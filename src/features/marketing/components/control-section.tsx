@@ -1,34 +1,29 @@
-import { ArrowRight, BadgeCheck, Check, Copy, MoreHorizontal } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 
 import { GET_STARTED_URL } from "../constants";
+import { CONTROL_COPY } from "./control-content";
+import { ActivityLog } from "./control-log";
 import { ScrollReveal } from "./scroll-reveal";
 
-/** ⚠ Static on purpose — no hooks, no modes. Keep it a server component.
+/** ⚠ Keep this a server component. `<ScrollReveal>` (the `<section>`) and
+ *  `<ActivityLog>` (the log, ./control-log.tsx) are the only client
+ *  boundaries; the claim column arrives server-rendered as `children`.
  *
- *  `<ScrollReveal>` is a client component and renders the `<section>` element
- *  itself, but that is the ONLY client boundary: everything below is passed as
- *  `children` and still arrives server-rendered. Do not "simplify" it by adding
- *  `"use client"` here and calling a hook — that would pull the whole card,
- *  bullet list and icon set into the bundle for one IntersectionObserver. */
-
-/** ⚠ Order is the argument: identity → consent → rules → record. */
-const BULLETS: readonly string[] = [
-  "Every agent has a stable identity",
-  "Actions are consent-gated by the people they affect",
-  "Trust rules decide what runs without you",
-  "Every exchange is threaded and auditable",
-];
-
+ *  ⚠ `lp-ctl--flip` puts the panel LEFT and the claim RIGHT on desktop; it is
+ *  Monitoring's alone. connect-section.tsx wears the same `.lp-ctl-*` layout
+ *  classes without it and stays claim-left. The DOM keeps the claim first, so
+ *  reading order and phones (stacked, claim on top) are unchanged.
+ *  Copy: ./control-content.ts. */
 export function ControlSection() {
   return (
-    <ScrollReveal className="lp-ctl">
+    <ScrollReveal className="lp-ctl lp-ctl--flip">
       <div className="lp-ctl-inner">
         <div className="lp-ctl-copy">
-          <p className="lp-ctl-eyebrow">Control</p>
-          <h2 className="lp-ctl-heading">Identity, consent, and full auditability</h2>
+          <p className="lp-ctl-eyebrow">{CONTROL_COPY.eyebrow}</p>
+          <h2 className="lp-ctl-heading">{CONTROL_COPY.heading}</h2>
 
           <ul className="lp-ctl-list">
-            {BULLETS.map((bullet) => (
+            {CONTROL_COPY.bullets.map((bullet) => (
               <li key={bullet} className="lp-ctl-item">
                 <Check className="lp-ctl-check" size={16} strokeWidth={2} aria-hidden />
                 {bullet}
@@ -38,55 +33,21 @@ export function ControlSection() {
 
           <div className="lp-ctl-cta">
             <a href={GET_STARTED_URL} className="lp-btn lp-btn--sm lp-btn--3d">
-              Learn more
+              {CONTROL_COPY.primaryCta}
               <ArrowRight size={14} strokeWidth={2} aria-hidden />
             </a>
             {/* TODO: no contact route yet — placeholder. No `href` on purpose:
                 this file is a server component (no handlers), and `href="#"`
                 would rewrite the URL to `/#` and jump-scroll mid-scrub. An
                 hrefless <a> keeps the styling and navigates nowhere. */}
-            <a className="lp-ctl-secondary">Talk to the team</a>
+            <a className="lp-ctl-secondary">{CONTROL_COPY.secondaryCta}</a>
           </div>
         </div>
 
-        {/* Static prop, no focusable children — hidden from AT; left column is
-            the accessible content. */}
+        {/* A scripted demo, no focusable children — hidden from AT; the claim
+            column is the accessible content. */}
         <div className="lp-ctl-panel" aria-hidden="true">
-          <div className="lp-ctl-card">
-            <div className="lp-ctl-card-head">
-              <div className="lp-ctl-card-text">
-                <span className="lp-ctl-card-name">
-                  Sam&apos;s Agent
-                  <BadgeCheck className="lp-ctl-verified" size={16} strokeWidth={2} />
-                </span>
-                <span className="lp-ctl-card-handle">@sams-agent</span>
-                <span className="lp-ctl-card-actions">
-                  <span className="lp-ctl-card-pill">Edit agent</span>
-                  <span className="lp-ctl-card-kebab">
-                    <MoreHorizontal size={15} strokeWidth={2} />
-                  </span>
-                </span>
-              </div>
-              <span className="lp-ctl-card-avatar" />
-            </div>
-
-            <dl className="lp-ctl-rows">
-              <div className="lp-ctl-row">
-                <dt className="lp-ctl-row-key">Agent ID</dt>
-                <dd className="lp-ctl-row-value">
-                  agt…7f3k2d
-                  <Copy className="lp-ctl-row-copy" size={13} strokeWidth={1.8} />
-                </dd>
-              </div>
-              <div className="lp-ctl-row">
-                <dt className="lp-ctl-row-key">Owner</dt>
-                <dd className="lp-ctl-row-value">
-                  <span className="lp-ctl-row-avatar" />
-                  Sam Wang
-                </dd>
-              </div>
-            </dl>
-          </div>
+          <ActivityLog />
         </div>
       </div>
     </ScrollReveal>

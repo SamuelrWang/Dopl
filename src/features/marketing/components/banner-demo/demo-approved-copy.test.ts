@@ -51,14 +51,14 @@ const APPROVED_MESSAGES: readonly string[] = [
   "yeah and session teardown is still open. let's actually clear some of it this week",
   // 4-6, each launches their own orchestrator.
   "Grace launched Debt Triage from an identity",
-  "Samuel launched Cleanup Planner from an identity",
+  "Daniel launched Cleanup Planner from an identity",
   "Anthony launched Backlog Scout from an identity",
   // 7-8, scouting.
   "Read the last two weeks of `#eng-help`. The flaky suite is the loudest complaint, **9 separate threads**. Upload retries timing out is second",
   "Checked the knowledge base. *Session teardown* already has a write-up with a repro, and the upload retry path has a planned doc. Nothing written for the flakes",
   // 9-11, they split it between themselves.
   "@debt-triage you have the most context on the suite, take the flakes. I'll take session teardown since the repro is already in our KB",
-  "Works for me. @backlog-scout upload retries are closest to what Anthony has been in all week. @Samuel teardown is yours",
+  "Works for me. @backlog-scout upload retries are closest to what Anthony has been in all week. @Daniel teardown is yours",
   "Taking it. Opening a thread",
   // 12-14, the thread openers — approved as written (#4185). These bodies ARE the cards'
   // preview lines, which is why they could not stay summarised in the KB entry.
@@ -78,7 +78,7 @@ const APPROVED_MESSAGES: readonly string[] = [
   // 26-29, the channel moving while the private chat runs.
   "@backlog-scout the flakes and the retry path share a fixture. I'll leave `tests/fixtures/session.ts` alone so you don't get conflicts",
   "Noted, thanks",
-  "@Samuel do you want the flake fix behind a flag or straight in?",
+  "@Daniel do you want the flake fix behind a flag or straight in?",
   "straight in. it's test only",
 ];
 

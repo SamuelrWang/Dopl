@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
+import type { IdentityFacts } from "@/shared/ui/identity-face";
 import { cn } from "@/shared/lib/utils";
 import type { ChannelConsentRequest, ChannelMessage } from "../types";
 import type { AgentNarrationEntry } from "./use-agent-narration";
@@ -18,7 +19,7 @@ import { displayViewFrom, type PageAnswer } from "./view-model-display";
 import type { AuthorIndex } from "./view-model";
 import type { AnswerDisplay } from "../hooks/use-display-writes";
 import { DirectedBox } from "./agent-stream-directed";
-import { InboundBox } from "./agent-stream-inbound-box";
+import { InboundBox, inboundFace } from "./agent-stream-inbound-box";
 import { messageTags, type RecipientTag } from "../lib/recipient-tags";
 import { StreamProse, StreamRoster, TruncatedNote } from "./agent-stream-prose";
 import { StreamWorkingRow } from "./agent-stream-working";
@@ -65,8 +66,12 @@ export function AgentStream({
   agentNameFor,
   roster,
   liveness = null,
-  color = null, className,
+  color = null,
+  self = null,
+  className,
 }: {
+  /** This agent's own face, worn by what it posted; absent draws none. */
+  self?: IdentityFacts | null;
   /**
    * **THE CHANNEL'S ROSTER, FOR THE ADDRESSEE PILLS ON A POSTED BOX** (#3081).
    *
@@ -131,7 +136,7 @@ export function AgentStream({
       buildAgentStream({
         entries,
         sent,
-        // The landing check is channel-wide: `sent` is filtered on `metadata.taskId`, which a threadless post lacks.
+        // The landing check is channel-wide: `sent` is filtered on `metadata.threadId`, which a threadless post lacks.
         delivered,
         pending,
         destination,
@@ -171,6 +176,7 @@ export function AgentStream({
           {groups.map((group) => (
             <StreamRow
               color={color}
+              self={self}
               key={group.key}
               group={group}
               viewer={viewer}
@@ -210,7 +216,9 @@ function StreamRow({
   agentNameFor,
   roster,
   color,
+  self,
 }: {
+  self: IdentityFacts | null;
   group: StreamGroup;
   viewer?: AvatarPerson | null;
   onPost?: (requestId: string) => void;
@@ -271,6 +279,7 @@ function StreamRow({
           onPost={onPost}
           busy={postBusy}
           color={color}
+          face={self}
         />
       </li>
     );
@@ -282,14 +291,8 @@ function StreamRow({
   if (item.lane === "inbound") {
     return (
       <li>
-        {/* ⚠ `fromOperator` IS THREADED, NOT DROPPED (release review, 2026-10-11): main stamps
-            it so this face can say "you" where the channel post is the operator's own, and the
-            field rode main → frame → item and stopped here — so their own post read back at
-            them as "Message received from <their own name>". */}
-        {/* ⚠ `authorKind` AND THE AGENT'S NAME RIDE WITH IT (Samuel, 2026-10-12): the banner
-            paints a person's message black and an agent's in its own colour, and names an agent
-            by its handle rather than by its operator. Server-derived, never sniffed out of
-            `senderName` — `agent-stream-inbound-box.tsx › inboundLabel` carries the ruling. */}
+        {/* `fromOperator` and `authorKind` decide the label, the edge and the face; all
+            server-derived, never sniffed out of `senderName` (`agent-stream-inbound-box.tsx`). */}
         <InboundBox
           text={item.text}
           sender={item.senderName}
@@ -297,6 +300,7 @@ function StreamRow({
           authorKind={item.authorKind}
           senderAgentName={item.senderAgentName}
           senderColor={item.senderColor}
+          face={inboundFace(item, viewer?.avatarUrl ?? null)}
           at={item.at}
         />
         {item.truncated === true && <TruncatedNote />}
@@ -382,9 +386,9 @@ function OperatorTurn({
     <div className="flex min-w-0 items-start justify-end gap-2">
       <StreamProse
         text={text}
-        className="max-w-[80%] rounded-[10px] bg-bg-inset px-2.5 py-1.5"
+        className="max-w-[80%] rounded-lg bg-bg-inset px-2.5 py-1.5"
       />
-      {viewer && <Avatar person={viewer} size="xs" />}
+      {viewer && <Avatar person={viewer} size="px30" />}
     </div>
   );
 }

@@ -11,7 +11,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { LEVEL_OPTIONS, MESSAGE_OPTIONS } from "./permission-preset-row";
-import { SettingRow } from "./settings-agent-rows";
+import { SettingCaption, SettingRow } from "./settings-agent-rows";
 import type { MessageMode } from "../lib/permission-modes";
 import type { PermissionLevel } from "../lib/launch-selection";
 import type { PosturePatch } from "./posture-warning";
@@ -47,7 +47,7 @@ export function AgentLaunchPostureRows({
 
       <SettingRow name="Permissions">
         <SelectMenu<PermissionLevel>
-          variant="text"
+          variant="bare"
           value={selection.level}
           options={LEVEL_OPTIONS}
           onChange={(level) => void selection.update({ level })}
@@ -61,7 +61,7 @@ export function AgentLaunchPostureRows({
           (`main/launch-selection.js › SELECTION_MESSAGE_MODES`). */}
       <SettingRow name="Messaging">
         <SelectMenu<MessageMode>
-          variant="text"
+          variant="bare"
           value={selection.messages as MessageMode}
           options={MESSAGE_OPTIONS}
           onChange={(messages) => {
@@ -76,16 +76,16 @@ export function AgentLaunchPostureRows({
       {/* Main's refusals, verbatim: the write failed closed before the store, so the rows alone
           would look unchanged. */}
       {selection.rejected.map((line) => (
-        <p key={line} role="alert" className="text-caption text-danger">
+        <SettingCaption key={line} role="alert" tone="danger">
           {line}
-        </p>
+        </SettingCaption>
       ))}
 
       {/* Review lines are notes (the settings are already the narrower ones), not failures. */}
       {selection.review.map((line) => (
-        <p key={line} role="note" className="text-caption text-warning">
+        <SettingCaption key={line} role="note" tone="warning">
           {line}
-        </p>
+        </SettingCaption>
       ))}
     </>
   );
@@ -100,27 +100,27 @@ function PermissionDetails({ selection }: { selection: LaunchSelectionState }) {
   });
   if (!rows.length) return null;
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-1.5 px-2 pb-2">
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 self-start text-caption text-text-muted hover:text-text-secondary"
+        className="flex items-center gap-0.75 self-start text-caption text-text-muted hover:text-text-secondary"
       >
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         Details
       </button>
       {open && (
-        <ul className="flex flex-col gap-0.5" aria-label="Permissions by runtime">
+        <ul className="card-well flex flex-col gap-0.5 px-2.5 py-1.5" aria-label="Permissions by runtime">
           {rows.map(({ d, s }) => (
             <li
               key={d.id}
-              className="flex min-h-[24px] items-center justify-between gap-2 rounded-[8px] border border-border-subtle bg-bg-inset px-2.5 py-1 text-caption text-text-secondary"
+              className="flex min-w-0 items-center justify-between gap-2 text-caption leading-5 text-text-secondary"
             >
               <span>
                 {d.label} · {s.label}
               </span>
-              <span className="font-mono text-text-muted">{s.setting}</span>
+              <span className="truncate font-mono text-text-muted">{s.setting}</span>
             </li>
           ))}
         </ul>
@@ -159,7 +159,7 @@ function AgentRuntimeRow({
   return (
     <SettingRow name="Runtime">
       <SelectMenu<string>
-        variant="text"
+        variant="bare"
         value={runtime}
         options={options}
         onChange={onChange}

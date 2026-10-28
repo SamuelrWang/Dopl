@@ -19,7 +19,7 @@ import * as repoMessages from "./repository-messages";
  * meant a per-channel number or a table-wide `seq`.
  *
  * ⚠ **REFUSES, NEVER DROPS** (`ChannelCiteUnresolvedError`). The nearest
- * precedent in this file's family goes the other way deliberately — a `taskId`
+ * precedent in this file's family goes the other way deliberately — a `threadId`
  * that is not the poster's exchange is silently stripped, because a mistagged
  * post is still a post worth keeping. A citation is different in kind: it is the
  * message's argument, and storing the prose while quietly discarding what it
@@ -41,7 +41,7 @@ export async function resolveCites(
   // disagree by the gap between a channel's own count and the table's, so
   // falling back would resolve — to the wrong message, in some other room, with
   // a pill confidently pointing at it. The column arrives with
-  // `supabase/migrations-held/20261122120000`; flipping this on is a change HERE
+  // `supabase/migrations-held/20261124120000`; flipping this on is a change HERE
   // plus a per-channel finder, and nothing else in the lane moves.
   for (const entry of cites) {
     if (entry.no !== undefined) {
@@ -77,13 +77,13 @@ export async function resolveCites(
       row.metadata !== null && typeof row.metadata === "object"
         ? (row.metadata as Record<string, unknown>)
         : {};
-    const taskId = typeof meta.taskId === "string" ? meta.taskId : null;
+    const threadId = typeof meta.threadId === "string" ? meta.threadId : null;
 
     // ⚠ A SUPPLIED `thread` IS A CLAIM TO CHECK, NOT A FILTER TO APPLY. The
     // caller said "this message, in that thread"; if the row is somewhere else
     // the caller's model of the transcript is wrong, and resolving it anyway
     // would hand back a pill that contradicts the sentence around it.
-    if (entry.thread !== undefined && entry.thread !== taskId) {
+    if (entry.thread !== undefined && entry.thread !== threadId) {
       throw new ChannelCiteUnresolvedError(entry);
     }
 
@@ -94,7 +94,7 @@ export async function resolveCites(
       // omitted so a reader can tell "this row has no per-channel number" from
       // "this citation predates the field".
       no: null,
-      thread: taskId,
+      thread: threadId,
     });
   }
   return resolved;

@@ -18,7 +18,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
 vi.mock("./repository-messages");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 // ⚠ **THE VERDICT RESOLVER READS `channel_sessions` (A9)** and this suite is
 // about the METADATA fold, not about who a post wakes. Mocked to the empty
 // projection so the agent half of `service-wake-verdict.ts` resolves nothing:
@@ -30,7 +30,7 @@ vi.mock("./repository-sessions");
 
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import * as repoSessions from "./repository-sessions";
 import { postMessage } from "./service-writes";
 import { MENTIONS_METADATA_KEY } from "../lib/mentions";
@@ -150,7 +150,7 @@ beforeEach(() => {
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
   );
-  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+  vi.mocked(repoThreads.listThreadsByChannel).mockResolvedValue({
     rows: [],
     truncated: false,
   });

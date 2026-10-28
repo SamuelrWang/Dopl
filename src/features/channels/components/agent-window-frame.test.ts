@@ -27,10 +27,9 @@ import {
   RAIL_PAD,
   RAIL_PAD_COLLAPSED,
   TAB_MAX,
-  TAB_UNDERLINE,
-  TAB_UNDERLINE_HEIGHT,
   TILE,
 } from "./agent-window-frame";
+import { TAB_UNDERLINE } from "@/shared/ui/tab-underline";
 
 /** `pl-4 pr-1` → `[16, 4]`, on the tree's 4px step. ⚠ The COLLAPSED pad is asymmetric by ruling
  *  (2026-09-15), so it cannot be read with `RAIL_PAD`'s single-number `px-*` parse. */
@@ -81,7 +80,7 @@ describe("the active tab's underline is the popup field's underline", () => {
     // ⚠ THE READ ITSELF IS AN ASSERTION: a renamed class silently matches nothing and `slice`
     // returns the rest of the file, so the capture must have produced a number.
     expect(height, "the popup field's underline rule moved or was renamed").toBeTruthy();
-    expect(TAB_UNDERLINE_HEIGHT).toBe(`h-[${height}px]`);
+    expect(TAB_UNDERLINE).toContain(`h-[${height}px]`);
   });
 
   it("is BLACK, FULL-BLEED and SQUARE-ENDED — the other three halves of that recipe", () => {
@@ -95,7 +94,7 @@ describe("the active tab's underline is the popup field's underline", () => {
   });
 
   it("is the chrome's one underline — declared once, not re-spelled at the tab", () => {
-    expect(chrome).toContain("TAB_UNDERLINE");
+    expect(chrome).toContain("<TabUnderline />");
     expect(chrome, "the chrome grew its own underline rule").not.toMatch(/h-\[2px\]/);
   });
 });
@@ -316,11 +315,10 @@ describe("a tab label and a rail row are one type SIZE, in two weights", () => {
  * ⚠ **IT IS AN EQUALITY ACROSS THREE FILES THAT DO NOT IMPORT EACH OTHER**, which is this module's
  * whole subject: the UPPER gap is `agent-posture.tsx`'s own `py-2.5` (the thread line above it,
  * `agent-window.tsx › AgentWorkingOn`, carries no bottom padding), the LOWER one is that file's
- * margin under the pickers, and a THIRD margin was arriving from `shared/ui/usage-meter.tsx`'s
- * `className` default — which measured 20px against 10, so it was never a padding at all.
+ * margin under the pickers, and the stats well must bring no margin of its own to stack on it.
  *
- * 🔒 MUTATION-PROOF: drop `meterClassName=""` from the stats and the second expectation fails;
- * change either `2.5` and the first does.
+ * 🔒 MUTATION-PROOF: give `AgentStats`' well a margin and the second expectation fails; change
+ * either `2.5` and the first does.
  */
 describe("the pickers sit the same distance from the line above and the meter below", () => {
   it("uses ONE step for both gaps", () => {
@@ -331,11 +329,10 @@ describe("the pickers sit the same distance from the line above and the meter be
     expect(lower![1]!.replace("mt-", "")).toBe(upper![1]!.replace("py-", ""));
   });
 
-  it("leaves the meter no margin of its own to stack on it", () => {
-    // ⚠ EMPTY, NOT ABSENT: `usage-meter.tsx` defaults `className` to `mt-3`, so omitting the prop
-    // is what put the extra 12px there. ⚠ IT IS A PROP ON `AgentStats` SINCE P17 (2026-09-17) —
-    // the window stopped spelling the meter itself when the two stats copies collapsed.
-    expect(view).toMatch(/meterClassName=""/);
+  it("leaves the stats well no margin of its own to stack on it", () => {
+    const well = code("agent-stats.tsx").match(/<div className="(card-well[^"]*)"/);
+    expect(well?.[1], "the stats well moved").toBeTruthy();
+    expect(well![1]).not.toMatch(/\b(m[tby]?-)/);
   });
 
   /** ⚠ AND THE ROW ABOVE STILL CONTRIBUTES NOTHING — the moment `AgentWorkingOn` grows a bottom

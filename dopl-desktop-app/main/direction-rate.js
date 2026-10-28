@@ -31,7 +31,7 @@
 // every unrelated agent; a per-channel one would do the same inside a room.
 //
 // ⚠ **IT CANNOT REACH THE OPERATOR'S OWN COMPOSER, AND THAT IS STRUCTURAL RATHER THAN CHECKED.**
-// The operator's messages to their own agent go through `session-reopen.js › messageByTask`
+// The operator's messages to their own agent go through `session-reopen.js › messageByThread`
 // directly from an `appWindowOnly` IPC op and never touch this module; the only caller is
 // `agent-directions.js › handle`, the claim funnel for rows that arrived over the network. A
 // human who types fast is not rate-limited by anything here.

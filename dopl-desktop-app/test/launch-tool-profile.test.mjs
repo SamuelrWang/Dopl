@@ -38,7 +38,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { fnOf, asyncFnOf } from "./helpers/source-probe.mjs";
 import { mkWin, evt, idsOf } from "./_ipc-harness.mjs";
 import { launchDefaultStub } from "./_launch-runtime-stub.mjs";
 import { evalModule } from "./helpers/module-sandbox.mjs";
@@ -108,18 +108,21 @@ const ENTRIES = [
  * if `watchedChannel` ever goes back to projecting, these cases go red instead of agreeing with a
  * copy that stayed correct.
  */
-function registry(entries) {
+function registry(entries, fetchChannel = async () => null) {
   const loops = new Map(entries.map((e) => [e.channel.id, e]));
   const src = `${fnOf(LISTENER, "listWatchedChannels")}\n${fnOf(LISTENER, "watchedChannel")}\n`
-    + "return { listWatchedChannels, watchedChannel };";
-  return new Function("loops", src)(loops);
+    + `${asyncFnOf(LISTENER, "channelForLaunch")}\n`
+    + "return { listWatchedChannels, watchedChannel, channelForLaunch };";
+  // `io.fetchChannel` is the miss path's server read (`GET /api/channels/:id`); null by default, so an
+  // unwatched id still fails closed unless a case hands the server's answer in.
+  return new Function("loops", "io", "diag", src)(loops, { fetchChannel }, () => {});
 }
 
 /** The requester lane: the real `sessions:launch`, bound to a real app window. */
-function bootLaunch(entries) {
+function bootLaunch(entries, fetchChannel) {
   const handlers = {};
   const launches = [];
-  const reg = registry(entries);
+  const reg = registry(entries, fetchChannel);
   const stub = (id) => {
     if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
     if (id === "./ipc-guards") return guards;
@@ -165,9 +168,9 @@ function bootLaunch(entries) {
 }
 
 /** The profile the requester lane really hands the engine. */
-async function requesterProfile(channelId, entries = ENTRIES) {
-  const { launch, launches, event } = bootLaunch(entries);
-  const res = await launch(event, { channelId, taskId: THREAD, threadTitle: "T" });
+async function requesterProfile(channelId, entries = ENTRIES, fetchChannel = undefined) {
+  const { launch, launches, event } = bootLaunch(entries, fetchChannel);
+  const res = await launch(event, { channelId, threadId: THREAD, threadTitle: "T" });
   assert.equal(res.ok, true, "the launch itself must succeed — otherwise nothing was resolved");
   assert.equal(launches.length, 1);
   return launches[0].toolProfile;
@@ -215,6 +218,41 @@ test("the fail-closed answer is the TABLE's, not a second literal in the handler
     "no ternary fallback beside the resolver — normalizeProfile owns the floor");
 });
 
+// ── 2b. THE STARTUP RACE: A LAUNCH BEFORE RECONCILE REACHED THE CHANNEL ─────────────────────
+//
+// After a restart `reconcile` walks workspaces serially (~1s each), so a launch into a channel it
+// has not reached yet missed `watchedChannel` and floored to `read_only` though the member row said
+// `full`. The miss now fetches that channel's DTO by id; only a failed fetch fails closed.
+
+const fetchedDto = (id, profile, memberCount = 1) => ({ ...entryFor(id, profile, memberCount).channel });
+
+test("an UNWATCHED channel launches at the FETCHED DTO's profile (`full`)", async () => {
+  const asked = [];
+  const fetch = async (id) => { asked.push(id); return fetchedDto(CH_GONE, "full"); };
+  assert.equal(await requesterProfile(CH_GONE, ENTRIES, fetch), "full");
+  assert.deepEqual(asked, [CH_GONE], "the miss asked the server for exactly this channel");
+});
+
+test("a WATCHED channel never fetches", async () => {
+  const fetch = async () => { throw new Error("a watched channel must not hit the server"); };
+  assert.equal(await requesterProfile(CH_FULL, ENTRIES, fetch), "full");
+});
+
+test("the fetched DTO is still narrowed for a shared room (`full` -> `channel_agent`)", async () => {
+  const fetch = async () => fetchedDto(CH_GONE, "full", 3);
+  assert.equal(await requesterProfile(CH_GONE, ENTRIES, fetch), "channel_agent");
+});
+
+test("a FAILED fetch fails closed to `read_only`", async () => {
+  assert.equal(await requesterProfile(CH_GONE, ENTRIES, async () => null), "read_only");
+  assert.equal(await requesterProfile(CH_GONE, ENTRIES, async () => { throw new Error("net"); }), "read_only");
+});
+
+test("a fetched non-member DTO (no profile) and a DTO for ANOTHER id both fail closed", async () => {
+  assert.equal(await requesterProfile(CH_GONE, ENTRIES, async () => fetchedDto(CH_GONE)), "read_only");
+  assert.equal(await requesterProfile(CH_GONE, ENTRIES, async () => fetchedDto(CH_FULL, "full")), "read_only");
+});
+
 // ── 3. THE PROPERTY THAT PREVENTS THIS CLASS: THE TWO LANES AGREE ─────────────────────────────
 
 test("the requester lane and the responder lane resolve the SAME profile for the same record",
@@ -259,7 +297,7 @@ test("`sessions:launch` does not read the projection, and `watchedChannel` retur
     const launchBody = fnOf(LAUNCH_OP, "launchFromButton");
     assert.equal(/listWatchedChannels/.test(launchBody), false,
       "the projection must not come back as this lane's input");
-    assert.match(launchBody, /listener\.watchedChannel\(p\.channelId\)/);
+    assert.match(launchBody, /listener\.channelForLaunch\(p\.channelId\)/);
     const { watchedChannel } = registry(ENTRIES);
     assert.equal(watchedChannel(CH_FULL).myAgentToolProfile, "full", "the field survives the hop");
     assert.equal(watchedChannel(CH_GONE), null, "an unwatched id is null, never a fabricated row");
@@ -289,4 +327,10 @@ test("`read_only` REMOVES the Dopl read tools from context — it does not gate 
   for (const name of DOPL_SAFE_TOOLS) {
     assert.equal(full.disallowedTools.includes(name), false, `full does not deny ${name}`);
   }
+});
+
+test("the DIRECTIVE lane reads the same miss-aware accessor, wired from index.js", () => {
+  assert.match(fnOf(read("launch-directive-spawn.js"), "spawn"), /await deps\.channelForLaunch\(d\.channelId\)/);
+  assert.match(read("index.js"), /channelForLaunch: \(channelId\) => listener\.channelForLaunch\(channelId\)/);
+  assert.match(read("launch-directives.js"), /channelForLaunch: typeof o\.channelForLaunch === 'function'/);
 });

@@ -13,13 +13,13 @@ const MAIN = join(HERE, "..", "main");
 const require = createRequire(import.meta.url);
 
 // ── LOW: an unrecognised server request — denied on restricted, never a standing grant on full ──
-test("gate: an unrecognised request is DENIED on a restricted profile and never opened by a task grant", () => {
+test("gate: an unrecognised request is DENIED on a restricted profile and never opened by a thread grant", () => {
   const { grantDecision } = require(join(MAIN, "session-profiles.js"));
   const { UNRECOGNISED_REQUEST_PREFIX } = require(join(MAIN, "runtime", "sdk-shape.js"));
   const toolName = `${UNRECOGNISED_REQUEST_PREFIX}item/new/requestApproval`;
   const grant = [toolName, `${toolName}:{}`];
-  assert.equal(grantDecision({ runtime: "codex", profile: "dopl_only", toolName, toolMode: "never", allowForTask: grant }), "deny");
-  assert.equal(grantDecision({ runtime: "codex", profile: "full", toolName, toolMode: "on-request", allowForTask: grant }), "gate",
+  assert.equal(grantDecision({ runtime: "codex", profile: "dopl_only", toolName, toolMode: "never", allowForThread: grant }), "deny");
+  assert.equal(grantDecision({ runtime: "codex", profile: "full", toolName, toolMode: "on-request", allowForThread: grant }), "gate",
     "a standing grant never pre-approves a request type Dopl cannot describe");
   assert.equal(grantDecision({ runtime: "codex", profile: "full", toolName, toolMode: "never" }), "gate",
     "even at Full access an unnamed request is ASKED (Codex's Axis A names no such row)");

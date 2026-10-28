@@ -3,20 +3,21 @@ import { fileURLToPath } from "node:url";
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { HomePageSkeleton } from "#/pages/home/home-skeleton";
-import {
-  HomeIdentityPanelsSkeleton,
-  HomeKnowledgePanelsSkeleton,
-} from "#/pages/home/home-skeleton";
+import { HomeIdentityPanelsSkeleton } from "#/pages/home/home-skeleton";
 import { ChannelRecordSkeleton } from "#/pages/home/channel-record-skeleton";
 import { OverviewSkeleton } from "#/pages/overview/overview-skeleton";
 import { ChannelsSkeleton } from "#/pages/channels/channels-skeleton";
 import { IdentitiesPageSkeleton } from "#/pages/identities/identities-skeleton";
 import { MembersPageSkeleton } from "#/pages/members/members-skeleton";
-import { IDENTITY_GRID } from "@/features/agent-identities/components/identity-section";
 import {
+  IDENTITY_GRID,
+  IDENTITY_GRID_RAIL,
+} from "@/features/agent-identities/components/identity-section";
+import {
+  HomeKnowledgePanelsSkeleton,
   KnowledgeBaseSkeleton,
   KnowledgeHomeSkeleton,
-} from "./knowledge-skeletons";
+} from "@/features/knowledge/components/knowledge-skeletons";
 
 /**
  * THE POINT OF THESE SKELETONS IS THAT THEY MATCH THE PAGE (Samuel, 2026-08-28:
@@ -54,7 +55,7 @@ const AGENTS_SKELETON = file("../../pages/identities/identities-skeleton.tsx");
 const OVERVIEW_SKELETON = file("../../pages/overview/overview-skeleton.tsx");
 const CHANNELS_SKELETON = file("../../pages/channels/channels-skeleton.tsx");
 const MEMBERS_SKELETON = file("../../pages/members/members-skeleton.tsx");
-const KNOWLEDGE_SKELETONS = file("./knowledge-skeletons.tsx");
+const KNOWLEDGE_SKELETONS = file("../../../../../src/features/knowledge/components/knowledge-skeletons.tsx");
 
 /** A file in the SHARED tree (`src/`), which is where four of these pages live. */
 const shared = (rel: string) => file(`../../../../../src/${rel}`);
@@ -131,35 +132,33 @@ describe("every per-page skeleton", () => {
 
 describe("skeleton grids REUSE the real page's grid, they do not restate it", () => {
   /**
-   * ⚠ THE HOME KNOWLEDGE GRID IS `home.module.css › .kbCards` ITSELF. That rule
+   * ⚠ THE HOME KNOWLEDGE GRID IS `home-knowledge.module.css › .kbCards` ITSELF. That rule
    * owns the 3 columns, the 224px row height, the 14px gap and the 1080px
    * step-down, plus the `--kv-*` rebinds the card reads. Restating any of it in
    * the skeleton is the drift this pins.
    */
   it("the /home Knowledge ghost mounts the page's own .kbCards", () => {
-    const page = file("../../pages/home/knowledge-panels.tsx");
+    const page = shared("features/knowledge/components/home/home-knowledge-panels.tsx");
     expect(page).toContain("home.kbCards");
-    expect(HOME_SKELETON).toContain("home.kbCards");
+    expect(KNOWLEDGE_SKELETONS).toContain("home.kbCards");
+    expect(HOME_SKELETON).toContain("<KbCardsGhost");
 
     const { container } = render(<HomeKnowledgePanelsSkeleton />);
     expect(container.querySelectorAll('[class*="kbCards"]').length).toBe(2);
     expect(container.querySelectorAll('[class*="kbCell"]').length).toBeGreaterThan(0);
   });
 
-  /**
-   * ⚠ A TAILWIND ARBITRARY VALUE CANNOT BE IMPORTED, so the agents grid is one
-   * copied string in two skeletons — and this is what keeps the copy honest.
-   */
+  // The ghosts import the grid constants rather than copying them, and each names its page's grid.
   it("the Agents ghosts carry IdentityGrid's grid class verbatim", () => {
-    // 2026-09-13: the grid is an EXPORTED constant now (`IDENTITY_GRID`), so the
-    // skeletons import it instead of copying the string; the pin is that both
-    // read the import and that the constant still spells a real grid.
-    // 🔒 FOUR PER ROW, FIXED (Samuel, 2026-09-13) — never auto-fill.
+    // 🔒 FOUR PER ROW, FIXED (Samuel, 2026-09-13), never auto-fill; /home alone is three across.
     expect(IDENTITY_GRID).toBe("grid grid-cols-4 gap-2.5");
-    expect(file("./section-panel-ghost.tsx")).toContain("className={IDENTITY_GRID}");
+    expect(IDENTITY_GRID_RAIL).toBe("grid grid-cols-3 gap-2.5");
+    expect(file("./section-panel-ghost.tsx")).toContain("grid = IDENTITY_GRID");
     for (const skeleton of [HOME_SKELETON, AGENTS_SKELETON]) {
       expect(skeleton).toContain("<IdentityCardsGhost count={");
     }
+    expect(HOME_SKELETON).toContain("grid={IDENTITY_GRID_RAIL}");
+    expect(AGENTS_SKELETON).not.toContain("IDENTITY_GRID_RAIL");
   });
 
   /**
@@ -168,9 +167,7 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
    * module is retyped here, so the ghost follows a re-tune of the real view.
    */
   it("the knowledge ghosts mount knowledge-v2's own classes", () => {
-    expect(KNOWLEDGE_SKELETONS).toContain(
-      'from "@/features/knowledge/components/knowledge-v2/knowledge-v2.module.css"'
-    );
+    expect(KNOWLEDGE_SKELETONS).toContain('from "./knowledge-v2/knowledge-v2.module.css"');
     for (const cls of [
       "kv.cardGrid",
       "kv.baseHead",
@@ -183,30 +180,24 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
       expect(KNOWLEDGE_SKELETONS).toContain(cls);
     }
     // …and nothing re-states the geometry those rules own.
-    const body = code("./knowledge-skeletons.tsx");
+    const body = code("../../../../../src/features/knowledge/components/knowledge-skeletons.tsx");
     expect(body).not.toContain("232px");
     expect(body).not.toContain("244px");
   });
 
   /**
-   * ⚠ THE OPENED BASE'S TWO SECTIONS ARE WELLS, and the level decides the face:
-   * they are drawn inside the shell's white `.pageCard` (or /home's record
-   * pane), so they take `SECTION_PANEL_GROUND` exactly as `detail/meta-card.tsx`
-   * and `detail/overview-changelog.tsx` do. Flat shimmer blocks resolved into a
-   * gray panel appearing under the reader.
+   * The opened base's info face is one reading column (`.infoColumn`): the name and
+   * description, then Details and Changelog, each a heading over a white card. The
+   * ghost mounts the same column and the same card, so neither section flashes in.
    */
-  it("the opened-base ghost grounds its info sections as SECTION_PANEL wells", () => {
-    expect(KNOWLEDGE_SKELETONS).toContain("SECTION_PANEL_GROUND");
-    // ⚠ THE REAL SECTION NAMES THE GROUND BY MOUNTING `SectionPanel`, NOT BY
-    // PASSING IT (R-38, 2026-09-17): the component paints the one flat gray, so
-    // the ghost — a plain `div`, because a loading state must not print a
-    // heading STRING — is the only side left that reads the constant by name.
+  it("the opened-base ghost draws the info face's column and its two white cards", () => {
+    expect(KNOWLEDGE_SKELETONS).toContain("kv.infoColumn");
     expect(
-      shared("features/knowledge/components/knowledge-v2/detail/meta-card.tsx")
-    ).toContain("SectionPanel");
+      shared("features/knowledge/components/knowledge-v2/detail/base-overview.tsx")
+    ).toContain("styles.infoColumn");
 
     const { container } = render(<KnowledgeBaseSkeleton />);
-    expect(container.querySelectorAll("[data-section-panel]")).toHaveLength(2);
+    expect(container.querySelectorAll(".white-card")).toHaveLength(2);
   });
 
   /**
@@ -283,7 +274,7 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
    */
   it("the overview ghost paints no container face, and the page still does", () => {
     expect(file("../../pages/overview/period-stats.tsx")).toContain(
-      "rounded-[14px] border border-border-default bg-bg-inset p-3.5"
+      "rounded-xl border border-border-default bg-bg-inset p-3.5"
     );
     expect(file("../../pages/overview/activity-chart.tsx")).toContain(
       'className="bento p-3.5"'
@@ -295,15 +286,13 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
     // The geometry survived the face: radius and padding, on a border box that
     // is still there and cannot be seen.
     expect(ghost).toContain(
-      'const FLAT_PANEL = "rounded-[14px] border border-transparent p-3.5"'
+      'const FLAT_PANEL = "rounded-xl border border-transparent p-3.5"'
     );
   });
 
   /**
-   * ⚠ THE CHANNELS GHOST IS THE SURFACE'S OWN COLUMN AND ROW METRICS. The
-   * composer offset is the one piece that CAN be imported — `COMPOSER_BOTTOM`
-   * exists precisely because the channel and agent composers must sit at one
-   * height — so the ghost imports it and the rest is byte-shared.
+   * ⚠ THE CHANNELS GHOST IS THE SURFACE'S OWN COLUMN AND ROW METRICS, byte-shared;
+   * its composer is the one shared `ComposerGhost`.
    */
   it("the channels ghost byte-shares the surface's columns, rows and composer", () => {
     const sidebar = shared("features/channels/components/sidebar.tsx");
@@ -326,28 +315,33 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
     const composer = shared("features/channels/components/composer.tsx");
 
     for (const [source, geometry] of [
-      [sidebar, "flex w-[260px] shrink-0 flex-col border-r border-border-default"],
-      [sidebarSearch, "flex h-[52px] shrink-0 items-center gap-2 px-3"],
+      [sidebar, "flex w-65 shrink-0 flex-col border-r border-border-default"],
+      [sidebarSearch, "flex h-13 shrink-0 items-center gap-2 px-3"],
       [sidebar, "flex flex-col gap-px px-2"],
       // The section header's strip — `pt-3`, not the `pt-4` this ghost carried.
       [header, "flex items-center gap-1 px-3 pb-1 pt-3"],
-      [paneHeader, "flex h-[56px] shrink-0 items-center gap-1.5 border-b border-border-default px-4"],
+      [paneHeader, "flex h-14 shrink-0 items-center gap-1.5 border-b border-border-default px-4"],
       [pane, "px-8 py-5"],
-      // The composer CARD — and it takes no row gap of its own.
-      [composer, "raised-tab flex flex-col rounded-[14px] px-[13px] py-[11px]"],
-      [composer, 'cn("relative shrink-0 px-4 pt-1", COMPOSER_BOTTOM)'],
     ] as const) {
       expect(source).toContain(geometry);
       expect(CHANNELS_SKELETON).toContain(geometry);
     }
+    // The composer is the record ghost's one `ComposerGhost`, which byte-shares the card.
+    const recordGhost = shared("features/channels/components/channel-record-skeleton.tsx");
+    expect(CHANNELS_SKELETON).toContain("<ComposerGhost />");
+    for (const geometry of [
+      "flex flex-col rounded-[20px] px-3 py-2.5",
+      'cn("relative shrink-0 px-4 pt-1", COMPOSER_BOTTOM)',
+    ]) {
+      expect(composer).toContain(geometry);
+      expect(recordGhost).toContain(geometry);
+    }
 
     // One row shell, one height, one indent pair.
-    expect(rows).toContain("h-[36px]");
+    expect(rows).toContain("h-9");
     expect(rows).toContain('const DEPTH_PAD = ["pl-2", "pl-5"]');
-    expect(CHANNELS_SKELETON).toContain("h-[36px]");
+    expect(CHANNELS_SKELETON).toContain("h-9");
     expect(CHANNELS_SKELETON).toContain('indented ? "pl-5" : "pl-2"');
-    // The offset is IMPORTED, never retyped.
-    expect(CHANNELS_SKELETON).toContain("COMPOSER_BOTTOM");
     expect(code("../../pages/channels/channels-skeleton.tsx")).not.toContain("pb-4");
   });
 
@@ -372,7 +366,7 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
     // The generic ghost's giveaways — a fixed list width and a document measure.
     const body = code("../../pages/members/members-skeleton.tsx");
     expect(body).not.toContain("372");
-    expect(body).not.toContain("max-w-[760px]");
+    expect(body).not.toContain("max-w-190");
   });
 
   it("the knowledge ghosts keep the two dividers /home's .frame selects on", () => {
@@ -392,9 +386,9 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
 describe("the wrong ghosts are gone, and only those", () => {
   const PAGES = [
     "../../pages/home/index.tsx",
-    "../../pages/home/knowledge-panels.tsx",
+    "../../../../../src/features/knowledge/components/home/home-knowledge-panels.tsx",
     "../../pages/home/identity-panels.tsx",
-    "../../pages/home/knowledge-base-view.tsx",
+    "../../../../../src/features/knowledge/components/home/home-knowledge-base-view.tsx",
     "../../pages/overview/index.tsx",
     "../../pages/channels/index.tsx",
     "../../pages/identities/index.tsx",
@@ -414,9 +408,9 @@ describe("the wrong ghosts are gone, and only those", () => {
    */
   it.each([
     ["../../pages/home/index.tsx", "HomePageSkeleton"],
-    ["../../pages/home/knowledge-panels.tsx", "HomeKnowledgePanelsSkeleton"],
+    ["../../../../../src/features/knowledge/components/home/home-knowledge-panels.tsx", "HomeKnowledgePanelsSkeleton"],
     ["../../pages/home/identity-panels.tsx", "HomeIdentityPanelsSkeleton"],
-    ["../../pages/home/knowledge-base-view.tsx", "KnowledgeBaseSkeleton"],
+    ["../../../../../src/features/knowledge/components/home/home-knowledge-base-view.tsx", "KnowledgeBaseSkeleton"],
     ["../../pages/overview/index.tsx", "OverviewSkeleton"],
     ["../../pages/channels/index.tsx", "ChannelsSkeleton"],
     ["../../pages/identities/index.tsx", "IdentitiesPageSkeleton"],

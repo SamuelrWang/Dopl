@@ -58,7 +58,7 @@ function buildGateway(over: GatewayOverrides, sessions: MenuSession[], launches:
         msg(2, { authorKind: "agent", authorUserId: OWNER, authorAgentId: "abcdefgh", authorAgentName: "Orchestrator", body: "**Done.** See ![c](x.png)" }),
         msg(3, { authorUserId: "someone", authorName: "Kim", recipientAgentIds: ["abcdefgh"] }),
         msg(4, { recipientAgentIds: ["abcdefgh"], body: "thanks" }),
-        msg(5, { kind: "task_progress", authorKind: "agent" }),
+        msg(5, { kind: "thread_progress", authorKind: "agent" }),
       ].filter((m) => q.before === undefined || m.seq < q.before);
       return { messages: all.slice(-q.limit), hasMore: all.length > q.limit };
     },
@@ -237,7 +237,7 @@ describe("menu routes", () => {
     // Another conversation's rows (seq 10, 11) land first; this agent's reply (seq 12) later.
     const rows = [
       msg(10, { authorKind: "agent", authorAgentId: "zyxwvuts", body: "other" }),
-      msg(11, { kind: "task_progress", authorKind: "agent", authorAgentId: "abcdefgh" }),
+      msg(11, { kind: "thread_progress", authorKind: "agent", authorAgentId: "abcdefgh" }),
       msg(12, { authorKind: "agent", authorAgentId: "abcdefgh", body: "mine" }),
     ];
     let released = 2;

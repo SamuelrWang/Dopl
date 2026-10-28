@@ -28,7 +28,7 @@ const CITE = { messageId: "m-12", seq: 12, no: null, thread: null };
 describe("the state is read from the stamp", () => {
   it("🔒 UNSTAMPED is `null` — the legacy face, unchanged", () => {
     expect(messageCitesOf({})).toBeNull();
-    expect(messageCitesOf({ taskId: "t-1" })).toBeNull();
+    expect(messageCitesOf({ threadId: "t-1" })).toBeNull();
   });
 
   it("🔒 STAMPED but citing nothing is `[]` — written under the rule", () => {

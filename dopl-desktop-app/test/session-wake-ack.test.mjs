@@ -43,7 +43,7 @@ function harness() {
   const dispatched = [];
   const io = { noteGatedBody: realIo.noteGatedBody };
   const sessions = new Map();
-  const store = { slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}` };
+  const store = { slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.threadId)) || ""}` };
   const api = new Function("io", "store", `${BLOCK}\n return { bind, enqueue, feedInbound };`)(io, store);
   api.bind({ sessions, dispatch: (s, ev) => dispatched.push(ev) });
   return { ...api, sessions, dispatched };
@@ -60,7 +60,7 @@ const session = (over = {}) => ({
 
 const inbound = (over = {}) => ({
   channelId: "c1",
-  taskId: "t1",
+  threadId: "t1",
   message: "@agent-a1b2c3d4 switch to the invoice thread",
   authorName: "Samuel",
   seq: 861,
@@ -141,7 +141,7 @@ test("WAKE: a session HELD on its sign-in is refused, and a refusal stamps nothi
   const h = harness();
   const s = session({ state: { messageMode: "ask", mode: "interactive", authHeld: true, parked: true } });
   h.sessions.set("c1:a1b2c3d4", s);
-  assert.equal(h.feedInbound({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4",
+  assert.equal(h.feedInbound({ channelId: "c1", threadId: "t1", agentId: "a1b2c3d4",
     message: "go", authorName: "Samuel", seq: 999, wake: true }), false);
   assert.equal(s.lastWakeSeq, undefined, "a refused message woke nothing");
 });
@@ -152,7 +152,7 @@ test("WAKE: it lands through `feedInbound`, which is the door every lane uses", 
   const h = harness();
   const s = session();
   h.sessions.set("c1:a1b2c3d4", s);
-  assert.equal(h.feedInbound({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4",
+  assert.equal(h.feedInbound({ channelId: "c1", threadId: "t1", agentId: "a1b2c3d4",
     message: "go", authorName: "Samuel", seq: 861, wake: true }), true);
   assert.equal(s.lastWakeSeq, 861);
 });
@@ -163,7 +163,7 @@ test("WAKE: a SPAWN-IDLE shell refused for want of a wake stamps nothing", () =>
   const h = harness();
   const s = session({ awaitingDirective: true });
   h.sessions.set("c1:a1b2c3d4", s);
-  assert.equal(h.feedInbound({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4",
+  assert.equal(h.feedInbound({ channelId: "c1", threadId: "t1", agentId: "a1b2c3d4",
     message: "hello", authorName: "Samuel", seq: 861 }), false);
   assert.equal(s.lastWakeSeq, undefined);
 });

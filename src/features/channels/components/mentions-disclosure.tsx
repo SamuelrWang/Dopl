@@ -85,7 +85,7 @@ export function MentionsDisclosure({
         type="button"
         onClick={() => setOpen((wasOpen) => !wasOpen)}
         aria-expanded={open}
-        className="flex h-9 w-full items-center gap-2 rounded-[8px] px-2 text-left transition-colors hover:bg-surface-raised-1"
+        className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left transition-colors hover:bg-surface-raised-1"
       >
         <Tag size={14} className="shrink-0 text-text-muted" />
         <span className="text-small text-text-secondary">Mentions</span>

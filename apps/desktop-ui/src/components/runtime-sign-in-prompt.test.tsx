@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { RuntimeCredentialStatus } from "@/shared/lib/spa-bridge";
 import { ToastHost } from "@/shared/ui/toast";
 import { installBridge } from "#/test-utils/bridge";
-import { RuntimeSignInPrompt } from "./runtime-sign-in-prompt";
+import { RuntimeSignInPrompt } from "@/features/channels/components/runtime-sign-in-prompt";
 
 /**
  * THE APP-LEVEL SIGN-IN PROMPT. Main decides when a runtime needs one (a held agent, a refused launch)

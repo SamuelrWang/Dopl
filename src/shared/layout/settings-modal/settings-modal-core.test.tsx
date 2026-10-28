@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 /**
- * 🔒 THE RAIL'S ROWS (Samuel, 2026-10-02): Workspaces · Agents · Devices · Configuration · Account
- * · Plans & Billing, one list filtered by `has`. Configuration is drawn only when a binding passes
- * `configurationPane` (the desktop); the web passes none and draws five rows. No Connect row.
- * Notifications (2026-10-09) follows the same rule: drawn only when `notificationsPane` is passed.
+ * The rail's tabs: one list filtered by `has`. Configuration and Notifications are drawn only when
+ * a binding passes their pane (the desktop); the web passes neither and draws five.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -37,9 +35,8 @@ function renderCore(
 async function railLabels() {
   const dialog = await screen.findByRole("dialog", { name: "Settings" });
   return within(dialog)
-    .getAllByRole("button")
-    .map((b) => b.textContent)
-    .filter((t) => t !== "Close");
+    .getAllByRole("tab")
+    .map((tab) => tab.textContent);
 }
 
 describe("settings modal core rail", () => {
@@ -84,6 +81,18 @@ describe("settings modal core rail", () => {
     renderCore(true, "notifications", false);
     await screen.findByRole("dialog", { name: "Settings" });
     expect(screen.queryByText("notifications pane")).toBeNull();
+  });
+
+  it("marks only the open section selected, by the underline and not a raised face", async () => {
+    renderCore(true, "devices");
+    const tabs = within(await screen.findByRole("tablist", { name: "Settings sections" })).getAllByRole("tab");
+    const selected = tabs.filter((tab) => tab.getAttribute("aria-selected") === "true");
+    expect(selected.map((tab) => tab.textContent)).toEqual(["Devices"]);
+    for (const tab of tabs) {
+      expect(tab.className).not.toMatch(/nav-chip|raised-tab/);
+      expect(tab.querySelector("svg")).toBeNull();
+    }
+    expect(selected[0].querySelector("[data-tab-underline]")).not.toBeNull();
   });
 
   it("renders each section's own pane", async () => {

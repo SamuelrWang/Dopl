@@ -10,6 +10,14 @@
 import { MemberMethods } from "./client-members.js";
 import * as channel from "./channel.js";
 import * as channelAccount from "./channel-account.js";
+import * as channelTasks from "./channel-tasks.js";
+import type {
+  ChannelTaskAction,
+  ChannelTaskDetail,
+  ChannelTaskPage,
+  ChannelTaskWriteResult,
+  TaskStatus,
+} from "./channel-task-types.js";
 import type {
   AccountMessagesOptions,
   AccountMessagesPage,
@@ -145,6 +153,18 @@ export class ChannelMethods extends MemberMethods {
     truncated: boolean;
   }> {
     return channel.readArtifact(this.transport, channelId, artifactId);
+  }
+
+  listChannelTasks(channelId: string, opts?: { status?: TaskStatus }): Promise<ChannelTaskPage> {
+    return channelTasks.listTasks(this.transport, channelId, opts);
+  }
+
+  readChannelTask(channelId: string, taskId: string): Promise<ChannelTaskDetail> {
+    return channelTasks.readTask(this.transport, channelId, taskId);
+  }
+
+  writeChannelTask(channelId: string, input: ChannelTaskAction): Promise<ChannelTaskWriteResult> {
+    return channelTasks.writeTask(this.transport, channelId, input);
   }
 
   awaitChannelMessages(

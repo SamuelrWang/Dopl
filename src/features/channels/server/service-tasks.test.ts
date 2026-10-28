@@ -1,383 +1,364 @@
-/**
- * Thread (task) lane of the channels write service. Repositories mocked;
- * `service-shared` real, `service-reads` mocked. Load-bearing rules:
- *   - authorization: createTask (member + addressee-member), setTaskMode
- *     (creator only). Close/reopen authz is
- *     `service-tasks-lifecycle.test.ts`;
- *   - ⚠ the SELF-TARGET guard — a thread addressed to its own creator has one
- *     party and can never be answered, and the guard sits IN FRONT of the
- *     `client_msg_id` short-circuit so a retry cannot be handed the dead thread
- *     back as a success.
- */
-
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./repository");
-vi.mock("./repository-messages");
-vi.mock("./repository-tasks");
-vi.mock("./service-reads");
-// ⚠ `getChannel` MOVED TO `service-list.ts` (R-26) — the one row projection.
-vi.mock("./service-list");
+// One double, `loadVisibleChannel`; the membership `if` of `requireMemberChannel` runs for real on it.
+vi.mock("./service-shared", async () => {
+  const { ChannelForbiddenError } = await import("./errors");
+  const loadVisibleChannel = vi.fn();
+  return {
+    UNIQUE_VIOLATION: "23505",
+    loadVisibleChannel,
+    requireMemberChannel: vi.fn(async (ctx: unknown, ref: string, action: string) => {
+      const { channel, membership } = (await loadVisibleChannel(ctx as never, ref)) as {
+        channel: unknown;
+        membership: unknown;
+      };
+      if (!membership) throw new ChannelForbiddenError(action);
+      return { channel, membership };
+    }),
+  };
+});
+vi.mock("./repository-tasks", () => ({
+  insertTask: vi.fn(),
+  findOwnTaskIdByClientId: vi.fn(),
+  findTask: vi.fn(),
+  listTasks: vi.fn(),
+  updateTask: vi.fn(),
+  insertAssignee: vi.fn(),
+  deleteAssignee: vi.fn(),
+  insertSubtask: vi.fn(),
+  findOwnSubtaskIdByClientId: vi.fn(),
+  updateSubtask: vi.fn(),
+  insertNote: vi.fn(),
+  findOwnNoteIdByClientId: vi.fn(),
+  listNotes: vi.fn(),
+}));
+vi.mock("./repository", () => ({ hasMembership: vi.fn(), pgErrorCode: () => null }));
+vi.mock("./repository-sessions", () => ({ sessionRowsWhere: vi.fn() }));
+vi.mock("./repository-threads", () => ({ findThreadByChannelAndId: vi.fn() }));
+vi.mock("./repository-messages", () => ({ findMessageRefsBySeqs: vi.fn() }));
+vi.mock("./service-writes", () => ({ postMessage: vi.fn() }));
 
-import * as repo from "./repository";
-import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
-import * as list from "./service-list";
-import { createTask, setTaskMode } from "./service-tasks";
+import * as repo from "./repository";
+import * as repoSessions from "./repository-sessions";
+import * as repoMessages from "./repository-messages";
+import { postMessage } from "./service-writes";
+import { loadVisibleChannel, type ChannelContext } from "./service-shared";
 import {
-  ChannelAddresseeNotMemberError,
-  ChannelChatAddressedError,
   ChannelForbiddenError,
-  TaskForbiddenError,
-  TaskSelfTargetError,
+  SubtaskNotFoundError,
+  TaskActorUnresolvedError,
+  TaskLimitError,
+  TaskLinkUnresolvedError,
+  TaskNotFoundError,
 } from "./errors";
-import type { ChannelContext } from "./service-shared";
-import type { ChannelMemberRow, ChannelRow, ChannelTaskRow } from "./dto";
+import type { ChannelTaskReadRow, TaskSubtaskRow } from "./dto-tasks";
+import { applyTaskAction } from "./service-tasks";
 
-const WS = "ws-1";
-const USER = "aaaaaaaa-e29b-41d4-a716-446655440000";
-const PEER = "bbbbbbbb-e29b-41d4-a716-446655440000";
-const CREATOR = "cccccccc-e29b-41d4-a716-446655440000";
-const TARGET = "dddddddd-e29b-41d4-a716-446655440000";
-const TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
+const CHANNEL = "44444444-4444-4444-8444-444444444444";
+const WORKSPACE = "22222222-2222-4222-8222-222222222222";
+const ME = "11111111-1111-4111-8111-111111111111";
+const PEER = "99999999-9999-4999-8999-999999999999";
+const TASK = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const MY_AGENT = "deynelz3";
+const OTHER_AGENT = "k2k2q9fh";
 
-const ctx: ChannelContext = {
-  workspaceId: WS,
-  userId: USER,
-  credentialSubjectUserId: USER,
-  source: "user",
-  role: "member",
-};
+const person = { workspaceId: WORKSPACE, userId: ME, source: "user", role: "member" } as ChannelContext;
+const agent = { ...person, source: "agent", sessionId: `${CHANNEL}::${MY_AGENT}` } as ChannelContext;
+const guest = { ...person, role: "guest" } as ChannelContext;
 
-function channelRow(overrides: Partial<ChannelRow> = {}): ChannelRow {
+function taskRow(over: Partial<ChannelTaskReadRow> = {}): ChannelTaskReadRow {
   return {
-    id: "chan-1",
-    workspace_id: WS,
-    created_by: USER,
-    slug: "general",
-    name: "General",
-    topic: "",
-    visibility: "private",
-    is_direct: false,
-    direct_key: null,
-    archived_at: null,
-    deleted_at: null,
-    created_at: "2026-07-27T00:00:00Z",
-    updated_at: "2026-07-27T00:00:00Z",
-    ...overrides,
-  };
-}
-
-function memberRow(userId: string, role = "member"): ChannelMemberRow {
-  return {
-    channel_id: "chan-1",
-    user_id: userId,
-    workspace_id: WS,
-    role,
-    last_read_at: null,
-    notify_scope: "all",
-    agent_tool_profile: "full",
-    favorited_at: null,
-    added_by: USER,
-    joined_at: "2026-07-27T00:00:00Z",
-  };
-}
-
-function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
-  return {
-    id: TASK_ID,
-    channel_id: "chan-1",
-    workspace_id: WS,
-    title: "Ship it",
+    id: TASK,
+    channel_id: CHANNEL,
+    workspace_id: WORKSPACE,
+    title: "Fix teardown",
+    description: "",
     status: "open",
-    outcome: null,
-    mode: "interactive",
-    created_by: CREATOR,
-    target_user_id: TARGET,
-    created_at: "2026-07-27T00:00:00Z",
-    updated_at: "2026-07-27T00:00:00Z",
-    closed_at: null,
-    outcome_summary: null,
-    ...overrides,
+    created_by: ME,
+    created_by_agent: null,
+    linked_thread_id: null,
+    linked_message_id: null,
+    due_at: null,
+    resolved_at: null,
+    resolved_by: null,
+    resolved_by_agent: null,
+    client_msg_id: null,
+    created_at: "2026-10-26T00:00:00Z",
+    updated_at: "2026-10-26T00:00:00Z",
+    channel_task_assignees: [],
+    channel_task_subtasks: [],
+    linked_thread: null,
+    linked_message: null,
+    ...over,
   };
 }
+
+const subtask = (position: number): TaskSubtaskRow => ({
+  id: `sub-${position}`,
+  task_id: TASK,
+  position,
+  title: "Step",
+  detail: null,
+  owner_user_id: ME,
+  owner_agent_id: null,
+  state: "todo",
+  created_by: ME,
+  client_msg_id: null,
+  created_at: "2026-10-26T00:00:00Z",
+  updated_at: "2026-10-26T00:00:00Z",
+});
+
+const seeChannel = (membership: unknown = { role: "member" }) =>
+  vi.mocked(loadVisibleChannel).mockResolvedValue({
+    channel: { id: CHANNEL, workspace_id: WORKSPACE },
+    membership,
+  } as never);
+
+/** An agent `agentId` live in this channel, run by `operator`. */
+const liveAgent = (operator: string) =>
+  vi.mocked(repoSessions.sessionRowsWhere).mockResolvedValue([{ user_id: operator }] as never);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow());
-  vi.mocked(repo.findChannelById).mockResolvedValue(channelRow());
-  vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
-    uid === USER ? memberRow(USER, "owner") : null
-  );
-  // createTask also asserts the addressee is an ACTIVE workspace member.
-  // Defaulted true; the departed-member test flips it.
-  vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
-  vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
-  vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
-  vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => ({
-    id: "msg-1",
-    seq: 1,
-    channel_id: row.channel_id,
-    workspace_id: row.workspace_id,
-    author_user_id: row.author_user_id,
-    author_kind: row.author_kind,
-    kind: row.kind,
-    body: row.body,
-    metadata: row.metadata,
-    client_msg_id: row.client_msg_id,
-    created_at: "2026-07-27T00:00:00Z",
-  }));
-  vi.mocked(list.getChannel).mockResolvedValue(
-    {} as Awaited<ReturnType<typeof list.getChannel>>
-  );
+  seeChannel();
+  vi.mocked(repoTasks.findTask).mockResolvedValue(taskRow());
+  vi.mocked(repoTasks.listNotes).mockResolvedValue([]);
+  vi.mocked(repoTasks.insertTask).mockResolvedValue(TASK);
+  vi.mocked(repoTasks.insertAssignee).mockResolvedValue("assignee-1");
+  vi.mocked(repo.hasMembership).mockResolvedValue(true);
+  vi.mocked(repoSessions.sessionRowsWhere).mockResolvedValue([]);
 });
 
-describe("createTask — authorization", () => {
-  it("forbids a non-member (public channel, caller not a member)", async () => {
-    vi.mocked(repo.findChannelBySlug).mockResolvedValue(
-      channelRow({ visibility: "public" })
-    );
-    vi.mocked(repo.findMembership).mockResolvedValue(null);
+describe("R8: a guest reads and adds notes, nothing else", () => {
+  it("refuses a guest's create and writes nothing", async () => {
     await expect(
-      createTask(ctx, "general", { title: "T", body: "b", toUserId: PEER })
+      applyTaskAction(guest, CHANNEL, { action: "create", title: "x" })
     ).rejects.toBeInstanceOf(ChannelForbiddenError);
     expect(repoTasks.insertTask).not.toHaveBeenCalled();
   });
 
-  it("rejects an addressee who is not a channel member", async () => {
+  it("lets a guest add a note", async () => {
+    await applyTaskAction(guest, CHANNEL, { action: "add_note", task: TASK, body: "seen" });
+    expect(repoTasks.insertNote).toHaveBeenCalledWith(
+      expect.objectContaining({ author_user_id: ME, author_agent_id: null, body: "seen" })
+    );
+  });
+
+  it("refuses a public-channel reader who is not a member", async () => {
+    seeChannel(null);
     await expect(
-      createTask(ctx, "general", { title: "T", body: "b", toUserId: PEER })
-    ).rejects.toBeInstanceOf(ChannelAddresseeNotMemberError);
+      applyTaskAction(person, CHANNEL, { action: "add_note", task: TASK, body: "x" })
+    ).rejects.toBeInstanceOf(ChannelForbiddenError);
+    expect(repoTasks.insertNote).not.toHaveBeenCalled();
+  });
+});
+
+describe("create", () => {
+  it("stamps the agent from the session key and wakes an assigned agent through postMessage (R7)", async () => {
+    liveAgent(ME);
+    await applyTaskAction(agent, CHANNEL, {
+      action: "create",
+      title: "Fix teardown",
+      assignees: [{ kind: "agent", agentId: OTHER_AGENT }],
+    });
+    expect(repoTasks.insertTask).toHaveBeenCalledWith(
+      expect.objectContaining({ created_by: ME, created_by_agent: MY_AGENT })
+    );
+    expect(repoTasks.insertAssignee).toHaveBeenCalledWith(TASK, ME, OTHER_AGENT);
+    expect(postMessage).toHaveBeenCalledWith(
+      agent,
+      CHANNEL,
+      expect.objectContaining({ to: `@agent-${OTHER_AGENT}`, clientMsgId: `task-${TASK}-assign-assignee-1` }),
+      { assignedTaskId: TASK }
+    );
+  });
+
+  it("posts nothing for a person assignee", async () => {
+    await applyTaskAction(person, CHANNEL, {
+      action: "create",
+      title: "x",
+      assignees: [{ kind: "person", userId: PEER }],
+    });
+    expect(repoTasks.insertAssignee).toHaveBeenCalledWith(TASK, PEER, null);
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  it("converges on the caller's own task for a retried clientMsgId", async () => {
+    vi.mocked(repoTasks.findOwnTaskIdByClientId).mockResolvedValue(TASK);
+    const { task } = await applyTaskAction(person, CHANNEL, {
+      action: "create",
+      title: "x",
+      clientMsgId: "k1",
+      assignees: [{ kind: "person", userId: PEER }],
+    });
+    expect(task.id).toBe(TASK);
+    expect(repoTasks.insertTask).not.toHaveBeenCalled();
+    expect(repoTasks.insertAssignee).not.toHaveBeenCalled();
+  });
+
+  it("refuses a message link outside this channel before writing", async () => {
+    vi.mocked(repoMessages.findMessageRefsBySeqs).mockResolvedValue([]);
+    await expect(
+      applyTaskAction(person, CHANNEL, { action: "create", title: "x", message: 41 })
+    ).rejects.toBeInstanceOf(TaskLinkUnresolvedError);
     expect(repoTasks.insertTask).not.toHaveBeenCalled();
   });
 
-  it("C-20: rejects a target who is a channel member but a DEPARTED workspace member", async () => {
-    // ⚠ `channel_members` is never swept on workspace-leave, so the target still
-    // resolves as a channel member but can never answer. Must fail CLOSED, not
-    // post an opening message and arm an await nothing will answer.
-    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
-      uid === USER ? memberRow(USER, "owner") : memberRow(uid)
-    );
-    vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(false);
+  it("refuses a person who is not a channel member", async () => {
+    vi.mocked(repo.hasMembership).mockResolvedValue(false);
     await expect(
-      createTask(ctx, "general", { title: "T", body: "b", toUserId: PEER })
-    ).rejects.toBeInstanceOf(ChannelAddresseeNotMemberError);
-    expect(repoTasks.insertTask).not.toHaveBeenCalled();
-  });
-
-  it("creates the task + posts the initial request tagged with taskId", async () => {
-    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
-      uid === USER ? memberRow(USER, "owner") : memberRow(uid)
-    );
-    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
-      taskRow({
-        created_by: row.created_by,
-        target_user_id: row.target_user_id,
-        title: row.title,
-        mode: row.mode,
+      applyTaskAction(person, CHANNEL, {
+        action: "create",
+        title: "x",
+        assignees: [{ kind: "person", userId: PEER }],
       })
-    );
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: USER, target_user_id: PEER })
-    );
-
-    const { thread: task, openingSeq } = await createTask(ctx, "general", {
-      title: "Ship it",
-      body: "please do X",
-      toUserId: PEER,
-    });
-
-    expect(task.createdBy).toBe(USER);
-    expect(task.targetUserId).toBe(PEER);
-    // ⚠ The opening message's seq rides back out — it is the requester's `await`
-    // cursor, and looking it up afterwards races the peer's reply.
-    expect(openingSeq).toBe(1);
-    const insertArg = vi.mocked(repoTasks.insertTask).mock.calls[0][0];
-    expect(insertArg).toMatchObject({
-      workspace_id: WS,
-      title: "Ship it",
-      mode: "interactive",
-      created_by: USER,
-      target_user_id: PEER,
-    });
-    const msgMeta = vi.mocked(repoMessages.insertMessage).mock.calls[0][0].metadata;
-    expect(msgMeta.taskId).toBe(TASK_ID);
-  });
-
-  // ⚠ The opening request is what the responder's desktop routes on, so the
-  // runtime stamp must reach it — only if createTask hands its own ctx down.
-  it("carries the caller's runtime onto the opening request", async () => {
-    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
-      uid === USER ? memberRow(USER, "owner") : memberRow(uid)
-    );
-    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
-      taskRow({ created_by: row.created_by, target_user_id: row.target_user_id })
-    );
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: USER, target_user_id: PEER })
-    );
-
-    await createTask(
-      { ...ctx, runtime: "desktop-session" },
-      "general",
-      { title: "Ship it", body: "please do X", toUserId: PEER }
-    );
-
-    const msgMeta = vi.mocked(repoMessages.insertMessage).mock.calls[0][0].metadata;
-    expect(msgMeta.runtime).toBe("desktop-session");
-  });
-
-  it("leaves the opening request unstamped for an external caller", async () => {
-    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
-      uid === USER ? memberRow(USER, "owner") : memberRow(uid)
-    );
-    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
-      taskRow({ created_by: row.created_by, target_user_id: row.target_user_id })
-    );
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: USER, target_user_id: PEER })
-    );
-
-    await createTask(ctx, "general", {
-      title: "Ship it",
-      body: "please do X",
-      toUserId: PEER,
-    });
-
-    const msgMeta = vi.mocked(repoMessages.insertMessage).mock.calls[0][0].metadata;
-    expect(Object.prototype.hasOwnProperty.call(msgMeta, "runtime")).toBe(false);
+    ).rejects.toBeInstanceOf(TaskActorUnresolvedError);
+    expect(repoTasks.insertTask).not.toHaveBeenCalled();
   });
 });
 
-describe("createTask — self-target guard", () => {
-  beforeEach(() => {
-    // Everyone is a channel member, so only the self-target guard catches it.
-    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
-      uid === USER ? memberRow(USER, "owner") : memberRow(uid)
-    );
-  });
-
-  it("rejects a thread the caller addressed to themselves, writing nothing", async () => {
-    // ⚠ Only creator and target may post. Self-addressed, they are one person,
-    // so the thread is accepted silently and sits dead in the panel.
+describe("assign", () => {
+  it("refuses an agent credential assigning a peer's agent", async () => {
+    liveAgent(PEER);
     await expect(
-      createTask(ctx, "general", { title: "T", body: "b", toUserId: USER })
-    ).rejects.toBeInstanceOf(TaskSelfTargetError);
-    expect(repoTasks.insertTask).not.toHaveBeenCalled();
-    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
-  });
-
-  it("still rejects on a retry whose client_msg_id matches a stored thread", async () => {
-    // ⚠ ORDERING, not idempotency: the guard sits IN FRONT of the
-    // client_msg_id short-circuit, so a retry errors identically instead of
-    // being handed the stored dead thread as a success.
-    vi.mocked(repoTasks.findOwnTaskByClientId).mockResolvedValue(
-      taskRow({ created_by: USER, target_user_id: USER })
-    );
-
-    await expect(
-      createTask(ctx, "general", {
-        title: "T",
-        body: "b",
-        toUserId: USER,
-        clientMsgId: "dedupe-self",
+      applyTaskAction(agent, CHANNEL, {
+        action: "assign",
+        task: TASK,
+        assignee: { kind: "agent", agentId: OTHER_AGENT },
       })
-    ).rejects.toBeInstanceOf(TaskSelfTargetError);
-
-    // Short-circuit never reached — no lookup, no re-driven post.
-    expect(repoTasks.findOwnTaskByClientId).not.toHaveBeenCalled();
-    expect(repoTasks.insertTask).not.toHaveBeenCalled();
-    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
+    ).rejects.toBeInstanceOf(ChannelForbiddenError);
+    expect(repoTasks.insertAssignee).not.toHaveBeenCalled();
   });
 
-  it("leaves a thread addressed to another member unaffected", async () => {
-    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
-      taskRow({ created_by: row.created_by, target_user_id: row.target_user_id })
-    );
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: USER, target_user_id: PEER })
-    );
-
-    const { thread } = await createTask(ctx, "general", {
-      title: "Ship it",
-      body: "please do X",
-      toUserId: PEER,
+  it("lets a person assign a peer's agent, filed under that agent's operator", async () => {
+    liveAgent(PEER);
+    await applyTaskAction(person, CHANNEL, {
+      action: "assign",
+      task: TASK,
+      assignee: { kind: "agent", agentId: OTHER_AGENT },
     });
+    expect(repoTasks.insertAssignee).toHaveBeenCalledWith(TASK, PEER, OTHER_AGENT);
+    expect(postMessage).toHaveBeenCalledTimes(1);
+  });
 
-    expect(thread.targetUserId).toBe(PEER);
-    expect(repoTasks.insertTask).toHaveBeenCalledTimes(1);
-    expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
+  it("does not wake an agent assigning itself, or re-wake an existing assignee", async () => {
+    liveAgent(ME);
+    await applyTaskAction(agent, CHANNEL, {
+      action: "assign",
+      task: TASK,
+      assignee: { kind: "agent", agentId: MY_AGENT },
+    });
+    vi.mocked(repoTasks.insertAssignee).mockResolvedValue(null);
+    await applyTaskAction(person, CHANNEL, {
+      action: "assign",
+      task: TASK,
+      assignee: { kind: "agent", agentId: OTHER_AGENT },
+    });
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  it("takes the new row back out when the wake post fails, so a retry wakes the agent", async () => {
+    liveAgent(PEER);
+    const down = new Error("post failed");
+    vi.mocked(postMessage).mockRejectedValueOnce(down);
+    const assign = () =>
+      applyTaskAction(person, CHANNEL, {
+        action: "assign",
+        task: TASK,
+        assignee: { kind: "agent", agentId: OTHER_AGENT },
+      });
+    await expect(assign()).rejects.toBe(down);
+    expect(repoTasks.deleteAssignee).toHaveBeenCalledWith(TASK, { agentId: OTHER_AGENT });
+    await assign();
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(repoTasks.deleteAssignee).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses an agent with no session in this channel", async () => {
+    await expect(
+      applyTaskAction(person, CHANNEL, {
+        action: "assign",
+        task: TASK,
+        assignee: { kind: "agent", agentId: OTHER_AGENT },
+      })
+    ).rejects.toBeInstanceOf(TaskActorUnresolvedError);
+  });
+
+  it("unassigns an agent by id alone, without a live session", async () => {
+    await applyTaskAction(person, CHANNEL, {
+      action: "unassign",
+      task: TASK,
+      assignee: { kind: "agent", agentId: OTHER_AGENT },
+    });
+    expect(repoTasks.deleteAssignee).toHaveBeenCalledWith(TASK, { agentId: OTHER_AGENT });
+    expect(repoSessions.sessionRowsWhere).not.toHaveBeenCalled();
   });
 });
 
-
-// 1.37.1: a thread needs no target. A one-member home channel could not open one
-// at all, because the only addressable member was the caller.
-describe("createTask — targetless thread", () => {
-  beforeEach(() => {
-    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
-      taskRow({ created_by: row.created_by, target_user_id: row.target_user_id })
+describe("set_status (R5)", () => {
+  it("stamps the resolver on resolve and clears it on any other status", async () => {
+    await applyTaskAction(agent, CHANNEL, { action: "set_status", task: TASK, status: "resolved" });
+    expect(repoTasks.updateTask).toHaveBeenLastCalledWith(
+      CHANNEL,
+      TASK,
+      expect.objectContaining({ status: "resolved", resolved_by: ME, resolved_by_agent: MY_AGENT })
     );
-  });
-
-  it("opens with no target in a one-member channel, addressed to nobody", async () => {
-    const { thread, openingSeq } = await createTask(ctx, "general", {
-      title: "Log",
-      body: "note",
+    vi.mocked(repoTasks.findTask).mockResolvedValue(
+      taskRow({ status: "resolved", resolved_at: "2026-10-26T01:00:00Z", resolved_by: ME })
+    );
+    await applyTaskAction(person, CHANNEL, { action: "set_status", task: TASK, status: "open" });
+    expect(repoTasks.updateTask).toHaveBeenLastCalledWith(CHANNEL, TASK, {
+      status: "open",
+      resolved_at: null,
+      resolved_by: null,
+      resolved_by_agent: null,
     });
-    expect(thread.targetUserId).toBeNull();
-    expect(openingSeq).toBe(1);
-    expect(vi.mocked(repoTasks.insertTask).mock.calls[0][0].target_user_id).toBeNull();
-    // There is no addressee to check.
-    expect(repo.isActiveWorkspaceMember).not.toHaveBeenCalled();
-    const opener = vi.mocked(repoMessages.insertMessage).mock.calls[0][0];
-    expect(opener.metadata.taskId).toBe(TASK_ID);
-    expect(opener.metadata.to_user_id).toBeUndefined();
   });
 
-  it('stamps intent "chat" on the opener of a record thread', async () => {
-    await createTask(ctx, "general", { title: "Log", body: "note", intent: "chat" });
-    const opener = vi.mocked(repoMessages.insertMessage).mock.calls[0][0];
-    expect(opener.metadata.intent).toBe("chat");
-  });
-
-  it("refuses a record thread that names a target, before writing anything", async () => {
-    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
-      uid === USER ? memberRow(USER, "owner") : memberRow(uid)
-    );
-    await expect(
-      createTask(ctx, "general", { title: "T", body: "b", toUserId: PEER, intent: "chat" })
-    ).rejects.toBeInstanceOf(ChannelChatAddressedError);
-    expect(repoTasks.insertTask).not.toHaveBeenCalled();
-  });
-});
-
-describe("setTaskMode — authorization", () => {
-  it("allows the creator and posts NO message", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: USER })
-    );
-    vi.mocked(repoTasks.updateTask).mockResolvedValue(
-      taskRow({ created_by: USER, mode: "autonomous" })
-    );
-
-    const task = await setTaskMode(ctx, "general", TASK_ID, "autonomous");
-
-    expect(task.mode).toBe("autonomous");
-    expect(vi.mocked(repoTasks.updateTask).mock.calls[0][1]).toMatchObject({
-      mode: "autonomous",
-    });
-    // ⚠ set_task_mode is realtime-invisible — it must not post a message.
-    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
-  });
-
-  it("forbids a non-creator (even the target)", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: CREATOR, target_user_id: USER })
-    );
-    await expect(
-      setTaskMode(ctx, "general", TASK_ID, "interactive")
-    ).rejects.toBeInstanceOf(TaskForbiddenError);
+  it("writes nothing when the status is unchanged", async () => {
+    await applyTaskAction(person, CHANNEL, { action: "set_status", task: TASK, status: "open" });
     expect(repoTasks.updateTask).not.toHaveBeenCalled();
+  });
+
+  it("answers not-found for a task outside this channel", async () => {
+    vi.mocked(repoTasks.findTask).mockResolvedValue(null);
+    await expect(
+      applyTaskAction(person, CHANNEL, { action: "set_status", task: TASK, status: "resolved" })
+    ).rejects.toBeInstanceOf(TaskNotFoundError);
+  });
+});
+
+describe("subtasks", () => {
+  it("appends after the last position, owned by the caller by default", async () => {
+    vi.mocked(repoTasks.findTask).mockResolvedValue(
+      taskRow({ channel_task_subtasks: [subtask(0), subtask(3)] })
+    );
+    await applyTaskAction(agent, CHANNEL, { action: "add_subtask", task: TASK, title: "Next" });
+    expect(repoTasks.insertSubtask).toHaveBeenCalledWith(
+      expect.objectContaining({ position: 4, owner_user_id: ME, owner_agent_id: MY_AGENT })
+    );
+  });
+
+  it("refuses past the cap", async () => {
+    vi.mocked(repoTasks.findTask).mockResolvedValue(
+      taskRow({ channel_task_subtasks: Array.from({ length: 50 }, (_, i) => subtask(i)) })
+    );
+    await expect(
+      applyTaskAction(person, CHANNEL, { action: "add_subtask", task: TASK, title: "x" })
+    ).rejects.toBeInstanceOf(TaskLimitError);
+    expect(repoTasks.insertSubtask).not.toHaveBeenCalled();
+  });
+
+  it("answers not-found for a subtask of another task", async () => {
+    vi.mocked(repoTasks.updateSubtask).mockResolvedValue(false);
+    await expect(
+      applyTaskAction(person, CHANNEL, {
+        action: "update_subtask",
+        task: TASK,
+        subtask: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        state: "done",
+      })
+    ).rejects.toBeInstanceOf(SubtaskNotFoundError);
   });
 });

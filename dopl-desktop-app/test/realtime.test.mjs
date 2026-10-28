@@ -361,7 +361,7 @@ const FULL_ROW_PAYLOAD = {
     // Prod's average channel_messages row serializes to ~880 bytes; this
     // stands in for it so the ratio below means something.
     body: "a long agent reply that the desktop deliberately never reads. ".repeat(9),
-    metadata: { taskId: "t-1", summary: "done", runtime: "desktop-session" },
+    metadata: { threadId: "t-1", summary: "done", runtime: "desktop-session" },
     client_msg_id: null,
     created_at: "2026-07-31T00:00:00Z",
   },

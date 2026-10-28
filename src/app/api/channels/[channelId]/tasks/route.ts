@@ -3,75 +3,47 @@ import {
   withWorkspaceAuth,
   type WorkspaceAuthContext,
 } from "@/shared/auth/with-workspace-auth";
-import { parseJson } from "@/shared/api/parse-json";
+import { parseJson, parseQuery } from "@/shared/api/parse-json";
 import { requireChannelId, toChannelErrorResponse, channelWorkspace } from "@/shared/api/channel-route";
 import {
+  applyTaskAction,
   buildChannelContext,
-  createTask,
-  createTaskFanOut,
   listChannelTasks,
+  readChannelTask,
 } from "@/features/channels/server/service";
-import { withMessageSource } from "@/features/channels/server/message-source";
-import {
-  isTaskFanOutInput,
-  TaskCreatePayloadSchema,
-} from "@/features/channels/schema";
+import { TaskActionSchema, TaskQuerySchema } from "@/features/channels/schema";
 
-// Channel tasks: GET lists, POST creates. NOT sessionOnly — task ops arrive over the MCP device
-// token; the service enforces channel-scoped authorization.
-async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
+// Channel tasks: GET lists (or reads one with `?task=`), POST applies one action. The service holds
+// every gate; tasks are never deleted, so there is no DELETE.
+async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
+    const query = parseQuery(request.nextUrl.searchParams, TaskQuerySchema, ["task", "status"]);
     const ctx = buildChannelContext(auth);
-    const { threads, truncated } = await listChannelTasks(
-      ctx,
-      requireChannelId(auth.params)
-    );
-    // `tasks` keeps the storage name; `truncated` is load-bearing (INVARIANTS §9).
-    return NextResponse.json({ tasks: threads, truncated });
+    const ref = requireChannelId(auth.params);
+    if (query.task !== undefined) {
+      return NextResponse.json({ task: await readChannelTask(ctx, ref, query.task) });
+    }
+    // `truncated` is load-bearing (INVARIANTS §9).
+    return NextResponse.json(await listChannelTasks(ctx, ref, query.status ?? null));
   } catch (err) {
     return toChannelErrorResponse(err);
   }
 }
 
-// ⚠ One POST, two shapes: single create, or fan-out (`toUserIds`, one thread per
-// addressee + group id). Same gate, since a fan-out is N ordinary creates
-// (INVARIANTS §9). Empty `toUserIds` is refused by `TaskFanOutSchema`.
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    const input = await parseJson(request, TaskCreatePayloadSchema);
-    const ctx = await withMessageSource(buildChannelContext(auth), request);
-    if (isTaskFanOutInput(input)) {
-      const { threads, groupId } = await createTaskFanOut(
-        ctx,
-        requireChannelId(auth.params),
-        input
-      );
-      // `tasks` / `openingSeqs` keep the storage name and stay ALIGNED by
-      // index — the client patches its optimistic rows against that order.
-      return NextResponse.json(
-        {
-          tasks: threads.map((t) => t.thread),
-          openingSeqs: threads.map((t) => t.openingSeq),
-          fanoutGroup: groupId,
-        },
-        { status: 201 }
-      );
-    }
-    const { thread, openingSeq } = await createTask(
-      ctx,
+    const input = await parseJson(request, TaskActionSchema);
+    const result = await applyTaskAction(
+      buildChannelContext(auth),
       requireChannelId(auth.params),
       input
     );
-    // `task` keeps the storage name. `openingSeq` lets a requester arm `await` without
-    // a follow-up read. ⚠ Null only when the idempotent short-circuit returned
-    // another member's thread.
-    return NextResponse.json({ task: thread, openingSeq }, { status: 201 });
+    return NextResponse.json(result, { status: input.action === "create" ? 201 : 200 });
   } catch (err) {
     return toChannelErrorResponse(err);
   }
 }
 
-// ⚠ Both at guest (INVARIANTS §4A, §2B; Samuel's Q1 ruling: guests may create
-// threads). The service's membership check (`ChannelForbiddenError`) is the gate.
+// Both at guest: the floor is a tripwire; the service admits a guest to reads and notes only.
 export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: channelWorkspace, minRole: "guest" });
 export const POST = withWorkspaceAuth(handlePost, { workspaceFromParams: channelWorkspace, minRole: "guest" });

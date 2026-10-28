@@ -108,7 +108,7 @@ function reported(over: Partial<SessionStateUpsert> = {}): SessionStateUpsert {
   return {
     session_key: `${CHAN}:t-1`,
     channel_id: CHAN,
-    task_id: null,
+    thread_id: null,
     name: "flint",
     state: "working",
     channel_name: "General",

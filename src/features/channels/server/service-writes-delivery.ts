@@ -85,7 +85,7 @@ export function weakerOrEqual(delivery: ChannelDelivery): ChannelDelivery[] {
 }
 
 /**
- * The agent id inside a desktop session key, `<channelId>:<taskId>:<agentId>`.
+ * The agent id inside a desktop session key, `<channelId>:<threadId>:<agentId>`.
  *
  * ⚠ **`null` FOR THE TWO-SEGMENT FORM, WHICH IS AN OLDER DESKTOP AND A
  * SUPPORTED PEER** (INVARIANTS §13, and the reason `SESSION_KEY_RE` still

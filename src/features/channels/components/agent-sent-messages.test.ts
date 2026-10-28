@@ -26,7 +26,7 @@ describe("agentSentMessages — what this agent actually posted", () => {
     authorUserId: ME,
     authorKind: "agent",
     body: "posted by my agent",
-    metadata: { taskId: "t-1" },
+    metadata: { threadId: "t-1" },
   });
 
   it("takes agent-authored rows on this thread under the viewer's OWN account", () => {
@@ -38,31 +38,31 @@ describe("agentSentMessages — what this agent actually posted", () => {
       id: "m-theirs",
       authorUserId: PEER,
       authorKind: "agent",
-      metadata: { taskId: "t-1" },
+      metadata: { threadId: "t-1" },
     });
     expect(agentSentMessages([theirs], "t-1", ME)).toEqual([]);
   });
 
   it("excludes my own HUMAN message, another thread, and lifecycle rows", () => {
-    const human = message({ id: "m-h", authorUserId: ME, metadata: { taskId: "t-1" } });
+    const human = message({ id: "m-h", authorUserId: ME, metadata: { threadId: "t-1" } });
     const other = message({
       id: "m-o",
       authorUserId: ME,
       authorKind: "agent",
-      metadata: { taskId: "t-2" },
+      metadata: { threadId: "t-2" },
     });
     const lifecycle = message({
       id: "m-l",
       authorUserId: ME,
       authorKind: "agent",
-      kind: "task_started",
-      metadata: { taskId: "t-1" },
+      kind: "thread_started",
+      metadata: { threadId: "t-1" },
     });
     expect(agentSentMessages([human, other, lifecycle], "t-1", ME)).toEqual([]);
   });
 
   it("answers nothing for a session with no first-class thread", () => {
-    // An empty taskId must not match every untagged row in the channel.
+    // An empty threadId must not match every untagged row in the channel.
     const untagged = message({ id: "m-u", authorUserId: ME, authorKind: "agent" });
     expect(agentSentMessages([untagged, MINE], "", ME)).toEqual([]);
   });
@@ -83,7 +83,7 @@ describe("agentSentMessages — what this agent actually posted", () => {
       authorKind: "agent",
       body: "from a1b2c3d4",
       clientMsgId: "agent-a1b2c3d4-1",
-      metadata: { taskId: "t-1" },
+      metadata: { threadId: "t-1" },
     });
     const byE5 = message({
       id: "m-e5",
@@ -91,7 +91,7 @@ describe("agentSentMessages — what this agent actually posted", () => {
       authorKind: "agent",
       body: "from e5f6g7h8",
       clientMsgId: "agent-e5f6g7h8-2",
-      metadata: { taskId: "t-1" },
+      metadata: { threadId: "t-1" },
     });
 
     it("gives each sibling ONLY its own posts", () => {
@@ -127,7 +127,7 @@ describe("agentSentMessages — what this agent actually posted", () => {
         id: "m-u",
         authorUserId: ME,
         authorKind: "agent",
-        metadata: { taskId: "t-1" },
+        metadata: { threadId: "t-1" },
       });
       const courtesy = message({
         id: "m-c",
@@ -139,7 +139,7 @@ describe("agentSentMessages — what this agent actually posted", () => {
         // stamp regex is anchored at BOTH ends, and the uuid's later `-` groups
         // are what make that decisive.
         clientMsgId: "agent-abcd1234-5678-90ab-cdef-000000000000-3",
-        metadata: { taskId: "t-1" },
+        metadata: { threadId: "t-1" },
       });
       expect(
         agentSentMessages([byA1, unstamped, courtesy], "t-1", ME, "a1b2c3d4").map(

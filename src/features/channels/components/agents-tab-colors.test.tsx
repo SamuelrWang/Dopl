@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
- * **THE AGENTS TAB'S COLOUR DOTS — ONE MARK, BOTH CARD SHAPES** (2026-09-14;
- * docs/specs/agent-colors.md item 8: *"the Agents-tab card and the pop-out rail row show a small
- * colour dot before the name for live agents"*).
+ * **THE AGENTS TAB'S AGENT COLOUR — ONE KEY, BOTH CARD SHAPES** (2026-09-14; docs/specs/agent-colors.md
+ * item 8). The card draws it as the identity face's ring and the context meter's fill, and carries
+ * the key as `data-agent-color`.
  *
  * ⚠ **THE DEFECT THIS FILE EXISTS FOR IS HALF A RULING.** `agents-tab-cards.tsx › PeerCards` read
- * `peer.color` off the projection and drew the dot; `agents-tab-cards.tsx › AgentCard` declared a
+ * `peer.color` off the projection and drew the mark; `agents-tab-cards.tsx › AgentCard` declared a
  * `color` prop, carried a docblock naming its source — and **nothing passed it**. So one list drew
  * the mark for every member's agents EXCEPT the operator's own, which is the one comparison the
  * surface exists to make. A declared-but-unpassed prop is §11's silent-feature shape in a second
@@ -49,7 +49,7 @@ function own(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummary {
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: "t-1",
+    threadId: "t-1",
     agentId: "aa11bb22",
     name: "aa11bb22",
     displayName: "Scout",
@@ -81,7 +81,7 @@ function dots(): string[] {
   );
 }
 
-describe("the colour dot on an Agents-tab card", () => {
+describe("the colour key on an Agents-tab card", () => {
   /**
    * 🔒 MUTATION-PROOF: drop the `color` prop from the own `AgentCard` mount in `agents-tab.tsx`,
    * or key `colorOf` off anything but the projection row's `name`, and this fails alone.
@@ -97,7 +97,7 @@ describe("the colour dot on an Agents-tab card", () => {
         onOpenAgent={noop}
       />
     );
-    // ⚠ THE KEY ON THE DOM, never the resolved hue — `agent-color-dot.tsx`'s own rule.
+    // ⚠ THE KEY ON THE DOM, never the resolved hue — the rule `agent-color-dot.tsx` set.
     expect(dots()).toContain("agent-05");
   });
 

@@ -36,6 +36,8 @@ import {
   type PaneFilter,
   type PaneMessage,
 } from "./chats-pane-data";
+import { CHROME_ICON_BUTTON } from "@/shared/ui/chrome-icon-button";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 /**
  * Playground chats pane — a clone of the desktop Chats page
@@ -46,9 +48,6 @@ import {
  * REAL workspace chats over the same JSX. Reads only — no writes, realtime,
  * or navigation.
  */
-
-const ICON_BTN =
-  "flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
 
 export function ChatsPane() {
   const { session } = usePlaygroundSession();
@@ -100,14 +99,14 @@ export function ChatsPane() {
   return (
     <div className="page-float flex antialiased">
       {/* ── Left: session list ─────────────────────────────────────── */}
-      <div className="flex w-[372px] shrink-0 flex-col border-r border-border-default">
+      <div className="flex w-93 shrink-0 flex-col border-r border-border-default">
         <div className="flex items-center gap-2 px-3.5 pb-2.5 pt-3.5">
           <h1 className="text-title font-semibold tracking-tight text-text-primary">
             Chats
           </h1>
           <span className="text-caption text-text-muted">{chatCount}</span>
           <span className="flex-1" />
-          <span className={ICON_BTN} aria-hidden>
+          <span className={CHROME_ICON_BUTTON} aria-hidden>
             <FolderPlus size={16} />
           </span>
         </div>
@@ -159,14 +158,14 @@ export function ChatsPane() {
       <div className="flex min-w-0 flex-1 flex-col">
         {selected === null ? (
           <div className="flex flex-1 items-center justify-center px-14">
-            <p className="max-w-[360px] text-center text-body leading-relaxed text-text-muted">
+            <p className="max-w-90 text-center text-body leading-relaxed text-text-muted">
               Nothing here yet. When an agent exports a session into this
               workspace, its transcript opens here.
             </p>
           </div>
         ) : (
           <>
-            <div className="flex h-[52px] shrink-0 items-center gap-1.5 border-b border-border-default px-3.5">
+            <div className="flex h-13 shrink-0 items-center gap-1.5 border-b border-border-default px-3.5">
               <span className="shrink-0 text-small font-medium text-text-secondary">
                 {selected.folderName ?? "Unfiled"}
               </span>
@@ -184,7 +183,7 @@ export function ChatsPane() {
                 {selected.isPublic ? "Public" : "Private"}
               </span>
               <span
-                className={cn(ICON_BTN, selected.pinned && "text-text-primary")}
+                className={cn(CHROME_ICON_BUTTON, selected.pinned && "text-text-primary")}
                 aria-hidden
               >
                 <Star
@@ -192,20 +191,20 @@ export function ChatsPane() {
                   className={cn(selected.pinned && "fill-current")}
                 />
               </span>
-              <span className={ICON_BTN} aria-hidden>
+              <span className={CHROME_ICON_BUTTON} aria-hidden>
                 <Copy size={15} />
               </span>
-              <span className={ICON_BTN} aria-hidden>
+              <span className={CHROME_ICON_BUTTON} aria-hidden>
                 <MoreHorizontal size={16} />
               </span>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-14 pb-16 pt-8">
-              <div className="mx-auto max-w-[760px]">
+              <div className="mx-auto max-w-190">
                 <HeaderCard chat={selected} />
 
                 <div className="mb-3 mt-7 flex items-baseline gap-2">
-                  <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+                  <span className={LABEL_TEXT}>
                     Conversation
                   </span>
                   <span className="text-caption text-text-muted">
@@ -251,7 +250,7 @@ function FolderHeader({
         </span>
       </span>
       {isPublic && (
-        <span className="flex h-6 w-6 items-center justify-center rounded-[6px] text-text-secondary">
+        <span className="flex h-6 w-6 items-center justify-center rounded-sm text-text-secondary">
           <Building2 size={12} />
         </span>
       )}
@@ -279,7 +278,7 @@ function ChatRow({
       )}
     >
       {selected && (
-        <span className="absolute bottom-1.5 left-0 top-1.5 w-[3px] rounded-r-[3px] bg-text-primary" />
+        <span className="absolute bottom-1.5 left-0 top-1.5 w-0.75 rounded-r-[3px] bg-text-primary" />
       )}
       <span className="flex w-full items-center gap-1.5">
         {chat.pinned && (
@@ -303,7 +302,7 @@ function ChatRow({
 
 function HeaderCard({ chat }: { chat: PaneChat }) {
   return (
-    <section className="overflow-hidden rounded-[14px] border border-border-strong bg-bg-elevated">
+    <section className="overflow-hidden rounded-xl border border-border-strong bg-bg-elevated">
       <div className="px-5 pb-4 pt-4">
         <h2 className="break-words text-display font-semibold tracking-tight text-text-primary">
           {chat.title}
@@ -355,7 +354,7 @@ function DisclosureStrip({ label, meta }: { label: string; meta?: string }) {
     <div className="border-t border-border-subtle">
       <div className="flex w-full items-center gap-2 bg-card-surface-subtle px-4 py-1.5 text-left">
         <ChevronRight size={11} className="shrink-0 text-text-muted" />
-        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+        <span className={LABEL_TEXT}>
           {label}
         </span>
         {meta && <span className="text-caption text-text-muted">{meta}</span>}
@@ -372,7 +371,7 @@ function MessageList({ messages }: { messages: PaneMessage[] }) {
         <article
           key={index}
           className={cn(
-            "rounded-[10px] border px-3.5 py-2.5",
+            "rounded-lg border px-3.5 py-2.5",
             message.role === "user"
               ? "ml-12 border-border-default bg-card-surface-subtle"
               : "border-border-subtle bg-bg-elevated"

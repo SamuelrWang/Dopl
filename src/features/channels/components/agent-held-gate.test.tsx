@@ -32,7 +32,7 @@ import {
 } from "./agents-held-gates";
 import { CHANNEL_ID } from "./test-fixtures";
 
-const TASK = "t-1";
+const THREAD = "t-1";
 const AGENT = "a1b2c3d4";
 
 afterEach(() => {
@@ -63,7 +63,7 @@ function agent(heldGates: unknown): DesktopSessionSummary {
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: TASK,
+    threadId: THREAD,
     agentId: AGENT,
     name: AGENT,
     state: "working",
@@ -192,7 +192,7 @@ describe("answering", () => {
     });
     // ⚠ THE `agentId` IS THE POINT OF THE ASSERTION. Omitted, main answers the OLDEST live agent
     // on the thread — a different agent's question, with nothing reporting the substitution.
-    expect(answerPermission).toHaveBeenCalledWith(CHANNEL_ID, TASK, "req-1", true, AGENT);
+    expect(answerPermission).toHaveBeenCalledWith(CHANNEL_ID, THREAD, "req-1", true, AGENT);
   });
 
   it("Deny is the same call with allow=false — fail-closed on both sides of the wire", async () => {
@@ -202,7 +202,7 @@ describe("answering", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Deny" }));
     });
-    expect(answerPermission).toHaveBeenCalledWith(CHANNEL_ID, TASK, "req-1", false, AGENT);
+    expect(answerPermission).toHaveBeenCalledWith(CHANNEL_ID, THREAD, "req-1", false, AGENT);
   });
 
   it("each card answers ITS OWN request", async () => {
@@ -215,7 +215,7 @@ describe("answering", () => {
     await act(async () => {
       fireEvent.click(second!.querySelector("button")!);
     });
-    expect(answerPermission).toHaveBeenCalledWith(CHANNEL_ID, TASK, "req-2", true, AGENT);
+    expect(answerPermission).toHaveBeenCalledWith(CHANNEL_ID, THREAD, "req-2", true, AGENT);
   });
 
   it("🔒 NOTHING IS STAMPED OPTIMISTICALLY — the card stands until main's next push", async () => {

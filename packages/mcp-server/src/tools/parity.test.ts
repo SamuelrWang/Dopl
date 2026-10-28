@@ -129,6 +129,8 @@ const READ_OPS: Record<string, string[]> = {
     "rooms.members",
     // `opListThreads` calls only `listChannelThreads`.
     "rooms.threads",
+    // `opReadTasks` calls only `listChannelTasks` / `readChannelTask` (plus the roster for names).
+    "rooms.tasks",
     // `rooms.help` RETURNS A CONSTANT AND MAKES NO REQUEST AT ALL — the same text
     // as the `dopl://doctrine/channels` MCP resource. It reads nothing, so it is
     // not merely "not a write": there is no client call in the handler to audit.

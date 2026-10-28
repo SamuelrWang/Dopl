@@ -38,7 +38,7 @@ test("ENDED: a retained record renders as an `ended` card under its own key", ()
   assert.equal(row.state, "ended");
   assert.equal(row.agentId, "a1b2c3d4");
   assert.equal(row.name, "a1b2c3d4");
-  assert.equal(row.taskId, "task-1");
+  assert.equal(row.threadId, "thread-1");
   // ⚠ NOTHING FINER OVER A DEAD SESSION. `detail` describes a turn in flight and would outlive
   // the run it described; the posture controls would offer a control over nothing.
   assert.equal(row.detail, null);
@@ -112,7 +112,7 @@ test("ENDED: `releaseEnded` only nudges the digest — it stores nothing to forg
   // unrelated state change. There is no cache here to invalidate, which is the point.
   const m = load();
   m.bind({ sessions: new Map(), endedRecords: () => [] });
-  assert.doesNotThrow(() => m.releaseEnded(["chan-1:task-1:a1b2c3d4"]));
+  assert.doesNotThrow(() => m.releaseEnded(["chan-1:thread-1:a1b2c3d4"]));
   assert.deepEqual(m.list(), []);
 });
 

@@ -36,7 +36,7 @@ const SYNC_TABLES = Object.freeze([
   'ontology_relationships',
   'chats', 'chat_messages', 'chat_folders',
   'channel_consent_requests', 'channels', 'channel_members',
-  'channel_messages', 'agent_presence',
+  'channel_messages', 'agent_presence', 'channel_tasks',
 ]);
 
 // Historically the channels exemption excluded the three listener tables from this feed; the UI

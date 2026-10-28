@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * One bar per runtime Dopl signs in from the app: its name, its status and, where a sign-in would help,
- * the control. Live from main's status push; absent (nothing rendered) without the bridge.
+ * One row per runtime Dopl signs in from the app: its name, its status and, where a sign-in would
+ * help, the control. Live from main's status push; absent (nothing rendered) without the bridge.
  */
 
 import { cn } from "@/shared/lib/utils";
-import { OpenScaleButton } from "@/shared/ui/open-scale-button";
 import type { RuntimeCredentialStatus } from "@/shared/lib/spa-bridge";
+import { pillButton } from "@/shared/ui/pill-button";
+import { StatusPill, type StatusTone } from "@/shared/ui/status-pill";
 import { SIGN_IN_BUSY } from "../lib/runtime-copy";
 import {
   cancelRuntimeSignIn,
@@ -19,75 +20,70 @@ import {
 
 const FULL_LABEL = "Enable Chrome & connectors";
 
-const STATUS: Record<RuntimeCredentialStatus["state"], { text: string; tone: string } | null> = {
-  connected: { text: "Connected", tone: "text-success" },
-  "not-connected": { text: "Not connected", tone: "text-text-muted" },
-  expired: { text: "Sign-in expired", tone: "text-danger" },
+const STATUS: Record<RuntimeCredentialStatus["state"], { text: string; tone: StatusTone } | null> = {
+  connected: { text: "Connected", tone: "live" },
+  "not-connected": { text: "Not connected", tone: "neutral" },
+  expired: { text: "Sign-in expired", tone: "attention" },
   "signing-in": null,
 };
 
-/** `rows`: hairline rows for a settings card (the profile popup); `bars`: framed bars (onboarding). */
-export function RuntimeCredentialBars({
-  className,
-  variant = "bars",
-}: {
-  className?: string;
-  variant?: "bars" | "rows";
-}) {
+/** Hairline rows for a settings card (the profile popup's Agents pane). */
+export function RuntimeCredentialBars({ className }: { className?: string }) {
   const runtimes = useRuntimeCredentials();
   const canCancel = canCancelRuntimeSignIn();
   if (!runtimes.length) return null;
-  const rows = variant === "rows";
   return (
-    <ul className={cn(rows ? "divide-y divide-border-subtle" : "space-y-2", className)}>
+    <ul className={cn("divide-y divide-border-default", className)}>
       {runtimes.map((r) => {
         const status = STATUS[r.state];
         const busy = r.state === "signing-in";
         return (
-          <li
-            key={r.runtimeId}
-            className={cn(
-              "flex items-center justify-between gap-3",
-              rows ? "py-2.5" : "rounded-lg border border-border-default bg-bg-elevated px-3 py-2"
-            )}
-          >
+          <li key={r.runtimeId} className="flex items-center justify-between gap-3 py-2.5">
             <span className="flex min-w-0 flex-col">
               <span className="text-body font-medium text-text-primary">{r.label}</span>
               {r.notice && <span className="text-caption text-text-secondary">{r.notice}</span>}
             </span>
             <span className="flex items-center gap-3">
-              {status && <span className={cn("text-caption", status.tone)}>{status.text}</span>}
+              {status && (
+                <StatusPill tone={status.tone} dot={status.tone === "live"}>
+                  {status.text}
+                </StatusPill>
+              )}
               {r.state !== "connected" && (
-                <OpenScaleButton
+                <button
+                  type="button"
                   onClick={() => void signInToRuntime(r.runtimeId)}
                   disabled={busy}
                   aria-busy={busy}
                   aria-label={busy ? undefined : `Sign in to ${r.label}`}
-                  className="disabled:opacity-60"
+                  className={pillButton("outline", "md")}
                 >
                   {busy ? SIGN_IN_BUSY : "Sign in"}
-                </OpenScaleButton>
+                </button>
               )}
               {r.state === "connected" && r.full === "on" && (
-                <span className="text-caption text-success">Chrome & connectors on</span>
+                <StatusPill>Chrome & connectors on</StatusPill>
               )}
               {r.state === "connected" && (r.full === "off" || r.full === "signing-in") && (
-                <OpenScaleButton
+                <button
+                  type="button"
                   onClick={() => void signInFullToRuntime(r.runtimeId)}
                   disabled={r.full === "signing-in"}
                   aria-busy={r.full === "signing-in"}
-                  className="disabled:opacity-60"
+                  className={pillButton("outline", "md")}
                 >
                   {r.full === "signing-in" ? SIGN_IN_BUSY : FULL_LABEL}
-                </OpenScaleButton>
+                </button>
               )}
               {canCancel && (busy || r.full === "signing-in") && (
-                <OpenScaleButton
+                <button
+                  type="button"
                   onClick={() => cancelRuntimeSignIn(r.runtimeId)}
                   aria-label={`Cancel ${r.label} sign-in`}
+                  className={pillButton("outline", "md")}
                 >
                   Cancel
-                </OpenScaleButton>
+                </button>
               )}
             </span>
           </li>

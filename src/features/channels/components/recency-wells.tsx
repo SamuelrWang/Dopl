@@ -43,7 +43,7 @@
  */
 
 import { useMemo, type ReactNode } from "react";
-import { WellsColumn, type WellItem } from "./collapse-wells";
+import { WellsColumn, type WellItem, type WellVariant } from "./collapse-wells";
 
 const DAY_MS = 86_400_000;
 
@@ -128,8 +128,9 @@ export interface RecencyWellItem {
  * is CLIPPED against it) each reach their box intact. Nothing here sorts.
  * ⚠ **`now` IS A PARAMETER WITH A DEFAULT**, so a test can state an age instead of
  * arranging for one; the render passes nothing.
- * ⚠ **NO `face` IS PASSED AND NONE MAY BE** — the two tabs wear the default
- * `PANEL_WELL` Samuel ruled on in September and did not ask to restyle.
+ * ⚠ **THE FACE IS THE CALLER'S** (`collapse-wells.tsx › WellVariant`): the Agents tab keeps the
+ * gray `well`; the Threads and Artifacts lists pass `heading`, the /home channel rail's heading
+ * over one card per item.
  *
  * 🔒 ⚠ **EVERY WELL DRAWS, EMPTY OR NOT, SINCE 2026-09-17 (Samuel, verbatim):**
  * *"in the Threads and Agents view, i want to have the gray boxes kept there even
@@ -148,11 +149,13 @@ export interface RecencyWellItem {
 export function RecencyWells({
   items,
   storageKey,
+  variant,
   now,
 }: {
   items: readonly RecencyWellItem[];
   /** This surface's `localStorage` key — see `well-state.ts › useWells`. */
   storageKey: string;
+  variant?: WellVariant;
   /** ⚠ NO `= Date.now()` DEFAULT HERE — that is an impure call during render
    *  (`react-hooks/purity`). The clock's default lives on {@link wellFor}, the
    *  pure function, exactly as `agents-model.ts › peerRowStale` holds its own. */
@@ -172,6 +175,7 @@ export function RecencyWells({
       wells={RECENCY_WELLS}
       items={filed}
       storageKey={storageKey}
+      variant={variant}
       // 🔒 THE FOUR BOXES ARE THE TAB'S STRUCTURE (Samuel, 2026-09-17) — see the
       // ruling on this component. The tab's own empty sentence still draws BESIDE
       // them, exactly as /home's does: four empty wells cannot say which emptiness

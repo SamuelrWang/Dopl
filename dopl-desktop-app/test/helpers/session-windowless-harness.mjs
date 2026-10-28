@@ -17,7 +17,7 @@ const SRC = readFileSync(join(HERE, "..", "main", "session-windowless.js"), "utf
 
 export function load(consentOver = {}, targetingOver = null) {
   const notices = [];
-  const posts = []; // T25: the ONE task_progress a first denial writes into the channel
+  const posts = []; // T25: the ONE thread_progress a first denial writes into the channel
   const diags = [];
   const rows = [];
   const banners = []; // notifyToolGate captures — { channelName, tool, onAllow, onOpen }
@@ -45,9 +45,9 @@ export function load(consentOver = {}, targetingOver = null) {
     }
     if (id === "./channel-post") {
       return {
-        // T25. The real signature is (entry, m, kind, taskId, extra, bodyText, opts).
-        postTaskEvent: async (entry, m, kind, taskId, extra, bodyText, opts) => {
-          posts.push({ entry, m, kind, taskId, extra, bodyText, opts });
+        // T25. The real signature is (entry, m, kind, threadId, extra, bodyText, opts).
+        postThreadEvent: async (entry, m, kind, threadId, extra, bodyText, opts) => {
+          posts.push({ entry, m, kind, threadId, extra, bodyText, opts });
           return true;
         },
       };
@@ -89,7 +89,7 @@ export function session(over = {}) {
   return {
     windowless: true,
     channelId: "chan-1",
-    taskId: "task-1",
+    threadId: "thread-1",
     workspaceId: "ws-1",
     settled: false,
     pendingPermissions: new Map([["req-1", {}]]),

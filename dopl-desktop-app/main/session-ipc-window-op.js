@@ -12,14 +12,14 @@ const { diag } = require('./diag');
 function openAgentWindow(p) {
   const asAgentId = require('./session-ipc-ops').asAgentId;
   const { isSafeSegment } = require('./deep-link-target');
-  // ⚠ A CHANNEL-LEVEL AGENT HAS NO THREAD (2026-08-21), so an EMPTY `taskId` is legitimate
+  // ⚠ A CHANNEL-LEVEL AGENT HAS NO THREAD (2026-08-21), so an EMPTY `threadId` is legitimate
   // here — but only when an agent id names the target instead. A payload naming neither is
   // asking for a window onto nothing and is refused in the same `{ok:false}` shape as
-  // everything else. A NON-empty taskId still passes the ONE character rule.
+  // everything else. A NON-empty threadId still passes the ONE character rule.
   const agentId = asAgentId(p.agentId);
-  const taskId = p.taskId == null ? '' : String(p.taskId);
+  const threadId = p.threadId == null ? '' : String(p.threadId);
   if (!isSafeSegment(p.segment)) return { ok: false };
-  if (taskId ? !isSafeSegment(taskId) : !agentId) return { ok: false };
+  if (threadId ? !isSafeSegment(threadId) : !agentId) return { ok: false };
   try {
     if (require('./version-gate').isBlocked()) {
       diag('session ipc: refused sessions:openAgentWindow — the version floor is blocking');
@@ -29,7 +29,7 @@ function openAgentWindow(p) {
   return require('./agent-window').openAgentWindow({
     segment: p.segment,
     channelId: p.channelId,
-    taskId,
+    threadId,
     // ⚠ ONE WINDOW PER AGENT since 2026-08-21: without this, opening the second agent on a
     // thread silently FRONTED the first one's window.
     agentId,

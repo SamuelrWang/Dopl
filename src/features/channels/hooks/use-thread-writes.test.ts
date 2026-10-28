@@ -281,7 +281,7 @@ describe("send — the transcript key is invalidated on settle (H1)", () => {
       toUserId: "u-ada",
     });
     await flush();
-    settle({ task: thread() });
+    settle({ thread: thread() });
     await inFlight;
 
     const entry = messagesEntry(h);

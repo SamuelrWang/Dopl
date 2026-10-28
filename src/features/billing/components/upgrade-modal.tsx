@@ -11,14 +11,20 @@ import { apiRequest, ApiError } from "@/shared/api/api-client";
 import { getSpaBridge, isSpaRenderer } from "@/shared/lib/spa-bridge";
 import { getAppOrigin } from "@/shared/lib/app-origin";
 import { PERSONAL_MONTHLY_CREDITS, SEAT_MONTHLY_CREDITS } from "../credits";
-import { planNumber } from "../plans";
-import { formatMoney, PRO_PRICE, TEAM_SEAT_PRICE } from "../prices";
+import {
+  isPersonalPaidPlan,
+  PERSONAL_PAID_PLANS,
+  PERSONAL_PLAN_NAMES,
+  planNumber,
+} from "../plans";
+import { formatMoney, PERSONAL_PLAN_PRICES, TEAM_SEAT_PRICE } from "../prices";
 import { billingUrl, type CheckoutPlan } from "../url";
 import { EmbeddedCheckoutForm } from "./embedded-checkout";
 import {
   AddMemberBlocked,
   AlreadyPaidNote,
   AskAdminNote,
+  PersonalPriceLine,
   PlanOption,
   type Ent,
 } from "./upgrade-modal-parts";
@@ -37,16 +43,13 @@ const TEAM_UNLOCKS = [
 ] as const;
 
 /**
- * What Pro buys on a home space (2026-09-08). No "per member" (one
- * member by construction) and no object-cap line — the cap is a multi-member
- * free rule (`plans.ts › FREE_MULTI_MEMBER_OBJECT_CAP`), so listing it would
- * sell an unlock the buyer already has.
+ * What a paid personal tier buys on a home space (Pro 2026-09-08, Max
+ * 2026-10-22). No "per member" (one member by construction) and no object-cap
+ * line — the cap is a multi-member free rule
+ * (`plans.ts › FREE_MULTI_MEMBER_OBJECT_CAP`), so listing it would sell an
+ * unlock the buyer already has. Each option below carries its own credit figure.
  */
-const PRO_UNLOCKS = [
-  `${planNumber(PERSONAL_MONTHLY_CREDITS.pro)} credits a month`,
-  "Full chat history",
-  "Priority support",
-] as const;
+const PERSONAL_UNLOCKS = ["Full chat history", "Priority support"] as const;
 
 interface Props {
   open: boolean;
@@ -127,7 +130,7 @@ export function UpgradeModal({
   const label = showAddMember
     ? "Upgrade to add members"
     : isHomeSpace
-      ? "Upgrade to Pro"
+      ? "Upgrade your plan"
       : "Upgrade your workspace";
 
   return (
@@ -154,6 +157,7 @@ export function UpgradeModal({
         ) : (
           <GenericUpsell
             ent={ent}
+            workspaceId={workspaceId}
             reason={reason}
             canManageBilling={canManageBilling}
             switching={switching}
@@ -180,7 +184,7 @@ function CheckoutView({
   onBack: () => void;
 }) {
   const seats = ent.billableSeats;
-  const isPro = plan === "pro";
+  const personal = isPersonalPaidPlan(plan) ? plan : null;
   return (
     <div>
       <button
@@ -191,14 +195,14 @@ function CheckoutView({
         ← Back
       </button>
       <h2 className="mb-1 text-display font-semibold tracking-tight text-text-primary">
-        Subscribe to {isPro ? "Pro" : "Team"}
+        Subscribe to {personal ? PERSONAL_PLAN_NAMES[personal] : "Team"}
       </h2>
       {/* Branched on the plan, not the container: this line describes the
           session about to be created, and `pro` is flat quantity-1, so seat
           math would name a unit it does not have. */}
       <p className="mb-4 text-caption text-text-secondary">
-        {isPro
-          ? `${formatMoney(PRO_PRICE)} / month`
+        {personal
+          ? `${formatMoney(PERSONAL_PLAN_PRICES[personal])} / month`
           : `${seats} ${seats === 1 ? "seat" : "seats"} · ${formatMoney(
               seats * TEAM_SEAT_PRICE
             )} / month`}
@@ -214,7 +218,7 @@ function CheckoutView({
 
 /**
  * Desktop leg of checkout — same handoff as
- * `apps/desktop-ui/src/components/settings-modal/billing-pane.tsx`. The
+ * `shared/layout/settings-modal/desktop-billing-pane.tsx`. The
  * packaged renderer cannot mount Stripe at all (`script-src 'self'`,
  * `connect-src 'none'`, `frame-src 'none'`, and a `file://` document), so the
  * paywall stops at the pitch and sends the purchase to the browser (GAP-9).
@@ -254,7 +258,7 @@ function browserBillingUrl(plan: CheckoutPlan): string {
   // the standard workspace this window is showing, where `pro` is refused (400
   // `PLAN_NOT_FOR_CONTAINER`). Bare `/billing?plan=pro` is the one link that
   // resolves the caller's home space (`app/billing/page.tsx`).
-  if (plan === "pro") {
+  if (isPersonalPaidPlan(plan)) {
     return billingUrl(getAppOrigin(), { intent: "upgrade", plan });
   }
   const segment = window.location.hash.replace(/^#\/?/, "").split(/[/?#]/)[0];
@@ -269,6 +273,7 @@ function browserBillingUrl(plan: CheckoutPlan): string {
  */
 function GenericUpsell({
   ent,
+  workspaceId,
   reason,
   canManageBilling,
   switching,
@@ -278,6 +283,7 @@ function GenericUpsell({
   onClose,
 }: {
   ent: Ent;
+  workspaceId?: string;
   reason?: string;
   canManageBilling: boolean;
   switching: boolean;
@@ -293,12 +299,12 @@ function GenericUpsell({
   // instead. Standard-only: `solo` was never sold on a home space.
   const hasLiveSub =
     !isHomeSpace && (ent.status === "active" || ent.status === "past_due");
-  const unlocks = isHomeSpace ? PRO_UNLOCKS : TEAM_UNLOCKS;
+  const unlocks = isHomeSpace ? PERSONAL_UNLOCKS : TEAM_UNLOCKS;
 
   return (
     <div>
       <h2 className="text-display font-semibold tracking-tight text-text-primary">
-        {isHomeSpace ? "Upgrade to Pro" : "Upgrade your workspace"}
+        {isHomeSpace ? "Upgrade your plan" : "Upgrade your workspace"}
       </h2>
       {reason && (
         <p className="mt-1 text-caption text-text-secondary">{reason}</p>
@@ -323,7 +329,7 @@ function GenericUpsell({
       {ent.loading ? (
         <div className="bento mt-5 h-24 animate-pulse opacity-50" />
       ) : ent.isPaid ? (
-        <AlreadyPaidNote ent={ent} onClose={onClose} />
+        <AlreadyPaidNote ent={ent} workspaceId={workspaceId} onClose={onClose} />
       ) : (
         <>
           {switchError && (
@@ -331,23 +337,22 @@ function GenericUpsell({
           )}
           <div className="mt-5 flex flex-col gap-2.5">
             {isHomeSpace ? (
-              <PlanOption
-                title="Pro"
-                priceLine={
-                  <>
-                    {formatMoney(PRO_PRICE)}{" "}
-                    <span className="text-caption font-normal text-text-muted">
-                      / month
-                    </span>
-                  </>
-                }
-                // No seat math and no roster — `pro` is flat, quantity 1.
-                pitch="Billed monthly. Cancel anytime."
-                cta="Continue to checkout"
-                highlight
-                canManageBilling={canManageBilling}
-                onSelect={() => onChoose("pro")}
-              />
+              // One option per personal tier, cheapest first. No seat math and
+              // no roster — both are flat, quantity 1.
+              PERSONAL_PAID_PLANS.map((tier) => (
+                <PlanOption
+                  key={tier}
+                  title={PERSONAL_PLAN_NAMES[tier]}
+                  priceLine={
+                    <PersonalPriceLine plan={tier} price={PERSONAL_PLAN_PRICES[tier]} />
+                  }
+                  pitch={`${planNumber(PERSONAL_MONTHLY_CREDITS[tier])} credits a month. Billed monthly. Cancel anytime.`}
+                  cta="Continue to checkout"
+                  highlight
+                  canManageBilling={canManageBilling}
+                  onSelect={() => onChoose(tier)}
+                />
+              ))
             ) : (
               <PlanOption
                 title="Team"

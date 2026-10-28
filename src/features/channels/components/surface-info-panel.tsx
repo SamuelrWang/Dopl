@@ -8,7 +8,7 @@
 import { useState } from "react";
 import type { Role } from "@/features/workspaces/types";
 import { cn } from "@/shared/lib/utils";
-import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { InviteDialog } from "./invite-dialog";
 import { useChannelHeaderWrite } from "../hooks/use-channel-header-writes";
 import { useChannelInfoCardWrite } from "../hooks/use-channel-info-card-writes";
@@ -22,8 +22,11 @@ import type {
   ChannelSurfaceCapabilities,
   ChannelSurfaceSlots,
 } from "./channel-surface-contract";
-import type { Channel, ChannelMention } from "../types";
+import type { Channel, ChannelMention, TaskLink } from "../types";
 import { launchAllowedInView } from "./launch-view-gate";
+import { ChannelTasksTab } from "./tasks-tab";
+import { citationScrollTargetId } from "../lib/message-refs";
+import { isActiveTask } from "../lib/task-model";
 
 export function SurfaceInfoPanel({
   channel,
@@ -90,7 +93,13 @@ export function SurfaceInfoPanel({
   // Single column: opening a transcript also switches the face. No-op on desktop.
   const showChannel = () => webView?.setView("channel");
 
-  // Optimistic mark-read, then jump (the scroll signal runs post-render).
+  // The scroll signal runs post-render.
+  const jumpToMessage = (threadId: string | null, messageId: string) => {
+    sel.jumpToMessage(threadId, messageId);
+    showChannel();
+  };
+
+  // Optimistic mark-read, then jump.
   const openMention = (mention: ChannelMention) => {
     if (!mention.read) {
       data.markRead.mutate({
@@ -98,8 +107,13 @@ export function SurfaceInfoPanel({
         messageIds: [mention.messageId],
       });
     }
-    sel.jumpToMessage(mention.threadId, mention.messageId);
-    showChannel();
+    jumpToMessage(mention.threadId, mention.messageId);
+  };
+
+  // A message link is a main-room seq: from a thread view the sentinel pages the channel back to it.
+  const openTaskLink = (link: TaskLink) => {
+    if (link.kind === "thread") sel.openThread(link.threadId);
+    else sel.jumpToMessage(null, citationScrollTargetId(openThread ? [] : data.rows, link.seq));
   };
 
   // Sends the displayed unread ids, never an "all" flag: the list is bounded (INVARIANTS §9).
@@ -147,6 +161,7 @@ export function SurfaceInfoPanel({
       mentionsLoading={data.mentionsLoading}
       onOpenMention={openMention}
       onMarkAllMentionsRead={markAllMentionsRead}
+      onJumpToMessage={jumpToMessage}
       artifacts={capabilities?.artifacts}
       headerEdit={headerEdit}
       infoCardEdit={{ onSave: infoCardWrite.save }}
@@ -160,7 +175,7 @@ export function SurfaceInfoPanel({
               type="button"
               onClick={() => setInviteOpen(true)}
               // The recipe is face and scale only; spacing stays at the call site.
-              className={cn(PAGE_ACTION_BTN, "ml-auto")}
+              className={cn(pillButton("ink", "lg"), "ml-auto")}
             >
               Add member
             </button>
@@ -200,6 +215,32 @@ export function SurfaceInfoPanel({
           onMarkAllRead: markAllMentionsRead,
         },
       })}
+      tasks={
+        capabilities?.tasks ? (
+          <ChannelTasksTab
+            channelId={channel.id}
+            workspaceId={workspaceId}
+            index={index}
+            feeds={{ sessions: agentSessions, peers: agentsPanel.peerSessions }}
+            gate={gate}
+            tasks={data.tasks}
+            truncated={data.tasksTruncated}
+            loading={data.tasksLoading}
+            failed={data.tasksFailed}
+            // A guest reads tasks and adds notes, nothing else.
+            canEdit={role !== "guest"}
+            openTaskId={sel.openTaskId}
+            onOpenTask={sel.setOpenTaskId}
+            onOpenLink={openTaskLink}
+          />
+        ) : undefined
+      }
+      activeTaskCount={
+        capabilities?.tasks && !data.tasksLoading && !data.tasksFailed
+          ? data.tasks.filter(isActiveTask).length
+          : undefined
+      }
+      tasksTabSignal={sel.tasksTabSignal}
       settings={
         <ChannelsSettingsSlot
           channel={channel}

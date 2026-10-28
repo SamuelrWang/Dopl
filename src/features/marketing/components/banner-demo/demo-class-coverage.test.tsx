@@ -21,11 +21,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import postcss from "postcss";
 import tailwind from "@tailwindcss/postcss";
 import { DemoScene } from "./demo-scene";
 import { stepIndex } from "./demo-steps";
+import { FLAKES_TASK_TITLE } from "./demo-tasks";
 
 /** The two stylesheets the landing page loads, in load order: `src/app/layout.tsx`
  *  imports the first, `src/app/page.tsx` the second. */
@@ -96,6 +97,19 @@ describe("the hero scene's CSS is all present on the landing page", () => {
       (c) => !selectors.has(c) && !UNSTYLED(c)
     );
     // Names them: a count says nothing about which recipe to port.
+    expect(missing).toEqual([]);
+  });
+
+  it("🔒 …and so does the task detail, and the tasks pill's pop-up", () => {
+    // The detail is only on stage mid-beat, the pop-up only once its pill is pressed.
+    const { container } = render(<DemoScene step={stepIndex("task-note")} />);
+    const scene = within(container);
+    fireEvent.click(scene.getByRole("button", { name: /\d+ tasks?$/ }));
+    expect(scene.getByRole("region", { name: "Tasks" })).toBeTruthy();
+    expect(scene.getByRole("article", { name: FLAKES_TASK_TITLE })).toBeTruthy();
+    const missing = emittedClasses(container).filter(
+      (c) => !selectors.has(c) && !UNSTYLED(c)
+    );
     expect(missing).toEqual([]);
   });
 

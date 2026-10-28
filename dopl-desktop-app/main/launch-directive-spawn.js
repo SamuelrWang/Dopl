@@ -92,7 +92,7 @@ function planPosture(d, runtimeId, chainAllowed) {
  * Spawn through the funnel → `{ refused: <word> }` or `{ agentId, applied* }`, every `applied*` the
  * RESOLVED value handed to `deps.launch`, never the request.
  * Every CONTAINMENT input comes from this machine, never the directive: the tool profile from
- * `channel-listener.js › watchedChannel` (unwatched → `no-bridge`), narrowed `full` →
+ * `channel-listener.js › channelForLaunch` (neither watched nor fetched → `no-bridge`), narrowed `full` →
  * `channel_agent` in a shared room; the posture from the operator's record for the launch runtime,
  * which a directive may only narrow; `windowless: true`. The directive supplies goal, model,
  * runtime, identity id, name, colour and posture/chain REQUESTS; a denied chain request refuses.
@@ -114,12 +114,14 @@ async function spawn(d, deps) {
       'is off for this channel; the operator turns it on in the channel Settings tab');
     return { refused: 'no-chain', setting: launchPosture.CHAIN_SETTING };
   }
-  const channel = deps.watchedChannel ? deps.watchedChannel(d.channelId) : null;
+  // Watched, else fetched by id (a directive that beat reconcile to this channel); neither → `no-bridge`.
+  const channel = deps.channelForLaunch ? await deps.channelForLaunch(d.channelId)
+    : (deps.watchedChannel ? deps.watchedChannel(d.channelId) : null);
   if (!channel) {
     return { refused: 'no-bridge' };
   }
   const targeting = require('./targeting');
-  const channelLevel = d.taskId === '';
+  const channelLevel = d.threadId === '';
 
   let identity = null;
   if (d.identityId) {
@@ -149,7 +151,7 @@ async function spawn(d, deps) {
   }
   const res = await deps.launch({
     channelId: d.channelId,
-    taskId: d.taskId,
+    threadId: d.threadId,
     workspaceId: d.workspaceId || null,
     runtime: runtime.id,
     goal: d.goal || require('./session-launch-op').defaultGoal(channelLevel, ''),
@@ -157,10 +159,10 @@ async function spawn(d, deps) {
     direct: false,
     context: {
       channelName: String(channel.name || '').slice(0, 120),
-      taskTitle: null,
+      threadTitle: null,
       channelId: d.channelId,
       workspaceId: d.workspaceId || null,
-      taskId: d.taskId,
+      threadId: d.threadId,
       scope: channelLevel ? 'channel' : 'thread',
       workspaceSegment: null,
       // Captured at spawn and never re-read: a later edit or deletion neither changes nor stops it.

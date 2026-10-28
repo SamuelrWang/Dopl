@@ -57,7 +57,7 @@ test("SCOPE: it reaches BOTH sides' first turn, and only for a channel-level lau
       side,
       message: "hi",
       nonce: "n0nce",
-      context: channelCtx({ authorName: "Dana", taskTitle: null }),
+      context: channelCtx({ authorName: "Dana", threadTitle: null }),
     });
     assert.match(turn, /YOUR SCOPE IS THIS CHANNEL'S MAIN ROOM/, side);
     assert.match(turn, /YOU CAN READ EVERY THREAD IN THIS CHANNEL, ON DEMAND/, side);
@@ -66,7 +66,7 @@ test("SCOPE: it reaches BOTH sides' first turn, and only for a channel-level lau
     side: "responder",
     message: "hi",
     nonce: "n0nce",
-    context: { channelId: CHAN, workspaceId: WS, taskId: "0f5d1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b" },
+    context: { channelId: CHAN, workspaceId: WS, threadId: "0f5d1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b" },
   });
   assert.ok(!/YOUR SCOPE IS THIS CHANNEL'S MAIN ROOM/.test(threadTurn),
     "a thread-scoped session is never told it is channel-scoped");

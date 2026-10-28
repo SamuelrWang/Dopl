@@ -1,6 +1,6 @@
 // The operator's controls over their OWN live agents, resolved against the engine's registry (injected via
 // bind(); no cycle): reopen, pause/end, the live posture, the live model and the direct 1:1 lane, plus the
-// quit guard. `taskId` is the wire spelling of `thread`. The PURE block's module-scope deps are free vars.
+// quit guard. The PURE block's module-scope deps are free vars.
 
 const store = require('./session-store');
 const { floorWindowlessMessage } = require('./session-profiles');
@@ -20,7 +20,7 @@ const authReprobe = {
 let deps = { sessions: null, refreshTray: function () {}, openAgentWindow: null, dispatch: null };
 
 // `bind` rebuilds `deps` from a literal: a handle the engine passes and this list omits is dropped silently,
-// and the drop reads as a guard firing (it once made `reopenByTask` refuse every live session).
+// and the drop reads as a guard firing (it once made `reopenByThread` refuse every live session).
 function bind(d) {
   deps = {
     sessions: (d && d.sessions) || null,
@@ -33,14 +33,14 @@ function bind(d) {
 // One agent out of a thread: an `agentId` resolves EXACTLY (a wrong or dead id answers nothing — "pause my
 // agent" must never pause another); no id takes the OLDEST live agent on the thread. Exported so
 // `session-answer-permission.js` never restates it.
-function resolveSession(a, channelId, taskId) {
+function resolveSession(a, channelId, threadId) {
   if (!deps.sessions) return null;
   const agentId = String((a && a.agentId) || '');
   if (agentId) {
-    const s = deps.sessions.get(store.slotKey({ channelId: channelId, taskId: taskId, agentId: agentId }));
+    const s = deps.sessions.get(store.slotKey({ channelId: channelId, threadId: threadId, agentId: agentId }));
     return s && !s.settled ? s : null;
   }
-  const prefix = store.threadKeyPrefix(channelId, taskId);
+  const prefix = store.threadKeyPrefix(channelId, threadId);
   for (const s of deps.sessions.values()) {
     if (s.settled) continue;
     if (String(s.key || '').indexOf(prefix) !== 0) continue;
@@ -60,11 +60,11 @@ function listLiveSessions() {
       key: s.key,
       channelId: s.channelId || null,
       workspaceId: s.workspaceId || null,
-      taskId: s.taskId || '',
+      threadId: s.threadId || '',
       agentId: s.agentId || null,
       runtimeId: s.runtimeId || null,
       channelName: (s.context && s.context.channelName) || null,
-      taskTitle: (s.context && s.context.taskTitle) || null,
+      threadTitle: (s.context && s.context.threadTitle) || null,
       status: (s.state && s.state.phase) || null,
     });
   }
@@ -73,16 +73,16 @@ function listLiveSessions() {
 
 // The one reopen path: a LIVE session opens the agent window; anything else refuses (`no-session`). `segment`
 // comes from the caller, the only layer holding the workspace slug.
-function reopenByTask(a) {
+function reopenByThread(a) {
   const channelId = String((a && a.channelId) || '');
-  const taskId = String((a && a.taskId) || '');
+  const threadId = String((a && a.threadId) || '');
   if (!deps.sessions) return { ok: false };
-  const s = resolveSession(a, channelId, taskId);
+  const s = resolveSession(a, channelId, threadId);
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
   if (!deps.openAgentWindow) return { ok: false };
   // The agent id comes from the resolved session, so one agent never gets a second window.
   return deps.openAgentWindow({
-    segment: String((a && a.segment) || ''), channelId, taskId, agentId: String(s.agentId || ''),
+    segment: String((a && a.segment) || ''), channelId, threadId, agentId: String(s.agentId || ''),
   });
 }
 
@@ -90,12 +90,12 @@ function reopenByTask(a) {
 // bugs): pause interrupts the turn, end is terminal and touches no thread. Own-agents-only by construction.
 const CONTROL_EVENTS = { pause: 'interrupt', end: 'end' };
 
-function controlByTask(a) {
+function controlByThread(a) {
   const channelId = String((a && a.channelId) || '');
-  const taskId = String((a && a.taskId) || '');
+  const threadId = String((a && a.threadId) || '');
   const type = Object.prototype.hasOwnProperty.call(CONTROL_EVENTS, a && a.action) ? CONTROL_EVENTS[a.action] : null;
   if (!type || !deps.sessions || !deps.dispatch) return { ok: false };
-  const s = resolveSession(a, channelId, taskId);
+  const s = resolveSession(a, channelId, threadId);
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
   try {
     // An end's reason is forwarded, never validated here: `session-effects.js › endReasonOf` owns the set.
@@ -109,13 +109,13 @@ function controlByTask(a) {
 // The live posture on a running session: the reducer's own set_* event (it coerces and echoes), applied from
 // the next gate decision. Nothing pending is re-decided. It widens supervision, never containment (the
 // profile is checked first).
-function setModeByTask(a) {
+function setModeByThread(a) {
   const channelId = String((a && a.channelId) || '');
-  const taskId = String((a && a.taskId) || '');
+  const threadId = String((a && a.threadId) || '');
   const axis = a && a.axis;
   if (!deps.sessions || !deps.dispatch) return { ok: false };
   if (axis !== 'tools' && axis !== 'messages') return { ok: false, reason: 'bad-axis' };
-  const s = resolveSession(a, channelId, taskId);
+  const s = resolveSession(a, channelId, threadId);
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
   const pinned = !!a && a.pinned === true;
   // C2: read in THIS session's words; a pinned pick is clamped to the channel's value for its runtime.
@@ -134,11 +134,11 @@ function setModeByTask(a) {
 
 // Switch a running agent's model on its own runtime (resolved on that runtime's roster; an unknown pick is
 // refused with a sentence). Grants nothing and reaches no gate decision.
-async function setModelByTask(a) {
+async function setModelByThread(a) {
   const channelId = String((a && a.channelId) || '');
-  const taskId = String((a && a.taskId) || '');
+  const threadId = String((a && a.threadId) || '');
   if (!deps.sessions) return { ok: false };
-  const s = resolveSession(a, channelId, taskId);
+  const s = resolveSession(a, channelId, threadId);
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
   // A runtime that cannot switch live refuses with a sentence; recording a pick nothing applied would be a lie.
   const descriptor = runtimeRegistry.descriptorFor(s.runtimeId);
@@ -174,21 +174,21 @@ async function setModelByTask(a) {
 // It dispatches the existing `steer` (one wake path), bypasses the inbound gate (this is not inbound), resolves
 // against main's registry (own agents only), and frames the text with the session nonce: operator authority,
 // or DATA for a direction.
-function messageByTask(a) {
+function messageByThread(a) {
   const channelId = String((a && a.channelId) || '');
-  const taskId = String((a && a.taskId) || '');
+  const threadId = String((a && a.threadId) || '');
   const text = String((a && a.text) || '').trim();
   const directed = directedTurn.readDirected(a);
   if (!text || !deps.sessions || !deps.dispatch) return { ok: false };
   if (directed === false) return { ok: false, reason: 'no-session' };
-  const s = resolveSession(a, channelId, taskId);
+  const s = resolveSession(a, channelId, threadId);
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
   // Cross-account fence (F-373): the registry outlives a sign-out; an unstamped session fails closed.
   if (directed && s.operatorUserId !== directed.operatorUserId) return { ok: false, reason: 'no-session' };
   // A held session has no query to feed: refuse (or, for a runtime with no in-app sign-in, re-probe first).
   if (s.state && s.state.authHeld === true) {
     if (!authReprobe.reprobesOnWake(s)) return { ok: false, reason: 'auth-hold' };
-    return authReprobe.reprobeHeld(s).then((released) => (released ? messageByTask(a) : { ok: false, reason: 'auth-hold' }));
+    return authReprobe.reprobeHeld(s).then((released) => (released ? messageByThread(a) : { ok: false, reason: 'auth-hold' }));
   }
   try {
     // Read BEFORE the dispatch (it moves activity to working). `priority: 'next'` queues or joins the running
@@ -236,7 +236,7 @@ function listOrphanRisk() {
     key: s.key,
     agentId: s.agentId || null,
     channelName: (s.context && s.context.channelName) || null,
-    taskTitle: (s.context && s.context.taskTitle) || null,
+    threadTitle: (s.context && s.context.threadTitle) || null,
     counterpartyName: s.counterpartyName || null,
     working: !!(s.state && s.state.activity !== 'idle' && s.state.activity !== 'awaiting_peer'),
   }));
@@ -255,4 +255,4 @@ function endLiveSessions() {
 
 // ─── END SESSION-REOPEN-PURE ──────────────────────────────────────────────────────
 
-module.exports = { bind, listLiveSessions, reopenByTask, controlByTask, setModeByTask, setModelByTask, messageByTask, listOrphanRisk, endLiveSessions, resolveSession };
+module.exports = { bind, listLiveSessions, reopenByThread, controlByThread, setModeByThread, setModelByThread, messageByThread, listOrphanRisk, endLiveSessions, resolveSession };

@@ -19,7 +19,7 @@ const tokensOf = (text: string) =>
 describe("what counts as a citation", () => {
   it("reads the idioms agents actually type here", () => {
     expect(tokensOf("re #1759 — see my note")).toEqual(["#1759"]);
-    expect(tokensOf("Found it. Seq #1718 is a task_progress marker")).toEqual(["#1718"]);
+    expect(tokensOf("Found it. Seq #1718 is a thread_progress marker")).toEqual(["#1718"]);
     expect(tokensOf("the rows (#1718, #1724, #1733)")).toEqual(["#1718", "#1724", "#1733"]);
     expect(tokensOf("seq 1759 reads back whole over MCP")).toEqual(["seq 1759"]);
     expect(tokensOf("SEQ 1800 is the one")).toEqual(["SEQ 1800"]);

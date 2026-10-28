@@ -17,7 +17,7 @@
  * ring to every registered app window and tracks no subscriptions — a subscription
  * protocol's only failure mode is the two sides going out of step, and there is nothing to
  * gain from it when the filter is a string compare. ⚠ THAT KEY HAS THREE SEGMENTS since
- * multiplayer agents (`<channelId>:<taskId>:<agentId>`); see {@link narrationPrefix} for
+ * multiplayer agents (`<channelId>:<threadId>:<agentId>`); see {@link narrationPrefix} for
  * what a two-segment filter cost.
  */
 
@@ -51,7 +51,7 @@ interface AgentNarrationFeed {
  * (2026-08-22, F-250).
  *
  * ⚠ THE SAME COMPOSITION `main/session-store.js › sessionKey` MAKES:
- * `<channelId>:<taskId>:<agentId>`. It gained its third segment with multiplayer
+ * `<channelId>:<threadId>:<agentId>`. It gained its third segment with multiplayer
  * agents, and this side did not — so every pushed frame's `sessionKey` failed the
  * equality below and the Work lane FROZE at whatever the mount read returned, on
  * every build, single-agent included. A filter that can never match has no error
@@ -62,8 +62,8 @@ interface AgentNarrationFeed {
  * `session-store.js › threadKeyPrefix` says it is: without it `<channel>:<thread>`
  * would also prefix `<channel>:<thread-with-a-longer-id>`.
  */
-function narrationPrefix(channelId: string, taskId: string): string {
-  return `${channelId}:${taskId}:`;
+function narrationPrefix(channelId: string, threadId: string): string {
+  return `${channelId}:${threadId}:`;
 }
 
 /**
@@ -79,10 +79,10 @@ function narrationPrefix(channelId: string, taskId: string): string {
 function narrationMatches(
   sessionKey: string,
   channelId: string,
-  taskId: string,
+  threadId: string,
   agentId: string
 ): boolean {
-  const prefix = narrationPrefix(channelId, taskId);
+  const prefix = narrationPrefix(channelId, threadId);
   return agentId ? sessionKey === prefix + agentId : sessionKey.startsWith(prefix);
 }
 
@@ -122,7 +122,7 @@ interface NarrationFrame {
 
 export function useAgentNarration(
   channelId: string,
-  taskId: string,
+  threadId: string,
   /** WHICH INSTANCE. ⚠ Optional: a main older than multiplayer emits no `agentId`
    *  on its summaries and runs at most one agent per thread, so its absence
    *  degrades to the (channel, thread) prefix rather than refusing. */
@@ -131,7 +131,7 @@ export function useAgentNarration(
   const [frame, setFrame] = useState<NarrationFrame | null>(null);
   const supported = useSyncExternalStore(noSubscribe, hasNarration, noBridgeOnServer);
   const agent = typeof agentId === "string" ? agentId.trim() : "";
-  const key = narrationPrefix(channelId, taskId) + agent;
+  const key = narrationPrefix(channelId, threadId) + agent;
 
   useEffect(() => {
     const sessions = getSpaBridge()?.sessions;
@@ -147,7 +147,7 @@ export function useAgentNarration(
       // the thread's OLDEST live agent rather than the one on screen. It is
       // optional on the bridge and an older preload drops it, which is exactly
       // the behaviour that build already had.
-      .narration?.(channelId, taskId, agent || undefined)
+      .narration?.(channelId, threadId, agent || undefined)
       .then((r) => {
         // The subscription below may already have delivered a NEWER frame while this read
         // was in flight; it must not be overwritten by the older one.
@@ -158,14 +158,14 @@ export function useAgentNarration(
       });
 
     const off = sessions.onNarration?.((e) => {
-      if (!live || !narrationMatches(e.sessionKey, channelId, taskId, agent)) return;
+      if (!live || !narrationMatches(e.sessionKey, channelId, threadId, agent)) return;
       setFrame({ key, entries: e.entries });
     });
     return () => {
       live = false;
       off?.();
     };
-  }, [channelId, taskId, agent, key]);
+  }, [channelId, threadId, agent, key]);
 
   return { entries: frame?.key === key ? frame.entries : null, supported };
 }

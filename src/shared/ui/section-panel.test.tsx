@@ -98,7 +98,7 @@ describe("the hook survives the rule that used it", () => {
     for (const rel of [
       "src/app/globals.css",
       "apps/desktop-ui/src/styles/kit.css",
-      "apps/desktop-ui/src/pages/home/home.module.css",
+      "src/features/home/components/shell/home.module.css",
     ]) {
       const css = readFileSync(path.join(process.cwd(), rel), "utf8")
         .replace(/\/\*[\s\S]*?\*\//g, "");

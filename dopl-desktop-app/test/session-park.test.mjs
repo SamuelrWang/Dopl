@@ -134,7 +134,7 @@ test("resumeParked is a no-op for a settled session or a resume already in fligh
 test("a session created during a resume's acquireRuntime await is NOT overwritten (post-await re-check)", async () => {
   let release;
   const gate = new Promise((r) => { release = r; });
-  const rec = { channelId: "c1", taskId: "t1", agentId: "a1b2c3d4", profile: "full", side: "responder", mode: "autonomous" };
+  const rec = { channelId: "c1", threadId: "t1", agentId: "a1b2c3d4", profile: "full", side: "responder", mode: "autonomous" };
   const h = harness({ gateSdk: gate });
 
   const resuming = h.startResume(rec, "sdk-1", "nudge"); // claims nothing; suspends at acquireRuntime
@@ -152,7 +152,7 @@ test("startResume refuses BEFORE the await too, when the slot is already live", 
   // The cheap half of the same guard: nothing is asked of the SDK for a slot that is occupied.
   const h = harness();
   h.sessions.set("c1:t1:a1b2c3d4", { key: "c1:t1:a1b2c3d4", settled: false });
-  assert.equal(await h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "nudge"), false);
+  assert.equal(await h.startResume({ channelId: "c1", threadId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "nudge"), false);
   assert.deepEqual(h.calls.startSession, []);
 });
 
@@ -176,7 +176,7 @@ function fill(h, n) {
 test("CAP: a resume at the ceiling is refused, and asks nothing of the SDK", async () => {
   const h = harness();
   fill(h, REAL_MAX);
-  assert.equal(await h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "n"), false);
+  assert.equal(await h.startResume({ channelId: "c1", threadId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "n"), false);
   assert.deepEqual(h.calls.startSession, [], "no seventh session");
   assert.deepEqual(h.calls.buildLaunchSpec, [], "and no spec was assembled for one");
 });
@@ -184,7 +184,7 @@ test("CAP: a resume at the ceiling is refused, and asks nothing of the SDK", asy
 test("CAP: one below the ceiling still resumes — the guard is a bound, not a block", async () => {
   const h = harness();
   fill(h, REAL_MAX - 1);
-  assert.equal(await h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "n"), true);
+  assert.equal(await h.startResume({ channelId: "c1", threadId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "n"), true);
   assert.equal(h.calls.startSession.length, 1);
 });
 
@@ -195,7 +195,7 @@ test("CAP: settled registry entries do not count against it", async () => {
   const h = harness();
   fill(h, REAL_MAX);
   for (const s of h.sessions.values()) s.settled = true;
-  assert.equal(await h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "n"), true);
+  assert.equal(await h.startResume({ channelId: "c1", threadId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "n"), true);
 });
 
 // ⚠ THE SAME CHECK-THEN-ACT RACE THE SLOT GUARD ALREADY HANDLED. `acquireRuntime` is wide enough for a
@@ -206,7 +206,7 @@ test("CAP: a slot taken DURING acquireRuntime is caught by the post-await re-che
   const gate = new Promise((r) => { release = r; });
   const h = harness({ gateSdk: gate });
   fill(h, REAL_MAX - 1);
-  const resuming = h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "n");
+  const resuming = h.startResume({ channelId: "c1", threadId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "n");
   fill(h, REAL_MAX); // a racing launch takes the last one while we are parked on acquireRuntime
   release();
   assert.equal(await resuming, false);
@@ -246,7 +246,7 @@ test("CAP: the ceiling under test is the one `session-windowless.js` actually de
 
 test("a PRE-MULTIPLAYER record (no agentId) resumes with a freshly MINTED id, never null", async () => {
   const h = harness();
-  const legacy = { channelId: "c1", taskId: "t1", workspaceId: "w1", side: "responder", profile: "full" };
+  const legacy = { channelId: "c1", threadId: "t1", workspaceId: "w1", side: "responder", profile: "full" };
   assert.equal(await h.startResume(legacy, "sdk-1", "continue"), true);
   const spec = h.calls.startSession[0];
   assert.ok(agentId.isAgentId(spec.agentId), `a real instance id, got ${JSON.stringify(spec.agentId)}`);
@@ -257,7 +257,7 @@ test("a PRE-MULTIPLAYER record (no agentId) resumes with a freshly MINTED id, ne
 
 test("a record that HAS an agent id keeps it — a resume must not come back a stranger", async () => {
   const h = harness();
-  await h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "continue");
+  await h.startResume({ channelId: "c1", threadId: "t1", agentId: "a1b2c3d4" }, "sdk-1", "continue");
   assert.equal(h.calls.startSession[0].agentId, "a1b2c3d4");
   assert.equal(h.calls.startSession[0].key, "c1:t1:a1b2c3d4");
 });
@@ -265,7 +265,7 @@ test("a record that HAS an agent id keeps it — a resume must not come back a s
 test("a MALFORMED stored agent id is refused and re-minted, not carried through", async () => {
   for (const bad of ["", "  ", "A1B2C3D4", "toolongforanid", "a1b2c3", "agent-1", 42, {}, null]) {
     const h = harness();
-    await h.startResume({ channelId: "c1", taskId: "t1", agentId: bad }, "sdk-1", "continue");
+    await h.startResume({ channelId: "c1", threadId: "t1", agentId: bad }, "sdk-1", "continue");
     const spec = h.calls.startSession[0];
     assert.ok(agentId.isAgentId(spec.agentId), `stored id ${JSON.stringify(bad)} must be re-minted`);
   }
@@ -277,7 +277,7 @@ test("the mint is written back, so a SECOND resume of the same record finds the 
   // session resuming the SAME sdkSessionId — a regression the mint would otherwise introduce,
   // because the guard above was exact for a legacy record while the id was `null`.
   const h = harness();
-  const legacy = { channelId: "c1", taskId: "t1", workspaceId: "w1", side: "responder" };
+  const legacy = { channelId: "c1", threadId: "t1", workspaceId: "w1", side: "responder" };
   assert.equal(await h.startResume(legacy, "sdk-1", "continue"), true);
   assert.equal(await h.startResume(legacy, "sdk-1", "continue"), false, "the second click is refused");
   assert.equal(h.calls.startSession.length, 1, "one session, not two on one sdk conversation");
@@ -288,7 +288,7 @@ test("the record's OWN post counter rides the resume (client_msg_id collision gu
   // re-used above, so a counter that restarted at 0 would re-mint ids the server already holds
   // and its idempotency short-circuit would silently discard the resumed agent's replies.
   const h = harness();
-  await h.startResume({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4", ownPostSeq: 7 }, "sdk-1", "go");
+  await h.startResume({ channelId: "c1", threadId: "t1", agentId: "a1b2c3d4", ownPostSeq: 7 }, "sdk-1", "go");
   assert.equal(h.calls.startSession[0].ownPostSeq, 7, "handed over RAW; startSession adds the slack");
 });
 

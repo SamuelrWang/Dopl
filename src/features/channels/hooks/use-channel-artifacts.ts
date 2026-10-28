@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * THE ARTIFACT READS — this channel's cards, and ONE card's folded run.
+ * THE ARTIFACT READS — this channel's artifacts, and ONE artifact's folded run.
  *
  * ⚠ **THEY ARE A REAL SERVER LANE AND DELIBERATELY NOT THE TRANSCRIPT'S.** The
  * page a reader has loaded carries an `entries` envelope holding only the cards
@@ -56,12 +56,12 @@ export function useChannelArtifacts(
 }
 
 /**
- * ONE CARD, OPENED — its members verbatim, in seq order, with their own seqs.
+ * ONE ARTIFACT, OPENED (`artifact-detail.tsx`) — its members verbatim, in seq order.
  *
  * ⚠ **THE BODIES COME FROM THE SERVER RATHER THAN FROM THE TRANSCRIPT IN HAND**,
  * and that is the difference between this face and the in-transcript card: the
  * transcript's card can only show the members that are on the loaded page and says
- * so (`artifact-card.tsx › artifactPartialLabel`), whereas an opened card is the
+ * so (`artifact-card.tsx › artifactPartialLabel`), whereas an opened artifact is the
  * whole run up to the member ceiling.
  * ⚠ `truncated` HERE IS THE MEMBER CEILING (`repository-artifacts.ts ›
  * ARTIFACT_MEMBER_LIMIT`), a different bound from the list's — same rule, two

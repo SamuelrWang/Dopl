@@ -163,7 +163,7 @@ test("H2: a corrupt or hostile handed-in posture still lands on the MOST RESTRIC
 
 test("H2: the preset is not, and cannot become, part of any GRANT", () => {
   const s = initialSessionState({ toolMode: "bypass", messageMode: "auto_both" });
-  assert.deepEqual(s.allowForTask, [], "nor is any tool grant");
+  assert.deepEqual(s.allowForThread, [], "nor is any tool grant");
   assert.equal(s.authHeld, false);
 });
 

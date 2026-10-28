@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { AGENT_COLOR_KEYS } from "./agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 import { AGENT_COLOR_VALUES, parseOklch } from "./agent-color-values";
 
 const ROOT = path.resolve(import.meta.dirname, "../../../..");

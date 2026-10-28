@@ -7,6 +7,7 @@
  * watches a channel without busy-looping.
  */
 import { MemberMethods } from "./client-members.js";
+import type { ChannelTaskAction, ChannelTaskDetail, ChannelTaskPage, ChannelTaskWriteResult, TaskStatus } from "./channel-task-types.js";
 import type { AccountMessagesOptions, AccountMessagesPage, AccountStatus, AccountStatusOptions } from "./account-types.js";
 import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelArtifact, ChannelArtifactAction, ChannelArtifactResult, ChannelCreateInput, ChannelUpdateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelReadEntry, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, ThreadMode, WorkspaceAwaitResult } from "./channel-types.js";
 import type { ShowDisplayInput, ShowDisplayResult } from "./display-types.js";
@@ -50,6 +51,11 @@ export declare class ChannelMethods extends MemberMethods {
         messages: ChannelMessage[];
         truncated: boolean;
     }>;
+    listChannelTasks(channelId: string, opts?: {
+        status?: TaskStatus;
+    }): Promise<ChannelTaskPage>;
+    readChannelTask(channelId: string, taskId: string): Promise<ChannelTaskDetail>;
+    writeChannelTask(channelId: string, input: ChannelTaskAction): Promise<ChannelTaskWriteResult>;
     awaitChannelMessages(channelId: string, opts: AwaitMessagesOptions): Promise<AwaitResult>;
     /** One page of a channel's threads, most recently active first, plus whether
      *  the server's ceiling clipped it. ⚠ Never re-sort the page — see

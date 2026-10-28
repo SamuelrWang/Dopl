@@ -8,7 +8,7 @@
 //   · `hasLiveSession` stays true, so every later request into that (channel, thread) slot
 //     answers `{skipped:'busy'}` and the peer is told to resend, forever;
 //   · the slot counts against MAX_WINDOWS, so six of them and the desktop opens nothing;
-//   · no `task_started` was ever posted, so the requester has nothing to look at either.
+//   · no `thread_started` was ever posted, so the requester has nothing to look at either.
 // There was no path out of it short of quitting the app.
 //
 // WHAT THIS FILE PINS:
@@ -66,10 +66,10 @@ const toolResult = (id) => ({
 /** One real windowless session on the real engine, with its runtime handle and registry entry. */
 async function liveSession(agentName) {
   const before = rt.handles.length;
-  const res = await engine.launchResponderSession(launchArgs({ taskId: "", agentName }));
+  const res = await engine.launchResponderSession(launchArgs({ threadId: "", agentName }));
   assert.ok(res && res.sessionId, `launched: ${JSON.stringify(res)}`);
   await settle();
-  const s = registryReads.sessionOn({ channelId: CHANNEL, taskId: "", agentId: res.agentId });
+  const s = registryReads.sessionOn({ channelId: CHANNEL, threadId: "", agentId: res.agentId });
   assert.ok(s, "registered");
   return { handle: rt.handles[before], s, agentId: res.agentId };
 }
@@ -102,7 +102,7 @@ test("there is ONE timer, so the watchdog cannot leak beside the idle one", () =
   assert.equal((ENGINE.match(/setTimeout\(/g) || []).length, 1, "one arming site in the engine");
   // ⚠ THE EVENT IS STILL `t.type`, WHICH IS THE WHOLE FENCE. 2026-10-10 made the DURATION negotiable — a
   // work re-arm is clamped to what is left of the continuous-work cap (`session-work-cap.js`) so a long
-  // task is not parked mid-tool-call — but the clamp may only ever SHORTEN an `idle_timeout`. If it could
+  // thread is not parked mid-tool-call — but the clamp may only ever SHORTEN an `idle_timeout`. If it could
   // also choose the event, a cap could fire the launch watchdog and end a launch the transport can still
   // recover, which is exactly what this file exists to prevent. The event this file's one arming site
   // dispatches is `t.type` and nothing else.

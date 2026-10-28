@@ -59,7 +59,7 @@ export async function insertArtifact(
  * who reused a key another member's agent was about to use would be handed back
  * THEIR artifact. Same shape, same fix, same column order as
  * `repository-messages.ts › findOwnMessageByClientId` and
- * `repository-tasks.ts › findOwnTaskByClientId`.
+ * `repository-threads.ts › findOwnThreadByClientId`.
  *
  * ⚠ THE DATABASE AGREES WITH THIS FUNCTION and it has to — the partial unique
  * index is `(channel_id, client_msg_id, created_by) WHERE client_msg_id IS NOT

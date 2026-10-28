@@ -27,7 +27,7 @@ export function StreamWorkingRow({
       className="flex min-w-0 items-center gap-1 pt-0.5 text-caption text-text-secondary"
     >
       {workingRowWord(liveness.label)}
-      <span aria-hidden className="flex shrink-0 items-center gap-[3px]">
+      <span aria-hidden className="flex shrink-0 items-center gap-0.75">
         {/* Static class strings (Tailwind can't see runtime-built delays); stock `animate-pulse`, since a
             custom keyframe would have to land in both globals.css and the desktop's kit.css. */}
         <span className="h-1 w-1 animate-pulse rounded-full bg-current [animation-delay:0ms] [animation-duration:1.4s] motion-reduce:animate-none" />

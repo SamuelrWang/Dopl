@@ -13,18 +13,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 
 import * as repo from "./repository";
 import * as repoSessions from "./repository-sessions";
 import * as repoMessages from "./repository-messages";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import { postMessage } from "./service-writes";
 import {
   ChannelAddresseeNotMemberError,
   ChannelForbiddenError,
-  ChannelTaskNotInChannelError,
-  TaskForbiddenError,
+  ChannelThreadNotInChannelError,
+  ThreadForbiddenError,
 } from "./errors";
 import type { ChannelContext } from "./service-shared";
 import type { ChannelMemberRow, ChannelMessageRow, ChannelRow } from "./dto";
@@ -196,12 +196,12 @@ describe("postMessage — reserved metadata keys", () => {
   });
 });
 
-describe("postMessage — task metadata stamping (v15, Q4)", () => {
-  const TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
+describe("postMessage — thread metadata stamping (v15, Q4)", () => {
+  const THREAD_ID = "660e8400-e29b-41d4-a716-446655440111";
 
-  function taskRowFor(overrides: Record<string, unknown> = {}) {
+  function threadRowFor(overrides: Record<string, unknown> = {}) {
     return {
-      id: TASK_ID,
+      id: THREAD_ID,
       channel_id: "chan-1",
       workspace_id: WS,
       title: "Real title",
@@ -215,123 +215,123 @@ describe("postMessage — task metadata stamping (v15, Q4)", () => {
       updated_at: "2026-07-20T00:00:00Z",
       closed_at: null,
       ...overrides,
-    } as Awaited<ReturnType<typeof repoTasks.findTaskByChannelAndId>>;
+    } as Awaited<ReturnType<typeof repoThreads.findThreadByChannelAndId>>;
   }
 
-  it("strips caller taskMode/taskCreatedBy/taskTitle and stamps from the resolved task", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRowFor());
+  it("strips caller threadMode/threadCreatedBy/threadTitle and stamps from the resolved thread", async () => {
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(threadRowFor());
 
     await postMessage(ctx, "general", {
       body: "reply",
       metadata: {
-        taskId: TASK_ID,
-        taskMode: "interactive",
-        taskCreatedBy: "evil",
-        taskTitle: "spoofed",
+        threadId: THREAD_ID,
+        threadMode: "interactive",
+        threadCreatedBy: "evil",
+        threadTitle: "spoofed",
       },
     });
 
     const meta = capturedMetadata();
-    expect(meta.taskId).toBe(TASK_ID);
-    expect(meta.taskMode).toBe("autonomous");
-    expect(meta.taskCreatedBy).toBe(USER);
-    expect(meta.taskTitle).toBe("Real title");
-    expect(repoTasks.findTaskByChannelAndId).toHaveBeenCalledWith("chan-1", TASK_ID);
+    expect(meta.threadId).toBe(THREAD_ID);
+    expect(meta.threadMode).toBe("autonomous");
+    expect(meta.threadCreatedBy).toBe(USER);
+    expect(meta.threadTitle).toBe("Real title");
+    expect(repoThreads.findThreadByChannelAndId).toHaveBeenCalledWith("chan-1", THREAD_ID);
   });
 
-  it("SECURITY: a UUID taskId that resolves to no task in the channel is rejected (400), not silently un-threaded", async () => {
+  it("SECURITY: a UUID threadId that resolves to no thread in the channel is rejected (400), not silently un-threaded", async () => {
     // Server-validated threading: a bogus first-class id cannot fabricate a
     // threaded group — rejected outright.
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(null);
 
     await expect(
       postMessage(ctx, "general", {
         body: "reply",
-        metadata: { taskId: TASK_ID, taskMode: "interactive" },
+        metadata: { threadId: THREAD_ID, threadMode: "interactive" },
       })
-    ).rejects.toBeInstanceOf(ChannelTaskNotInChannelError);
+    ).rejects.toBeInstanceOf(ChannelThreadNotInChannelError);
 
-    expect(repoTasks.findTaskByChannelAndId).toHaveBeenCalledWith("chan-1", TASK_ID);
+    expect(repoThreads.findThreadByChannelAndId).toHaveBeenCalledWith("chan-1", THREAD_ID);
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 
-  it("a non-UUID taskId never hits the TASK table, and an unowned one is stripped", async () => {
-    // A legacy `task-<channelId>-<seq>` id resolves no task row and is checked
+  it("a non-UUID threadId never hits the THREAD table, and an unowned one is stripped", async () => {
+    // A legacy `thread-<channelId>-<seq>` id resolves no thread row and is checked
     // against its opening request's pair — unresolvable here, so the tag is
     // stripped and the post lands untagged. Full matrix in
     // `service-writes-metadata-thread.test.ts`.
     await postMessage(ctx, "general", {
       body: "reply",
-      metadata: { taskId: "task-chan-1-7", taskMode: "interactive" },
+      metadata: { threadId: "thread-chan-1-7", threadMode: "interactive" },
     });
 
-    expect(repoTasks.findTaskByChannelAndId).not.toHaveBeenCalled();
+    expect(repoThreads.findThreadByChannelAndId).not.toHaveBeenCalled();
     const meta = capturedMetadata();
-    expect(Object.prototype.hasOwnProperty.call(meta, "taskId")).toBe(false);
-    expect(Object.prototype.hasOwnProperty.call(meta, "taskMode")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(meta, "threadId")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(meta, "threadMode")).toBe(false);
     expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
   });
 
   it("SECURITY (B3): a member who is neither creator nor target cannot post into the thread", async () => {
     // ⚠ Channel membership is NOT thread membership. Every member can read
-    // every thread id, and a stamped taskId lands the message inside that
+    // every thread id, and a stamped threadId lands the message inside that
     // thread's card and routes it to the responder's session window. Refused
     // outright, never silently un-threaded.
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRowFor({ created_by: "creator-x", target_user_id: "responder-y" })
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      threadRowFor({ created_by: "creator-x", target_user_id: "responder-y" })
     );
 
     await expect(
       postMessage(ctx, "general", {
         body: "landing in someone else's thread",
-        metadata: { taskId: TASK_ID },
+        metadata: { threadId: THREAD_ID },
       })
-    ).rejects.toBeInstanceOf(TaskForbiddenError);
+    ).rejects.toBeInstanceOf(ThreadForbiddenError);
 
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 
   it("allows the thread's TARGET to post into it (the responder's own replies)", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRowFor({ created_by: "creator-x", target_user_id: USER })
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      threadRowFor({ created_by: "creator-x", target_user_id: USER })
     );
 
     await postMessage(ctx, "general", {
       body: "here is the answer",
-      metadata: { taskId: TASK_ID },
+      metadata: { threadId: THREAD_ID },
     });
 
-    expect(capturedMetadata().taskId).toBe(TASK_ID);
+    expect(capturedMetadata().threadId).toBe(THREAD_ID);
   });
 
-  it("stamps taskTarget from the task's target_user_id, stripping the caller copy", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRowFor({ target_user_id: "responder-y" })
+  it("stamps threadTarget from the thread's target_user_id, stripping the caller copy", async () => {
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      threadRowFor({ target_user_id: "responder-y" })
     );
 
     await postMessage(ctx, "general", {
       body: "here is the answer",
-      metadata: { taskId: TASK_ID, taskTarget: "evil" },
+      metadata: { threadId: THREAD_ID, threadTarget: "evil" },
     });
 
     const meta = capturedMetadata();
     // ⚠ Server stamp (the real responder) wins over the caller's spoof — this
-    // binds the desktop's task-reply suppression to the true responder.
-    expect(meta.taskTarget).toBe("responder-y");
+    // binds the desktop's thread-reply suppression to the true responder.
+    expect(meta.threadTarget).toBe("responder-y");
   });
 
-  it("a null-target task stamps no taskTarget and strips the caller copy", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRowFor({ target_user_id: null })
+  it("a null-target thread stamps no threadTarget and strips the caller copy", async () => {
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      threadRowFor({ target_user_id: null })
     );
 
     await postMessage(ctx, "general", {
       body: "reply",
-      metadata: { taskId: TASK_ID, taskTarget: "evil" },
+      metadata: { threadId: THREAD_ID, threadTarget: "evil" },
     });
 
     const meta = capturedMetadata();
-    expect(Object.prototype.hasOwnProperty.call(meta, "taskTarget")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(meta, "threadTarget")).toBe(false);
   });
 });
 

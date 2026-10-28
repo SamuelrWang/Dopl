@@ -54,9 +54,9 @@ const VERBS = new Set([
 ]);
 
 describe("tool manifest", () => {
-  it("is 40 uniquely named verb_noun tools", () => {
+  it("is 41 uniquely named verb_noun tools", () => {
     const names = GRANULAR_TOOLS.map((t) => t.name);
-    expect(names).toHaveLength(40);
+    expect(names).toHaveLength(41);
     expect(new Set(names).size).toBe(names.length);
     const bad = names.filter((n) => !/^dopl_[a-z]+(_[a-z]+)*$/.test(n) || !VERBS.has(n.split("_")[1]));
     expect(bad).toEqual([]);

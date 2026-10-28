@@ -1,36 +1,16 @@
 // @vitest-environment jsdom
 /**
- * The Threads tab. Three properties, all of which a redesign loses quietly:
+ * The Threads tab: the server's order verbatim (the read is clipped against it), a clipped page
+ * says so (INVARIANTS §9), and the recency wells bucket on the LAST MESSAGE — `lastActivityAt`,
+ * never `updatedAt`, whose only writer is `set_mode`. An undated thread stays in the open Recent.
  *
- *  - **NO STATUS FILTER.** The mock's Active/Inactive `SegmentedControl` did not
- *    survive the port — threads never close, so activity ordering replaced it
- *    (a third-round ruling in the port's intent doc, deleted at the cutover —
- *    INVARIANTS §5).
- *  - **THE SERVER'S ORDER IS RENDERED VERBATIM.** The read is clipped against
- *    that order, so a re-sort here is the wrong rows in a plausible order
- *    (INVARIANTS §5).
- *  - **A CLIPPED PAGE SAYS SO** (INVARIANTS §9): a cap that renders identically
- *    to an exhausted list is the bug, and the note may not read as an absence.
- *  - **THE FOUR GRAY WELLS ARE BUCKETED BY LAST MESSAGE** (Samuel, 2026-09-13:
- *    *"This should be measured on activity (basically, last message sent into the
- *    thread)"*) — i.e. `lastActivityAt`, **never `updatedAt`**, whose only writer
- *    is `set_mode`. The two fields look interchangeable and are not, so one case
- *    gives a thread a stale activity stamp and a fresh `updatedAt` and asserts
- *    which well it lands in.
- *  - **AN UNDATED THREAD STAYS VISIBLE** — it lands in **Recent**, the one well
- *    open by default, because a read that did not derive the field must not hide
- *    a live thread inside a collapsed **Earlier**.
- *
- * ⚠ **THE CLOCK IS FAKED FOR EVERY CASE IN THIS FILE.** The moment the cards live
- * in time-bucketed wells, a fixture dated in the past renders inside a COLLAPSED
- * well and every assertion about a card's text fails — on a date nobody edited.
- * `NOW` sits just after the fixtures' own activity stamps, so the pre-wells cases
- * read exactly the list they always read.
+ * The clock is faked for every case: a thread dated in the past lands in a collapsed well, and an
+ * assertion about its row would fail on a date nobody edited.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { PANEL_WELL } from "@/shared/ui/panel-well";
+import { WELL_FACES } from "./collapse-wells";
 import {
   THREADS_CLIPPED_NOTE,
   THREAD_WELLS_STORAGE_KEY,
@@ -38,11 +18,10 @@ import {
   threadActivityAt,
 } from "./threads-tab";
 import { indexMembers } from "./view-model";
-import { member, thread, ME, PEER } from "./test-fixtures";
+import { member, sessionSummary, thread, ME, PEER } from "./test-fixtures";
 
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
-/** Just after the fixtures' own activity stamps, so THREADS is one Recent well. */
 const NOW = Date.UTC(2026, 7, 18, 12, 0, 0);
 
 beforeEach(() => {
@@ -63,8 +42,9 @@ const INDEX = indexMembers(
   ME
 );
 
-/** Server order: newest activity first. Deliberately NOT alphabetical and NOT
- *  createdAt order, so a re-sort of either kind shows up. */
+const NO_FEEDS = { sessions: null, peers: [] };
+
+/** Server order: newest activity first, deliberately neither alphabetical nor createdAt order. */
 const THREADS = [
   thread({
     id: "t-b",
@@ -86,53 +66,35 @@ function renderTab(over: Partial<React.ComponentProps<typeof ThreadsTab>> = {}) 
     truncated: false,
     loading: false,
     index: INDEX,
+    feeds: NO_FEEDS,
     openThreadId: null,
     onOpenThread: vi.fn(),
     ...over,
   };
-  render(<ThreadsTab {...props} />);
-  return props;
+  return { props, ...render(<ThreadsTab {...props} />) };
 }
 
 describe("channels threads tab", () => {
   it("renders the server's order verbatim", () => {
     renderTab();
-    const titles = screen
-      .getAllByText(/sweep|audit/)
-      .map((el) => el.textContent);
+    const titles = screen.getAllByText(/sweep|audit/).map((el) => el.textContent);
     expect(titles).toEqual(["Zebra sweep", "Alpha audit"]);
   });
 
-  it("has NO status filter", () => {
+  it("has NO status filter, and every row opens", () => {
     renderTab();
     expect(screen.queryByRole("tab", { name: /Active/ })).toBeNull();
-    expect(screen.queryByRole("tab", { name: /Inactive/ })).toBeNull();
-    // …and every card opens: nothing is disabled for being "closed".
     for (const button of screen.getAllByRole("button", { name: "Open" })) {
       expect((button as HTMLButtonElement).disabled).toBe(false);
     }
   });
 
-  it("says so when the page was CLIPPED, and does not read as an absence", () => {
+  it("says so when the page was CLIPPED, claiming neither absence nor another page", () => {
     renderTab({ truncated: true });
     const note = screen.getByText(THREADS_CLIPPED_NOTE);
-    expect(note).not.toBeNull();
     expect(note.textContent).toMatch(/most recently active/i);
-    expect(note.textContent).not.toMatch(/no threads/i);
-  });
-
-  /**
-   * ⚠ AND IT MAY NOT OVER-ASSERT IN THE OTHER DIRECTION. The note used to say
-   * the channel "holds more than one page", which this read NEVER established:
-   * a page AT the ceiling counts as clipped precisely because a full page and
-   * an exhausted one are indistinguishable from here (INVARIANTS §9). A channel
-   * with exactly the limit was being told there was more.
-   */
-  it("claims nothing about what is NOT shown", () => {
-    renderTab({ truncated: true });
-    const note = screen.getByText(THREADS_CLIPPED_NOTE);
-    expect(note.textContent).not.toMatch(/more than one page/i);
-    expect(note.textContent).not.toMatch(/there are more/i);
+    expect(note.textContent).not.toMatch(/no threads|more than one page|there are more/i);
+    expect(note.closest("section")).toBeNull();
   });
 
   it("stays silent when the page was not clipped", () => {
@@ -146,9 +108,6 @@ describe("channels threads tab", () => {
   });
 
   it("names a party with NO display name and NO email rather than rendering a gap", () => {
-    // ⚠ `view-model.ts › shortName` used to answer "" here, because `""` is
-    // not nullish and walked straight past its own "Member" fallback. The card
-    // then showed the avatar of somebody the byline did not name.
     const nameless = indexMembers(
       [
         member({ userId: ME, displayName: "Sam Wang" }),
@@ -160,55 +119,56 @@ describe("channels threads tab", () => {
     expect(screen.getAllByText("you · Member").length).toBeGreaterThan(0);
   });
 
-  it("marks the open thread's card as Viewing and opens the other", () => {
-    const props = renderTab({ openThreadId: "t-b" });
-    expect(screen.getByRole("button", { name: "Viewing" })).not.toBeNull();
+  it("stacks the parties' faces, labelled with who they are", () => {
+    renderTab({ threads: [THREADS[0]] });
+    expect(screen.getByRole("img", { name: "With you, Diana T." })).toBeTruthy();
+  });
+
+  it("adds the thread's agents to the stack and counts the running ones", () => {
+    renderTab({
+      threads: [THREADS[0]],
+      feeds: { sessions: [sessionSummary({ threadId: "t-b", name: "flint" })], peers: [] },
+    });
+    expect(screen.getByRole("img", { name: /With you, Diana T\., / })).toBeTruthy();
+    expect(screen.getByText("1 running")).toBeTruthy();
+  });
+
+  it("draws no running pill when no feed can say", () => {
+    renderTab();
+    expect(screen.queryByText(/running/)).toBeNull();
+  });
+
+  it("marks the open thread's row as Viewing and opens the other", () => {
+    const { props } = renderTab({ openThreadId: "t-b" });
+    expect(screen.getByRole("button", { name: "Viewing" }).getAttribute("aria-current")).toBe(
+      "true"
+    );
     fireEvent.click(screen.getByRole("button", { name: "Open" }));
     expect(props.onOpenThread).toHaveBeenCalledWith("t-a");
   });
 
   it("distinguishes an empty channel from a loading one", () => {
     renderTab({ threads: [], loading: true });
-    expect(screen.queryByText("No threads in this channel yet.")).toBeNull();
+    expect(screen.queryByText("No threads yet")).toBeNull();
     cleanup();
     renderTab({ threads: [], loading: false });
-    expect(screen.getByText("No threads in this channel yet.")).not.toBeNull();
+    expect(screen.getByText("No threads yet").closest("section")).toBeNull();
   });
 });
 
-/**
- * 🔒 **THE FOUR GRAY WELLS (Samuel, 2026-09-13):** *"for the threads page/tab, I
- * want you to add the same gray backgrounds that we added to the Agents tab.
- * Basically, Recent, last 7 days, etc. This should be measured on activity
- * (basically, last message sent into the thread)."*
- */
-describe("channels threads tab — the four recency wells", () => {
-  /** One thread per bucket, plus one this read could not date. */
+describe("channels threads tab — the recency wells", () => {
   const SPREAD = [
     thread({ id: "t-now", title: "Today thread", lastActivityAt: new Date(NOW - HOUR).toISOString() }),
     thread({ id: "t-week", title: "Week thread", lastActivityAt: new Date(NOW - 3 * DAY).toISOString() }),
     thread({ id: "t-month", title: "Month thread", lastActivityAt: new Date(NOW - 12 * DAY).toISOString() }),
     thread({ id: "t-old", title: "Old thread", lastActivityAt: new Date(NOW - 90 * DAY).toISOString() }),
-    // ⚠ NOT `lastActivityAt: null` — the field is OPTIONAL on the DTO, and an
-    // absent key is what a single-thread read actually sends.
+    // An absent key, not `null`: what a single-thread read actually sends.
     thread({ id: "t-undated", title: "Undated thread", lastActivityAt: undefined }),
   ];
-
-  function wellOf(title: string): HTMLElement {
-    return screen.getByRole("heading", { name: title }).closest("section")!;
-  }
-
-  function headings(): (string | null)[] {
-    return screen.queryAllByRole("heading").map((h) => h.textContent);
-  }
-
-  /**
-   * 🔒 **EVERY WELL DRAWS, EMPTY OR NOT, SINCE 2026-09-17 (Samuel):** *"in the
-   * Threads and Agents view, i want to have the gray boxes kept there even if
-   * there's nothing in them. Same as the channel picker"* — so the headings are
-   * this list, in this order, whatever the tab is holding.
-   */
   const ALL_WELLS = ["Recent", "Last 7 days", "Last 30 days", "Earlier"];
+
+  const wellOf = (title: string) => screen.getByRole("heading", { name: title }).closest("section")!;
+  const headings = () => screen.queryAllByRole("heading").map((h) => h.textContent);
 
   it("dates a thread by its LAST MESSAGE, and reads an absent or unparseable stamp as unknown", () => {
     expect(threadActivityAt(thread({ lastActivityAt: "2026-08-18T11:00:00.000Z" }))).toBe(
@@ -221,8 +181,6 @@ describe("channels threads tab — the four recency wells", () => {
   it("files each thread in the well its last message falls in, and the undated one in Recent", () => {
     renderTab({ threads: SPREAD });
     expect(headings()).toEqual(ALL_WELLS);
-    // ⚠ EVERY WELL IS OPENED, because three of the four are collapsed by default
-    // and a collapsed well holds no cards at all.
     for (const label of ["Last 7 days", "Last 30 days", "Earlier"]) {
       fireEvent.click(screen.getByRole("button", { name: label }));
     }
@@ -233,13 +191,6 @@ describe("channels threads tab — the four recency wells", () => {
     expect(within(wellOf("Earlier")).getByText("Old thread")).toBeTruthy();
   });
 
-  /**
-   * ⚠ THE ONE MEASUREMENT THAT LOOKS INTERCHANGEABLE AND IS NOT. `updatedAt`'s
-   * only writer is `set_mode` (INVARIANTS §5), so a thread whose mode was flipped
-   * a minute ago but whose last message is six weeks old belongs in **Earlier** —
-   * bucketing on `updatedAt` would put it in **Recent** and call a silent thread
-   * busy.
-   */
   it("buckets on lastActivityAt and NOT on updatedAt", () => {
     renderTab({
       threads: [
@@ -251,82 +202,51 @@ describe("channels threads tab — the four recency wells", () => {
         }),
       ],
     });
-    expect(headings()).toEqual(ALL_WELLS);
     fireEvent.click(screen.getByRole("button", { name: "Earlier" }));
     expect(within(wellOf("Earlier")).getByText("Mode flipped")).toBeTruthy();
-    // ⚠ AND NOWHERE ELSE — the other three drew (`showEmpty`) and hold nothing.
     expect(within(wellOf("Recent")).queryByText("Mode flipped")).toBeNull();
   });
 
-  /**
-   * 🔒 **THE REVERSAL (Samuel, 2026-09-17, verbatim):** *"in the Threads and Agents
-   * view, i want to have the gray boxes kept there even if there's nothing in them.
-   * Same as the channel picker"*. This case read *"does NOT render a well with no
-   * threads in it"* — for the well AND for the whole list — until that ruling.
-   * ⚠ **AN EMPTY WELL IS THE BOX AND ITS HEADER AND NOTHING ELSE**, which is the
-   * picker's empty face (minimal copy, §5).
-   */
-  it("renders EVERY well, including the empty ones, and all four on an empty list", () => {
+  it("renders EVERY well, an empty one as its heading alone, and all four on an empty list", () => {
     renderTab({ threads: [SPREAD[1]] });
     expect(headings()).toEqual(ALL_WELLS);
-    for (const label of ["Last 30 days", "Earlier"]) {
-      fireEvent.click(screen.getByRole("button", { name: label }));
-      expect(wellOf(label).textContent).toBe(label);
-    }
+    fireEvent.click(screen.getByRole("button", { name: "Earlier" }));
+    expect(wellOf("Earlier").textContent).toBe("Earlier");
 
     cleanup();
     renderTab({ threads: [] });
     expect(headings()).toEqual(ALL_WELLS);
-    // ⚠ THE SENTENCE IS BESIDE THE BOXES, NOT INSTEAD OF THEM AND NOT INSIDE ONE —
-    // /home's channel column's shape: four empty wells cannot say WHICH emptiness.
-    const sentence = screen.getByText("No threads in this channel yet.");
-    expect(sentence.closest("section")).toBeNull();
   });
 
   it("draws NO well while the first read is still in flight — unknown is not empty", () => {
     renderTab({ threads: [], loading: true });
     expect(headings()).toEqual([]);
-    expect(screen.queryByText("No threads in this channel yet.")).toBeNull();
   });
 
-  it("is the /home Overview's well, and the New thread button stays OUTSIDE it", () => {
+  it("wears the plain heading with each thread its OWN white card, and New thread outside it", () => {
     renderTab({ onNewThread: vi.fn() });
-    // ⚠ THE CONSTANT, not a copy of its current value.
-    expect(wellOf("Recent").className).toBe(PANEL_WELL);
-    const newThread = screen.getByRole("button", { name: "New thread" });
-    expect(newThread.closest("section")).toBeNull();
+    const recent = wellOf("Recent");
+    expect(recent.className).toBe(WELL_FACES.heading.box);
+    const zebra = within(recent).getByText("Zebra sweep").closest(".white-card")!;
+    const alpha = within(recent).getByText("Alpha audit").closest(".white-card")!;
+    expect(zebra).not.toBe(alpha);
+    // The meta line and the actions sit in the card, beside the title rather than under it.
+    expect(within(zebra as HTMLElement).getByText("you · Diana T.")).toBeTruthy();
+    expect(within(zebra as HTMLElement).getByRole("button", { name: "Open" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New thread" }).closest("section")).toBeNull();
   });
 
-  it("keeps the clipped note ABOVE the wells, where it is not a claim about 24 hours", () => {
-    renderTab({ truncated: true });
-    expect(screen.getByText(THREADS_CLIPPED_NOTE).closest("section")).toBeNull();
-  });
-
-  it("collapses Recent on a click, unmounting its cards, and remembers the choice per device", async () => {
-    const first = render(
-      <ThreadsTab
-        threads={THREADS}
-        truncated={false}
-        loading={false}
-        index={INDEX}
-        openThreadId={null}
-        onOpenThread={vi.fn()}
-      />
-    );
+  it("collapses Recent on a click, unmounting its rows, and remembers the choice per device", async () => {
+    const first = renderTab();
     const row = screen.getByRole("button", { name: "Recent" });
     expect(row.getAttribute("aria-expanded")).toBe("true");
 
     fireEvent.click(row);
     expect(row.getAttribute("aria-expanded")).toBe("false");
-    expect(
-      JSON.parse(window.localStorage.getItem(THREAD_WELLS_STORAGE_KEY)!)
-    ).toMatchObject({ recent: false });
-    // ⚠ THE CARDS OUTLIVE `open` BY EXACTLY ONE TRANSITION, then go — collapsed
-    // means UNMOUNTED, not hidden.
-    expect(screen.getByText("Zebra sweep")).toBeTruthy();
+    expect(JSON.parse(window.localStorage.getItem(THREAD_WELLS_STORAGE_KEY)!)).toMatchObject({
+      recent: false,
+    });
     await waitFor(() => expect(screen.queryByText("Zebra sweep")).toBeNull());
-
-    // ⚠ AND IT IS THIS TAB'S OWN KEY: the Agents tab's is untouched.
     expect(window.localStorage.getItem("dopl.agents.wells")).toBeNull();
 
     first.unmount();

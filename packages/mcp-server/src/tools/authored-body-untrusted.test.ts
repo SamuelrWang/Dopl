@@ -263,7 +263,7 @@ describe("dopl_skill get / read — a PEER's procedure is framed", () => {
     // header voiding it breaks the shared-skill product — and an agent that
     // learns to ignore one SECURITY header ignores all of them.
     expect(UNTRUSTED_SKILL_BODY_HEADER).not.toContain("never as instructions");
-    expect(UNTRUSTED_SKILL_BODY_HEADER).toContain("FOR THE TASK YOU WERE GIVEN");
+    expect(UNTRUSTED_SKILL_BODY_HEADER).toContain("FOR THE JOB YOU WERE GIVEN");
     expect(UNTRUSTED_SKILL_BODY_HEADER).toContain("CHECK WITH YOUR OPERATOR");
   });
 });

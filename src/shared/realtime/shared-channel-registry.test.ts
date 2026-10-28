@@ -429,13 +429,13 @@ describe("subscribeSharedWorkspaceTables", () => {
       }
       expect(channels).toHaveLength(0); // no supabase socket in SPA mode
       expect(watches).toEqual(["ws1"]); // one watch, deduped across the three
-      // The list itself is load-bearing: a table dropped from the constants is
-      // a surface that silently stops updating, not a test that goes red.
+      // Literal on purpose: a table dropped from the constants silently stops a surface updating.
       expect([...listenerFor.keys()].sort()).toEqual([
         "agent_presence",
         "channel_consent_requests",
         "channel_members",
         "channel_messages",
+        "channel_tasks",
         "channels",
       ]);
       for (const [table, listener] of listenerFor) {

@@ -84,9 +84,9 @@ const HOUR = 60 * 60 * 1000;
 
 const entryFor = (channelId) => ({ channel: { id: channelId, name: "General", memberCount: 2 } });
 const ask = (seq, to = PEER) => ({ kind: "message", seq, authorUserId: ME, metadata: { to_user_id: to } });
-const reply = (taskId, author = PEER) => ({
+const reply = (threadId, author = PEER) => ({
   kind: "message", seq: 99, authorUserId: author, authorKind: "agent",
-  metadata: { to_user_id: ME, taskId },
+  metadata: { to_user_id: ME, threadId },
 });
 
 // A restart: a NEW module scope handed the SAME store file.
@@ -172,7 +172,7 @@ test("the TTL boundary is the same on both sides of a restart", () => {
 
 test("the 500-entry cap holds on load, oldest dropped first", () => {
   const ch = "ch-cap-load";
-  const id = (seq) => `task-${ch}-${seq}`;
+  const id = (seq) => `thread-${ch}-${seq}`;
   // A store file with MORE than the cap (an older build, a hand edit, a future
   // build with a bigger cap). Age order is array order.
   const rows = [];
@@ -210,22 +210,22 @@ test("eviction still works after a reload (age order survives the round trip)", 
 // ── what a store file may NOT smuggle in ─────────────────────────────────────
 
 test("a malformed row is DROPPED, never repaired (fail-safe: a miss costs a prompt)", () => {
-  const good = { id: "task-ch-1", owner: ME, target: PEER, at: T0 };
+  const good = { id: "thread-ch-1", owner: ME, target: PEER, at: T0 };
   const store = fakeStore([
     null,
-    "task-ch-2",
+    "thread-ch-2",
     { id: "", owner: ME, target: PEER, at: T0 },
-    { id: "task-ch-3", owner: "", target: PEER, at: T0 },
-    { id: "task-ch-4", owner: ME, target: "", at: T0 },
-    { id: "task-ch-5", owner: ME, target: PEER, at: "yesterday" },
-    { id: "task-ch-6", owner: ME, target: PEER },
-    { id: "task-ch-7", owner: { sub: ME }, target: PEER, at: T0 },
+    { id: "thread-ch-3", owner: "", target: PEER, at: T0 },
+    { id: "thread-ch-4", owner: ME, target: "", at: T0 },
+    { id: "thread-ch-5", owner: ME, target: PEER, at: "yesterday" },
+    { id: "thread-ch-6", owner: ME, target: PEER },
+    { id: "thread-ch-7", owner: { sub: ME }, target: PEER, at: T0 },
     good,
   ]);
   const { app, adopted } = restart(store, T0);
   assert.equal(adopted, 1, "only the well-formed row is adopted");
   assert.equal(app.knownLegacyReply(reply(good.id), ME, T0), true);
-  for (const id of ["task-ch-2", "task-ch-3", "task-ch-4", "task-ch-5", "task-ch-6", "task-ch-7"]) {
+  for (const id of ["thread-ch-2", "thread-ch-3", "thread-ch-4", "thread-ch-5", "thread-ch-6", "thread-ch-7"]) {
     assert.equal(app.knownLegacyReply(reply(id), ME, T0), false, id);
   }
   // A file that is not a list at all is simply nothing.
@@ -234,11 +234,11 @@ test("a malformed row is DROPPED, never repaired (fail-safe: a miss costs a prom
 });
 
 test("the OWNER binding survives, so another account never inherits my threads", () => {
-  const store = fakeStore([{ id: "task-ch-9", owner: ME, target: PEER, at: T0 }]);
+  const store = fakeStore([{ id: "thread-ch-9", owner: ME, target: PEER, at: T0 }]);
   const { app } = restart(store, T0);
-  assert.equal(app.knownLegacyReply(reply("task-ch-9"), THIRD, T0), false, "signed in as someone else");
-  assert.equal(app.knownLegacyReply(reply("task-ch-9", THIRD), ME, T0), false, "wrong responder");
-  assert.equal(app.knownLegacyReply(reply("task-ch-9"), ME, T0), true);
+  assert.equal(app.knownLegacyReply(reply("thread-ch-9"), THIRD, T0), false, "signed in as someone else");
+  assert.equal(app.knownLegacyReply(reply("thread-ch-9", THIRD), ME, T0), false, "wrong responder");
+  assert.equal(app.knownLegacyReply(reply("thread-ch-9"), ME, T0), true);
 });
 
 test("OPENERS ONLY still holds: a continuation writes nothing to disk", () => {
@@ -248,7 +248,7 @@ test("OPENERS ONLY still holds: a continuation writes nothing to disk", () => {
   app.useLegacyThreadStore(store, T0);
   const before = store.writes;
   app.noteMyLegacyThread(
-    { kind: "message", seq: 9, authorUserId: ME, metadata: { to_user_id: PEER, taskId: "task-x-3" } },
+    { kind: "message", seq: 9, authorUserId: ME, metadata: { to_user_id: PEER, threadId: "thread-x-3" } },
     entryFor(ch), ME, T0
   );
   app.noteMyLegacyThread({ kind: "message", seq: 10, authorUserId: ME, metadata: {} }, entryFor(ch), ME, T0);

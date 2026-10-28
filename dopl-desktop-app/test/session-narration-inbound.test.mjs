@@ -11,7 +11,7 @@
 //    agent's own post — the exact class of lie `lane` was introduced to make impossible.
 //  - **THE BODY KEEPS ITS SHAPE AND IS BOUNDED ANYWAY.** `narration-text.js`'s CAPTION-vs-PROSE
 //    rule: a message's structure is its content, so `line`'s flatten would delete the meaning of a
-//    peer's numbered task list. But the ring is bounded by characters and the TRANSCRIPT is the
+//    peer's numbered thread list. But the ring is bounded by characters and the TRANSCRIPT is the
 //    record, so the length bound is `POST_CAP`, not `PROSE_CAP` — and either cut must confess.
 //  - **THE SENDER IS A FLATTENED CAPTION.** It is peer-typed prose; a newline in it would forge a
 //    second line in a banner that promises one.
@@ -169,7 +169,7 @@ test("the agent's own name rides ONLY beside `authorKind: 'agent'`, flattened an
 
 test("the agent's COLOUR rides the same gate, unvalidated here on purpose", () => {
   // ⚠ MAIN DOES NOT OWN THE PALETTE: the key crosses as the server wrote it and
-  // `channels/lib/agent-colors.ts › agentColorOrNull` is the ONE membership test, at the item
+  // `src/shared/lib/agent-colors.ts › agentColorOrNull` is the ONE membership test, at the item
   // boundary. Two validators would be two chances to disagree about one agent's colour — so this
   // arm's job is the GATE (kind + presence) and the BOUND, not the vocabulary.
   assert.equal(

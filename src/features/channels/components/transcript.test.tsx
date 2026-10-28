@@ -10,13 +10,13 @@
  * somebody else's screen their words land on. `author_user_id` is always
  * `ctx.userId` and is the signal the layout hangs off.
  *
- * Also pinned: `task_started` renders as NOTHING while a TERMINAL lifecycle row
+ * Also pinned: `thread_started` renders as NOTHING while a TERMINAL lifecycle row
  * renders as a slim receipt line (the shipping desktop's trigger lanes still
  * post both — INVARIANTS §5), a thread's opening message becomes a CARD in the
  * channel view while the rest stay in the thread view, and the scroll-target row
- * carries `data-message-id`. How a body WRAPS is `transcript-body.test.tsx` and
- * the attribution PILL is `agent-attribution.test.tsx` — separate files because
- * this one has no headroom under the 500-line cap.
+ * carries `data-message-id`. How a body WRAPS is `transcript-body.test.tsx`, the
+ * attribution PILL is `agent-attribution.test.tsx` and the request fan-out is
+ * `thread-card-fanout.test.tsx`.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -158,20 +158,20 @@ describe("channels transcript — channel view vs thread view", () => {
   const T = thread({ id: "t-1", title: "UI-kit design" });
   const MESSAGES = [
     message({ id: "chan", seq: 1, body: "CHANNEL-TEXT" }),
-    message({ id: "open", seq: 2, body: "OPENING-TEXT", metadata: { taskId: "t-1" } }),
+    message({ id: "open", seq: 2, body: "OPENING-TEXT", metadata: { threadId: "t-1" } }),
     message({
       id: "reply",
       seq: 3,
       body: "THREAD-REPLY",
       authorUserId: PEER,
-      metadata: { taskId: "t-1" },
+      metadata: { threadId: "t-1" },
     }),
   ];
 
   it("renders the thread's OPENING message as a card and keeps its replies out of the channel", () => {
     renderRows(channelRows(MESSAGES, [T], INDEX, formatChannelTimestamp));
     expect(screen.getByText("CHANNEL-TEXT")).not.toBeNull();
-    expect(screen.getByText("Agent thread")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Open thread" })).not.toBeNull();
     expect(screen.getByText("UI-kit design")).not.toBeNull();
     expect(screen.getByText("OPENING-TEXT")).not.toBeNull();
     expect(screen.queryByText("THREAD-REPLY")).toBeNull();
@@ -182,7 +182,7 @@ describe("channels transcript — channel view vs thread view", () => {
     renderRows(channelRows(MESSAGES, [], INDEX, formatChannelTimestamp));
     expect(screen.getByText("OPENING-TEXT")).not.toBeNull();
     expect(screen.getByText("THREAD-REPLY")).not.toBeNull();
-    expect(screen.queryByText("Agent thread")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open thread" })).toBeNull();
   });
 
   it("opens the thread the card names, not the row's message id", () => {
@@ -204,9 +204,9 @@ describe("channels transcript — channel view vs thread view", () => {
 /**
  * THE LIFECYCLE RECEIPT. The property: **an ENDING is not run state.**
  *
- * `task_started` is a fact about a runtime and belongs to the Agents tab, so it
+ * `thread_started` is a fact about a runtime and belongs to the Agents tab, so it
  * renders as nothing on every build, forever. A TERMINAL row does not: the
- * shipping desktop's `main/trigger-outcomes.js` posts `task_failed` +
+ * shipping desktop's `main/trigger-outcomes.js` posts `thread_failed` +
  * `{declined:true}` on a consent deny, and dropping that left the requester
  * staring at an ask nobody appeared to have answered.
  */
@@ -219,7 +219,7 @@ describe("channels transcript — lifecycle receipts", () => {
           message({
             id: "x",
             seq: 1,
-            kind: "task_failed",
+            kind: "thread_failed",
             authorKind: "agent",
             body: "Request declined",
             metadata: { declined: true },
@@ -239,7 +239,7 @@ describe("channels transcript — lifecycle receipts", () => {
     expect(line.innerHTML).not.toContain("text-danger");
   });
 
-  it("renders the headless lane's flagless task_finished as a receipt", () => {
+  it("renders the headless lane's flagless thread_finished as a receipt", () => {
     // ⚠ PRODUCER GONE, ROW NOT: `main/trigger-headless.js › openOutboundReview`
     // posted this flagless; that lane is deleted, installed builds still post it.
     renderRows(
@@ -248,7 +248,7 @@ describe("channels transcript — lifecycle receipts", () => {
           message({
             id: "f",
             seq: 1,
-            kind: "task_finished",
+            kind: "thread_finished",
             authorKind: "agent",
             body: "Finished this request.",
           }),
@@ -262,21 +262,21 @@ describe("channels transcript — lifecycle receipts", () => {
     expect(line.dataset.receiptStatus).toBe("finished");
   });
 
-  it("drops a bare task_started, and drops an old build's task_started too", () => {
+  it("drops a bare thread_started, and drops an old build's thread_started too", () => {
     renderRows(
       channelRows(
         [
-          // Today's headless lane: `postTaskEvent` fills the default body.
+          // Today's headless lane: `postThreadEvent` fills the default body.
           message({
             id: "s1",
             seq: 1,
-            kind: "task_started",
+            kind: "thread_started",
             body: "Started working on this request.",
           }),
           // A v1 session-window echo — producer deleted, installed builds still post it.
-          message({ id: "s2", seq: 2, kind: "task_started", body: "STARTED" }),
+          message({ id: "s2", seq: 2, kind: "thread_started", body: "STARTED" }),
           // A flagless terminal row with nothing human in it is machine noise.
-          message({ id: "n", seq: 3, kind: "task_failed", body: "   " }),
+          message({ id: "n", seq: 3, kind: "thread_failed", body: "   " }),
         ],
         [],
         INDEX,
@@ -290,14 +290,14 @@ describe("channels transcript — lifecycle receipts", () => {
     expect(screen.getByText("Nothing posted here yet.")).not.toBeNull();
   });
 
-  it("paints a FLAGLESS task_failed — a real fault — in alarm ink", () => {
+  it("paints a FLAGLESS thread_failed — a real fault — in alarm ink", () => {
     renderRows(
       channelRows(
         [
           message({
             id: "x",
             seq: 1,
-            kind: "task_failed",
+            kind: "thread_failed",
             body: "Could not complete this request.",
           }),
         ],
@@ -313,16 +313,16 @@ describe("channels transcript — lifecycle receipts", () => {
 });
 
 describe("channels transcript — what it refuses to render", () => {
-  it("keeps task_progress prose, which is not a lifecycle kind", () => {
+  it("keeps thread_progress prose, which is not a lifecycle kind", () => {
     renderRows(
       channelRows(
-        [message({ id: "p", seq: 1, kind: "task_progress", body: "PROGRESS" })],
+        [message({ id: "p", seq: 1, kind: "thread_progress", body: "PROGRESS" })],
         [],
         INDEX,
         formatChannelTimestamp
       )
     );
-    // `task_progress` is prose an agent wrote — it stays.
+    // `thread_progress` is prose an agent wrote — it stays.
     expect(screen.getByText("PROGRESS")).not.toBeNull();
   });
 
@@ -392,108 +392,5 @@ describe("channels transcript — what it refuses to render", () => {
     // Resolved, so tinted as a mention — but NOT as a mention of me.
     expect(bare.className).toContain("text-link");
     expect(bare.className).not.toContain("bg-link/10");
-  });
-});
-
-/**
- * THE REQUEST FAN-OUT, as the transcript sees it: N opening messages sharing one
- * server-stamped `fanoutGroup` are ONE card with N addressee pills.
- *
- * ⚠ Mutation-verify by keying the dedupe on `thread.id` instead of the group —
- * "one card" goes red and three identical posts appear.
- */
-describe("channels transcript — the request fan-out", () => {
-  const GROUP = "grp-1";
-  const THIRD = "33333333-e29b-41d4-a716-446655440000";
-  const ROSTER = [
-    ...MEMBERS,
-    member({ userId: THIRD, displayName: "Ada Lovelace", role: "member" }),
-  ];
-  const FANOUT_INDEX = indexMembers(ROSTER, ME);
-  const THREADS = [
-    thread({ id: "t-a", title: "Sweep the docs", createdBy: ME, targetUserId: PEER }),
-    thread({ id: "t-b", title: "Sweep the docs", createdBy: ME, targetUserId: THIRD }),
-  ];
-  const OPENERS = [
-    message({
-      id: "op-a",
-      seq: 1,
-      body: "START-HERE",
-      metadata: { taskId: "t-a", fanoutGroup: GROUP },
-    }),
-    message({
-      id: "op-b",
-      seq: 2,
-      body: "START-HERE",
-      metadata: { taskId: "t-b", fanoutGroup: GROUP },
-    }),
-  ];
-
-  function renderFanOut(
-    over: { canLaunchAgent?: boolean; launchBusy?: boolean } = {}
-  ) {
-    const onOpenThread = vi.fn();
-    const onLaunchAgent = vi.fn();
-    render(
-      <Transcript
-        rows={channelRows(OPENERS, THREADS, FANOUT_INDEX, formatChannelTimestamp)}
-        index={FANOUT_INDEX}
-        flashId={null}
-        onLaunchAgent={onLaunchAgent}
-        onOpenThread={onOpenThread}
-        {...over}
-      />
-    );
-    return { onOpenThread, onLaunchAgent };
-  }
-
-  it("draws ONE card for two threads, with a pill per ADDRESSEE", () => {
-    renderFanOut();
-    expect(screen.getAllByText("Agent thread")).toHaveLength(1);
-    expect(screen.getAllByText("START-HERE")).toHaveLength(1);
-    // Each pill is that thread's own `targetUserId` — never the requester.
-    expect(screen.getByText("Diana T.")).not.toBeNull();
-    expect(screen.getByText("Ada L.")).not.toBeNull();
-    expect(screen.queryByText("you")).toBeNull();
-  });
-
-  it("keeps a fan-out thread's REPLY out of the channel — one card, not two", () => {
-    // ⚠ Only OPENERS carry `fanoutGroup` (the server strips it from every
-    // other post), so a reply arrives under the thread's OTHER identity, its
-    // `taskId`. A group-only seen-key let it re-emit the card as its own
-    // (observed live 2026-08-20: the addressee's first agent reply rendered as
-    // a second "Agent thread" card in the main transcript).
-    const reply = message({
-      id: "re-a",
-      seq: 3,
-      body: "AGENT-REPLY",
-      authorUserId: PEER,
-      authorKind: "agent",
-      metadata: { taskId: "t-a" },
-    });
-    renderRows(
-      channelRows([...OPENERS, reply], THREADS, FANOUT_INDEX, formatChannelTimestamp),
-      FANOUT_INDEX
-    );
-    expect(screen.getAllByText("Agent thread")).toHaveLength(1);
-    expect(screen.queryByText("AGENT-REPLY")).toBeNull();
-  });
-
-  it("states NO approval on the pills — no projection says who allowed", () => {
-    renderFanOut();
-    // ⚠ `AddresseePill` renders an SR-only verdict when `approved` is passed at
-    // all. Nothing may pass it here (F-206): "no pending row" would report
-    // never-asked as approved.
-    expect(screen.queryByText(/approved/)).toBeNull();
-    expect(screen.queryByText(/awaiting approval/)).toBeNull();
-  });
-
-
-  it("opens the viewer's OWN thread of the group", () => {
-    const { onOpenThread } = renderFanOut();
-    fireEvent.click(screen.getByRole("button", { name: "Open thread" }));
-    // ME created both, so the first is theirs — the point is that it names a
-    // THREAD id from the group, not the card's message id.
-    expect(onOpenThread).toHaveBeenCalledWith("t-a");
   });
 });

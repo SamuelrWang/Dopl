@@ -35,7 +35,7 @@ import { summary } from "./agent-window-harness";
 import { CHANNEL_ID, ME } from "./test-fixtures";
 // ⚠ READ OFF THE BANK, NEVER TYPED — `AGENT_COLOR_KEYS`'s ORDER *is* the assignment policy, so a
 // literal "agent-02" would be this suite deciding what "the picked key" means.
-import { AGENT_COLOR_KEYS } from "../lib/agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 
 const [FIRST, SECOND, THIRD] = AGENT_COLOR_KEYS;
 
@@ -58,10 +58,10 @@ function stubBridge(over: { withLaunch?: boolean } = {}) {
 
 /** The pop-out's own wiring: the panel above, the `+` beside the form. */
 function Harness({
-  taskId = "t-1",
+  threadId = "t-1",
   sessions,
 }: {
-  taskId?: string;
+  threadId?: string;
   sessions?: React.ComponentProps<typeof AgentWindowLaunch>["sessions"];
 }) {
   const panel = useAgentLaunch();
@@ -73,7 +73,7 @@ function Harness({
         workspaceId="ws-1"
         currentUserId={ME}
         channelId={CHANNEL_ID}
-        taskId={taskId}
+        threadId={threadId}
         sessions={sessions}
         agent={summary({ channelName: "Website", threadTitle: "UI-kit design" })}
       />
@@ -115,7 +115,7 @@ describe("the + opens the New agent form", () => {
     await waitFor(() => expect(launch).toHaveBeenCalledTimes(1));
     const payload = launch.mock.calls[0]![0] as Record<string, unknown>;
     expect(payload.channelId).toBe(CHANNEL_ID);
-    expect(payload.taskId).toBe("t-1");
+    expect(payload.threadId).toBe("t-1");
     expect(payload.workspaceId).toBe("ws-1");
     expect(payload.channelName).toBe("Website");
     expect(payload.threadTitle).toBe("UI-kit design");
@@ -126,15 +126,15 @@ describe("the + opens the New agent form", () => {
   });
 
   /** ⚠ `""` IS A RESPONDER WHOSE EXCHANGE NEVER BECAME FIRST-CLASS, so the sibling starts on the
-   *  ROOM — `taskId: null` on the wire, the channel-level lane. Never `''` passed through as a
+   *  ROOM — `threadId: null` on the wire, the channel-level lane. Never `''` passed through as a
    *  thread that is not addressable. */
   it("starts a CHANNEL-level agent when the active tab has no thread", async () => {
-    render(<Harness taskId="" />);
+    render(<Harness threadId="" />);
     fireEvent.click(screen.getByRole("button", { name: "New agent" }));
     await screen.findByRole("heading", { name: "New agent" });
     fireEvent.click(screen.getByRole("button", { name: "Launch" }));
     await waitFor(() => expect(launch).toHaveBeenCalledTimes(1));
-    expect((launch.mock.calls[0]![0] as { taskId: unknown }).taskId).toBeNull();
+    expect((launch.mock.calls[0]![0] as { threadId: unknown }).threadId).toBeNull();
   });
 
   /** ⚠ ABSENT, NOT DISABLED, on a build that cannot launch (INVARIANTS §11) — the form offers no
@@ -215,7 +215,7 @@ describe("the pop-out page wires the + to the form", () => {
   it("mounts the form for the ACTIVE tab, keyed by it", () => {
     expect(page).toMatch(/<AgentWindowLaunch[\s\S]{0,400}key=\{active\.key\}/);
     expect(page).toMatch(/channelId=\{active\.channelId\}/);
-    expect(page).toMatch(/taskId=\{active\.taskId\}/);
+    expect(page).toMatch(/threadId=\{active\.threadId\}/);
   });
 
   /**

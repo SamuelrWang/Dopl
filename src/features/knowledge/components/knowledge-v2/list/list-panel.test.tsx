@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { KnowledgeBase } from "../../../types";
 import type { BaseTree } from "../types";
 import type { TreeHandlers } from "../use-knowledge-v2-controller";
+import { TEXT_LINK_BUTTON } from "@/shared/ui/text-link";
 import { ListPanel } from "./list-panel";
 
 /**
@@ -113,13 +114,11 @@ describe("knowledge folder rail", () => {
     expect(row.className).toContain("treeRowActive");
   });
 
-  it("puts the create actions on the GLOBAL pill, not a local recipe", () => {
+  it("puts the create actions on the kit's text link, not a local recipe", () => {
     renderRail();
-    // `.btn-light` is the shared face `OpenScaleButton` composes.
     for (const name of ["New file", "New folder"]) {
       const btn = screen.getByRole("button", { name: new RegExp(name) });
-      expect(btn.className).toContain("btn-light");
-      expect(btn.className).toContain("openScale");
+      expect(btn.className).toContain(TEXT_LINK_BUTTON);
     }
   });
 

@@ -52,7 +52,7 @@ export function WorkspaceDangerZoneCore({
   }
 
   return (
-    <section className="w-full overflow-hidden rounded-[14px] border border-border-strong">
+    <section className="w-full overflow-hidden rounded-xl border border-border-strong">
       <div className="flex items-center bg-card-surface-subtle px-4 py-1.5">
         <span className="text-label font-semibold uppercase tracking-wide text-danger">
           Danger zone

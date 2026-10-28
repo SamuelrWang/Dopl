@@ -177,7 +177,7 @@ describe("a cached row from before a field shipped still renders", () => {
   /**
    * `ledgerDrift` shipped 2026-09-13 (F-693), so it takes the same field-wise
    * fallback `wallet` does. The consumer test is `!== 0`
-   * (`pages/home/overview-sections.tsx › CreditCapacityBar`), and
+   * (`home/components/overview/overview-credits.tsx › CreditsCard`), and
    * `undefined !== 0` is true — without the `?? 0` every replayed older row
    * would claim the reader's wallet does not match its own histogram.
    */

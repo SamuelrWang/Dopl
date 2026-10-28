@@ -265,7 +265,7 @@ describe("choosing, inline", () => {
   });
 });
 
-describe("the Working Folder row", () => {
+describe("the Working folder row", () => {
   it("is absent without the folder half of the bridge", async () => {
     bridge();
     mountAgent();
@@ -273,7 +273,7 @@ describe("the Working Folder row", () => {
     // ⚠ RENAMED 2026-09-06 (item 4), and the separate picker button is DELETED —
     // the folder NAME is the button now. Both absences are asserted: the row's name
     // and the control that used to sit under it.
-    expect(screen.queryByText("Working Folder")).toBeNull();
+    expect(screen.queryByText("Working folder")).toBeNull();
     expect(screen.queryByRole("button", { name: "Change folder…" })).toBeNull();
     expect(
       screen.queryByRole("button", {

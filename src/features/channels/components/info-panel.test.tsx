@@ -51,7 +51,7 @@ function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: "t-a",
+    threadId: "t-a",
     name: "flint",
     state: "working",
     channelName: "Website",
@@ -138,7 +138,7 @@ describe("the tab row's count badges", () => {
 
   it("counts my own agents PLUS live peers on Agents", () => {
     renderPanel({
-      agentSessions: [summary(), summary({ sessionId: "s-2", taskId: "t-b" })],
+      agentSessions: [summary(), summary({ sessionId: "s-2", threadId: "t-b" })],
       peerSessions: [peer()],
     });
     expect(badgeOf("Agents")).toBe("3");
@@ -147,7 +147,7 @@ describe("the tab row's count badges", () => {
   it("narrows BOTH halves to the open thread, exactly as the tab's list does", () => {
     renderPanel({
       openThread: THREADS[0],
-      agentSessions: [summary(), summary({ sessionId: "s-2", taskId: "t-b" })],
+      agentSessions: [summary(), summary({ sessionId: "s-2", threadId: "t-b" })],
       peerSessions: [peer(), peer({ name: "slate", threadId: "t-b" })],
     });
     // One of mine on t-a, one peer on t-a. The two t-b rows are out of scope.
@@ -310,7 +310,7 @@ describe("the badge agrees with the list under it", () => {
   // state are still synchronous.
   it("draws exactly as many agent cards as the Agents badge claims", async () => {
     renderPanel({
-      agentSessions: [summary(), summary({ sessionId: "s-2", taskId: "t-b", name: "onyx" })],
+      agentSessions: [summary(), summary({ sessionId: "s-2", threadId: "t-b", name: "onyx" })],
       peerSessions: [peer({ name: "slate" })],
     });
     expect(badgeOf("Agents")).toBe("3");

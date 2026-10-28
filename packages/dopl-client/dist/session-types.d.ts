@@ -40,7 +40,7 @@ import type { SessionPillState, ChannelSessionTelemetry } from "@dopl/contracts"
 export type SessionDetailKey = "thinking" | "tool" | "posting" | "permission" | "awaiting_peer" | "awaiting_inbound";
 export interface ChannelSessionState {
     channelId: string;
-    /** Thread (task) this session is on, or null. */
+    /** Thread this session is on, or null. */
     threadId: string | null;
     /**
      * THE ADDRESS, not the name. On any current desktop this is the AGENT-INSTANCE ID
@@ -77,6 +77,9 @@ export interface ChannelSessionState {
     detail?: SessionDetailKey | null;
     channelName: string | null;
     threadTitle: string | null;
+    /** The runtime this session runs on (`claude`, `codex`, …). Absent on an older server, `null`
+     *  from an older desktop. Not a closed set: the roster is the desktop's. */
+    runtime?: string | null;
     updatedAt: string;
 }
 /** The caller's OWN session — coarse projection plus the operator-only halves. */

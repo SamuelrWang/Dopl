@@ -14,7 +14,7 @@
 // SEAM: no injection — it derives its own targets from the flat info object the engine hands it.
 // Leaf deps are required directly; nothing here requires trigger.js back.
 
-const { postTaskEvent } = require('./channel-post');
+const { postThreadEvent } = require('./channel-post');
 // The register a quit drains before it closes the process (`quit-guard.js › teardown`).
 const terminalPosts = require('./session-terminal-posts');
 const { diag } = require('./diag');
@@ -56,8 +56,8 @@ const CANNOT_RUN =
   "I couldn't pick this up — my agent isn't able to run it right now. Try me again later, or reach me another way.";
 
 // ── THE SESSION LIFECYCLE ECHO (engine → channel) ────────────────────────
-// The engine's runLifecycle hands a flat info object { channelId, taskId, workspaceId,
-// side, sessionId, key, sdkSessionId }. postTaskEvent needs only channel.id, workspaceId,
+// The engine's runLifecycle hands a flat info object { channelId, threadId, workspaceId,
+// side, sessionId, key, sdkSessionId }. postThreadEvent needs only channel.id, workspaceId,
 // and a `seq` for the idempotent clientMsgId `${kind}-${channelId}-${seq}` (it does NOT
 // read channel.name), so the coupling is tiny.
 //
@@ -66,7 +66,7 @@ const CANNOT_RUN =
 // FIX #2: `seq` folds a per-resume-CYCLE discriminator into a STABLE base, so a NEW cycle
 // (a park->resume) posts a NEW server row while a RETRY within one cycle still collapses to
 // one (the server dedupes on the identical clientMsgId).
-//   base  = the first-class taskId, else the STABLE sessionKey (channelId:taskId) — never
+//   base  = the first-class threadId, else the STABLE sessionKey (channelId:threadId) — never
 //           the per-launch ephemeral sessionId, so a resume (fresh sessionId, same key)
 //           can't post under a different id.
 //   cycle = the SDK session id (a resumed query mints a fresh one at its own system/init),
@@ -79,14 +79,14 @@ const CANNOT_RUN =
 function echoSeq(info) {
   const i = info || {};
   if (i.seq != null) return i.seq;
-  const base = i.taskId || i.key || i.sessionId || 'session';
+  const base = i.threadId || i.key || i.sessionId || 'session';
   const cycle = i.sdkSessionId || i.sessionId || 'init';
   return base + '#' + cycle;
 }
 // ⚠ `sessionId` IS THE SLOT KEY `i.key`, NOT `i.sessionId` (2026-09-15, docs/traces/AGENT-BADGE-TRACE.md).
 // The flat info object carries both and they are different facts: `sessionId` is the PER-LAUNCH
 // ephemeral id (fresh on every resume, a React key on the wire) and `key` is
-// `<channelId>:<taskId>:<agentId>` — `session-store.js › sessionKey`, the same value
+// `<channelId>:<threadId>:<agentId>` — `session-store.js › sessionKey`, the same value
 // `runtime/claude/launch-spec.js:159` stamps onto a spawned session's own posts. The AGENT id is
 // the segment every reader wants (`lib/agent-post-stamp.ts › agentIdOfSessionKey` reads it from
 // the END), and the ephemeral id does not carry one at all, so stamping that would produce a
@@ -96,7 +96,7 @@ function echoTargets(info) {
   return {
     entry: { channel: { id: i.channelId }, workspaceId: i.workspaceId },
     m: { seq: echoSeq(i) },
-    taskId: i.taskId || undefined,
+    threadId: i.threadId || undefined,
     sessionId: i.key || undefined,
   };
 }
@@ -135,7 +135,7 @@ function firstInactiveNote(channelId, seq) {
 
 /**
  * ⚠ POSTS NOTHING, AND THAT IS THE FEATURE (Phase 5, 2026-08-18). This used to echo
- * `task_started` the instant the session's SDK system/init landed (§A.3 launched). A launch is
+ * `thread_started` the instant the session's SDK system/init landed (§A.3 launched). A launch is
  * a fact about a RUNTIME; the surface that reports it is the Agents tab, off the LOCAL session
  * projection, and a transcript row claiming it was the thing this phase removed.
  *
@@ -150,8 +150,8 @@ function onLaunched(_info) {}
 // { interrupted:true }), and — for P3 (v1.7.4) — an explicit calm `bodyOverride`. IDLE
 // no longer calls this at all (it parks).
 //
-// ⚠ ONLY `task_progress` IS POSTED. The terminal kinds are gone with the session card that read
-// them: a `task_failed{capped}` / `task_finished` row said "this exchange ended" on a surface
+// ⚠ ONLY `thread_progress` IS POSTED. The terminal kinds are gone with the session card that read
+// them: a `thread_failed{capped}` / `thread_finished` row said "this exchange ended" on a surface
 // that had no other way to say "this machine stopped", and the thread never had an outcome to
 // report (INVARIANTS §5). What is left is the `session_ended` MILESTONE — the one thing the
 // peer genuinely needs, because they are waiting on a reply that is not coming.
@@ -159,12 +159,12 @@ function onLaunched(_info) {}
 // this build still writes them, and installed builds still do.
 function onEnded(info, kind, extra, bodyOverride) {
   const meta = extra || {};
-  // P1-7 (2026-08-04): `task_progress` is the non-terminal marker for a LOCAL session end —
-  // see `session-effects.endLifecycle`. Everything else USED to be coerced to `task_finished`;
+  // P1-7 (2026-08-04): `thread_progress` is the non-terminal marker for a LOCAL session end —
+  // see `session-effects.endLifecycle`. Everything else USED to be coerced to `thread_finished`;
   // it is now dropped, because the coercion's only remaining job would be to manufacture a
   // terminal row this module no longer posts.
-  if (kind !== 'task_progress') return;
-  const { entry, m, taskId, sessionId } = echoTargets(info);
+  if (kind !== 'thread_progress') return;
+  const { entry, m, threadId, sessionId } = echoTargets(info);
   if (!entry.channel.id) return;
   // C-5: the calm status note is said once per (thread, cycle); see firstInactiveNote.
   if (meta.session_ended === true && !firstInactiveNote(entry.channel.id, m.seq)) {
@@ -173,14 +173,14 @@ function onEnded(info, kind, extra, bodyOverride) {
   }
   const body = bodyOverride || (meta.session_ended ? 'Session ended' : undefined);
   // ⚠ THE SLOT KEY RIDES WITH IT. This note is ABOUT one session, so the row must say which —
-  // see `echoTargets` above and `channel-post.js › postTaskEvent`'s `sessionId` note.
+  // see `echoTargets` above and `channel-post.js › postThreadEvent`'s `sessionId` note.
   // ⚠ AND IT IS REGISTERED, NOT MERELY FIRED (2026-10-12). Fire-and-forget is right while the
   // app is running and wrong at the one moment this note matters most: a session ended by a QUIT
   // posts from here and then `quit-guard.js › teardown` calls `app.quit()`, which took the
   // process away with the request in flight — so the peer waiting on a reply was told nothing.
   // `track` only HOLDS the promise so the quit path can give it a bounded moment; it does not
   // change this call's outcome, and the `.catch` below is still the only error handler.
-  terminalPosts.track(postTaskEvent(entry, m, 'task_progress', taskId, meta, body, { sessionId }))
+  terminalPosts.track(postThreadEvent(entry, m, 'thread_progress', threadId, meta, body, { sessionId }))
     .catch((err) => diag('session onEnded echo error', err && err.message));
 }
 

@@ -228,7 +228,7 @@ async function setup(ctx, who, tg) {
   if (spoofed.ok) posted.spoofedRuntime = spoofed.json.message;
   else ctx.spoofError = `HTTP ${spoofed.status} ${spoofed.text.slice(0, 300)}`;
 
-  // ── A THREAD, for the tasks/{taskId} route ────────────────────────────────────
+  // ── A THREAD, for the threads/{threadId} route ────────────────────────────────────
   if (!ctx.threadSkip) {
     const res = await api.createThread(ctx.channel.id, {
       title: 'harness: route coverage',
@@ -237,7 +237,7 @@ async function setup(ctx, who, tg) {
       clientMsgId: `harness-${tg.stamp}-thread`,
     });
     if (res.ok) {
-      ctx.thread = res.json.task;
+      ctx.thread = res.json.thread;
       // NO CLEANUP STEP FOR THE THREAD, and this is not an oversight — it is now simply
       // impossible. ⚠ THREADS DO NOT CLOSE AT ALL (wiring plan Phase 4, 2026-08-18): no close,
       // no propose, no reopen, and the `PATCH` arms behind them are deleted. Before that they

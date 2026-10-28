@@ -9,10 +9,10 @@ import { formatRelativeTime } from "@/shared/lib/format-time";
  * (Samuel's instruction, in those words). Taken from
  * `features/ontology/components/kanban-board.tsx` + `kanban-card.tsx`: a
  * horizontally scrolling row of `self-start` lanes, each a
- * `rounded-[14px] bg-bg-inset` well holding a header and a column of
- * `rounded-[10px]` bordered cards on `bg-bg-elevated`.
+ * `rounded-xl bg-bg-inset` well holding a header and a column of
+ * `rounded-lg` bordered cards on `bg-bg-elevated`.
  * ⚠ **WHAT IS DELIBERATELY NOT COPIED IS THE ARITHMETIC.** That board's `w-72`
- * lane and `h-[216px]` card are sized for object cards with an eight-line clamp;
+ * lane and `h-54` card are sized for object cards with an eight-line clamp;
  * an agent card is a name, a state word and a thread. **Do not "restore" the
  * ontology numbers** — they are a measurement from a different board.
  *
@@ -140,7 +140,7 @@ export function AgentBoard({ rows, onOpen, readOnlyPeers }: AgentBoardProps) {
       {lanes.map((lane) => (
         <section
           key={lane.id}
-          className="flex w-52 shrink-0 flex-col gap-1.5 self-start rounded-[14px] bg-bg-inset p-2"
+          className="flex w-52 shrink-0 flex-col gap-1.5 self-start rounded-xl bg-bg-inset p-2"
         >
           <header className="flex items-baseline justify-between gap-2 px-0.5">
             <h4 className="min-w-0 truncate text-label font-semibold uppercase tracking-wide text-text-secondary">
@@ -168,7 +168,7 @@ export function AgentBoard({ rows, onOpen, readOnlyPeers }: AgentBoardProps) {
 }
 
 const CARD_FACE =
-  "flex w-full flex-col items-start gap-0.5 rounded-[10px] border border-border-subtle bg-bg-elevated px-2 py-1.5 text-left";
+  "flex w-full flex-col items-start gap-0.5 rounded-lg border border-border-subtle bg-bg-elevated px-2 py-1.5 text-left";
 
 /** One agent. ⚠ The FACE is one string for both arms — a read-only card that
  *  drifted from the openable one would read as a different kind of thing. */

@@ -178,6 +178,20 @@ export type {
 } from "./channel-types.js";
 export type { ChannelSessionHealth } from "./session-health-types.js";
 export type {
+  ChannelTask,
+  ChannelTaskAction,
+  ChannelTaskDetail,
+  ChannelTaskNote,
+  ChannelTaskPage,
+  ChannelTaskSubtask,
+  ChannelTaskWriteResult,
+  SubtaskState,
+  TaskActor,
+  TaskActorRef,
+  TaskLink,
+  TaskStatus,
+} from "./channel-task-types.js";
+export type {
   AccountChannelMessage,
   AccountChannelStatus,
   AccountMessagesOptions,

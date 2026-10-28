@@ -26,7 +26,7 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { describe, expect, it } from "vitest";
-import { AGENT_COLOR_KEYS } from "./agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 import { AGENT_COLOR_VALUES } from "./agent-color-values";
 
 /** WCAG 2.1: normal text needs 4.5. */

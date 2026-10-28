@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * The channel's right column: the tab row (Info, Threads, Agents, Settings) and its bodies.
+ * The channel's right column: the tab row (Info, Threads, Agents, Tasks where the host offers it,
+ * Settings) and its bodies.
  * With a thread open the column is thread-scoped; Settings arrives as a slot (`settings-slot.tsx`).
  */
 
@@ -68,6 +69,7 @@ export function ChannelsInfoPanel({
   mentionsLoading,
   onOpenMention,
   onMarkAllMentionsRead,
+  onJumpToMessage,
   artifacts = false,
   headerEdit,
   infoCardEdit,
@@ -76,6 +78,9 @@ export function ChannelsInfoPanel({
   rosterEmptyLine,
   membersAction,
   infoTabSignal = 0,
+  tasks,
+  activeTaskCount,
+  tasksTabSignal = 0,
   fullTab,
   settings,
 }: {
@@ -114,6 +119,8 @@ export function ChannelsInfoPanel({
   mentionsLoading: boolean;
   onOpenMention: (mention: ChannelMention) => void;
   onMarkAllMentionsRead: () => void;
+  /** Moves the transcript to a message (an opened artifact's); absent draws no jump. */
+  onJumpToMessage?: (threadId: string | null, messageId: string) => void;
   /** The curated `channels.info_card` write, minted by the host; absent draws no rows. */
   infoCardEdit?: ChannelInfoCardEdit;
   /** Offer the Threads tab's Artifacts face (shares the slot: the row's width fits four tabs). */
@@ -131,15 +138,22 @@ export function ChannelsInfoPanel({
   settings?: ReactNode;
   /** Nonce: each change resets to Info. A nonce, so `tab` keeps one owner and "asked twice" resets twice. */
   infoTabSignal?: number;
+  /** The Tasks tab's body; absent draws no Tasks tab. */
+  tasks?: ReactNode;
+  /** The Tasks badge: unresolved tasks in the loaded list. */
+  activeTaskCount?: number;
+  /** Counter: each rise switches to Tasks (the composer's quick view); 0 while nothing is asked. */
+  tasksTabSignal?: number;
 }) {
   const [tab, setTab] = useState<TabKey>("info");
   // Owned here: the tab label and the body both read it. Not persisted.
   const [artifactsFace, setArtifactsFace] = useState(false);
   const openThreadId = openThread?.id ?? null;
   const threadView = openThread !== null;
-  const options = channelPaneTabs(threadView);
+  const options = channelPaneTabs(threadView, tasks !== undefined);
   // The capability is ANDed in here only.
   const onArtifactsFace = artifacts && artifactsFace;
+  const feeds = { sessions: agentSessions, peers: peerSessions };
 
   // Opening a thread removes the Threads tab; fall back to Info during render (not an effect, to avoid a broken frame).
   const dead = !options.some((t) => t.key === tab);
@@ -151,7 +165,15 @@ export function ChannelsInfoPanel({
     setSeenTabSignal(infoTabSignal);
     setTab("info");
   }
-  const activeTab: TabKey = dead || reset ? "info" : tab;
+  // Seeded at 0, not the current value: the ask that opens a closed column arrives with this
+  // panel's mount (`use-channels-selection.ts › openTask`), and closing the column zeroes it.
+  const [seenTasksSignal, setSeenTasksSignal] = useState(0);
+  const toTasks = tasks !== undefined && tasksTabSignal > seenTasksSignal;
+  if (tasksTabSignal !== seenTasksSignal) {
+    setSeenTasksSignal(tasksTabSignal);
+    if (toTasks) setTab("tasks");
+  }
+  const activeTab: TabKey = toTasks ? "tasks" : dead || reset ? "info" : tab;
 
   // The shared `activeAgentCount`, never a local sum; `null` sessions ⇒ `undefined`, never `0`.
   const agentCount =
@@ -172,7 +194,7 @@ export function ChannelsInfoPanel({
               <ThreadInfoTab
                 thread={openThread}
                 members={members}
-                currentUserId={index.currentUserId}
+                index={index}
                 agentSessions={agentSessions}
                 peerSessions={peerSessions}
               />
@@ -203,6 +225,7 @@ export function ChannelsInfoPanel({
               truncated={threadsTruncated}
               loading={threadsLoading}
               index={index}
+              feeds={feeds}
               openThreadId={openThreadId}
               onOpenThread={onOpenThread}
               onNewThread={onNewThread}
@@ -217,6 +240,8 @@ export function ChannelsInfoPanel({
                     channelId={channel.id}
                     workspaceId={channel.workspaceId}
                     index={index}
+                    feeds={feeds}
+                    onJumpToMessage={onJumpToMessage}
                   />
                 ) : undefined
               }
@@ -238,6 +263,8 @@ export function ChannelsInfoPanel({
               openAgent={openAgent}
               onOpenAgent={onOpenAgent}
             />
+          ) : shown === "tasks" ? (
+            tasks
           ) : (
             settings
           );
@@ -261,8 +288,7 @@ export function ChannelsInfoPanel({
       // `--info-w` is the draggable width (`use-info-resize.ts`); `shrink-0` keeps the slide from reflowing.
       className="flex w-[var(--info-w,380px)] shrink-0 flex-col border-l border-border-default"
     >
-      {/* The 380px row fits four tabs; a fifth needs a tighter layout, not a shorter label. */}
-      <div className="flex h-[56px] shrink-0 items-center px-3">
+      <div className="flex h-14 shrink-0 items-center px-3">
         <SegmentedControl
           options={options.map((t) => {
             // Badge dropped by face + slot, never by label text.
@@ -270,7 +296,10 @@ export function ChannelsInfoPanel({
             const option = threadsFaceOption(t, onArtifactsFace);
             return artifactsSlot
               ? option
-              : { ...option, count: tabCount(option.key, threads, agentCount) };
+              : {
+                  ...option,
+                  count: tabCount(option.key, threads, agentCount, activeTaskCount),
+                };
           })}
           value={activeTab}
           onChange={setTab}

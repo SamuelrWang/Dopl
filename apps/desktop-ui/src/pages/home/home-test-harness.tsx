@@ -230,12 +230,10 @@ export const MEMBERS: { members: ChannelMember[] } = {
   ],
 };
 
-/** BOUNDARY: the route and its envelope keep the STORAGE name `tasks`; the
- *  domain name is `thread`. */
-export const THREADS: { tasks: ChannelThread[]; truncated: boolean } = {
-  tasks: [
+export const THREADS: { threads: ChannelThread[]; truncated: boolean } = {
+  threads: [
     {
-      id: "task-1",
+      id: "thread-1",
       channelId: CHANNEL_ID,
       title: "Renewals over $1k",
       status: "open",
@@ -322,7 +320,7 @@ export function routes(
   if (bare === `/api/channels/${CHANNEL_ID}/members`) {
     return Promise.resolve(ok(MEMBERS));
   }
-  if (bare === `/api/channels/${CHANNEL_ID}/tasks`) {
+  if (bare === `/api/channels/${CHANNEL_ID}/threads`) {
     return Promise.resolve(ok(THREADS));
   }
   if (bare === `/api/workspaces/${LINK_SEGMENT}/overview-series`) {

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useAccountChannels } from "@/features/channels/hooks/use-channels";
 import type { Channel } from "@/features/channels/types";
-import { homeChannels } from "./home-rows";
+import { homeChannels } from "@/features/home/components/channels/home-rows";
 
 /**
  * THE OPERATOR'S HOME CHANNELS, for the two surfaces that want the channels

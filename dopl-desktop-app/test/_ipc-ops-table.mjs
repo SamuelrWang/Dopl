@@ -79,7 +79,7 @@ export const OPS = [
   // 2026-08-22 (ended-agent ruling): the desktop half of the thread-delete cascade. Main cannot see
   // the SERVER's cascade, so an ended agent's frozen 7-day history would outlive the thread it
   // worked. LOCAL stores only — never a `channel_message`, never a LIVE session.
-  ["agents:forgetThread", { channelId: CH, taskId: "t1" }, { ok: false }],
+  ["agents:forgetThread", { channelId: CH, threadId: "t1" }, { ok: false }],
   // 2026-09-23: the IN-APP SIGN-IN, runtime-scoped (was `claude:signIn`, 2026-08-25). Its subject is
   // the MACHINE's credential for one runtime; the payload is only that id, so the fourth slot is a
   // malformed id, refused at the boundary before any flow module loads. It starts no turn: the OAuth
@@ -93,26 +93,26 @@ export const OPS = [
   // a flag, never a credential. A refused read is the empty list.
   ["runtime:credentialStatus", undefined, { runtimes: [] }],
   ["runtime:dismissSignInPrompt", { runtimeId: "codex" }, { ok: false }, { runtimeId: "../codex" }],
-  ["sessions:reopen", { channelId: CH, taskId: "t1" }, { ok: false }],
+  ["sessions:reopen", { channelId: CH, threadId: "t1" }, { ok: false }],
   // 2026-08-18 (wiring plan Phase 5): the Agents tab's controls on the operator's OWN agent. STOP
   // verbs — `interrupt` and `end` — dispatched through main's own reducer, under the same sender
   // binding and UUID gate as every op above, which is why this list is asserted by COUNT as well
   // as by name.
-  ["sessions:pause", { channelId: CH, taskId: "t1" }, { ok: false }],
-  ["sessions:end", { channelId: CH, taskId: "t1" }, { ok: false }],
+  ["sessions:pause", { channelId: CH, threadId: "t1" }, { ok: false }],
+  ["sessions:end", { channelId: CH, threadId: "t1" }, { ok: false }],
   // 2026-09-17 (inline-approval ruling): the operator answering ONE tool call this machine is
   // HOLDING at the gate — the one op here that carries a DECISION rather than a control. It widens
   // nothing: ALLOW-ONCE mints no standing grant, neither axis moves, no turn starts, and a `deny`
   // VERDICT parks no resolver. `{ok:false}` is also the honest answer for an ordinary miss, so a
   // refused call and a real miss are indistinguishable here too.
-  ["sessions:answerPermission", { channelId: CH, taskId: "t1", requestId: "r1", allow: true }, { ok: false }],
+  ["sessions:answerPermission", { channelId: CH, threadId: "t1", requestId: "r1", allow: true }, { ok: false }],
   // 2026-08-25 (delete ruling): `sessions:end` PLUS a local erase — one stop path, never two, then
   // every local store keyed to the agent is dropped. It reaches no `channel_messages`. Same binding
   // and UUID gate; the review is in `preload-parity`.
-  ["sessions:delete", { channelId: CH, taskId: "t1", agentId: "abcdefgh" }, { ok: false }],
+  ["sessions:delete", { channelId: CH, threadId: "t1", agentId: "abcdefgh" }, { ok: false }],
   // 2026-08-20: the Agents tab's launch — the one START verb, own-thread only, UUID-gated on BOTH
   // ids, posture owned by main (see preload-parity).
-  ["sessions:launch", { channelId: CH, taskId: "t1" }, { ok: false }],
+  ["sessions:launch", { channelId: CH, threadId: "t1" }, { ok: false }],
   // 2026-08-25 (rename ruling): its subject is an agent, not a channel, so it carries the fourth
   // tuple slot with its own bad payload — there is no `channelId` to probe with. It writes a
   // DISPLAY string keyed by the instance address, and nothing resolves an agent by it.
@@ -139,22 +139,22 @@ export const OPS = [
   //     window, under the same binding, guards, version floor and budget.
   //   `sessions:message` — THE ONLY OP IN THIS FILE THAT STARTS A TURN on an existing session. Its
   //     bounds live at this boundary (UUID gate, `MESSAGE_CAP`, empty-after-trim refused, version
-  //     floor) and its argument lives with `main/session-reopen.js › messageByTask`.
+  //     floor) and its argument lives with `main/session-reopen.js › messageByThread`.
   //   `sessions:narration` — read-only, and the ONE row whose refusal shape is not `{ ok: false }`:
   //     it answers `{ entries: [] }`, because its caller renders a list and a refusal must look
   //     like "nothing to show". That is why this table pairs every op with its own refusal.
-  ["sessions:openAgentWindow", { segment: "acme-a1b2", channelId: CH, taskId: "t1" }, { ok: false }],
-  ["sessions:message", { channelId: CH, taskId: "t1", text: "hello" }, { ok: false }],
+  ["sessions:openAgentWindow", { segment: "acme-a1b2", channelId: CH, threadId: "t1" }, { ok: false }],
+  ["sessions:message", { channelId: CH, threadId: "t1", text: "hello" }, { ok: false }],
   // 2026-08-20: the agent view's LIVE permission controls. Same binding and UUID gate; the axis is
   // two literals here and the mode is re-validated against `session-profiles.js`'s frozen enums
   // before the reducer coerces again. It widens SUPERVISION (is the operator asked?), never
   // CONTAINMENT (what is reachable at all); `preload-parity` carries the full review.
-  ["sessions:setMode", { channelId: CH, taskId: "t1", axis: "tools", mode: "bypass" }, { ok: false }],
+  ["sessions:setMode", { channelId: CH, threadId: "t1", axis: "tools", mode: "bypass" }, { ok: false }],
   // 2026-08-22 (model-selection ruling): the LIVE model switch. The value is coerced against
   // `session-model.js`'s frozen ID list here and converted to the argv-safe alias inside, so a
   // forged string CLEARS the override rather than reaching a child process.
-  ["sessions:setModel", { channelId: CH, taskId: "t1", model: "claude-opus-5" }, { ok: false }],
-  ["sessions:narration", { channelId: CH, taskId: "t1" }, { entries: [] }],
+  ["sessions:setModel", { channelId: CH, threadId: "t1", model: "claude-opus-5" }, { ok: false }],
+  ["sessions:narration", { channelId: CH, threadId: "t1" }, { entries: [] }],
 ];
 
 // THE MACHINE-WIDE OPS HAVE NO BAD PAYLOAD TO REJECT, WHICH IS WHY THEY ARE LISTED HERE RATHER

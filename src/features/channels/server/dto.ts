@@ -22,7 +22,7 @@ import type {
   ThreadStatus,
 } from "../types";
 import { authorAgentIdOf } from "../lib/agent-post-stamp";
-import { agentColorOrNull } from "../lib/agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 // ⚠ THE ONE COERCION, IMPORTED RATHER THAN REPEATED (2026-09-07). The rule that junk and
 // absence land on the DEFAULT and never on `"none"` is a ruling, and a mapper with its own
 // `as` cast would be a second place it lived — the shape this wave has now found four times.
@@ -39,8 +39,8 @@ import type {
   ChannelMessageRow,
   ChannelArtifactRow,
   ChannelRow,
-  ChannelTaskActivityRow,
-  ChannelTaskRow,
+  ChannelThreadActivityRow,
+  ChannelThreadRow,
   ChannelViewerState,
   MapMemberOptions,
   ProfileRef,
@@ -50,14 +50,14 @@ export type {
   ChannelMemberRow,
   ChannelMessageRow,
   ChannelRow,
-  ChannelTaskActivityRow,
-  ChannelTaskRow,
+  ChannelThreadActivityRow,
+  ChannelThreadRow,
   ChannelViewerState,
   MapMemberOptions,
   MemberPresence,
   ProfileRef,
 } from "./dto-rows";
-export { CHANNEL_MESSAGE_COLS, CHANNEL_TASK_ACTIVITY_COLS } from "./dto-rows";
+export { CHANNEL_MESSAGE_COLS, CHANNEL_THREAD_ACTIVITY_COLS } from "./dto-rows";
 
 /**
  * A `BIGINT` as it crosses PostgREST — `number`, `string`, or absent.
@@ -66,7 +66,7 @@ export { CHANNEL_MESSAGE_COLS, CHANNEL_TASK_ACTIVITY_COLS } from "./dto-rows";
  * keystone below already follows in so many words: an ABSENT column (the
  * migration is not applied) is the same answer to a caller as a NULL one. The
  * numbering columns are added by a HELD migration
- * (`supabase/migrations-held/20261122120000`), so until Samuel applies it this
+ * (`supabase/migrations-held/20261124120000`), so until Samuel applies it this
  * returns `null` on every row and every reader falls back to `seq`.
  *
  * ⚠ A deliberate local twin of `collab-dto.ts › bigintOrNull`, which is
@@ -386,16 +386,16 @@ export function mapMemberRow(
 }
 
 /**
- * Task row -> DTO. Pure — the task is the authoritative status/mode store.
+ * Thread row -> DTO. Pure — the thread is the authoritative status/mode store.
  *
  * ⚠ `lastActivityAt` rides through ONLY when the row came from the activity
- * view ({@link ChannelTaskActivityRow}). On a single-row load it is ABSENT, and
+ * view ({@link ChannelThreadActivityRow}). On a single-row load it is ABSENT, and
  * absent means "this view did not derive it" — never "no activity" and never
  * "same as created_at" (INVARIANTS §9: omitting the field says this view did
  * not ask). Anything ordering or windowing by it must read it from the LIST.
  */
-export function mapTaskRow(
-  row: ChannelTaskRow | ChannelTaskActivityRow
+export function mapThreadRow(
+  row: ChannelThreadRow | ChannelThreadActivityRow
 ): ChannelThread {
   const lastActivityAt =
     "last_activity_at" in row ? { lastActivityAt: row.last_activity_at } : {};

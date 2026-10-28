@@ -61,7 +61,7 @@ test("MEASURED ORDER: a folded direction reports on the turn that answered it, a
   feed(r, lifecycle(first.uuid, "queued"));
   feed(r, lifecycle(first.uuid, "started"));
   feed(r, assistantTool);
-  // The direction arrives mid-tool-call: armed at depth 2, exactly as `messageByTask` does.
+  // The direction arrives mid-tool-call: armed at depth 2, exactly as `messageByThread` does.
   const pushed = await pushAndRead(r, DIRECTION);
   directed.armAndOpen(r.s, { id: D1, workspaceId: WS }, true, DIRECTION);
   feed(r, lifecycle(pushed.uuid, "queued"));

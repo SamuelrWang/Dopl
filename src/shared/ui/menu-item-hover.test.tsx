@@ -44,10 +44,13 @@ const PALETTE = {
 
 const read = (rel: string) => readFileSync(resolve(ROOT, rel), "utf8");
 
-/** The `.menu-row:hover, .menu-row:focus-visible { … }` body, comments stripped. */
+/** The `.menu-row:hover, .menu-row:focus-visible[, .menu-row-selected] { … }` body, comments
+ *  stripped. The selected row shares the one highlight. */
 function hoverBlock(source: string): string {
   const clean = source.replace(/\/\*[\s\S]*?\*\//g, "");
-  const m = clean.match(/\.menu-row:hover,\s*\n?\s*\.menu-row:focus-visible\s*\{([^}]*)\}/);
+  const m = clean.match(
+    /\.menu-row:hover,\s*\.menu-row:focus-visible(?:,\s*\.menu-row-selected)?\s*\{([^}]*)\}/
+  );
   if (!m) throw new Error("no `.menu-row:hover, .menu-row:focus-visible` rule");
   return m[1];
 }

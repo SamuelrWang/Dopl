@@ -237,6 +237,29 @@ async function listChannels(workspaceId, outcome) {
   }
 }
 
+// ONE channel's server DTO (`GET /api/channels/:id`, the list's own projection behind the same visibility
+// gate) for a launch that beat reconcile to its channel. No `X-Workspace-Id`: the route resolves the channel's
+// own container, so an untrusted payload workspace cannot misroute it. NULL on any failure: the caller fails
+// closed. Never raises the stale-session notice; reconcile owns that.
+async function fetchChannel(channelId) {
+  const short = String(channelId).slice(0, 8);
+  let res;
+  try {
+    res = await apiFetch(`/api/channels/${encodeURIComponent(channelId)}`, { timeoutMs: 10000 });
+  } catch (err) {
+    diag('fetchChannel error', short, err && err.message);
+    return null;
+  }
+  if (!res.ok) { discardBody(res); diag('fetchChannel', res.status, short); return null; }
+  try {
+    const data = await res.json();
+    return data && data.channel && typeof data.channel === 'object' ? data.channel : null;
+  } catch (err) {
+    diag('fetchChannel parse error', short, err && err.message);
+    return null;
+  }
+}
+
 // A bounded, serial retry ladder (never concurrent, F-072); only an auth-shaped failure repairs the session first.
 async function listChannelsWithRetry(workspaceId) {
   for (let attempt = 0; ; attempt += 1) {
@@ -281,6 +304,7 @@ module.exports = {
   listWorkspaces,
   listChannels,
   listChannelsWithRetry,
+  fetchChannel,
   // listener-people.js's OWN function objects (one instance of the member caches).
   resolveOperatorUserId: people.resolveOperatorUserId,
   displayNameFor: people.displayNameFor,

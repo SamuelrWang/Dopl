@@ -19,11 +19,11 @@
  *
  * ⚠ **A `.ts` CONSTANTS MODULE, NOT A COMPONENT.** Behavioural state
  * (`disabled:`), layout and the `aria-label` stay with the caller — the same
- * division `panel-buttons.tsx › PAGE_ACTION_BTN` holds. A control with no text
+ * division `pill-button.tsx › pillButton` holds. A control with no text
  * has no name but its `aria-label`, so every caller must pass one.
  */
 export const NAKED_ICON_BUTTON =
-  "flex shrink-0 items-center justify-center rounded-[8px] p-2 " +
+  "flex shrink-0 items-center justify-center rounded-md p-2 " +
   "text-text-muted transition-colors hover:text-text-primary";
 
 /** The glyph inside it — the size the ontology board header's gear wears. ONE

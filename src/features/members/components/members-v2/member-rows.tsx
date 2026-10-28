@@ -89,7 +89,7 @@ export function MemberSectionCard({
             {open && (
               <span
                 aria-hidden
-                className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-[3px] bg-text-primary"
+                className="absolute inset-y-1.5 left-0 w-0.75 rounded-r-[3px] bg-text-primary"
               />
             )}
             <button

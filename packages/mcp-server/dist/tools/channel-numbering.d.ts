@@ -18,7 +18,7 @@
  *
  * ⚠ **THE FALLBACK IS THE LIVE PATH TODAY, NOT A DEFENSIVE AFTERTHOUGHT.** The
  * migration that fills these columns is HELD
- * (`supabase/migrations-held/20261122120000`), so every row arrives with no
+ * (`supabase/migrations-held/20261124120000`), so every row arrives with no
  * number and every caller below takes the `seq` arm. Rendered output is therefore
  * byte-identical to before this branch until Samuel applies it. That is what
  * makes the wave safe to merge ahead of the schema.

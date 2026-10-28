@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * THE CONNECT PAGE'S RUNTIME BARS — one per runtime Dopl signs in from the app, in all four states, live
+ * THE RUNTIME SIGN-IN ROWS — one per runtime Dopl signs in from the app, in all four states, live
  * from main's push, and absent without the bridge.
  */
 
@@ -148,7 +148,7 @@ describe("Enable Chrome & connectors: the optional full login, on a connected ru
 it("shows main's safety-check spend notice under its runtime, and nothing when there is none", async () => {
   const notice = "Safety check of Claude Code 2.1.300 used 4 short model turns on this account. Dopl uses it now.";
   bridge([{ ...row("claude", "Claude Code", "connected"), notice }, row("codex", "Codex", "connected")]);
-  render(<RuntimeCredentialBars variant="rows" />);
+  render(<RuntimeCredentialBars />);
   expect(await screen.findByText(notice)).toBeTruthy();
   expect(bar("Claude Code").textContent).toContain(notice);
   expect(bar("Codex").textContent).toBe("CodexConnected");

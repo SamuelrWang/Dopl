@@ -84,7 +84,7 @@ export const MESSAGES: ChannelMessage[] = [
     authorKind: "user",
     kind: "message",
     body: "Can your agent take the channels port?",
-    metadata: { taskId: "t-1" },
+    metadata: { threadId: "t-1" },
     clientMsgId: null,
     createdAt: "2026-08-01T11:59:00.000Z",
     authorName: "Ada",

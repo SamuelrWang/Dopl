@@ -25,7 +25,7 @@ export const UNCOVERED_ACTIONS: ReadonlyArray<readonly [action: string, cls: Par
   ["DELETE agent-identities/[identityId]", "app-only-destructive", DELETE_APP_ONLY],
   ["DELETE channels/[channelId]", "app-only-destructive", DELETE_APP_ONLY],
   ["DELETE channels/[channelId]/members", "app-only-destructive", "removing a member is a departure, the operator's act"],
-  ["DELETE channels/[channelId]/tasks/[taskId]", "app-only-destructive", DELETE_APP_ONLY],
+  ["DELETE channels/[channelId]/threads/[threadId]", "app-only-destructive", DELETE_APP_ONLY],
   ["DELETE chats/[chatId]", "app-only-destructive", DELETE_APP_ONLY],
   ["DELETE chats/folders/[folderId]", "app-only-destructive", DELETE_APP_ONLY],
   ["DELETE home/links/[linkId]", "app-only-destructive", DELETE_APP_ONLY],

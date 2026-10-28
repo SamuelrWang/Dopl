@@ -4,7 +4,7 @@
 // no longer says signed out. A runtime Dopl signs in (Claude, Codex) holds only Dopl's own credential, so
 // only that sign-in releases it (`runtime-credentials.js › signIn`); a message never re-probes it.
 //
-// Drives the REAL `session-auth.js` and the REAL `session-reopen.js › messageByTask`, with the
+// Drives the REAL `session-auth.js` and the REAL `session-reopen.js › messageByThread`, with the
 // REAL reducer behind a fake dispatch; only the credential probe is stubbed.
 
 import { test } from "node:test";
@@ -20,7 +20,7 @@ const runtimeRegistry = require("../main/runtime/index.js");
 const { initialSessionState, sessionReducer } = loadReducer();
 
 const AGENT = "a1b2c3d4";
-const task = { channelId: "chan-1", taskId: "task-9", agentId: AGENT };
+const thread = { channelId: "chan-1", threadId: "thread-9", agentId: AGENT };
 
 function world(runtimeId) {
   const dispatched = [];
@@ -36,7 +36,7 @@ function world(runtimeId) {
   });
   sessionReopen.bind({ sessions, dispatch, refreshTray: () => {} });
   const s = {
-    key: `chan-1:task-9:${AGENT}`, channelId: "chan-1", taskId: "task-9", agentId: AGENT,
+    key: `chan-1:thread-9:${AGENT}`, channelId: "chan-1", threadId: "thread-9", agentId: AGENT,
     sessionId: "s-1", runtimeId, settled: false, context: {}, nonce: "n0nce1", operatorUserId: "op-1",
     state: initialSessionState({ mode: "interactive", side: "responder" }),
     abortController: { abort() {} }, pushIterator: { close() {} },
@@ -64,7 +64,7 @@ function withProbe(answer, fn) {
 test("Cursor: still signed out → the message is refused and the agent stays held", async () => {
   const { s } = world("cursor");
   await withProbe(() => ({ usable: false, source: "status-nonzero" }), async (probed) => {
-    const res = await sessionReopen.messageByTask({ ...task, text: "are you there?" });
+    const res = await sessionReopen.messageByThread({ ...thread, text: "are you there?" });
     assert.deepEqual(res, { ok: false, reason: "auth-hold" });
     assert.deepEqual(probed(), ["cursor"], "its own credential WAS re-asked");
     assert.equal(s.state.authHeld, true);
@@ -74,7 +74,7 @@ test("Cursor: still signed out → the message is refused and the agent stays he
 test("Cursor: signed back in → the next message releases the hold and is delivered", async () => {
   const { s, dispatched } = world("cursor");
   await withProbe(() => ({ usable: true, source: "cli-status" }), async () => {
-    const res = await sessionReopen.messageByTask({ ...task, text: "carry on" });
+    const res = await sessionReopen.messageByThread({ ...thread, text: "carry on" });
     assert.deepEqual(res, { ok: true });
     assert.equal(s.state.authHeld, false, "released");
     assert.equal(s.authHold, null);
@@ -90,7 +90,7 @@ for (const runtimeId of ["claude", "codex"]) {
     const { s } = world(runtimeId);
     await withProbe(() => ({ usable: true }), async (probed) => {
       assert.equal(sessionAuth.reprobesOnWake(s), false);
-      const res = sessionReopen.messageByTask({ ...task, text: "hello" });
+      const res = sessionReopen.messageByThread({ ...thread, text: "hello" });
       assert.deepEqual(res, { ok: false, reason: "auth-hold" }, "synchronous, as before");
       assert.equal(await sessionAuth.reprobeHeld(s), false);
       assert.deepEqual(probed(), []);

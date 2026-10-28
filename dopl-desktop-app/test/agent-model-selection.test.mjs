@@ -32,7 +32,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
 const read = (f) => readFileSync(join(MAIN, f), "utf8");
 const model = require(join(MAIN, "runtime", "claude", "usage.js"));
-// U10 (2026-09-21): `setModelByTask`'s new free vars. REAL, never stubbed — `main/runtime/index.js`
+// U10 (2026-09-21): `setModelByThread`'s new free vars. REAL, never stubbed — `main/runtime/index.js`
 // is electron-free by contract, so the live-switch refusal is asked of the SHIPPED descriptors.
 const RUNTIME_REGISTRY = require(join(MAIN, "runtime/index.js"));
 // 2026-10-08: the Claude adapter keeps no roster; launch resolution reads the catalog. Here the catalog
@@ -128,23 +128,23 @@ test("LAUNCH: what could not BE a model id sends no model (the CLI's default); a
 
 // ── 4. THE LIVE SWITCH ───────────────────────────────────────────────────────────────────────
 
-/** `setModelByTask`, sliced from the shipped op and driven against a fake registry + query. */
+/** `setModelByThread`, sliced from the shipped op and driven against a fake registry + query. */
 function live({ query, settled = false, runtimeId = "claude" } = {}) {
   const src = read("session-reopen.js");
   // fnOf starts at `function`, so the `async` modifier is restored here.
-  const body = fnOf(src, "resolveSession") + "\nasync " + fnOf(src, "setModelByTask");
+  const body = fnOf(src, "resolveSession") + "\nasync " + fnOf(src, "setModelByThread");
   const s = { key: "c:t:a1b2c3d4", agentId: "a1b2c3d4", settled, model: "", query, runtimeId };
   const sessions = new Map([[s.key, s]]);
   // ⚠ `runtimeRegistry` / `runtimeCopy` JOINED THE INJECTED SET ON 2026-09-21 (U10) AND ARE REAL.
-  // `setModelByTask` now asks the SESSION'S OWN descriptor whether a live model switch is a thing
+  // `setModelByThread` now asks the SESSION'S OWN descriptor whether a live model switch is a thing
   // this runtime does — `capability.js › canSwitchModelLive`'s first consumer in `main/` — so
   // driving it against a stub would pin nothing about the refusal that matters.
   const fn = new Function(
     "deps", "store", "sessionModel", "runtimeRegistry", "runtimeCopy",
-    `${body}\n return setModelByTask;`
+    `${body}\n return setModelByThread;`
   )(
     { sessions },
-    { slotKey: (x) => `${x.channelId || ""}:${x.taskId || ""}:${x.agentId || ""}`,
+    { slotKey: (x) => `${x.channelId || ""}:${x.threadId || ""}:${x.agentId || ""}`,
       threadKeyPrefix: (c, t) => `${c || ""}:${t || ""}:` },
     model,
     RUNTIME_REGISTRY, RUNTIME_REGISTRY.copy
@@ -152,7 +152,7 @@ function live({ query, settled = false, runtimeId = "claude" } = {}) {
   return { fn, s };
 }
 
-const address = { channelId: "c", taskId: "t", agentId: "a1b2c3d4" };
+const address = { channelId: "c", threadId: "t", agentId: "a1b2c3d4" };
 
 test("LIVE: the SDK is told, and the pick is RECORDED for the next assembly", () => {
   // Both halves matter. `s.model` is what `buildSdkOptions` reads on the NEXT assembly — a park, a
@@ -270,7 +270,7 @@ test("REPORT: the bridge declares the field and the op, in BOTH trees", () => {
   const preload = readFileSync(join(HERE, "..", "renderer", "app-preload.js"), "utf8");
   // The durable posture has no model field: the preload forwards none.
   assert.doesNotMatch(codeOf(preload), /preset\.model/, "the durable posture forwards no model");
-  assert.match(preload, /setModel: \(channelId, taskId, model, agentId\) =>/,
+  assert.match(preload, /setModel: \(channelId, threadId, model, agentId\) =>/,
     "and the preload is the ground truth all three follow");
 });
 

@@ -207,7 +207,7 @@ export function mapWorkspaceAgents(
       name: agentFaceName(row.display_name),
       state: row.state,
       detail: narrowSessionDetail(row.detail),
-      threadId: row.task_id,
+      threadId: row.thread_id,
       threadTitle: row.thread_title,
       mine: row.user_id === viewerId,
       updatedAt: row.updated_at,

@@ -15,7 +15,7 @@
 // in the first place, and deleting the whole file — the obvious move, since its title names a
 // deleted module — is exactly the twice-repeated mistake §14 was written for.
 //
-// WHAT THE RULE IS WORTH. `sessionKey(channelId, taskId)` is the (channel, thread) identity the
+// WHAT THE RULE IS WORTH. `sessionKey(channelId, threadId)` is the (channel, thread) identity the
 // engine registry, `queued-notice.js`'s per-thread dedupe and `session-reopen.js` / `session-park.js`'s
 // resolution all name a session by. A second spelling anywhere would not throw and would not fail a
 // behavioural test — it would silently give one caller a different session than another, which is

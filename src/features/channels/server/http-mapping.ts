@@ -21,7 +21,7 @@ import {
   ChannelMemberExistsError,
   ChannelNotFoundError,
   ChannelSlugConflictError,
-  ChannelTaskNotInChannelError,
+  ChannelThreadNotInChannelError,
   ConsentAlreadyDecidedError,
   AgentDirectiveForeignError,
   ConsentNotFoundError,
@@ -37,9 +37,14 @@ import {
   AgentColorTakenError,
   LaunchIdentityAmbiguousError,
   LaunchIdentityNotFoundError,
-  TaskForbiddenError,
+  ThreadForbiddenError,
+  ThreadNotFoundError,
+  ThreadSelfTargetError,
+  SubtaskNotFoundError,
+  TaskActorUnresolvedError,
+  TaskLimitError,
+  TaskLinkUnresolvedError,
   TaskNotFoundError,
-  TaskSelfTargetError,
 } from "./errors";
 
 /** Maps channel domain errors to `HttpError`; `null` for anything else, so the shared tail
@@ -88,8 +93,8 @@ function mapChannelError(err: unknown): HttpError | null {
   if (err instanceof ChannelCiteNumberUnavailableError) {
     return new HttpError(400, "CHANNEL_CITE_NO_UNAVAILABLE", err.message);
   }
-  if (err instanceof ChannelTaskNotInChannelError) {
-    return new HttpError(400, "CHANNEL_TASK_NOT_IN_CHANNEL", err.message);
+  if (err instanceof ChannelThreadNotInChannelError) {
+    return new HttpError(400, "CHANNEL_THREAD_NOT_IN_CHANNEL", err.message);
   }
   // 404 for all four causes: distinguishing them would probe which message ids are escalations.
   if (err instanceof EscalationNotFoundError) {
@@ -166,14 +171,14 @@ function mapChannelError(err: unknown): HttpError | null {
   if (err instanceof ConsentAlreadyDecidedError) {
     return new HttpError(409, "CONSENT_ALREADY_DECIDED", err.message);
   }
-  if (err instanceof TaskNotFoundError) {
-    return new HttpError(404, "TASK_NOT_FOUND", err.message);
+  if (err instanceof ThreadNotFoundError) {
+    return new HttpError(404, "THREAD_NOT_FOUND", err.message);
   }
-  if (err instanceof TaskForbiddenError) {
-    return new HttpError(403, "TASK_FORBIDDEN", err.message);
+  if (err instanceof ThreadForbiddenError) {
+    return new HttpError(403, "THREAD_FORBIDDEN", err.message);
   }
-  if (err instanceof TaskSelfTargetError) {
-    return new HttpError(400, "CHANNEL_TASK_SELF_TARGET", err.message);
+  if (err instanceof ThreadSelfTargetError) {
+    return new HttpError(400, "CHANNEL_THREAD_SELF_TARGET", err.message);
   }
   if (err instanceof DirectSelfTargetError) {
     return new HttpError(400, "DIRECT_SELF_TARGET", err.message);
@@ -193,13 +198,28 @@ function mapChannelError(err: unknown): HttpError | null {
   // Retrying an undecodable cursor cannot ever succeed, so the loop would be
   // indefinite and silent. Its own code, so a caller can tell it from a malformed
   // body and act on the remedy the message carries.
-  // ⚠ **404, MATCHING ITS SIBLINGS** (`ChannelNotFoundError`, `TaskNotFoundError`).
+  // ⚠ **404, MATCHING ITS SIBLINGS** (`ChannelNotFoundError`, `ThreadNotFoundError`).
   // It had no arm at all until 2026-10-12, so a GET for an unknown artifact id
   // answered 500 — a retryable status for a request that can never succeed. The
   // message never says whether the id exists in another channel: ids are not
   // probeable across rooms.
   if (err instanceof ArtifactNotFoundError) {
     return new HttpError(404, "ARTIFACT_NOT_FOUND", err.message);
+  }
+  if (err instanceof TaskNotFoundError) {
+    return new HttpError(404, "TASK_NOT_FOUND", err.message);
+  }
+  if (err instanceof SubtaskNotFoundError) {
+    return new HttpError(404, "SUBTASK_NOT_FOUND", err.message);
+  }
+  if (err instanceof TaskActorUnresolvedError) {
+    return new HttpError(400, "TASK_ACTOR_UNRESOLVED", err.message);
+  }
+  if (err instanceof TaskLinkUnresolvedError) {
+    return new HttpError(400, "TASK_LINK_UNRESOLVED", err.message);
+  }
+  if (err instanceof TaskLimitError) {
+    return new HttpError(409, "TASK_LIMIT_REACHED", err.message);
   }
   if (err instanceof ChannelCursorUndecodableError) {
     return new HttpError(400, "CHANNEL_CURSOR_UNDECODABLE", err.message);

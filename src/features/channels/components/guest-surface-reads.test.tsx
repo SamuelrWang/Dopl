@@ -62,6 +62,9 @@ vi.mock("../hooks/use-channel-mentions", () => ({
     ...empty,
   })),
 }));
+vi.mock("../hooks/use-channel-tasks", () => ({
+  useChannelTasks: vi.fn(() => ({ tasks: [], truncated: false, loading: false, refetch: vi.fn() })),
+}));
 vi.mock("../hooks/use-mention-writes", () => ({
   useMentionWrites: () => ({ markRead: vi.fn() }),
 }));
@@ -113,6 +116,7 @@ vi.mock("./use-inline-consent", () => ({
 import { useChannelSurfaceData } from "./channel-surface-data";
 import { useConsentInbox } from "../hooks/use-consent-inbox";
 import { useChannelMentions } from "../hooks/use-channel-mentions";
+import { useChannelTasks } from "../hooks/use-channel-tasks";
 import type { Channel } from "../types";
 import type { ChannelSurfaceCapabilities } from "./channel-surface";
 
@@ -178,6 +182,18 @@ describe("the reads a guest DOES keep", () => {
     // widens nothing.
     mount({ memberManagement: false, selfManagement: false });
     expect(vi.mocked(useChannelMentions)).toHaveBeenCalledWith(CHANNEL.id, WS);
+  });
+});
+
+describe("the tasks read follows the tasks capability", () => {
+  it("reads nothing without it — the guest lane and the workspace page pass none", () => {
+    mount({ memberManagement: false, selfManagement: false });
+    expect(vi.mocked(useChannelTasks)).toHaveBeenCalledWith(null, WS);
+  });
+
+  it("reads the channel's tasks where the host offers them (/home)", () => {
+    mount({ memberManagement: false, tasks: true });
+    expect(vi.mocked(useChannelTasks)).toHaveBeenCalledWith(CHANNEL.id, WS);
   });
 });
 

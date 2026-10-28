@@ -9,10 +9,6 @@
  * A thread-scoped read now carries the METADATA HEADER that op rendered, above
  * the transcript it always rendered, so the fold deleted an op and no answer.
  *
- * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread` — the `thread`
- * op param resolves against `channel_tasks` rows and `/tasks` routes under
- * `@dopl/client`.
- *
  * Every STRING these ops emit lives in `channel-render.ts`, where the
  * peer-authored-text discipline is documented and enforced. This file is
  * control flow.
@@ -101,9 +97,9 @@ export async function opList(
  * Read a channel's transcript, optionally SCOPED TO ONE THREAD.
  *
  * ⚠ `thread` is a FILTER, not a lookup: route keeps rows whose
- * `metadata.taskId` equals it, an id nothing carries returns `[]` not 404, and
+ * `metadata.threadId` equals it, an id nothing carries returns `[]` not 404, and
  * any non-empty string is legal (transcripts still carry legacy
- * `task-<channelId>-<seq>` ids). Blank/whitespace treated as unset rather than
+ * `thread-<channelId>-<seq>` ids). Blank/whitespace treated as unset rather than
  * sent, so `thread=""` reads the channel instead of 400ing on the route's `min(1)`.
  *
  * ⚠ A HOLD has no thread parameter — a filtered hold would miss messages an
@@ -131,8 +127,8 @@ export async function opList(
 
 /**
  * THE THREAD'S OWN CARD, above the exchange (C15). ⚠ **BEST-EFFORT, AND THE
- * SILENCE IS THE CONTRACT**: a legacy `task-<channel>-<seq>` id is a real,
- * filterable `metadata.taskId` with NO row behind it, so a 404 here means "this
+ * SILENCE IS THE CONTRACT**: a legacy `thread-<channel>-<seq>` id is a real,
+ * filterable `metadata.threadId` with NO row behind it, so a 404 here means "this
  * tag names no thread row", which is a fact about ad-hoc exchanges rather than
  * an error — the transcript below is the answer either way. A thrown non-404
  * still propagates.
@@ -182,7 +178,7 @@ export async function opRead(
 ): Promise<ToolResponse> {
   const scope = thread?.trim() ? thread.trim() : undefined;
   // ⚠ Id ROUND TRIPS: agent copies it from a `read` legend, and a legend id is
-  // `metadata.taskId`, stored verbatim by a peer for any non-UUID value. A
+  // `metadata.threadId`, stored verbatim by a peer for any non-UUID value. A
   // hand-built code span is not a container (one backtick opens it).
   const safeScope = scope ? inlineOr(scope, NO_ID) : "";
   // Hot path — no pre-resolve. Route accepts slug-or-id in [channelId] and
@@ -405,7 +401,7 @@ export async function opListThreads(
   // visibility enforced there), no pre-resolve via listChannels.
   //
   // ⚠ THE ORDER IS THE SERVER'S AND IS NOT RE-DERIVED HERE. One repository read
-  // (`repository-tasks.ts › listTasksByChannel`) orders every thread list by
+  // (`repository-threads.ts › listThreadsByChannel`) orders every thread list by
   // last activity, so this listing and the operator's own sidebar cannot
   // disagree about which exchange is live. Sorting these rows again would also
   // be sorting the wrong rows — the server's LIMIT clipped against ITS order.
@@ -425,7 +421,7 @@ export async function opListThreads(
   const lines = [
     `## ${ref} — ${threads.length} thread${threads.length === 1 ? "" : "s"}, most recently active first\n`,
     // ⚠ Framing FIRST — titles/outcome summaries are peer-typed and
-    // `listChannelTasks` is channel-transparent: every member receives every
+    // `listChannelThreads` is channel-transparent: every member receives every
     // thread's text, not just their own.
     `${UNTRUSTED_THREAD_HEADER}\n`,
   ];

@@ -35,6 +35,10 @@ opening the file it names is how a fiction gets promoted into INVARIANTS.**
 - **For ANY UI work, read [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) first.** All interface code MUST
   use the global design tokens (semantic `text-*` scale, token color utilities) and kit classes — never
   hardcode hex colors, raw px font sizes, or shadow/border recipes in components.
+- **For ANY new design or restyle, also read [docs/DESIGN-LANGUAGE.md](docs/DESIGN-LANGUAGE.md)** — Samuel's
+  approved "identity" look (white cards, hairlines, one soft shadow, the identity avatar ratio, component
+  recipes, motion, copy voice) and how to roll it out (granular, demo-first). DESIGN-SYSTEM.md stays the
+  source for tokens; port this look into tokens/kit, never as local literals.
 - **Open findings live in [docs/REFACTOR-FINDINGS.md](docs/REFACTOR-FINDINGS.md)** with `F-NNN` ids.
   ⚠ **Allocate a new id from the highest claimed on ANY LIVE BRANCH, never from `master`'s** — that
   file is an append-only shared counter, and on 2026-09-01 three branches of one wave each allocated
@@ -100,7 +104,7 @@ drove the machine to load 270 with swap full.)
 
 ## Definition of green
 
-**Five suites, TWO lints, TWO typechecks, and TWELVE non-suite gates.** Full table: docs/INVARIANTS.md §14.
+**Seven suites, TWO lints, FOUR typechecks, and TWELVE non-suite gates.** Full table: docs/INVARIANTS.md §14.
 Red CI is a P0.
 
 ⚠ **RE-DERIVE THE COUNT, NEVER QUOTE IT: `grep -n 'run:' .github/workflows/ci.yml`.** It has been wrong
@@ -138,7 +142,9 @@ is a TYPECHECK and not one of the twelve:
    type: the SDK's copy and its committed `dist/` re-export it now, so neither can
    disagree. Every field on this set is `optional` AND `nullable` by design (an
    older desktop must not 400 its whole push), so drift here fails no build and no
-   test: the field just never arrives.
+   test: the field just never arrives. ⚠ **A SECOND FAMILY SINCE 2026-10-26, same script
+   and step (the count does not move)**: `PEER_FIELDS` (`runtime`) across the zod schema,
+   both `ChannelSessionState` declarations and its migration column.
 7. `npx tsx scripts/check-message-kind-drift.ts` — the `channel_messages` **kind** and
    **author_kind** SETS across `@dopl/contracts › channels.ts` and the column `CHECK`. The zod half
    needs no step: `closedEnum` over an `Exclude`d type makes that pair a compile error, and the SDK

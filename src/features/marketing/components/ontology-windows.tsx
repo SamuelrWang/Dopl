@@ -1,436 +1,279 @@
-import type { ReactNode } from "react";
-import { FileText } from "lucide-react";
+"use client";
+
+import { Check, FileText, Hash, Plus } from "lucide-react";
 import {
-  ClaudeMark,
-  DoplMark,
-  GmailMark,
-  HubSpotMark,
-  NotionMark,
-  SlackMark,
-} from "./ontology-marks";
+  MockAgentFace,
+  ActorFace,
+  PersonFace,
+  Sequence,
+  TypingDots,
+  WithMentions,
+  accent,
+  actorAgent,
+  actorName,
+  at,
+} from "./ontology-bits";
+import {
+  AGENTS,
+  CHANNEL,
+  CONTEXT,
+  TASKS,
+  MOCK_TASK_STATUS_LABEL,
+  type MockTaskStatus,
+} from "./ontology-content";
+import { AgentRail } from "./ontology-agent-rail";
+import { GmailMark, NotionMark, SlackMark } from "./ontology-marks";
+import { CHANNEL_END_MS, THREAD, THREAD_SLOTS } from "./ontology-thread";
 
 /**
- * Four static vignettes, one per Ontology tab (mounted by
- * ./ontology-section). No real data, nothing interactive.
+ * Three of the four Orchestration windows (the fourth, Command, is
+ * ./ontology-command.tsx). Mounted by ./ontology-section.tsx, which keys each
+ * one per tab and writes its `data-play`. Decorative mocks — every root is
+ * `aria-hidden`; the tab's own title + blurb are the accessible content.
+ * Play contract and helpers: ./ontology-bits.tsx. Words: ./ontology-content.ts.
  *
- * ⚠ ONE vertical geometry across all four: three 44px items + 22px gaps = 176px
- * = every connector viewBox height here, so y = 22 / 88 / 154 are the item
- * centres in stages 1-4. Change a tile height or gap and you MUST change the
- * viewBox with it, or the curves leave the boxes they point at.
- *
- * ⚠ ONE box: marketing.css pins .lp-ont-window to the "Unify Data" height so the
- * glass never resizes between tabs. A vignette that outgrows it is a bug in the
- * vignette, not a reason to unpin.
+ * ⚠ ONE box: marketing.css pins `.lp-ont-window`'s height so the glass never
+ * resizes between tabs. A window that outgrows it is a bug in the window.
  */
 
-/** ⚠ Avatars keep `alt=""`: each sits beside its own name, so a filled alt
- *  makes a screen reader say the name twice. */
-type Person = { readonly id: string; readonly name: string };
-const PEOPLE: readonly Person[] = [
-  { id: "sam", name: "Sam" },
-  { id: "anthony", name: "Anthony" },
-  { id: "grace", name: "Grace" },
-];
+// ── 1 · Context ─────────────────────────────────────────────────────────
 
-function Avatar({ id }: { id: string }) {
+export function ContextWindow() {
+  const c = CONTEXT;
+  const writer = AGENTS[c.writer];
+  const lastEntry = c.entries[c.entries.length - 1].at;
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={`/img/avatars/${id}.jpg`}
-      alt=""
-      className="lp-ont-avatar"
-      width={30}
-      height={30}
-      draggable={false}
-    />
-  );
-}
-
-/**
- * Connector shapes, all on the SAME 72 × 176 grid.
- *
- * CONVERGING (1, 3): control points share their endpoints' y, so tangents are
- * horizontal at BOTH ends — a funnel, not three lines meeting in a V.
- * DIVERGING (4) is that read backwards.
- *
- * ⚠ SPLIT (2) is NOT diverging-minus-trunk. One shared origin (0,88) reads as
- * the 1-to-3 split it replaces. Each line gets its OWN origin, and since the
- * rewrite that origin IS its destination: three PARALLEL horizontals at the row
- * centres y = 22 / 88 / 154. No joint, no tilt. Earlier cuts angled the outer
- * two (cubics, then diagonals) off a 34 / 142 origin; both read as a wobble in
- * an otherwise ruled drawing, and the diagonals read as crooked on the real
- * banner. Parallel-flat is the settled look — do not re-introduce a slope.
- */
-const FUNNEL_PATHS = [
-  "M0 22C23 22 23 88 46 88",
-  "M0 88H46",
-  "M0 154C23 154 23 88 46 88",
-  "M46 88H72",
-];
-const FUNNEL_JOINT = 46;
-
-const FANOUT_PATHS = [
-  "M0 88H26",
-  "M26 88C49 88 49 22 72 22",
-  "M26 88H72",
-  "M26 88C49 88 49 154 72 154",
-];
-const FANOUT_JOINT = 26;
-
-/** ⚠ Top / middle / bottom, IN THAT ORDER — the stage-2 sequence draws them by
- *  DOM position (marketing.css › .lp-ont-fan-line:nth-child). */
-const SPLIT_PATHS = ["M0 22H72", "M0 88H72", "M0 154H72"];
-
-/**
- * Decorative — the boxes either side carry the meaning.
- * `preserveAspectRatio="none"` lets the layer squeeze on narrow windows;
- * `vectorEffect` keeps hairline AND dash pattern in screen px, so squeezing
- * never stretches or thickens the dashes.
- */
-function Connector({
-  paths,
-  joint,
-  className = "lp-ont-funnel",
-}: {
-  paths: readonly string[];
-  joint: number;
-  className?: string;
-}) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 72 176"
-      preserveAspectRatio="none"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <g
-        fill="none"
-        stroke="#c9c9c9"
-        strokeWidth="1"
-        strokeDasharray="3 4"
-        strokeLinecap="round"
-      >
-        {paths.map((d) => (
-          <path key={d} d={d} vectorEffect="non-scaling-stroke" />
-        ))}
-      </g>
-      <circle cx={joint} cy="88" r="2.5" fill="#c9c9c9" />
-    </svg>
-  );
-}
-
-/**
- * Stage 2's connector. Each line is its OWN stacked layer: the sequence reveals
- * them at three moments and must clip one without touching the other two,
- * which a single <svg> cannot do.
- *
- * ⚠ Clip runs on the wrapping DIV, not the <path>: `clip-path` on an SVG child
- * resolves against a fill-box engines disagree on, and it would fight
- * `vectorEffect`. `inset()` on a block box keeps dashes 1px and unstretched.
- */
-function SplitConnector() {
-  return (
-    <div className="lp-ont-fan" aria-hidden="true">
-      {SPLIT_PATHS.map((d) => (
-        <div key={d} className="lp-ont-fan-line">
-          <svg
-            className="lp-ont-fan-svg"
-            viewBox="0 0 72 176"
-            preserveAspectRatio="none"
-            focusable="false"
-          >
-            <path
-              d={d}
-              fill="none"
-              stroke="#c9c9c9"
-              strokeWidth="1"
-              strokeDasharray="3 4"
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-            />
-          </svg>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** 1 — "Unify Data": three sources funnelling into the knowledge base. */
-const KB_FILES = ["positioning.md", "pricing-notes.md", "call-transcript.md"];
-
-export function KnowledgeWindow() {
-  return (
-    <div className="lp-ont-win lp-ont-win--unify">
-      <div className="lp-ont-sources">
-        <div className="lp-ont-source">
-          <HubSpotMark />
-        </div>
-        <div className="lp-ont-source">
-          <SlackMark />
-        </div>
-        <div className="lp-ont-source">
-          <NotionMark />
-        </div>
-      </div>
-
-      <Connector paths={FUNNEL_PATHS} joint={FUNNEL_JOINT} />
-
+    <div className="lp-ont-win" aria-hidden="true">
       <div className="lp-ont-kb">
-        <p className="lp-ont-win-label">Knowledge base</p>
-        <h3 className="lp-ont-win-title">Launch Runbook</h3>
+        <p className="lp-ont-win-label">{c.kbLabel}</p>
+        <h3 className="lp-ont-win-title">{c.kbTitle}</h3>
+
+        <div className="lp-ont-writer" style={accent(writer.color)}>
+          <MockAgentFace id={c.writer} d={20} />
+          <span className="lp-ont-writer-name">{writer.name}</span>
+          <Sequence
+            steps={[
+              ["writing", 0],
+              ["wrote", lastEntry + 400],
+            ]}
+            render={(v) =>
+              v === "writing" ? (
+                <span className="lp-ont-writer-state">
+                  {c.writing}
+                  <TypingDots from={0} length={lastEntry + 400} />
+                </span>
+              ) : (
+                <span className="lp-ont-writer-state">{c.wrote}</span>
+              )
+            }
+          />
+        </div>
 
         <ul className="lp-ont-files">
-          {KB_FILES.map((file) => (
-            <li key={file} className="lp-ont-file">
-              <FileText
-                size={14}
-                strokeWidth={1.5}
-                className="lp-ont-file-icon"
-              />
-              {file}
-            </li>
-          ))}
-        </ul>
-
-        <p className="lp-ont-win-foot">3 sources · synced now</p>
-      </div>
-    </div>
-  );
-}
-
-/**
- * 2 — "Define Objects": one typed TEMPLATE stamped onto three people. THE ONE
- * VIGNETTE THAT MOVES, entirely in CSS.
- *
- * ⚠ Timeline lives once in marketing.css under "stage 2 — the stamp"; this
- * file supplies only the boxes AND THEIR ORDER — every step is :nth-child.
- * ⚠ Sequence must END in the static layout, which is what makes the
- * reduced-motion branch one `animation: none` plus hiding the panel.
- */
-type Trait = readonly [name: string, kind: "Knowledge" | "Skill"];
-
-const TEMPLATE_TRAITS: readonly Trait[] = [
-  ["Email voice", "Knowledge"],
-  ["Sales cycle docs", "Knowledge"],
-  ["CRM updating", "Skill"],
-];
-
-/** Template fields resolved for ONE person, shown in the expanded Sam.
- *  ⚠ Order must match TEMPLATE_TRAITS — same rows, stamped. */
-type SamField = readonly [name: string, value: string, kind: Trait[1]];
-
-const SAM_FIELDS: readonly SamField[] = [
-  ["Email voice", "sam-voice", "Knowledge"],
-  ["Sales cycle docs", "sam-sales-docs", "Knowledge"],
-  ["CRM updating", "crm-updating", "Skill"],
-];
-
-function TraitRows({ traits }: { traits: readonly Trait[] }) {
-  return (
-    <ul className="lp-ont-traits">
-      {traits.map(([name, kind]) => (
-        <li key={name} className="lp-ont-trait">
-          <span className="lp-ont-trait-name">{name}</span>
-          <span
-            className={
-              kind === "Skill"
-                ? "lp-ont-badge lp-ont-badge--skill"
-                : "lp-ont-badge"
-            }
-          >
-            {kind}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-export function ObjectWindow() {
-  return (
-    <div className="lp-ont-win lp-ont-win--objects">
-      <div className="lp-ont-tpl">
-        <p className="lp-ont-win-label">Object template</p>
-        <h3 className="lp-ont-win-title">Sales Rep</h3>
-        <TraitRows traits={TEMPLATE_TRAITS} />
-      </div>
-
-      <SplitConnector />
-
-      <div className="lp-ont-stamp">
-        <ul className="lp-ont-instances">
-          {PEOPLE.map((person) => (
-            <li key={person.id} className="lp-ont-inst">
-              <Avatar id={person.id} />
-              <span className="lp-ont-who">
-                <span className="lp-ont-who-name">{person.name}</span>
-                <span className="lp-ont-who-role">Sales Rep</span>
+          {c.entries.map((entry) => (
+            <li key={entry.name} className="lp-ont-file lp-ont-rise" style={at(entry.at)}>
+              <FileText size={14} strokeWidth={1.5} className="lp-ont-file-icon" />
+              <span className="lp-ont-file-text">
+                <span className="lp-ont-file-name">{entry.name}</span>
+                <span className="lp-ont-file-meta">{entry.detail}</span>
               </span>
             </li>
           ))}
         </ul>
 
-        {/* Expanded Sam — exists ONLY for the sequence. ⚠ Absolutely
-            positioned: a panel in the flow would resize the column it collapses
-            into. `aria-hidden` — the list above already says "Sam". */}
-        <div className="lp-ont-sam" aria-hidden="true">
-          <div className="lp-ont-sam-card">
-            {/* ⚠ Sized/padded to .lp-ont-inst's row so the collapse's last frame
-                IS the compact card and the cross-fade has nothing to move. */}
-            <div className="lp-ont-sam-id">
-              <Avatar id="sam" />
-              <span className="lp-ont-who">
-                <span className="lp-ont-who-name">Sam</span>
-                <span className="lp-ont-who-role">@sam</span>
-              </span>
+        <p className="lp-ont-win-foot lp-ont-srcs">
+          {c.sourcesLabel}
+          <SlackMark />
+          <NotionMark />
+          <GmailMark />
+        </p>
+      </div>
+
+      <span className="lp-ont-link lp-ont-draw" style={at(c.wireAt)}>
+        <i />
+      </span>
+
+      <div className="lp-ont-client lp-ont-rise" style={at(c.objAt)}>
+        <p className="lp-ont-win-label">{c.objLabel}</p>
+        <h3 className="lp-ont-win-title">{c.objTitle}</h3>
+
+        <dl className="lp-ont-fields">
+          {c.fields.map((f) => (
+            <div key={f.key} className="lp-ont-field lp-ont-rise" style={at(f.at)}>
+              <dt className="lp-ont-field-key">{f.key}</dt>
+              <dd className="lp-ont-field-value">{f.value}</dd>
             </div>
-
-            <ul className="lp-ont-traits lp-ont-sam-list">
-              {SAM_FIELDS.map(([name, value, kind]) => (
-                <li key={name} className="lp-ont-trait">
-                  <span className="lp-ont-trait-name">{name}</span>
-                  <span
-                    className={
-                      kind === "Skill"
-                        ? "lp-ont-badge lp-ont-badge--val lp-ont-badge--skill"
-                        : "lp-ont-badge lp-ont-badge--val"
-                    }
-                  >
-                    {value}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * 3 — "Form Relationships": stage 2's three reps as chips, wired into one
- * Client. Rule sits on its own line, not floating over the wires — the only
- * version that survives a 375px window.
- */
-const CLIENT_FIELDS: readonly (readonly [string, string])[] = [
-  ["Stage", "Evaluating"],
-  ["Owner", "Sam"],
-];
-
-export function RelationshipWindow() {
-  return (
-    <div className="lp-ont-win lp-ont-win--rel">
-      <div className="lp-ont-rel-row">
-        <ul className="lp-ont-chips">
-          {PEOPLE.map((person) => (
-            <li key={person.id} className="lp-ont-chip">
-              <Avatar id={person.id} />
-              <span className="lp-ont-chip-name">{person.name}</span>
-            </li>
           ))}
-        </ul>
+          <div className="lp-ont-field">
+            <dt className="lp-ont-field-key lp-ont-rise" style={at(c.peopleAt)}>
+              {c.peopleLabel}
+            </dt>
+            <dd className="lp-ont-field-value lp-ont-people">
+              {c.people.map((p, i) => (
+                <span key={p.id} className="lp-ont-person lp-ont-fade" style={at(c.peopleAt + 150 + i * 180)}>
+                  <PersonFace id={p.id} d={20} />
+                  {p.airport}
+                </span>
+              ))}
+              <span className="lp-ont-person-more lp-ont-fade" style={at(c.peopleAt + 700)}>
+                {c.more}
+              </span>
+            </dd>
+          </div>
+        </dl>
 
-        <Connector paths={FUNNEL_PATHS} joint={FUNNEL_JOINT} />
-
-        <div className="lp-ont-client">
-          <p className="lp-ont-win-label">Object · Client</p>
-          <h3 className="lp-ont-win-title">Acme Corp</h3>
-
-          <dl className="lp-ont-fields">
-            {CLIENT_FIELDS.map(([key, value]) => (
-              <div key={key} className="lp-ont-field">
-                <dt className="lp-ont-field-key">{key}</dt>
-                <dd className="lp-ont-field-value">{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
+        <p className="lp-ont-rule lp-ont-rise" style={at(c.templateAt)}>
+          <span className="lp-ont-badge">{c.templateBadge}</span>
+          {c.template}
+        </p>
       </div>
-
-      <p className="lp-ont-rule">
-        <span className="lp-ont-badge">Rule</span>
-        After call → update owner
-      </p>
     </div>
   );
 }
 
-/**
- * 4 — "Enable Action": one instance + context, Claude turning it into work in
- * the rep's own tools. Claude gets a full 44px tile, destinations the small one.
- */
-const SAM_CONTEXT: readonly Trait[] = [
-  ["Email voice", "Knowledge"],
-  ["CRM updating", "Skill"],
-];
+// ── 2 · Channels ────────────────────────────────────────────────────────
 
-const OUTCOMES: readonly {
-  readonly id: string;
-  readonly mark: ReactNode;
-  readonly text: string;
-}[] = [
-  { id: "gmail", mark: <GmailMark />, text: "Sent post-conference follow-up" },
-  { id: "dopl", mark: <DoplMark />, text: "Updated Launch Runbook KB" },
-  { id: "slack", mark: <SlackMark />, text: "Posted pipeline update" },
-];
+export { CHANNEL_END_MS };
 
-export function AgentWindow() {
+const CHANNEL_FACES = ["orchestrator", "scout", "liaison", "booker"] as const;
+
+export function ChannelsWindow() {
   return (
-    <div className="lp-ont-win lp-ont-win--action">
-      <div className="lp-ont-actor">
-        <div className="lp-ont-actor-id">
-          <Avatar id="sam" />
-          <span className="lp-ont-who">
-            <span className="lp-ont-who-name">Sam</span>
-            <span className="lp-ont-who-role">Sales Rep</span>
+    <div className="lp-ont-win lp-ont-win--chan" aria-hidden="true">
+      <div className="lp-ont-feed">
+      <div className="lp-ont-chan-head">
+        <span className="lp-ont-chan-name">
+          <Hash size={14} strokeWidth={2} />
+          {CHANNEL.name}
+        </span>
+        <span className="lp-ont-faces">
+          <PersonFace id="sam" d={22} />
+          {CHANNEL_FACES.map((id) => (
+            <MockAgentFace key={id} id={id} d={22} />
+          ))}
+        </span>
+      </div>
+
+      <div className="lp-ont-thread">
+        {CHANNEL.lines.map((line, i) => {
+          const slot = THREAD_SLOTS[i];
+          if (line.kind === "event") {
+            return (
+              <div key={i} className="lp-ont-grow" style={at(slot.at)}>
+                <div>
+                  <p className="lp-ont-event">
+                    <Plus size={11} strokeWidth={2.5} />
+                    {line.text}
+                  </p>
+                </div>
+              </div>
+            );
+          }
+          const agent = actorAgent(line.from);
+          return (
+            <div key={i}>
+              {"typing" in slot && slot.typing !== undefined && agent ? (
+                <div className="lp-ont-typing" style={at(slot.typing, THREAD.typing)}>
+                  <div>
+                    <p className="lp-ont-typing-line">
+                      {agent.name} is typing
+                      <span className="lp-ont-dots">
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+              <div className="lp-ont-grow" style={at(slot.at)}>
+                <div>
+                  <div
+                    className={agent ? "lp-ont-post lp-ont-post--agent" : "lp-ont-post"}
+                    style={agent ? accent(agent.color) : undefined}
+                  >
+                    <ActorFace actor={line.from} d={24} />
+                    <span className="lp-ont-post-body">
+                      <span className="lp-ont-post-name">
+                        {actorName(line.from)}
+                        {agent ? <span className="lp-ont-post-runtime">{agent.runtime.name}</span> : null}
+                      </span>
+                      <span className="lp-ont-post-text">
+                        <WithMentions text={line.text} />
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      </div>
+
+      <AgentRail />
+    </div>
+  );
+}
+
+// ── 3 · Tasks ───────────────────────────────────────────────────────────
+
+function StatusMark({ status }: { status: MockTaskStatus }) {
+  if (status === "done")
+    return (
+      <span className="lp-ont-tick lp-ont-tick--done">
+        <Check size={10} strokeWidth={3} />
+      </span>
+    );
+  return <span className={status === "working" ? "lp-ont-tick lp-ont-tick--working" : "lp-ont-tick"} />;
+}
+
+/** Done-count over time, from the rows' own "done" steps. */
+const DONE_TIMES = TASKS.rows
+  .flatMap((row) => row.steps.filter(([s]) => s === "done").map(([, t]) => t))
+  .sort((a, b) => a - b);
+const COUNT_STEPS: [number, number][] = [
+  [0, 0],
+  ...DONE_TIMES.map((t, i): [number, number] => [i + 1, t]),
+];
+
+export function TasksWindow() {
+  const total = TASKS.rows.length;
+  return (
+    <div className="lp-ont-win lp-ont-win--tasks" aria-hidden="true">
+      <div className="lp-ont-tasks-head">
+        <span>
+          <p className="lp-ont-win-label">{TASKS.label}</p>
+          <h3 className="lp-ont-win-title">{TASKS.title}</h3>
+        </span>
+        <span className="lp-ont-progress">
+          <span className="lp-ont-progress-count">
+            <Sequence steps={COUNT_STEPS} render={(n) => `${n} / ${total}`} />
           </span>
-        </div>
-        <TraitRows traits={SAM_CONTEXT} />
+          <span className="lp-ont-segs">
+            {TASKS.rows.map((_, i) => (
+              <i key={i}>
+                {i < DONE_TIMES.length ? <b className="lp-ont-fill" style={at(DONE_TIMES[i])} /> : null}
+              </i>
+            ))}
+          </span>
+        </span>
       </div>
 
-      {/* Below 560px the row becomes a column; these hairlines stand in for the
-          horizontal wires, which squeezing cannot rotate. */}
-      <span className="lp-ont-vwire" aria-hidden="true" />
-
-      <svg
-        className="lp-ont-wire"
-        viewBox="0 0 34 176"
-        preserveAspectRatio="none"
-        aria-hidden="true"
-        focusable="false"
-      >
-        <path
-          d="M0 88H34"
-          fill="none"
-          stroke="#c9c9c9"
-          strokeWidth="1"
-          strokeDasharray="3 4"
-          strokeLinecap="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      </svg>
-
-      <div className="lp-ont-source lp-ont-brain">
-        <ClaudeMark />
-      </div>
-
-      <Connector
-        paths={FANOUT_PATHS}
-        joint={FANOUT_JOINT}
-        className="lp-ont-funnel lp-ont-funnel--out"
-      />
-
-      <span className="lp-ont-vwire" aria-hidden="true" />
-
-      <ul className="lp-ont-outcomes">
-        {OUTCOMES.map((outcome) => (
-          <li key={outcome.id} className="lp-ont-outcome">
-            <span className="lp-ont-source lp-ont-source--sm">
-              {outcome.mark}
+      <ul className="lp-ont-tasks">
+        {TASKS.rows.map((row) => (
+          <li key={row.title} className="lp-ont-task">
+            <Sequence steps={row.steps} render={(s) => <StatusMark status={s} />} />
+            <span className="lp-ont-task-title">{row.title}</span>
+            <span className="lp-ont-task-owner">
+              <ActorFace actor={row.owner} d={20} />
+              {actorName(row.owner)}
             </span>
-            <span className="lp-ont-outcome-text">{outcome.text}</span>
+            <Sequence
+              className="lp-ont-stack lp-ont-stack--end"
+              steps={row.steps}
+              render={(s) => <span className={`lp-ont-status lp-ont-status--${s}`}>{MOCK_TASK_STATUS_LABEL[s]}</span>}
+            />
           </li>
         ))}
       </ul>

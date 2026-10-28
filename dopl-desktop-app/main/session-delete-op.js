@@ -19,7 +19,7 @@
 // `client_msg_id`) and never a local table. INVARIANTS §5 / §11.
 //
 // ⚠ **THERE IS ONE STOP PATH AND THIS IS NOT A SECOND ONE.** A LIVE agent is ended through
-// `session-reopen.js › controlByTask({action:'end'})` (re-exported by the engine) — the same reducer event the Agents tab's
+// `session-reopen.js › controlByThread({action:'end'})` (re-exported by the engine) — the same reducer event the Agents tab's
 // End button dispatches, reaching the same `session-teardown.js › settle`. A delete that tore
 // down its own way would be a second set of the C3 bugs (an orphaned `claude` child still
 // holding this session's pre-approved `dopl_channel` access). END, THEN PURGE — in that order,
@@ -50,7 +50,7 @@ const { diag } = require('./diag');
  * ⚠ REFUSALS: a payload naming no channel or no agent answers a bare `{ ok: false }`, the same
  * shape the sender binding refuses with — a hostile page must not learn which one it hit. An
  * address that resolves to NO agent (neither live nor retained) answers
- * `{ ok: false, reason: 'no-agent' }`, on the same terms `controlByTask` answers `no-session`:
+ * `{ ok: false, reason: 'no-agent' }`, on the same terms `controlByThread` answers `no-session`:
  * the guard has already passed, so the word costs nothing and a silent success over nothing is
  * the swallow this family has been bitten by twice.
  */
@@ -61,19 +61,19 @@ function deleteAgent(payload) {
   if (!agentId) return { ok: false };
   const address = {
     channelId: String(p.channelId),
-    taskId: String(p.taskId == null ? '' : p.taskId),
+    threadId: String(p.threadId == null ? '' : p.threadId),
     agentId: agentId,
   };
   const key = require('./session-store').slotKey(address);
 
   // 1. STOP IT, THROUGH THE ONE TEARDOWN. A refusal here is the ordinary case — an ended agent
   //    left the registry when it settled — so it is read as "there was nothing live", never as a
-  //    failure. `controlByTask` resolves the agent EXACTLY, because the id is required above.
+  //    failure. `controlByThread` resolves the agent EXACTLY, because the id is required above.
   let ended = false;
   try {
     const engine = require('./session-engine');
-    ended = typeof engine.controlByTask === 'function'
-      && engine.controlByTask({ ...address, action: 'end' }).ok === true;
+    ended = typeof engine.controlByThread === 'function'
+      && engine.controlByThread({ ...address, action: 'end' }).ok === true;
   } catch (err) {
     diag('session-delete: end failed —', (err && err.message) || String(err));
   }

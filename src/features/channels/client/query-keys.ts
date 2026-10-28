@@ -35,9 +35,8 @@ export function channelMessagesPath(channelId: string): string {
   return channelPath(channelId, "/messages");
 }
 
-/** BOUNDARY: wire/storage name `task` == domain name `thread`. */
 export function channelThreadsPath(channelId: string): string {
-  return channelPath(channelId, "/tasks");
+  return channelPath(channelId, "/threads");
 }
 
 /**
@@ -45,8 +44,6 @@ export function channelThreadsPath(channelId: string): string {
  * it: nothing READS a single thread here (the page derives the open thread from
  * the bounded list), so the only callers are set-mode's PATCH and the DELETE. A
  * key for a query that does not exist invites a second source of thread truth.
- *
- * BOUNDARY: wire/storage name `task` == domain name `thread`.
  */
 export function channelThreadPath(
   channelId: string,
@@ -54,7 +51,7 @@ export function channelThreadPath(
 ): string {
   return channelPath(
     channelId,
-    `/tasks/${encodeURIComponent(threadId)}`
+    `/threads/${encodeURIComponent(threadId)}`
   );
 }
 
@@ -76,6 +73,12 @@ export function channelMentionsPath(channelId: string): string {
  */
 export function channelArtifactsPath(channelId: string): string {
   return channelPath(channelId, "/artifacts");
+}
+
+/** The channel's TASKS: the list, and one task's detail behind `?task=<id>`. One route, so `.all`
+ *  reaches both arms. */
+export function channelTasksPath(channelId: string): string {
+  return channelPath(channelId, "/tasks");
 }
 
 export const CHANNEL_CONSENT_PATH = "/api/channels/consent";
@@ -100,6 +103,9 @@ export const channelKeys = {
   /** ⚠ `.all` covers BOTH arms — the list and every `?artifact=<id>` card. */
   artifacts: (channelId: string): ApiResourceKeys =>
     apiResource(channelArtifactsPath(channelId)),
+  /** ⚠ `.all` covers BOTH arms — the list and every `?task=<id>` detail. */
+  tasks: (channelId: string): ApiResourceKeys =>
+    apiResource(channelTasksPath(channelId)),
   consent: (): ApiResourceKeys => apiResource(CHANNEL_CONSENT_PATH),
 };
 

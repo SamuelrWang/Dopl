@@ -57,7 +57,7 @@ const row = (over = {}) => ({
   id: DID,
   workspace_id: WS,
   channel_id: CH,
-  task_id: TH,
+  thread_id: TH,
   operator_user_id: ME,
   goal: "Draft the release notes",
   model: "claude-opus-5",
@@ -303,17 +303,17 @@ test("CONTRACT: a directive in the DTO's spelling survives `handle`'s owner chec
 });
 
 // ⚠ THE DTO RENAMES THE THREAD FIELD, and a row reaches `directiveFrom` by TWO roads that
-// disagree about the name: a realtime frame is the raw row (`task_id`), the claim's answer is
+// disagree about the name: a realtime frame is the raw row (`thread_id`), the claim's answer is
 // `service-launch.ts › toDirective`, which answers `threadId`. Missing the second would silently
 // collapse every threaded directive to the CHANNEL scope — a launch on the wrong subject that
 // looks like a success.
-test("CONTRACT: the claimed row's `threadId` is read, not just the raw row's `task_id`", () => {
+test("CONTRACT: the claimed row's `threadId` is read, not just the raw row's `thread_id`", () => {
   const service = readFileSync(
     join(HERE, "..", "..", "src", "features", "channels", "server", DTO_FILE), "utf8"
   );
-  assert.match(service, /threadId: row\.task_id/, "the DTO really does rename it");
-  assert.equal(wire.directiveFrom({ id: DID, channel_id: CH, threadId: TH }, WS).taskId, TH);
-  assert.equal(wire.directiveFrom({ id: DID, channel_id: CH, task_id: TH }, WS).taskId, TH);
+  assert.match(service, /threadId: row\.thread_id/, "the DTO really does rename it");
+  assert.equal(wire.directiveFrom({ id: DID, channel_id: CH, threadId: TH }, WS).threadId, TH);
+  assert.equal(wire.directiveFrom({ id: DID, channel_id: CH, thread_id: TH }, WS).threadId, TH);
 });
 
 test("CONTRACT: `decideBody` has exactly three shapes and never a fourth", () => {
@@ -360,7 +360,7 @@ test("CONTRACT: a row is NARROWED, so a widened table cannot start influencing t
     ["agentId", "agentName", "channelId", "color", "goal", "id", "kind", "model", "runtime",
       "operatorUserId", "status",
       "chain", "startMessageMode", "startToolMode",
-      "targetAgentId", "targetMessageMode", "targetName", "targetToolMode", "taskId",
+      "targetAgentId", "targetMessageMode", "targetName", "targetToolMode", "threadId",
       "identityId", "identityName", "workspaceId"].sort());
   assert.equal(d.shell_command, undefined);
   assert.equal(d.startModes, undefined);
@@ -487,8 +487,8 @@ test("CONTRACT: an id or channel that is not a UUID is not a directive at all", 
   assert.equal(wire.directiveFrom(row({ channel_id: "../etc" }), WS), null);
   assert.equal(wire.directiveFrom(null, WS), null);
   // ⚠ A NON-UUID THREAD COLLAPSES TO THE CHANNEL SCOPE rather than being smuggled into a key.
-  assert.equal(wire.directiveFrom(row({ task_id: "task-legacy-7" }), WS).taskId, "");
-  assert.equal(wire.directiveFrom(row({ task_id: null }), WS).taskId, "");
+  assert.equal(wire.directiveFrom(row({ thread_id: "thread-legacy-7" }), WS).threadId, "");
+  assert.equal(wire.directiveFrom(row({ thread_id: null }), WS).threadId, "");
 });
 
 test("CONTRACT: the goal is bounded and collapsed — it becomes fenced prompt input", () => {

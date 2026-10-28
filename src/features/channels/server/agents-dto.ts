@@ -9,9 +9,6 @@ import type { ChannelAgent } from "../types";
  * has to name the handle that wrote them. So the row is still read, and mapped
  * down to the three fields attribution needs.
  *
- * `channel_task_participants` had its row shape and mapper here too; breakout
- * rooms went with the addressing and nothing reads that table now.
- *
  * Hand-written rather than pulled from the generated `Database` type — the same
  * cast-at-the-boundary pattern the rest of the channels feature uses (`dto.ts`,
  * `collab-dto.ts`), since the repository talks to the untyped `supabaseAdmin()`

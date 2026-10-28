@@ -31,7 +31,7 @@ export function DeviceGlyph({ kind }: { kind: DeviceKind }) {
   return (
     <span
       aria-hidden="true"
-      className="raised-tab flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] text-text-secondary"
+      className="raised-tab flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-secondary"
     >
       <DeviceKindIcon kind={kind} size={15} strokeWidth={1.8} />
     </span>

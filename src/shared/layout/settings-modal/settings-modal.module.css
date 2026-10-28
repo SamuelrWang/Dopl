@@ -41,6 +41,15 @@
 .cardVisible { opacity: 1; transform: none; }
 .card *, .card *::before, .card *::after { box-sizing: border-box; }
 
+/* Panel variant — a fixed white box; the content owns the scroll (the identity view). */
+.cardPanel {
+  width: 720px;
+  height: 560px;
+  max-height: 86vh;
+  flex-direction: column;
+  background: var(--bg-overlay);
+}
+
 /* Narrow variant — single-pane dialog (e.g. per-KB settings). */
 .cardNarrow {
   display: block;
@@ -151,37 +160,17 @@
 }
 .close:hover { background: var(--surface-raised-2); color: var(--text-secondary); }
 
-/* Left nav = the app-shell sidebar's chip rail, on the SAME ground the /home
-   channel switcher stands on — `--home-panel` (#f1f3f5), not `--shell-surface`
-   (Samuel, 2026-09-11: "make the left, where the sidebar is, gray. It should be
-   the gray that we have as the background color where the channel switcher
-   is"). The resting `.nav-chip` fill (`--shell-chip`) was already tuned against
-   this ground for the app sidebar on 2026-08-30, so the chips need no shift.
-   The rail's right edge is the channel switcher's own panel line. */
+/* The rail stands on the ground /home's New channel button does: the panel's `--bg-overlay` on
+   every face but Channels (`home/components/shell/home.module.css`). */
 .nav {
   width: 192px;
   flex: 0 0 192px;
-  background: var(--home-panel);
+  background: var(--bg-overlay);
   border-right: 1px solid var(--home-panel-line);
-  padding: 12px;
+  padding: 28px 24px 20px;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-}
-/* LAYOUT ONLY, and it is `app-shell.module.css › .nav` VALUE FOR VALUE — same
-   column, same 7px gap, same `flex-start` so a chip is as wide as its own label
-   on both rails. Rows are the kit's `.nav-chip` / `.nav-chip-active`
-   (+ `.raised-tab` when selected). ⚠ No local nav-item recipe, deliberately —
-   nothing to drift.
-
-   ⚠ `.navGroup` AND `.navGroupLabel` STOOD HERE AND ARE DELETED (Samuel,
-   2026-09-18): an uppercase "WORKSPACE" / "ACCOUNT" strip over a padded column
-   was the indent the rail was rebuilt to lose. One flat list, one level. */
-.navList {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 7px;
 }
 
 .navFoot { margin-top: auto; padding-top: 12px; }
@@ -195,11 +184,3 @@
 }
 .pane::-webkit-scrollbar { width: 8px; }
 .pane::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
-
-.paneTitle {
-  font-size: var(--text-title);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
-  margin-bottom: 16px;
-}

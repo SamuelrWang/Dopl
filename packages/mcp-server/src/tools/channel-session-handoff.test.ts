@@ -109,7 +109,7 @@ describe('send thread="new" handoff (rollback §3.5)', () => {
     // whether a session started" — which was the right shape for a request whose
     // outcome the server cannot see. It stopped being the right shape when the
     // outcome became KNOWABLE and always the same: `main/targeting.js ›
-    // requesterTaskOpen` has had no caller since F-228, so nothing opens, ever.
+    // requesterThreadOpen` has had no caller since F-228, so nothing opens, ever.
     // A hedge over a certainty is a lie with better manners.
 
     // ⚠ THE OPERATIVE FIX, AND IT SURVIVED THE TERSENING. The old copy said

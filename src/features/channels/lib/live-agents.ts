@@ -10,8 +10,9 @@
  */
 
 // ⚠ THE ONE MEMBERSHIP TEST FOR A COLOUR KEY — this file reconciles two untrusted
-// sources, so it narrows rather than casts. `lib/agent-colors.ts` says what a key is, once.
-import { agentColorOrNull } from "./agent-colors";
+// sources, so it narrows rather than casts. `shared/lib/agent-colors.ts` says what a key is, once.
+import { useMemo } from "react";
+import { agentColorOrNull, agentColorVar } from "@/shared/lib/agent-colors";
 import type { AgentColorKey } from "../types";
 import type { LiveAgentSession } from "./draft-recipients";
 
@@ -177,4 +178,14 @@ export function liveAgentsFromKey(key: string): readonly LiveAgentSession[] {
     out.push({ name, displayName: displayName || null, color: agentColorOrNull(color) });
   }
   return out;
+}
+
+/** The working strip's colours: each live agent's name to its colour token, off the same set the
+ *  picker and the tint read, so one agent cannot be two hues on one screen. */
+export function useWorkingColors(live: readonly LiveAgentSession[]): ReadonlyMap<string, string> {
+  return useMemo(() => {
+    const out = new Map<string, string>();
+    for (const agent of live) if (agent.color) out.set(agent.name, agentColorVar(agent.color));
+    return out;
+  }, [live]);
 }

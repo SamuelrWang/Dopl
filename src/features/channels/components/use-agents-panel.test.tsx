@@ -167,7 +167,7 @@ describe("useAgentsPanel › launch", () => {
     const payload = launch.mock.calls[0][0];
     // ⚠ `null`, never `""` — the empty string is already a real wire value
     // meaning "a responder whose thread never became first-class".
-    expect(payload.taskId).toBeNull();
+    expect(payload.threadId).toBeNull();
     expect("counterpartyId" in payload).toBe(false);
     expect(payload.threadTitle).toBeNull();
     expect(payload.channelId).toBe("c-1");
@@ -281,7 +281,7 @@ describe("useAgentsPanel › launch", () => {
           {
             sessionId: "s-1",
             channelId: "c-1",
-            taskId: "t-1",
+            threadId: "t-1",
             name: "flint",
             state: "working",
             channelName: "Website",

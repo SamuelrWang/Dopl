@@ -1,0 +1,56 @@
+/* ─────────────────────────────────────────────────────────────────────
+   UI STAGING — the stage around the desktop window, and the playground's own
+   channel column. The window's contents are the PRODUCT shell
+   (`staging-frame.tsx`); nothing here restyles it.
+   ⚠ Imported by `staging-frame.tsx`, so it reaches every `/playground/*`
+   route: scope every rule under `.uis-` (or `.uis-window`).
+   ───────────────────────────────────────────────────────────────────── */
+
+.uis-stage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  /* The hero's picture behind the window (`hero-banner.tsx › .lp-banner-img`). */
+  background: #1d2430 url("/img/landscape-valley-v2.jpg") center / cover no-repeat;
+  font-family: var(--font-app), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The window — `marketing.css › .lp-banner-demo-slot`'s recipe (radius, frame
+   ground, hairline, drop), minus its opacity flip and `pointer-events: none`:
+   this window is meant to be clicked. Fixed 26px inset, the slot's own.
+   `--shell-rail-w` is the one token whose value differs between the trees:
+   the web carries 0px (it has no rail), desktop `tokens.css` 54px. */
+.uis-window {
+  --shell-rail-w: 54px;
+  position: absolute;
+  inset: 26px;
+  border-radius: 14px;
+  background: var(--home-frame);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.14),
+    0 18px 48px rgba(0, 0, 0, 0.26);
+  overflow: hidden;
+}
+
+/* ── THE PLAYGROUND'S CHANNEL COLUMN (`staging-channel-rail.tsx`) ────
+   The demo's column, made clickable; its rows are kit + Tailwind
+   (`white-card raise`), no rule here. A long list scrolls
+   inside the column (`.lp-demo-sw` is `overflow: hidden`, right for the
+   hero's fixed rows, wrong for a picker). */
+.uis-window .uis-sw {
+  overflow-y: auto;
+}
+/* The well heading is a toggle button, not a caption. */
+.uis-window .uis-sw-head-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}

@@ -88,7 +88,7 @@ function refresh() {
 /**
  * ARM THE LANE.
  *
- * ⚠ `direct` IS THE DELIVERY FUNNEL AND IS MANDATORY — `session-reopen.js › messageByTask`,
+ * ⚠ `direct` IS THE DELIVERY FUNNEL AND IS MANDATORY — `session-reopen.js › messageByThread`,
  * the SAME op the operator's own composer uses. It is passed in rather than required here for
  * the launch lane's reason (the funnel cannot require this module back), and reusing it rather
  * than writing a second dispatch is the whole of ruling R1: one resolution, one `steer`, one
@@ -330,7 +330,7 @@ async function claim(d) {
 /**
  * DELIVER into the named agent's private turn.
  *
- * ⚠ **IT CALLS THE SAME `messageByTask` THE OPERATOR'S OWN COMPOSER CALLS** — ruling R1, and
+ * ⚠ **IT CALLS THE SAME `messageByThread` THE OPERATOR'S OWN COMPOSER CALLS** — ruling R1, and
  * the repo's own discipline: no new reducer branch, no second wake path, no second way to
  * start a turn. What the `directed` argument changes inside that op is the FRAMING (fenced
  * data, not operator authority) and the CAPTURE; the resolution, the private-turn open and
@@ -343,11 +343,11 @@ async function claim(d) {
 async function deliverTo(d) {
   const res = await deps.direct({
     channelId: d.channelId,
-    taskId: d.taskId,
+    threadId: d.threadId,
     agentId: d.agentId,
     text: d.body,
     // ⚠ THE WHOLE OF WHAT MAKES THIS A DIRECTION RATHER THAN AN OPERATOR MESSAGE.
-    // ⚠ `operatorUserId` RIDES THE DIRECTION so `messageByTask` can prove the TARGET SESSION
+    // ⚠ `operatorUserId` RIDES THE DIRECTION so `messageByThread` can prove the TARGET SESSION
     // belongs to the same operator — the registry outlives a sign-out (2026-08-31 review).
     // ⚠ `senderAgentId` RIDES ALONG AS A CAPTION ONLY (F-376a, 2026-08-31) — the narration
     // entry needs it so the operator can tell WHICH of their agents spoke. It is beside

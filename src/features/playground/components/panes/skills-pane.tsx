@@ -53,7 +53,7 @@ interface DemoSkill {
 
 function P({ children }: { children: ReactNode }) {
   return (
-    <p className="my-3 text-[16px] leading-[1.7] text-text-primary/90">
+    <p className="my-3 text-(length:--doc-text) leading-[1.7] text-text-primary/90">
       {children}
     </p>
   );
@@ -61,7 +61,7 @@ function P({ children }: { children: ReactNode }) {
 
 function H2({ children }: { children: ReactNode }) {
   return (
-    <h2 className="mb-1.5 mt-6 text-[19px] font-semibold tracking-tight text-text-primary">
+    <h2 className="mb-1.5 mt-6 text-(length:--doc-h2) font-semibold tracking-tight text-text-primary">
       {children}
     </h2>
   );
@@ -69,7 +69,7 @@ function H2({ children }: { children: ReactNode }) {
 
 function Code({ children }: { children: ReactNode }) {
   return (
-    <code className="rounded border border-border-subtle bg-surface-raised-3 px-1 py-px font-mono text-[12.5px] text-text-primary">
+    <code className="rounded border border-border-subtle bg-surface-raised-3 px-1 py-px font-mono text-(length:--doc-code) text-text-primary">
       {children}
     </code>
   );
@@ -241,7 +241,7 @@ function StaticSkillsPane() {
   return (
     <div className="page-float flex antialiased">
       {/* List pane */}
-      <div className="flex w-[372px] shrink-0 flex-col border-r border-border-default">
+      <div className="flex w-93 shrink-0 flex-col border-r border-border-default">
         <div className="flex items-center gap-2 px-3.5 pb-2.5 pt-3.5">
           <h1 className="text-title font-semibold tracking-tight text-text-primary">
             Skills
@@ -253,7 +253,7 @@ function StaticSkillsPane() {
           <span
             title="New skill"
             aria-hidden
-            className="flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary"
+            className="flex h-7 w-7 items-center justify-center rounded-tile text-text-secondary"
           >
             <Plus size={16} />
           </span>

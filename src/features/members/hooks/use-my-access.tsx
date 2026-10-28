@@ -95,7 +95,7 @@ function useMyAccess(workspaceSegment: string | null): UseMyAccessResult {
 const MyAccessCtx = createContext<UseMyAccessResult | null>(null);
 
 /** App-shell provider — mounted by the desktop UI's `app-shell.tsx` (and
- *  `knowledge-base-view.tsx`);
+ *  `home-knowledge-base-view.tsx`);
  *  descendants read via `useMyAccessContext()` so the request is shared.
  *  Without it the context returns a no-op shape (data null, resolve null),
  *  so consumers don't crash on pages with no workspace in scope. */

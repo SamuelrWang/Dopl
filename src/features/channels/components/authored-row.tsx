@@ -21,7 +21,7 @@ export type AuthoredRowAccent = {
 };
 
 /** `self-stretch` makes the bar the row's height; the top end is square to meet the frame. */
-const ACCENT_BAR = "w-[3px] shrink-0 self-stretch rounded-b-full";
+const ACCENT_BAR = "w-0.75 shrink-0 self-stretch rounded-b-full";
 
 /**
  * One shape with the bar: a three-sided border ({@link ACCENT_FRAME_EDGE}) whose 3px equals
@@ -29,7 +29,7 @@ const ACCENT_BAR = "w-[3px] shrink-0 self-stretch rounded-b-full";
  * pill and border move as one; 2px (not the kit's 1px) because the face has no hover fill.
  */
 const ACCENT_FRAME =
-  "inline-flex max-w-full border-[3px] border-solid -mb-[3px] shadow-[var(--shadow-bento)] transition-transform duration-150 has-[button:hover]:-translate-y-0.5 has-[button:active]:translate-y-0.5 motion-reduce:transition-none";
+  "inline-flex max-w-full border-[3px] border-solid -mb-0.75 shadow-[var(--shadow-bento)] transition-transform duration-150 has-[button:hover]:-translate-y-0.5 has-[button:active]:translate-y-0.5 motion-reduce:transition-none";
 
 /** Square on the bar side, a stadium elsewhere; the frame and the pill take the same constant. */
 const ACCENT_RADIUS = {
@@ -39,8 +39,8 @@ const ACCENT_RADIUS = {
 
 /** No border on the bar side (the bar is that edge); the outer pull cancels the outer border. */
 const ACCENT_FRAME_EDGE = {
-  me: "border-r-0 -ml-[3px]",
-  peer: "border-l-0 -mr-[3px]",
+  me: "border-r-0 -ml-0.75",
+  peer: "border-l-0 -mr-0.75",
 } as const;
 
 /** Content is inset 8px from the bar; the frame pulls back 8px to meet it. Move as a pair. */
@@ -105,8 +105,6 @@ export function AuthoredRow({
       via={via}
       agentId={agentId}
       agentName={agentName}
-      // The same paint as the bar and frame, so one agent cannot show two hues.
-      agentPaint={accent?.paint ?? null}
       radius={accent ? ACCENT_RADIUS[edge] : undefined}
       framed={accent !== null}
       time={time}
@@ -142,7 +140,7 @@ export function AuthoredRow({
         data-message-id={id}
         className={cn(
           // Negative margin + padding: the row owns the strip the flash tints, so no layout shift.
-          "-mx-2 flex flex-col gap-1.5 rounded-[10px] px-2 py-1 transition-colors duration-700",
+          "-mx-2 flex flex-col gap-1.5 rounded-lg px-2 py-1 transition-colors duration-700",
           mine ? "items-end" : "items-start",
           flash && `${FLASH_TINT} duration-150`
         )}
@@ -160,7 +158,7 @@ export function AuthoredRow({
       data-agent-color={accent.key ?? undefined}
       className={cn(
         // Same strip as a bare row, so the transcript does not step as authors alternate.
-        "-mx-2 flex items-stretch rounded-[10px] px-2 py-1 transition-colors duration-700",
+        "-mx-2 flex items-stretch rounded-lg px-2 py-1 transition-colors duration-700",
         // Bar on the outer edge; a reversal keeps the bar first in the DOM either way.
         mine ? "flex-row-reverse" : "flex-row",
         flash && `${FLASH_TINT} duration-150`

@@ -401,19 +401,19 @@ describe("dropThread", () => {
     vi.mocked(apiRequest)
       .mockResolvedValueOnce({ messages: page(60, 50) })
       .mockResolvedValueOnce({
-        messages: [msg(8), msg(9, { metadata: { taskId: "t-1" } }), msg(10)],
+        messages: [msg(8), msg(9, { metadata: { threadId: "t-1" } }), msg(10)],
       });
 
     const h = await mount();
     await h.loadOlder();
-    expect(h.read().messages.some((m) => m.metadata.taskId === "t-1")).toBe(true);
+    expect(h.read().messages.some((m) => m.metadata.threadId === "t-1")).toBe(true);
 
     await act(async () => {
       h.read().dropThread("t-1");
     });
     await settle();
 
-    expect(h.read().messages.some((m) => m.metadata.taskId === "t-1")).toBe(false);
+    expect(h.read().messages.some((m) => m.metadata.threadId === "t-1")).toBe(false);
     expect(h.read().messages).toHaveLength(52);
   });
 });

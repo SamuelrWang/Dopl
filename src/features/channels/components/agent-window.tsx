@@ -80,7 +80,7 @@ function useWindowTitle(name: string | null): void {
 export function ChannelsAgentWindow({
   workspaceId,
   channelId,
-  taskId,
+  threadId,
   agentId = null,
   currentUserId,
 }: {
@@ -88,7 +88,7 @@ export function ChannelsAgentWindow({
   channelId: string;
   /** The agent's own half of its key — `?thread=`. `""` is a real value (a responder with
    *  no first-class thread), and is why this is not gated on truthiness. */
-  taskId: string;
+  threadId: string;
   /**
    * WHICH INSTANCE — `?agent=`, when the URL carries one (2026-08-22).
    *
@@ -123,10 +123,10 @@ export function ChannelsAgentWindow({
       sessions?.find(
         (s) =>
           s.channelId === channelId &&
-          s.taskId === taskId &&
+          s.threadId === threadId &&
           (!agentId || s.agentId === agentId)
       ) ?? null,
-    [sessions, channelId, taskId, agentId]
+    [sessions, channelId, threadId, agentId]
   );
   // ⚠ THE RESOLVED AGENT'S OWN ID, NOT THE ROUTE'S PARAM (2026-08-22, F-250).
   // `agentId` above is the URL's, which main does not emit yet; `agent.agentId`
@@ -134,7 +134,7 @@ export function ChannelsAgentWindow({
   // agent whose header is above it either way.
   const { entries: narration, supported } = useAgentNarration(
     channelId,
-    taskId,
+    threadId,
     agent?.agentId
   );
   // 🔒 **THE END NOTICE LEAVES THE LOG AND BECOMES THE THREAD LINE'S BADGE** (Samuel, 2026-09-15 —
@@ -223,6 +223,8 @@ export function ChannelsAgentWindow({
     refetchMembers: () => {
       void refetchMembers();
     },
+    // No tasks read here, so a tasks-only doorbell has nothing to refetch.
+    refetchTasks: () => {},
   });
   const { consent } = useChannelPreferenceWrites({ workspaceId, gate });
 
@@ -230,8 +232,8 @@ export function ChannelsAgentWindow({
   // window's Sent lane shows every sibling agent's posts on the same thread as
   // if they were this one's.
   const sent = useMemo(
-    () => agentSentMessages(messages, taskId, currentUserId, agent?.agentId),
-    [messages, taskId, currentUserId, agent?.agentId]
+    () => agentSentMessages(messages, threadId, currentUserId, agent?.agentId),
+    [messages, threadId, currentUserId, agent?.agentId]
   );
 
   // ⚠ THE VIEWER'S FACE, OFF THE TRANSCRIPT THIS WINDOW ALREADY READS (Samuel,
@@ -303,13 +305,8 @@ export function ChannelsAgentWindow({
         <PostureControls
           agent={agent}
           channelId={channelId}
-          taskId={taskId}
-          // 🔒 `meterClassName=""` (Samuel, 2026-09-15) and no start stamp — the two
-          // differences that used to justify a second copy of this component (P17,
-          // collapsed 2026-09-17); `agent-stats.tsx` carries both reasons.
-          stats={
-            <AgentStats agent={agent} meterClassName="" showStarted={false} />
-          }
+          threadId={threadId}
+          stats={<AgentStats agent={agent} showStarted={false} />}
         />
       ) : null}
       {/* 🔒 **THE HELD-GATE CARD, IN THE WINDOW TOO** (Samuel's ruling R-24,
@@ -349,7 +346,7 @@ export function ChannelsAgentWindow({
       />
       <AgentComposer
         channelId={channelId}
-        taskId={taskId}
+        threadId={threadId}
         agentId={agent?.agentId}
         runtimeId={agent?.runtimeId}
         name={agent ? agentDisplayName(agent) : null}
@@ -386,7 +383,7 @@ export function ChannelsAgentWindow({
  * block's `py-2.5`, which is the equality Samuel set earlier the same day and
  * `agent-window-frame.test.ts` pins.
  */
-function AgentWorkingOn({
+export function AgentWorkingOn({
   agent,
   endNote,
 }: {
@@ -431,7 +428,7 @@ function AgentWorkingOn({
  *
  * ⚠ THE MARK IS A ROUNDED SQUARE SHORTER THAN THE BAR, and that is the whole instruction (*"It
  * should not be the same height as the top bar, but be to the left of the name"*): 24px inside a
- * 56px bar, `rounded-[8px]`.
+ * 56px bar, `rounded-md`.
  *
  * ⚠ THE RIGHT GROUP READS STATUS → EXPAND → CLOSE (Samuel, same day: *"move the ended
  * badge/thinking badges and stuff to the left of the expand and X buttons"*). The badges are the

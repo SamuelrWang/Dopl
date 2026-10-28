@@ -8,14 +8,14 @@ import type {
   ChannelThread,
 } from "../types";
 import type { MessageReadQuery } from "../schema";
-import { ChannelNotFoundError, TaskNotFoundError } from "./errors";
+import { ChannelNotFoundError, ThreadNotFoundError } from "./errors";
 import { mapAgentRow } from "./agents-dto";
-import { mapMemberRow, mapTaskRow } from "./dto";
+import { mapMemberRow, mapThreadRow } from "./dto";
 import * as repo from "./repository";
 import { acceptChannelCursor } from "./cursor-accept";
 import * as repoAgents from "./repository-agents";
 import * as repoMessages from "./repository-messages";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import * as collab from "./repository-collab";
 import * as workspaceRepo from "@/features/workspaces/server/repository";
 import {
@@ -82,7 +82,7 @@ export async function listChannelMembers(
 /**
  * Cursor-based message read — forward from `since`, BACKWARD from `before`, or
  * the newest page when neither is given, capped at `limit` and optionally scoped
- * to ONE thread (`query.thread` → `metadata.taskId`). A member's read advances
+ * to ONE thread (`query.thread` → `metadata.threadId`). A member's read advances
  * `last_read_at` best-effort; a non-member on a public channel has none to move.
  *
  * ⚠ A THREAD-SCOPED read moves NO watermark: content-derived and monotonic, it
@@ -387,21 +387,21 @@ export async function pollChannelMessages(
 }
 
 /**
- * Every task in a channel the caller may read, MOST RECENTLY ACTIVE FIRST, and
- * whether the read clipped. One read behind both the web's `Map<taskId,
+ * Every thread in a channel the caller may read, MOST RECENTLY ACTIVE FIRST, and
+ * whether the read clipped. One read behind both the web's `Map<threadId,
  * overlay>` and the MCP `list_threads` listing, so the two surfaces cannot
  * disagree about which thread is live. Gated by the transcript's visibility rule.
  *
  * ⚠ `truncated` is not decoration: threads never leave this list, so a clipped
  * list rendering like an exhausted one is the bug (INVARIANTS §9). Never drop it.
  */
-export async function listChannelTasks(
+export async function listChannelThreads(
   ctx: ChannelContext,
   ref: string
 ): Promise<{ threads: ChannelThread[]; truncated: boolean }> {
   const { channel } = await loadVisibleChannel(ctx, ref);
-  const { rows, truncated } = await repoTasks.listTasksByChannel(channel.id);
-  return { threads: rows.map(mapTaskRow), truncated };
+  const { rows, truncated } = await repoThreads.listThreadsByChannel(channel.id);
+  return { threads: rows.map(mapThreadRow), truncated };
 }
 
 /**
@@ -424,17 +424,17 @@ export async function listAgents(
 }
 
 /**
- * One task by id, scoped to a channel the caller may read. ⚠ A task id not
- * resolving to a task IN THIS channel is a `TaskNotFoundError` — ids cannot be
+ * One thread by id, scoped to a channel the caller may read. ⚠ A thread id not
+ * resolving to a thread IN THIS channel is a `ThreadNotFoundError` — ids cannot be
  * probed across channels.
  */
-export async function getChannelTask(
+export async function getChannelThread(
   ctx: ChannelContext,
   ref: string,
-  taskId: string
+  threadId: string
 ): Promise<ChannelThread> {
   const { channel } = await loadVisibleChannel(ctx, ref);
-  const row = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
-  if (!row) throw new TaskNotFoundError(taskId);
-  return mapTaskRow(row);
+  const row = await repoThreads.findThreadByChannelAndId(channel.id, threadId);
+  if (!row) throw new ThreadNotFoundError(threadId);
+  return mapThreadRow(row);
 }

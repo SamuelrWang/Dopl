@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * THE AGENT HALF OF THE SETTINGS TAB — Tool access, the Working Folder row, and
+ * THE AGENT HALF OF THE SETTINGS TAB — Tool access, the Working folder row, and
  * the Launch-agents control.
  *
  * ⚠ Split out of `settings-tab.test.tsx` (2026-09-14, 500-line cap), which keeps
@@ -20,7 +20,7 @@ afterEach(cleanup);
 
 const TOOL_PROFILES = desktopSource("tool-profiles.js");
 
-/** The Working Folder picker. ⚠ By `aria-label`: its visible text is a path, so the
+/** The Working folder picker. ⚠ By `aria-label`: its visible text is a path, so the
  *  accessible name states the act instead (`settings-desktop-rows.tsx`). */
 const folderPicker = () =>
   screen.getByLabelText("Change the working folder for this channel's agents");
@@ -149,7 +149,7 @@ describe("Tool access — every profile says what it means, in a few words", () 
   });
 });
 
-describe("the Working Folder row", () => {
+describe("the Working folder row", () => {
   /**
    * ⚠ THE DEFAULT IS NOW A REAL DIRECTORY, NOT A WORD THIS TREE OWNS (2026-09-05,
    * task 15). `label` was `null` here and the row printed "Sandbox (default)" over
@@ -170,12 +170,12 @@ describe("the Working Folder row", () => {
 
   it("names the EFFECTIVE default folder, and the NAME is the picker button", () => {
     // ⚠ 2026-09-06 (item 4): the separate "Change folder…" button is DELETED and the
-    // folder name itself — underlined text, a real `<button>` — opens the picker. The
+    // folder name itself — a real `<button>` in the value face — opens the picker. The
     // row is a NAME and a CONTROL on one line, which is the shape this tab states.
     // What this case pinned before is unchanged: the label is a real directory, never
     // a word this tree invented.
     const text = copy({ folder: { ...folder } });
-    expect(text).toContain("Working Folder");
+    expect(text).toContain("Working folder");
     expect(text).toContain("~/Downloads");
     expect(text).not.toContain("Sandbox");
     expect(row("Change folder…")).toBeNull();

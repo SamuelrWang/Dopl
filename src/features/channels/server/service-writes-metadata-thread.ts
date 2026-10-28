@@ -1,6 +1,6 @@
 import "server-only";
-import { parseLegacyTaskSeq } from "../lib/legacy-task-id";
-import type { ChannelTaskRow } from "./dto";
+import { parseLegacyThreadSeq } from "../lib/legacy-thread-id";
+import type { ChannelThreadRow } from "./dto";
 import * as repoMessages from "./repository-messages";
 
 /**
@@ -19,28 +19,18 @@ import * as repoMessages from "./repository-messages";
 
 /**
  * The two people a first-class thread belongs to (creator + addressee), and the
- * WHOLE first-class write gate.
- *
- * It was briefly wrapped by an async `mayWriteThread` that consulted
- * `channel_task_participants`: a thread with rows in that table was a BREAKOUT
- * ROOM whose SET decided who may post, with the original pair staying valid.
- * Breakout rooms are gone (rollback §1) — no route seeds a set, no op joins one
- * — so consulting the table would be a query per threaded post against rows
- * nothing can add to. The pair is the rule again, and it is synchronous.
- *
- * Rows written before the rollback are LEFT IN PLACE and simply stop being
- * consulted; a later cleanup migration may drop the table.
+ * WHOLE first-class write gate. Synchronous: the pair is the rule.
  */
 export function isThreadParticipant(
-  task: ChannelTaskRow,
+  thread: ChannelThreadRow,
   userId: string
 ): boolean {
-  return task.created_by === userId || task.target_user_id === userId;
+  return thread.created_by === userId || thread.target_user_id === userId;
 }
 
 /**
  * Whether `userId` is one of the two participants of a LEGACY
- * `task-{channelId}-{seq}` exchange. A legacy session has no `channel_tasks`
+ * `thread-{channelId}-{seq}` exchange. A legacy session has no `channel_threads`
  * row, so the only server-side record of who it belongs to is its opening
  * request: the message at that seq, whose author is the requester and whose
  * `metadata.to_user_id` is the responder — exactly the pair `groupThread`
@@ -55,11 +45,11 @@ export function isThreadParticipant(
  */
 export async function isLegacyThreadParticipant(
   channelId: string,
-  taskId: string,
+  threadId: string,
   userId: string
 ): Promise<boolean> {
-  const seq = parseLegacyTaskSeq(taskId, channelId);
-  // `parseLegacyTaskSeq` already pins the prefix to this channel and the tail
+  const seq = parseLegacyThreadSeq(threadId, channelId);
+  // `parseLegacyThreadSeq` already pins the prefix to this channel and the tail
   // to digits; seqs start at 1, and a digit run long enough to lose precision
   // is not a seq either.
   if (seq === null || seq < 1 || !Number.isSafeInteger(seq)) return false;
@@ -72,7 +62,7 @@ export async function isLegacyThreadParticipant(
 
 /**
  * ⚠ `isThreadClosed` USED TO LIVE HERE (F6) — the one read of
- * `channel_tasks.status` on the write path, which raised the `threadClosed`
+ * `channel_threads.status` on the write path, which raised the `threadClosed`
  * notice on a post into a settled thread. DELETED with thread closing (wiring
  * plan Phase 4, 2026-08-18): nothing closes a thread, so the only rows it could
  * ever fire on are legacy ones, and the COLUMN is now legacy and unread

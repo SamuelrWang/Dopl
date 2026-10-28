@@ -17,8 +17,9 @@
  *      directions (`shared/lib/closed-enum.ts`). Re-reading them here would be a
  *      second, weaker statement of a proof that already holds — which is the
  *      duplication this family of gates exists to delete.
- *   3. the column `CHECK` in `20260725120000_channels.sql`. SQL can import
- *      nothing, and it is the only one of the three that can REJECT a write.
+ *   3. the column `CHECK` — `kind`'s in `20261121180000_rename_task_to_thread.sql`,
+ *      `author_kind`'s in `20260725120000_channels.sql` ({@link KindFamily.migration}).
+ *      SQL can import nothing, and it is the only one of the three that can REJECT a write.
  *
  * ⚠ **TWO SITES LEFT THIS SCRIPT ON 2026-09-02 AND THEY ARE NOT "NO LONGER
  * CHECKED".** `packages/dopl-client/src/channel-types.ts` and its committed
@@ -75,14 +76,14 @@ const REPO_ROOT = resolve(__dirname, "..");
 export type Read = (rel: string) => string;
 
 const MIGRATIONS_DIR = "supabase/migrations";
-/** The migration that CREATEs `channel_messages` — both `CHECK`s are inline in it. */
-export const KIND_MIGRATION = `${MIGRATIONS_DIR}/20260725120000_channels.sql`;
 
 export interface KindFamily {
   /** How a failure reads. */
   label: string;
   /** The `channel_messages` column whose `CHECK` states the set in SQL. */
   column: string;
+  /** The NEWEST migration that defines that column's `CHECK`. */
+  migration: string;
   /** `@dopl/contracts`' union — the reference. */
   referenceType: string;
   /** The type `Exclude`d from the reference, and what it excludes. */
@@ -95,12 +96,14 @@ export const FAMILIES: KindFamily[] = [
   {
     label: "message kind",
     column: "kind",
+    migration: `${MIGRATIONS_DIR}/20261121180000_rename_task_to_thread.sql`,
     referenceType: "ChannelMessageKind",
     postable: { type: "PostableMessageKind", excluded: ["system"] },
   },
   {
     label: "author kind",
     column: "author_kind",
+    migration: `${MIGRATIONS_DIR}/20260725120000_channels.sql`,
     referenceType: "MessageAuthorKind",
     postable: { type: "PostableAuthorKind", excluded: ["system"] },
   },
@@ -115,10 +118,10 @@ export const FAMILIES: KindFamily[] = [
  */
 export function sqlCheckValues(sql: string, column: string): string[] {
   const re = new RegExp(`CHECK\\s*\\(\\s*${column}\\s+IN\\s*\\(([^)]*)\\)`, "i");
-  const m = re.exec(sql);
+  const m = re.exec(sql.replace(/--[^\n]*/g, ""));
   if (!m) {
     throw new Error(
-      `could not find \`CHECK (${column} IN (…))\` in ${KIND_MIGRATION} — if the constraint moved to a later migration, point KIND_MIGRATION at that file, which is the one thing this script cannot infer`
+      `could not find \`CHECK (${column} IN (…))\` — if the constraint moved to a later migration, point that family's \`migration\` at the file, which is the one thing this script cannot infer`
     );
   }
   return [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
@@ -139,21 +142,31 @@ export function sqlCheckValues(sql: string, column: string): string[] {
  * makes about this same file), and the alternative — an exemption list — records
  * a review that the regex can simply perform.
  *
- * ⚠ **IT IS STILL DELIBERATELY OVER-BROAD.** Any `CONSTRAINT` clause on this
- * table whose statement so much as mentions `kind` is reported, including
- * `author_kind`, including a DROP, and including a constraint merely NAMED for
- * one — a false positive costs one reader a minute, and a false negative makes
- * every set above compare against history.
+ * ⚠ **IT IS PER FAMILY AND STILL DELIBERATELY OVER-BROAD.** Any `CONSTRAINT`
+ * clause on this table, in a file after the family's own migration, whose
+ * statement so much as mentions the family's column is reported, including a
+ * DROP and a constraint merely NAMED for it — a false positive costs one reader a
+ * minute, and a false negative makes every set above compare against history.
+ * `kind` excludes `author_kind`, the one column that ends in it.
  */
 export function laterConstraintRedefinitions(
   read: Read,
-  migrationFiles: string[]
+  migrationFiles: string[],
+  family: KindFamily
 ): string[] {
-  const base = KIND_MIGRATION.slice(MIGRATIONS_DIR.length + 1);
+  const base = family.migration.slice(MIGRATIONS_DIR.length + 1);
+  const longer = FAMILIES.map((f) => f.column)
+    .filter((c) => c !== family.column && c.endsWith(family.column))
+    .map((c) => `(?<!${c.slice(0, -family.column.length)})`)
+    .join("");
+  const mentions = new RegExp(
+    `ALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(?:public\\.)?channel_messages[\\s\\S]{0,400}?CONSTRAINT[^;]{0,400}${longer}${family.column}`,
+    "i"
+  );
   return migrationFiles
     .filter((f) => f.endsWith(".sql") && f > base)
     .filter((f) =>
-      /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?channel_messages[\s\S]{0,400}?CONSTRAINT[^;]{0,400}kind/i.test(
+      mentions.test(
         read(`${MIGRATIONS_DIR}/${f}`)
       )
     );
@@ -168,8 +181,8 @@ export function sitesFor(
     reference: extractUnion(read(REFERENCE_FILE), family.referenceType),
     mirrors: [
       [
-        `${KIND_MIGRATION} › CHECK (${family.column} IN …)`,
-        sqlCheckValues(read(KIND_MIGRATION), family.column),
+        `${family.migration} › CHECK (${family.column} IN …)`,
+        sqlCheckValues(read(family.migration), family.column),
       ],
     ],
   };
@@ -222,15 +235,15 @@ function main(): void {
   const read: Read = (rel) => readFileSync(resolve(REPO_ROOT, rel), "utf8");
   let drift = false;
 
-  const redefined = laterConstraintRedefinitions(
-    read,
-    readdirSync(resolve(REPO_ROOT, MIGRATIONS_DIR))
-  );
-  if (redefined.length) {
-    drift = true;
-    console.error(
-      `[drift] a later migration carries a CONSTRAINT clause against channel_messages: ${redefined.join(", ")}. This gate reads ${KIND_MIGRATION}; point KIND_MIGRATION at the newest definition, or it compares against history.`
-    );
+  const files = readdirSync(resolve(REPO_ROOT, MIGRATIONS_DIR));
+  for (const family of FAMILIES) {
+    const redefined = laterConstraintRedefinitions(read, files, family);
+    if (redefined.length) {
+      drift = true;
+      console.error(
+        `[drift] a later migration carries a ${family.column} CONSTRAINT clause against channel_messages: ${redefined.join(", ")}. This gate reads ${family.migration}; point the family's \`migration\` at the newest definition, or it compares against history.`
+      );
+    }
   }
 
   for (const family of FAMILIES) {

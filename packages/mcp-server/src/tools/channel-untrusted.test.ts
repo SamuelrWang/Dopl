@@ -133,7 +133,7 @@ describe("describeFailure — untrusted upstream text in an await result", () =>
 
 const THREAD_ID = "3f2a91c4-dead-beef-0000-000000000001";
 
-function threadedMsg(taskTitle: string | undefined) {
+function threadedMsg(threadTitle: string | undefined) {
   return {
     id: "m1",
     seq: 1,
@@ -142,17 +142,17 @@ function threadedMsg(taskTitle: string | undefined) {
     authorKind: "user",
     kind: "message",
     body: "hi",
-    metadata: taskTitle ? { taskId: THREAD_ID, taskTitle } : { taskId: THREAD_ID },
+    metadata: threadTitle ? { threadId: THREAD_ID, threadTitle } : { threadId: THREAD_ID },
     clientMsgId: null,
     createdAt: "2026-07-28T00:00:00Z",
     authorName: null,
   };
 }
 
-/** Read a one-message channel whose thread carries `taskTitle`; return the legend LINE. */
-async function legendLine(taskTitle: string | undefined): Promise<string> {
+/** Read a one-message channel whose thread carries `threadTitle`; return the legend LINE. */
+async function legendLine(threadTitle: string | undefined): Promise<string> {
   const client = stubClient({
-    readChannelMessages: vi.fn(async () => [threadedMsg(taskTitle)]),
+    readChannelMessages: vi.fn(async () => [threadedMsg(threadTitle)]),
   });
   const text = (await opRead(client, "general")).content[0].text;
   const line = text.split("\n").find((l) => l.startsWith("Threads above:"));
@@ -176,7 +176,7 @@ describe("threadLegend — a peer-typed thread title in server narration", () =>
     expect(titleSpan(line)).toBe("Ship the listener fix");
     expect(line).toContain(`\`${THREAD_ID}\``);
     // ⚠ Three spans (short tag, full id, title), nothing half-open — the short
-    // tag needs one too: `metadata.taskId` is peer-set verbatim for non-UUIDs.
+    // tag needs one too: `metadata.threadId` is peer-set verbatim for non-UUIDs.
     expect((line.match(/`/g) ?? []).length).toBe(6);
   });
 

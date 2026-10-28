@@ -21,18 +21,57 @@
 // Not a cycle: `credits.ts` reaches back for `PlanId` with `import type`, which
 // is erased — the only runtime edge is this one, plans → credits.
 import { PERSONAL_MONTHLY_CREDITS, SEAT_MONTHLY_CREDITS } from "./credits";
-import { formatMoney, PRO_PRICE, TEAM_SEAT_PRICE } from "./prices";
+import { formatMoney, MAX_PRICE, PRO_PRICE, TEAM_SEAT_PRICE } from "./prices";
 import type { WorkspaceKind } from "@/features/workspaces/types";
 
 /**
  * The billing taxonomy; each value is scoped to a container kind — `team` only
- * on a standard workspace, `pro` (2026-09-08) only on `kind='home'`, `solo`
- * retired and sold nowhere, `free` = no live subscription on either.
+ * on a standard workspace, `pro` (2026-09-08) and `max` (2026-10-22) only on
+ * `kind='home'`, `solo` retired and sold nowhere, `free` = no live
+ * subscription on either.
  * Mirrored by `workspace_billing_plan_check`
- * (`20260930130000_workspace_billing_plan_pro.sql`): a value here the CHECK
+ * (`20261121170000_workspace_billing_plan_max.sql`): a value here the CHECK
  * lacks is a `23514` inside the Stripe webhook, which retries forever.
  */
-export type PlanId = "free" | "solo" | "team" | "pro";
+export type PlanId = "free" | "solo" | "team" | "pro" | "max";
+
+/**
+ * The personal (home-space) PAID plans, cheapest first. The one list every
+ * "is this a personal paid plan" question reads, so a fourth personal tier is
+ * an edit here rather than a hunt for `plan === "pro"` (2026-10-22).
+ */
+export const PERSONAL_PAID_PLANS = ["pro", "max"] as const;
+export type PersonalPaidPlan = (typeof PERSONAL_PAID_PLANS)[number];
+
+export function isPersonalPaidPlan(plan: unknown): plan is PersonalPaidPlan {
+  return plan === "pro" || plan === "max";
+}
+
+/**
+ * Rank of a personal paid plan — a higher number is the bigger tier. Decides
+ * whether a switch is an UPGRADE (immediate, prorated) or a DOWNGRADE (at the
+ * period end) in `server/plan-change.ts`.
+ */
+export function personalPlanRank(plan: PersonalPaidPlan): number {
+  return PERSONAL_PAID_PLANS.indexOf(plan);
+}
+
+/**
+ * Display name of the third tier. ⚠ A WORKING NAME (Samuel, 2026-10-22: "I
+ * don't know what we should call it") — every surface reads this constant, so a
+ * rename is this one line. The plan ID `max` is not a display string and does
+ * not move with it.
+ */
+export const MAX_PLAN_NAME = "Max";
+
+/** Display names of the personal plans, for copy that names "the plan in front
+ *  of it" ("Welcome to …", "Upgrade to …"). */
+export const PERSONAL_PLAN_NAMES: Record<"free" | PersonalPaidPlan, string> = {
+  // The free personal plan is "Starter" (Samuel, 2026-10-22), like the workspace one.
+  free: "Starter",
+  pro: "Pro",
+  max: MAX_PLAN_NAME,
+};
 
 /**
  * Thousands separators for a number that renders in copy. Locale-pinned: a bare
@@ -86,7 +125,7 @@ const seatCreditsFeature = (plan: PlanId) =>
  * The personal credits line. Deliberately not "per member": a home space
  * has exactly one member, so the wording would imply a roster that cannot exist.
  */
-const personalCreditsFeature = (tier: "free" | "pro") =>
+const personalCreditsFeature = (tier: "free" | PersonalPaidPlan) =>
   `${planNumber(PERSONAL_MONTHLY_CREDITS[tier])} credits / month`;
 
 /**
@@ -101,7 +140,7 @@ export const WORKSPACE_PLANS: ReadonlyArray<PlanDef> = [
     priceMonthly: "Free",
     priceNote: "",
     features: [
-      "Every feature included — no gates",
+      "Every feature included, no gates",
       "Unlimited members",
       "Unlimited ontology objects while you work solo",
       `Teams of 2+: up to ${planNumber(FREE_MULTI_MEMBER_OBJECT_CAP)} ontology objects`,
@@ -127,7 +166,9 @@ export const WORKSPACE_PLANS: ReadonlyArray<PlanDef> = [
 ];
 
 /**
- * Home-space plans — Free and Pro (2026-09-08, spec §11.1).
+ * Home-space plans — Free, Pro (2026-09-08, spec §11.1) and Max (2026-10-22).
+ * Three cards, cheapest first; the order is the upgrade ladder the plan cards
+ * and `/pricing` render left to right.
  *
  * No member line and no seat wording on either card: a home space has
  * exactly one member (`20260920120000_workspace_kind_personal.sql`), so
@@ -138,11 +179,11 @@ export const WORKSPACE_PLANS: ReadonlyArray<PlanDef> = [
 export const PERSONAL_PLANS: ReadonlyArray<PlanDef> = [
   {
     id: "free",
-    name: "Free",
+    name: "Starter",
     priceMonthly: "Free",
     priceNote: "",
     features: [
-      "Every feature included — no gates",
+      "Every feature included, no gates",
       "Unlimited ontology objects",
       `${FREE_CHATS_WINDOW_DAYS} days of chat history`,
       personalCreditsFeature("free"),
@@ -161,6 +202,18 @@ export const PERSONAL_PLANS: ReadonlyArray<PlanDef> = [
       "Priority support",
     ],
   },
+  {
+    id: "max",
+    name: MAX_PLAN_NAME,
+    priceMonthly: formatMoney(MAX_PRICE),
+    priceNote: "/ month",
+    features: [
+      "Unlimited ontology objects",
+      "Full chat history",
+      personalCreditsFeature("max"),
+      "Priority support",
+    ],
+  },
 ];
 
 /**
@@ -168,8 +221,8 @@ export const PERSONAL_PLANS: ReadonlyArray<PlanDef> = [
  * choose between the two groups.
  *
  * `link` falling to the workspace group is deliberate: an unknown kind must not
- * be offered a checkout that 400s, and `pro` is refused for anything but
- * `home`. An absent kind (a row read before `20260920120000` applied) is
+ * be offered a checkout that 400s, and `pro`/`max` are refused for anything
+ * but `home`. An absent kind (a row read before `20260920120000` applied) is
  * `standard`, the same default `workspaces/types.ts › isStandardWorkspace` takes.
  */
 export function plansForKind(

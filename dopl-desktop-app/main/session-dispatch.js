@@ -378,14 +378,14 @@ const markGap = (s) => { if (s && s.catchUp) s.catchUp.gap = true; };
 
 function feedLiveSession(entry, m, myUserId) {
   // ⚠ THE kind FILTER IS THE LAST WORD ON THIS MACHINE — a non-'message' post reaches no
-  // session at all. Safe only because the server refuses task_* kinds from an agent
+  // session at all. Safe only because the server refuses thread_* kinds from an agent
   // (service-writes.assertLifecycleKindIsServerOwned), so prose can no longer ride in one. What
   // still arrives is a LIFECYCLE marker (a statement about a SESSION, not a person speaking) or
-  // a `task_progress` MILESTONE (feeding those spends one peer turn per milestone, on a stream
+  // a `thread_progress` MILESTONE (feeding those spends one peer turn per milestone, on a stream
   // the product tells agents to post freely). Widening it also un-does the loop brake where a
   // loop is cheapest to start.
   if (!m) return false;
-  const live = sessionEngine.liveOnThread({ channelId: entry.channel.id, taskId: targeting.firstClassTaskId(m) });
+  const live = sessionEngine.liveOnThread({ channelId: entry.channel.id, threadId: targeting.firstClassThreadId(m) });
   // A thread row these returns never hand over gaps every live run but its author (W2; Samuel #4622: milestones too).
   const unhanded = () => { for (const s of live) if (!wroteIt(s, m) && !authoredBySession(s, m)) markGap(s); return false; };
   if (m.kind !== 'message') return unhanded();
@@ -433,7 +433,7 @@ function feedLiveSession(entry, m, myUserId) {
     const wasDormant = dormant(s);
     const ok = sessionEngine.feedInbound({
       channelId: entry.channel.id,
-      taskId: targeting.firstClassTaskId(m),
+      threadId: targeting.firstClassThreadId(m),
       agentId: s.agentId,
       message: m.body,
       seq: m.seq, // the turn's seq — the windowless outbound bridge's thread join
@@ -455,8 +455,8 @@ function feedLiveSession(entry, m, myUserId) {
       // AND, FOR AN AGENT, ITS NAME AND ITS COLOUR KEY — both joined server-side onto the row
       // (`types.ts › ChannelMessage.authorAgentName` / `.authorAgentColor`), so the banner can name
       // `@the-agent` and paint with the colour that agent already wears. ⚠ GATED ON THE KIND, and
-      // the colour rides as the KEY: `lib/agent-colors.ts` is the only place one becomes a `var()`
-      // and this machine does not own the palette.
+      // the colour rides as the KEY: `src/shared/lib/agent-colors.ts` is the only place one becomes
+      // a `var()` and this machine does not own the palette.
       ...(m.authorKind === 'agent' && m.authorAgentName ? { authorAgentName: m.authorAgentName } : {}),
       ...(m.authorKind === 'agent' && m.authorAgentColor ? { authorAgentColor: m.authorAgentColor } : {}),
     });

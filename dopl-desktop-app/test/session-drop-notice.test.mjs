@@ -2,7 +2,7 @@
 // 2026-10-10 before the fix existed:
 //   `viloxuwt` ran 7 minutes, posted NOTHING, parked on turn end, reaped 12h later.
 //   `jsk2zowk` posted a MILESTONE with two tests still failing, parked, reaped 12h later, no DONE.
-// Each wrote one `task_progress` lifecycle marker, which addresses nobody and names no agent, so
+// Each wrote one `thread_progress` lifecycle marker, which addresses nobody and names no agent, so
 // the launcher went on waiting. These pin the two halves of the fix: the REDUCER deciding a park
 // reported nothing (from state alone), and the EXECUTOR's pure text/last-activity helpers.
 //

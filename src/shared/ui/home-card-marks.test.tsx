@@ -7,7 +7,7 @@
  * Both channel rows — /home's card and the workspace picker's 36px line — draw
  * the same three facts, and until Wave 4 the dot was cut twice and the chip was
  * inline markup on one host. Two declarations is how a restyle lands on whichever
- * file the next reader opened, which is the defect `page-action-button.ts` was
+ * file the next reader opened, which is the defect `pill-button.tsx` was
  * extracted to fix.
  *
  * ⚠ **TWO INKS IS NOT TWO IMPLEMENTATIONS.** R-03 keeps the workspace picker's

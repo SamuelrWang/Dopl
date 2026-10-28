@@ -26,7 +26,7 @@ enforced by the filesystem, not by a comment asking people to be careful.
 ## ⚠ A held file may sort BEFORE applied ones
 
 Two of the three held files (`20261110140000`, `20261110150000`) sort before the
-`20261114…` drops released on 2026-09-29; `20261122120000` sorts after every
+`20261114…` drops released on 2026-09-29; `20261124120000` sorts after every
 applied file. Production is not applied with
 `supabase db push` — versions there are stamped at apply time and reconciled by
 migration NAME (see `docs/RELEASE-MCP-V2-2026-09-02.md` §0) — so this only
@@ -50,10 +50,11 @@ git log --all --name-only --pretty=format: -- 'supabase/migrations*' \
   | grep -oE '^[0-9]{14}' | sort -u | tail -5
 ```
 
-Measured 2026-10-12: `20261122120000` was stamped only after that command showed
+Measured 2026-10-12: the file (then `20261122120000`) was stamped only after that command showed
 `20261121120000` already claimed by `channel_member_tally_rpc.sql` on
 `cleanup/c13-tally` and `fix/c13-tally-r` — a collision no test on either branch
-could have reported, because neither branch can read the other.
+could have reported, because neither branch can read the other. Re-stamped
+`20261124120000` on 2026-10-27, when the Device SDK's `20261122200000…700000` landed after it.
 
 ⚠ **A `git log --all` CHECK IS DELIBERATELY NOT A TEST.** CI clones shallow and
 single-branch, so such a test would see no branches and pass vacuously — the
@@ -88,7 +89,7 @@ against production on 2026-09-28. Each file's header lists what it drops and why
 They are independent of each other; release either. After releasing one,
 re-generate `src/shared/supabase/types.ts`.
 
-### Per-channel numbering — `20261122120000`
+### Per-channel numbering — `20261124120000`
 
 **Held by Samuel's ruling, not by an unmet precondition** (2026-10-12): *"write
 them, NEVER apply them."* The only held file here that **adds** rather than
@@ -97,7 +98,7 @@ drops, so it is absent from the drop-completeness list in
 
 | File | Adds | Extra gate before release |
 |---|---|---|
-| `20261122120000_channel_per_channel_numbering.sql` | `channel_messages.channel_seq` (NOT NULL) + `.thread_seq` (nullable), two unique indexes, and `channel_message_insert` allocating both under the advisory lock it already holds | Samuel's word to apply, **and** the five-step release checklist in the file's own header — the `CHANNEL_MESSAGE_COLS` step is the one that breaks page reads if it happens in the wrong order |
+| `20261124120000_channel_per_channel_numbering.sql` | `channel_messages.channel_seq` (NOT NULL) + `.thread_seq` (nullable), two unique indexes, and `channel_message_insert` allocating both under the advisory lock it already holds | Samuel's word to apply, **and** the five-step release checklist in the file's own header — the `CHANNEL_MESSAGE_COLS` step is the one that breaks page reads if it happens in the wrong order |
 
 ⚠ **IT IS A `CREATE OR REPLACE` OF `channel_message_insert`, COPIED FROM
 `20260912120000` §4.** If any migration applied after that one redefines the

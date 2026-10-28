@@ -135,7 +135,7 @@ describe("/home's search field", () => {
     // a query that matches no channel used to empty this column.
     expect(await screen.findByRole("listbox", { name: "Search results" })).toBeInTheDocument();
     expect(screen.getAllByText("Priya Shah").length).toBeGreaterThan(0);
-    expect(screen.getByText("Link out")).toBeInTheDocument();
+    expect(screen.getByText("Invited")).toBeInTheDocument();
     expect(screen.queryByText("No matches")).not.toBeInTheDocument();
   });
 
@@ -157,7 +157,8 @@ describe("/home's search field", () => {
     fireEvent.focus(field);
     fireEvent.change(field, { target: { value: "orchestrator" } });
 
-    fireEvent.click(await screen.findByText("Desktop Orchestrator Protocol"));
+    // By the row: the popup marks the typed word inside the title.
+    fireEvent.click(await findRow("kb-orch"));
     await screen.findByRole("tab", { name: "Knowledge", selected: true });
   });
 

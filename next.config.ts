@@ -2,6 +2,25 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /**
+   * DEV-ONLY, AND IT IS WHY BROWSER-BACK INTO A DEV PAGE CAME BACK DEAD (F-782,
+   * measured 2026-10-16 on Next 16.2.2; the same code is still in 16.4.2).
+   *
+   * With the default `reactDebugChannel: true`, `next dev` keeps React's debug info OUT
+   * of the HTML and streams it over the HMR WebSocket, keyed by the document's request id
+   * (`self.__next_r`). Hydration waits for that stream to close. The server hands each
+   * id's stream out ONCE (`next/dist/server/dev/debug-channel.js ›
+   * connectReactDebugChannelForHtmlRequest` deletes it, and silently returns for an
+   * unknown id). Browser back/forward re-serves the document from DISK CACHE (dev HTML is
+   * `no-cache`, which history navigation skips; the open HMR socket keeps it out of
+   * bfcache), so the replayed page asks for an id already spent, never gets its close
+   * chunk, and never hydrates: every client hook stays at its SSR `static` mode and every
+   * `ssr: false` chunk (and its CSS) never loads — "animations and styling dropped".
+   *
+   * `false` puts the debug info back inline in the RSC payload. Production never had the
+   * channel (it is gated on `__NEXT_DEV_SERVER`), so this changes nothing there.
+   */
+  experimental: { reactDebugChannel: false },
+  /**
    * Expose the Google OAuth client ID to the browser for Google One Tap. The
    * client ID is not a secret (One Tap embeds it in the page), so we alias the
    * existing server-side GOOGLE_CLIENT_ID into the NEXT_PUBLIC_ name the One Tap
@@ -43,9 +62,29 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: "/terms", destination: "/services-agreement", permanent: true },
-      // The docs land on their home page; config redirects run before the proxy, so bare
-      // `/docs` needs no public-route entry (`/docs/` has one).
-      { source: "/docs", destination: "/docs/home", permanent: true },
+      // The docs land on their home page (`docs/content/index.ts › DOCS_HOME`); config redirects
+      // run before the proxy, so bare `/docs` needs no public-route entry (`/docs/` has one).
+      // Temporary: the home moved twice on 2026-10-27, and a 308 is cached by browsers.
+      { source: "/docs", destination: "/docs/home", permanent: false },
+      // Slugs that left the sidebar keep working. Temporary until the structure has settled.
+      { source: "/docs/start-here", destination: "/docs/quickstart", permanent: false },
+      { source: "/docs/use-cases/connect-devices", destination: "/docs/guides/connect-a-device", permanent: false },
+      { source: "/docs/use-cases/routing", destination: "/docs/concepts/context-profiles-and-routing", permanent: false },
+      // Device pages by brand became device CATEGORIES (2026-10-27); each brand is a model on its
+      // category page (`docs/content/pages-categories.ts`).
+      { source: "/docs/use-cases/:intent(show|ask|notify)", destination: "/docs/devices/display-glasses", permanent: false },
+      { source: "/docs/devices/:device(even-realities-g2|mentra)", destination: "/docs/devices/display-glasses", permanent: false },
+      { source: "/docs/devices/:device(meta|meta-ray-ban)", destination: "/docs/devices/audio-glasses", permanent: false },
+      { source: "/docs/devices/:device(google-home|home-assistant)", destination: "/docs/devices/smart-home", permanent: false },
+      { source: "/docs/devices/:device(phone|phone-push|apple-watch)", destination: "/docs/devices/phones", permanent: false },
+      { source: "/docs/devices/:device(desktop|mac-notch)", destination: "/docs/devices/computers", permanent: false },
+      { source: "/docs/devices/cars", destination: "/docs/devices/vehicles", permanent: false },
+      // C10 `doc_url` (`@dopl/contracts/device-sdk › ERROR_DOC_BASE`) points at /docs/errors/<code>.
+      { source: "/docs/errors/:code", destination: "/docs/api-reference/errors", permanent: false },
+      // The API reference's pre-contract pages (2026-10-20) were renamed to the frozen Device
+      // SDK contract (`docs/specs/device-sdk/openapi.yaml`); show/ask/notify are Deliver intents.
+      { source: "/docs/api-reference/:intent(show|ask|notify)", destination: "/docs/api-reference/deliver", permanent: false },
+      { source: "/docs/api-reference/endpoints", destination: "/docs/api-reference/connections", permanent: false },
     ];
   },
   /**

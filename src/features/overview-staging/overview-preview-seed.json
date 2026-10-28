@@ -1,0 +1,54 @@
+{
+  "hosts": [
+    {
+      "device": "Samuel's MacBook Pro",
+      "name": "Samuel's MacBook Pro",
+      "status": "online",
+      "thisComputer": true,
+      "agents": [
+        { "id": "a1", "name": "Release Captain", "channelName": "Dopl", "runtime": "claude", "runningMinutes": 184, "state": "waiting" },
+        { "id": "a2", "name": "Billing Reviewer", "channelName": "Dopl", "runtime": "codex", "runningMinutes": 22, "state": "working" },
+        { "id": "a3", "name": "Landing Copy Fix", "channelName": "Dopl", "runtime": "claude", "runningMinutes": 9, "state": "working" }
+      ]
+    },
+    {
+      "device": "Samuel's Mac Studio",
+      "name": "Samuel's Mac Studio",
+      "status": "away",
+      "agents": [
+        { "id": "a4", "name": "Recruiter", "channelName": "Job Apps", "runtime": "claude", "runningMinutes": 47, "state": "working" }
+      ]
+    }
+  ],
+  "routes": [
+    { "id": "r1", "at": "2026-10-26T14:32:00-07:00", "kind": "Question", "from": "Landing Copy Fix", "summary": "Keep the SDK section or hide it?", "tried": ["Even G2"], "why": "You were wearing your glasses and they answered." },
+    { "id": "r2", "at": "2026-10-26T14:05:00-07:00", "kind": "Decision", "from": "Release Captain", "summary": "Ship 1.43.0 tonight or tomorrow morning?", "tried": ["Even G2", "Samuel's iPhone"], "why": "Glasses didn't answer in 30 seconds, so it moved to your phone." },
+    { "id": "r3", "at": "2026-10-26T13:48:00-07:00", "kind": "Message", "from": "Billing Reviewer", "summary": "October invoices reconciled, 2 credits unmatched", "tried": ["Samuel's MacBook Pro"], "why": "Not urgent, so it waited on your Mac." },
+    { "id": "r4", "at": "2026-10-26T12:10:00-07:00", "kind": "Notice", "from": "Samuel's Mac Studio", "summary": "Mac Studio went to sleep", "tried": ["Samuel's iPhone"], "why": "Your phone was the last device you used." },
+    { "id": "r5", "at": "2026-10-26T11:02:00-07:00", "kind": "Question", "from": "Recruiter", "summary": "Which role list should the outreach start from?", "tried": ["Even G2", "Samuel's iPhone", "Samuel's MacBook Pro"], "why": "Glasses and phone were offline, so it fell back to your Mac." }
+  ],
+  "logs": [
+    { "id": "l1", "at": "2026-10-26T14:32:07-07:00", "device": "Even G2", "level": "info", "event": "Answer received", "detail": "Tapped option 1 for Landing Copy Fix" },
+    { "id": "l2", "at": "2026-10-26T14:31:52-07:00", "device": "Even G2", "level": "info", "event": "Question shown", "detail": "From Landing Copy Fix, 2 options" },
+    { "id": "l3", "at": "2026-10-26T14:30:11-07:00", "device": "Samuel's MacBook Pro", "level": "info", "event": "Agent started", "detail": "Billing Reviewer on Codex" },
+    { "id": "l4", "at": "2026-10-26T14:05:40-07:00", "device": "Samuel's iPhone", "level": "info", "event": "Decision answered", "detail": "Picked Tomorrow morning" },
+    { "id": "l5", "at": "2026-10-26T14:05:31-07:00", "device": "Even G2", "level": "warn", "event": "No answer", "detail": "Timed out after 30 seconds, handed to phone" },
+    { "id": "l6", "at": "2026-10-26T13:20:44-07:00", "device": "Samuel's MacBook Pro", "level": "warn", "event": "Permission asked", "detail": "Release Captain wants to post in #Dopl" },
+    { "id": "l7", "at": "2026-10-26T12:10:03-07:00", "device": "Samuel's Mac Studio", "level": "warn", "event": "Lost connection", "detail": "Heartbeat missed twice" },
+    { "id": "l8", "at": "2026-10-26T11:02:15-07:00", "device": "Samuel's iPhone", "level": "error", "event": "Delivery failed", "detail": "Phone offline, retried twice" },
+    { "id": "l9", "at": "2026-10-26T10:41:56-07:00", "device": "Even G2", "level": "info", "event": "Paired", "detail": "Connected through Samuel's MacBook Pro" },
+    { "id": "l10", "at": "2026-10-26T09:15:00-07:00", "device": "Samuel's MacBook Pro", "level": "info", "event": "Updated", "detail": "Dopl 1.42.0 to 1.43.0" }
+  ],
+  "reachOrder": ["Even G2", "Samuel's iPhone", "Samuel's MacBook Pro"],
+  "reachWaitSeconds": 30,
+  "devices": [
+    { "device": "Even G2", "kind": "glasses", "model": "Even Realities G2", "through": "Samuel's MacBook Pro", "inUse": true, "battery": 64 },
+    { "device": "Samuel's iPhone", "kind": "phone", "model": "iPhone 17 Pro", "through": "Samuel's MacBook Pro", "battery": 81, "status": "away" },
+    { "device": "Samuel's Mac Studio", "kind": "computer", "model": "Mac Studio · Dopl 1.42.0", "status": "away" }
+  ],
+  "addDevice": { "pairingCode": "K7Q2M9" },
+  "needs": [
+    { "id": "n1", "kind": "approval", "ask": "Wants to post release notes in #Dopl", "agent": "Release Captain", "host": "Samuel's MacBook Pro", "channelName": "Dopl", "at": "2026-10-26T13:20:00-07:00" },
+    { "id": "n2", "kind": "question", "ask": "Which role list should the outreach start from?", "agent": "Recruiter", "host": "Samuel's Mac Studio", "channelName": "Job Apps", "at": "2026-10-26T11:02:00-07:00" }
+  ]
+}

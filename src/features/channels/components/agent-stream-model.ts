@@ -34,34 +34,22 @@ import type { PostDestination } from "./agents-model";
 import type { ChannelConsentRequest, ChannelMessage } from "../types";
 
 /**
- * ⚠ THE LANE VOCABULARY LIVES IN `agent-stream-lanes.ts` SINCE 2026-08-31 (§1),
- * and this file stays its import path of record — {@link StreamLane} and
- * {@link frameLane} are re-exported here, so no importer changed. The seam: that
- * file moves when the DESKTOP's `kind` / `lane` vocabulary moves, this one when
- * the stream's own arithmetic does (the echo dedupe, the held-draft join, the
- * TTL, the grouping) — and neither has ever needed the other's reason.
+ * The lane vocabulary lives in `agent-stream-lanes.ts` and {@link frameLane} is re-exported here.
+ * The seam: that file moves when the DESKTOP's `kind` / `lane` vocabulary moves, this one when the
+ * stream's own arithmetic does (the echo dedupe, the held-draft join, the TTL, the grouping).
  */
-export { frameLane, type StreamLane } from "./agent-stream-lanes";
-/* ⚠ VALUE-ONLY SINCE THE ROW SHAPE MOVED (2026-10-10): the type is still re-exported above, for
-   every importer that reads it from this path, but `StreamItem` is where it was USED here and that
-   now lives in `agent-stream-item.ts`. */
+export { frameLane } from "./agent-stream-lanes";
 import { frameLane } from "./agent-stream-lanes";
-import { agentColorOrNull } from "../lib/agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 
 /**
  * ⚠ THE TOOL-RUN GROUPING LIVES IN `agent-stream-groups.ts`, and this file stays its import
- * path of record — {@link StreamGroup},
- * {@link groupStreamItems}, `toolUses` and {@link shortToolName} are re-exported here, so
- * no importer changed. The seam: that file moves when the RUN COUNT's arithmetic moves
+ * path of record — {@link StreamGroup}, {@link groupStreamItems} and {@link shortToolName} are
+ * re-exported here. The seam: that file moves when the RUN COUNT's arithmetic moves
  * (what main stamped vs what this side received past the ring's bounds), this one when the
  * stream's assembly does — the echo dedupe, the held-draft join, the TTL.
  */
-export {
-  groupStreamItems,
-  toolUses,
-  shortToolName,
-  type StreamGroup,
-} from "./agent-stream-groups";
+export { groupStreamItems, shortToolName, type StreamGroup } from "./agent-stream-groups";
 /**
  * ⚠ THE ROW SHAPE LIVES IN `agent-stream-item.ts`, and this file stays its import path of
  * record — {@link StreamItem} is re-exported here, so no
@@ -210,8 +198,8 @@ function epoch(iso: string): number {
  *
  *   1. **The landing check read the AGENT-FILTERED lane.** `sent` comes from
  *      `agent-panel.tsx › agentSentMessages`, which requires
- *      `m.metadata.taskId === taskId`. **A channel-level post carries no
- *      `taskId`** — the measured row's metadata was
+ *      `m.metadata.threadId === threadId`. **A channel-level post carries no
+ *      `threadId`** — the measured row's metadata was
  *      `{intent, runtime, summary, session_id}` and nothing else — so the
  *      delivered row was filtered out before the join could see it, on every
  *      threadless post there is. The join itself was never wrong: the stored
@@ -245,7 +233,7 @@ export function buildAgentStream({
    * ⚠ IT IS UNFILTERED ON PURPOSE. `sent` is agent-scoped so one agent's box
    * never shows a sibling's words (F-251); this answers a different question —
    * *did these bytes reach the channel at all* — and the agent filter is
-   * actively wrong for it, because a threadless post carries no `taskId` to be
+   * actively wrong for it, because a threadless post carries no `threadId` to be
    * filtered ON. Defaults to `sent` so a caller that has not threaded it yet
    * behaves exactly as before.
    */
@@ -294,7 +282,7 @@ export function buildAgentStream({
     // so the echo drops rather than doubling.
     if (lane === "sent" && !held && posted.has(echo)) return;
     // ⚠ A FORMERLY-HELD FRAME IS NOT DROPPED BY `hasTranscript`. Its row exists
-    // but `agentSentMessages` could not attribute it (no `taskId` on a threadless
+    // but `agentSentMessages` could not attribute it (no `threadId` on a threadless
     // post), so dropping it would delete the operator's only view of a post they
     // just authorized. It renders as the ordinary POSTED face instead.
     const wasHeld = lane === "sent" && framePending(entry);

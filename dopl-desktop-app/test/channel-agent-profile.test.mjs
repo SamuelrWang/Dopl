@@ -53,7 +53,7 @@ const minus = (a, b) => a.filter((n) => b.indexOf(n) === -1).sort();
 // ── 1. THE CLAUDE LANE — the wire, by name, both directions ──────────────────────────────────
 
 test("SDK: `channel_agent` denies the whole shell BY NAME, on the list the gate reads first", () => {
-  // ⚠ `disallowedTools` is `grantDecision` step 1 — the one verdict no task grant and no
+  // ⚠ `disallowedTools` is `grantDecision` step 1 — the one verdict no thread grant and no
   // `bypass` mode can open. A shell name absent from HERE is a shell an Axis-A floor can reopen.
   const cfg = CLAUDE.buildSessionToolConfig("channel_agent");
   for (const name of SHELL) {

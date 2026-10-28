@@ -3,7 +3,7 @@ import * as repo from "./repository";
 
 /**
  * WHAT LEAVING THE WORKSPACE COSTS INSIDE CHANNELS — the sweep half of C-20.
- * (The ADDRESSING half is `postMessage` / `createTask` asserting
+ * (The ADDRESSING half is `postMessage` / `createThread` asserting
  * `isActiveWorkspaceMember` and failing closed.)
  *
  * ⚠ Why the sweep exists — AND WHY THE REASON CHANGED. It was the implicit
@@ -45,9 +45,9 @@ import * as repo from "./repository";
  * its roster intact and self-heals on rejoin; interrupted the other way, you get
  * exactly the one-member DM this exists to prevent.
  *
- * ⚠ Deliberately does NOT sweep `channel_tasks`. A thread whose creator or
+ * ⚠ Deliberately does NOT sweep `channel_threads`. A thread whose creator or
  * target left is left alone: addressing already fails closed. ⚠ **This bullet
- * used to add "and the survivor keeps `closeTask`" — a way to settle the
+ * used to add "and the survivor keeps `closeThread`" — a way to settle the
  * stranded exchange. Thread closing was removed (wiring plan Phase 4,
  * 2026-08-18) and the survivor now has NOTHING**, which makes that half of C-20
  * slightly worse rather than merely open. Posting a system note would still mean

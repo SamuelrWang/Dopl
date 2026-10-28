@@ -957,3 +957,180 @@ body.legal-active {
     padding: 12px;
   }
 }
+
+/* ── Status badges (Live / Beta / Coming soon): beside the H1, on non-live sidebar rows, in
+   device support grids and capability cards. ─────────────────────────── */
+.docs-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: var(--grotesk);
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+  vertical-align: middle;
+  color: var(--text-secondary);
+}
+.docs-status[data-status="live"] {
+  border-color: transparent;
+  background: var(--surface-raised-2);
+  color: var(--ink);
+}
+.docs-head h1 .docs-status {
+  margin-left: 8px;
+}
+.docs-nav .docs-status {
+  margin-left: 8px;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* ── Overview "how it works" chain ─────────────────────────────────── */
+.docs-flow {
+  display: flex;
+  align-items: stretch;
+  margin: 16px 0 24px;
+}
+.docs-flow-step {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+}
+.docs-flow-arrow {
+  flex: none;
+  margin: 0 8px;
+  color: var(--muted);
+}
+.docs-flow-node {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  align-self: stretch;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.docs-flow-title {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.docs-flow-detail {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-secondary);
+}
+@media (max-width: 720px) {
+  .docs-flow,
+  .docs-flow-step {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .docs-flow-arrow {
+    align-self: center;
+    margin: 6px 0;
+    transform: rotate(90deg);
+  }
+}
+
+/* ── Device categories: the model grid and the one capability card ─── */
+.docs-support-none {
+  font-size: 13px;
+  color: var(--muted);
+}
+.docs-cap {
+  margin: 24px 0 32px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  scroll-margin-top: calc(var(--docs-topbar-h) + 16px);
+}
+.docs-cap-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 8px;
+}
+.docs-prose .docs-cap-head h3 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+}
+.docs-cap-head code {
+  font-family: var(--docs-mono);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.docs-cap-tier {
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--text-secondary);
+}
+.docs-cap-facts {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 8px 16px;
+  margin: 16px 0;
+  font-size: 14px;
+  line-height: 22px;
+}
+.docs-cap-facts dt {
+  font-weight: 600;
+}
+.docs-cap-facts dd {
+  margin: 0;
+  color: var(--text-secondary);
+}
+.docs-cap-facts ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.docs-prose .docs-cap-label {
+  margin: 16px 0 8px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.docs-cap-support {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  line-height: 22px;
+}
+.docs-cap-support li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.docs-cap-model {
+  font-weight: 600;
+}
+.docs-cap-note {
+  flex-basis: 100%;
+  color: var(--text-secondary);
+}
+@media (max-width: 720px) {
+  .docs-cap {
+    padding: 16px;
+  }
+  .docs-cap-facts {
+    grid-template-columns: 1fr;
+  }
+}

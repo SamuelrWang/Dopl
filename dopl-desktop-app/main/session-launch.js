@@ -60,7 +60,7 @@ async function launch(a) {
   const atCap = () => sessionWindowless.liveCount(deps.sessions) >= sessionWindowless.MAX_CONCURRENT_SESSIONS;
   // Mint the instance id at the one funnel: a caller may hand one in (a resume) but not invent a shape.
   const agentId = isAgentId(a.agentId) ? a.agentId : newAgentId();
-  const slot = { channelId: a.channelId, taskId: a.taskId, agentId: agentId };
+  const slot = { channelId: a.channelId, threadId: a.threadId, agentId: agentId };
   const key = store.slotKey(slot);
   // No `busy` law: several agents per thread is normal; the concurrency ceiling bounds the machine. `trigger.js`
   // still handles `busy` (the post-await re-check below).
@@ -167,7 +167,7 @@ async function launch(a) {
     key,
     agentId,
     channelId: a.channelId,
-    taskId: a.taskId,
+    threadId: a.threadId,
     workspaceId: a.workspaceId,
     side: a.side,
     profile: a.toolProfile,
@@ -217,7 +217,7 @@ async function launch(a) {
   // directive), and only once a session really exists — after the two skip returns above, so a
   // refused launch never claims one started.
   //
-  // ⚠ WHY NOT THE CHANNEL MESSAGE: `task_started` is dropped at `targeting.js › classify` by the
+  // ⚠ WHY NOT THE CHANNEL MESSAGE: `thread_started` is dropped at `targeting.js › classify` by the
   // `kind !== 'message'` guard and always was, which is why this needed a new emit rather than a
   // new arm. It is a LOCAL fact about this machine's spawns, so a local emit is also the honest
   // place for it.

@@ -125,7 +125,7 @@ function reported(
   return {
     session_key: sessionKey,
     channel_id: CH,
-    task_id: null,
+    thread_id: null,
     name: "Agent",
     state: "working",
     channel_name: null,
@@ -146,6 +146,7 @@ function reported(
     last_wake_seq: null,
     last_wake_at: null,
     display_name: null,
+    runtime: null,
     identity_name: null,
     color,
     color_shared: false,

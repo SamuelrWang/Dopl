@@ -1,10 +1,11 @@
-import { Info } from "lucide-react";
+import { ArrowRight, Info } from "lucide-react";
 import Link from "next/link";
 
-import { docHref, slugify, type DocBlock, type DocParam, type ListItem } from "../content";
+import { capabilityAnchor, docHref, slugify, type CapabilityCard, type DocBlock, type DocParam, type ListItem } from "../content";
 import { DOC_ICONS } from "./docs-icons";
 import { CodeGroup, DocsConnect, PromptWindow } from "./docs-interactive";
 import { RichText } from "./rich-text";
+import { StatusBadge } from "./status-badge";
 
 export function DocBlocks({ blocks }: { blocks: DocBlock[] }) {
   return (
@@ -42,6 +43,59 @@ function Param({ p }: { p: DocParam }) {
         <RichText text={p.description} />
       </p>
     </div>
+  );
+}
+
+/**
+ * The one capability card every device category uses: title with its capability id and tier, what it
+ * does, limits, permission, the call (TypeScript and cURL), an example response, and model support.
+ */
+function Capability({ card: c }: { card: CapabilityCard }) {
+  return (
+    <section className="docs-cap" id={capabilityAnchor(c)}>
+      <header className="docs-cap-head">
+        <h3>{c.title}</h3>
+        <code>{c.capability}</code>
+        <span className="docs-cap-tier">{c.tier}</span>
+      </header>
+      <p>
+        <RichText text={c.what} />
+      </p>
+      <dl className="docs-cap-facts">
+        <dt>Limits</dt>
+        <dd>
+          <ul>
+            {c.limits.map((l) => (
+              <li key={l}>
+                <RichText text={l} />
+              </li>
+            ))}
+          </ul>
+        </dd>
+        <dt>Permission</dt>
+        <dd>
+          <RichText text={c.permission} />
+        </dd>
+      </dl>
+      <p className="docs-cap-label">Call</p>
+      <CodeGroup tabs={c.code} />
+      <p className="docs-cap-label">Example response</p>
+      <CodeGroup tabs={c.response} />
+      <p className="docs-cap-label">Supported on</p>
+      <ul className="docs-cap-support">
+        {c.support.map((m) => (
+          <li key={m.model}>
+            <span className="docs-cap-model">{m.model}</span>
+            <StatusBadge status={m.status} />
+            {m.note && (
+              <span className="docs-cap-note">
+                <RichText text={m.note} />
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -172,31 +226,49 @@ function Block({ block: b }: { block: DocBlock }) {
           </table>
         </div>
       );
-    case "endpoints":
+    case "support":
       return (
         <div className="docs-table-wrap">
-          <table className="docs-table docs-table-endpoints">
+          <table className="docs-table docs-support">
             <thead>
               <tr>
-                <th>{b.label}</th>
-                <th aria-hidden />
+                <th>Capability</th>
+                {b.models.map((m) => (
+                  <th key={m}>{m}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {b.rows.map((r) => (
-                <tr key={r.path}>
+                <tr key={r.capability}>
                   <td>
-                    <Link href={docHref(r.href)}>
-                      <code>
-                        {r.method} {r.path}
-                      </code>
-                    </Link>
+                    <code>{r.capability}</code>
                   </td>
-                  <td>{r.description}</td>
+                  {r.cells.map((cell, i) => (
+                    <td key={i}>
+                      {cell ? <StatusBadge status={cell} /> : <span className="docs-support-none">Not supported</span>}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      );
+    case "capability":
+      return <Capability card={b} />;
+    case "flow":
+      return (
+        <div className="docs-flow" role="list" aria-label={b.label}>
+          {b.items.map((it, i) => (
+            <div key={it.title} className="docs-flow-step" role="listitem">
+              {i > 0 && <ArrowRight size={16} strokeWidth={1.8} className="docs-flow-arrow" aria-hidden />}
+              <div className="docs-flow-node">
+                <span className="docs-flow-title">{it.title}</span>
+                <span className="docs-flow-detail">{it.detail}</span>
+              </div>
+            </div>
+          ))}
         </div>
       );
     case "changelog":

@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { AGENT_COLOR_KEYS } from "../lib/agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 import { pickAgentColor } from "../lib/agent-color-pick";
 import { resolveReportedColors, type ChannelColorClaims } from "./session-colors";
 import { withoutClaimedColors } from "./repository-session-colors";

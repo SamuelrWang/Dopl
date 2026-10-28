@@ -1,4 +1,4 @@
-// Channels listener — channel message posting (task-lifecycle events + replies).
+// Channels listener — channel message posting (thread-lifecycle events + replies).
 //
 // SPLIT NOTE (Round B): extracted from trigger.js so the consent→spawn→reply
 // pipeline and the async consent resolvers can share ONE set of POST helpers
@@ -21,13 +21,13 @@ const io = require('./listener-io');
 const consent = require('./consent');
 const { diag } = require('./diag');
 
-// ── Task lifecycle events (Feature 4) ────────────────────────────────────────
-// task_started/task_finished/task_failed are just channel_messages with
-// kind=task_* and author_kind=agent, grouped by a per-spawn metadata.taskId.
-// ⚠ The web renders the three task_* LIFECYCLE kinds as NOTHING since wiring plan
+// ── Thread lifecycle events (Feature 4) ────────────────────────────────────────
+// thread_started/thread_finished/thread_failed are just channel_messages with
+// kind=thread_* and author_kind=agent, grouped by a per-spawn metadata.threadId.
+// ⚠ The web renders the three thread_* LIFECYCLE kinds as NOTHING since wiring plan
 // Phase 5 (`channels/components/view-model.ts › isLifecycleEcho`); the surface that drew them,
 // components/activity-event-row.tsx, was deleted at the Phase 12 cutover. The calm
-// `task_progress` milestone below is the one that still renders. Best-effort, single attempt (non-critical
+// `thread_progress` milestone below is the one that still renders. Best-effort, single attempt (non-critical
 // telemetry); the deterministic clientMsgId lets the server dedupe on a crash
 // replay. A generic body only — never the reply text or any error detail.
 //
@@ -55,13 +55,13 @@ const { diag } = require('./diag');
 //
 // Returns true only on a confirmed post, so a caller that reports its own outcome
 // can say "posted" or "post failed" honestly. Still best-effort: it never throws.
-async function postTaskEvent(entry, m, kind, taskId, extra, bodyText, opts) {
+async function postThreadEvent(entry, m, kind, threadId, extra, bodyText, opts) {
   const bodies = {
-    task_started: 'Started working on this request.',
-    task_finished: 'Finished this request.',
-    task_failed: 'Could not complete this request.',
+    thread_started: 'Started working on this request.',
+    thread_finished: 'Finished this request.',
+    thread_failed: 'Could not complete this request.',
   };
-  const metadata = { taskId, ...(extra || {}) };
+  const metadata = { threadId, ...(extra || {}) };
   const body = {
     body: bodyText || bodies[kind] || '',
     kind,
@@ -78,10 +78,10 @@ async function postTaskEvent(entry, m, kind, taskId, extra, bodyText, opts) {
       timeoutMs: 15000,
       ...(opts && opts.sessionId ? { sessionId: opts.sessionId } : {}),
     });
-    diag('task event', kind, res.ok ? 'ok' : `failed ${res.status}`, entry.channel.id.slice(0, 8));
+    diag('thread event', kind, res.ok ? 'ok' : `failed ${res.status}`, entry.channel.id.slice(0, 8));
     return res.ok === true;
   } catch (err) {
-    diag('task event', kind, 'error', err && err.message);
+    diag('thread event', kind, 'error', err && err.message);
     return false;
   }
 }
@@ -92,9 +92,9 @@ async function postTaskEvent(entry, m, kind, taskId, extra, bodyText, opts) {
 // a longer one 400s on the first attempt and, being a 4xx, is never retried.
 //
 // `metadata` (optional) rides through to `channel_messages.metadata` (jsonb).
-// The agent's ACTUAL reply carries `{ taskId }` so the web thread can group it
-// into the same session card as its task_started/finished events. Reserved keys
-// (to_user_id/summary) are stripped server-side, so taskId is the only key we set
+// The agent's ACTUAL reply carries `{ threadId }` so the web thread can group it
+// into the same session card as its thread_started/finished events. Reserved keys
+// (to_user_id/summary) are stripped server-side, so threadId is the only key we set
 // here.
 //
 // P1-5 (2026-08-04) — THIS COMMENT USED TO CARRY A FALSE INVARIANT, and the false
@@ -146,7 +146,7 @@ async function postCourtesy(entry, m, text) {
 // ── THE DROP NOTICE ──────────────────────────────────────────────────────────
 //
 // A REAL MESSAGE saying an agent stopped without reporting (`session-drop-notice.js`). It exists
-// because the lifecycle marker beside it is not a report: `task_progress` renders as a status
+// because the lifecycle marker beside it is not a report: `thread_progress` renders as a status
 // line, addresses nobody, and carries no agent name or cause — so a launcher waiting on a DONE
 // learned nothing when the agent parked silent or was reaped at the 12h bound.
 //
@@ -158,7 +158,7 @@ async function postCourtesy(entry, m, text) {
 // anywhere. The operator's own banner (`agent_dropped`) is the half that interrupts somebody.
 //
 // ⚠ `sessionId` IS WHAT MAKES IT ATTRIBUTABLE — the slot key, on the header, never in metadata
-// (see postTaskEvent's note). Without it the row reads "Agent" and names nobody, which is the
+// (see postThreadEvent's note). Without it the row reads "Agent" and names nobody, which is the
 // defect this notice was written to fix.
 //
 // `clientMsgId` is the caller's, keyed per (session cycle, code), so the bounded retry below and
@@ -172,7 +172,7 @@ async function postDropNotice(entry, text, opts) {
     intent: 'chat',
     clientMsgId: o.clientMsgId,
     ...(o.summary ? { summary: o.summary } : {}),
-    ...(o.taskId ? { metadata: { taskId: o.taskId } } : {}),
+    ...(o.threadId ? { metadata: { threadId: o.threadId } } : {}),
   }, o.sessionId);
 }
 
@@ -221,4 +221,4 @@ async function postWithRetry(entry, body, sessionId) {
 // — so removing it closes one of those without a separate edit. A new local notice belongs on the
 // route, where the operator's switch and the surface choice both live.
 
-module.exports = { postTaskEvent, postResult, postCourtesy, postDropNotice };
+module.exports = { postThreadEvent, postResult, postCourtesy, postDropNotice };

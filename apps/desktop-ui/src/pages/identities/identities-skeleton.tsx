@@ -17,14 +17,14 @@ export function IdentitiesPageSkeleton({
 }) {
   return (
     <SkeletonSurface label={label} className="page-float flex flex-col antialiased">
-      <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border-default px-4">
+      <div className="flex h-13 shrink-0 items-center gap-3 border-b border-border-default px-4">
         <SkeletonLine w={92} h={18} />
         <span className="flex-1" />
-        <Skeleton className="h-8 w-[126px] rounded-lg" />
+        <Skeleton className="h-8 w-31.5 rounded-lg" />
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden px-6 py-5">
-        <div className="mx-auto flex max-w-[960px] flex-col gap-3">
+        <div className="mx-auto flex max-w-240 flex-col gap-3">
           <IdentityPanelGhost cards={3} />
           <IdentityPanelGhost cards={2} />
           <IdentityPanelGhost cards={4} />

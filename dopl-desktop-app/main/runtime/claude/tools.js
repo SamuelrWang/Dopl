@@ -64,7 +64,7 @@ const { GRANULAR_READ_TOOLS, GRANULAR_SAFE_TOOLS, withGranularOffer } = doplTool
 // the gate where grantDecision op-scopes it.
 //
 // ⚠ AND `disallowedTools` IS NOT MERELY A LAUNCH FLAG. `grantDecision` step 1 reads it as the
-// GATE's own first check — the one verdict no task grant and no `bypass` can open — which is why
+// GATE's own first check — the one verdict no thread grant and no `bypass` can open — which is why
 // `descriptor.containment.profiles.<p>.denyList` is LAUNCH-BLOCKING when null rather than a
 // hidden control: a restricted profile with no list in this runtime's vocabulary is a restricted
 // profile with no enforcement at all.
@@ -136,7 +136,7 @@ function buildSessionToolConfig(profile) {
   //
   // ⚠ WHY BOTH HALVES AND NOT JUST THE DENY. `builtinTools` (L0) is what the model is OFFERED —
   // a name absent from it is never in context — and `disallowedTools` is what `grantDecision`
-  // step 1 REFUSES, the one verdict no task grant and no `bypass` mode can open. Removing the
+  // step 1 REFUSES, the one verdict no thread grant and no `bypass` mode can open. Removing the
   // shell from the offer alone would leave it openable by a future bound; denying it alone would
   // leave three tool schemas in every turn's context that can only ever be refused. Both.
   //
@@ -324,7 +324,7 @@ function toolModeAllows(mode, toolName) {
 // profile it was launched with, and nothing else — no tool posture can send a message.
 //
 // ⚠ AND IT IS APPLIED TO THE READ, NOT TO STATE. The message floor has two state-writing lanes
-// (`channel-prefs.js › windowlessMessageMode`, `session-reopen.js › setModeByTask`); this one is
+// (`channel-prefs.js › windowlessMessageMode`, `session-reopen.js › setModeByThread`); this one is
 // applied once at decision time in `session-io.js › grantArgs`, which is the single read of both
 // axes. The trade is written out there.
 function floorWindowlessTool(mode) {

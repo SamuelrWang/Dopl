@@ -1,4 +1,4 @@
-import { agentColorOrNull } from "../lib/agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 import type {
   AgentColorKey,
   ChannelConsentRequest,
@@ -48,7 +48,7 @@ export type SessionStateRow = {
   workspace_id: string;
   user_id: string;
   session_key: string;
-  task_id: string | null;
+  thread_id: string | null;
   name: string;
   state: string;
   channel_name: string | null;
@@ -82,6 +82,8 @@ export type SessionStateRow = {
   display_name: string | null;
   /** Peer-visible by design (every member draws it); TEXT, so `narrowSessionColor` narrows it. */
   color: string | null;
+  /** Peer-visible: the runtime badge. NULL = a desktop older than the field. */
+  runtime: string | null;
 };
 
 /**
@@ -132,7 +134,7 @@ export const OPERATOR_ONLY_SESSION_FIELDS = [
 export type SessionStateUpsert = {
   session_key: string;
   channel_id: string;
-  task_id: string | null;
+  thread_id: string | null;
   name: string;
   state: string;
   channel_name: string | null;
@@ -157,6 +159,7 @@ export type SessionStateUpsert = {
   identity_name: string | null;
   /** The one field the server may overrule (`session-colors.ts › resolveReportedColors`). */
   color: AgentColorKey | null;
+  runtime: string | null;
   /**
    * SERVER-SET, never reported: this session REUSES a key another live session in the channel
    * holds, because every key was taken (2026-10-08). Exempts the row from the per-channel unique
@@ -208,7 +211,7 @@ export function mapPeerSessionStateRow(
 ): ChannelSessionState {
   return {
     channelId: row.channel_id,
-    threadId: row.task_id,
+    threadId: row.thread_id,
     name: row.name,
     // A cast, not a check: the render's closed-set test (`channel-session-render.ts › formatSessionLine`) holds.
     state: row.state as SessionPillState,
@@ -220,6 +223,7 @@ export function mapPeerSessionStateRow(
     displayName: row.display_name ?? null,
     // Peer-visible, and narrowed rather than passed through.
     color: narrowSessionColor(row.color),
+    runtime: row.runtime ?? null,
     updatedAt: row.updated_at,
   };
 }

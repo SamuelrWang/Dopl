@@ -1,14 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Plus } from "lucide-react";
+import { Network } from "lucide-react";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
-import { cn } from "@/shared/lib/utils";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { CreateButton, pillButton } from "@/shared/ui/pill-button";
+import { InPlaceDescription } from "@/shared/ui/in-place-fields";
 import { pendingRow } from "@/shared/ui/pending";
-// The app's 36px black pill; `bits.tsx › TAB_ACTION` is its only declaration in
-// `src` (/home's `panel-buttons.tsx › PAGE_ACTION_BTN` is the desktop-ui twin).
-import { TAB_ACTION } from "@/features/channels/components/bits";
 import { useOntology } from "../hooks/use-ontology";
 import {
   useRememberOntology,
@@ -17,7 +16,7 @@ import {
 } from "../hooks/use-last-opened";
 import { useObjectDraft } from "../hooks/use-object-draft";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
-import { BoardDisplayMenu, BoardSettingsMenu, DescriptionField, NameField } from "./board-header-bits";
+import { BoardDisplayMenu, BoardSettingsMenu, NameField } from "./board-header-bits";
 import { CapNotice } from "./cap-notice";
 import { OntologySwitcher, ontologySwitcherEntries } from "./ontology-switcher";
 import { DeleteOntologyDialog } from "./delete-ontology-dialog";
@@ -315,31 +314,27 @@ export function OntologyView({
     // make an unrelated ontology.
     return (
       <Frame>
-        <p className="m-auto text-lead text-text-secondary">
-          This ontology is no longer here.
-        </p>
+        <EmptyState icon={Network} title="This ontology is no longer here." />
       </Frame>
     );
   }
   if (graph.ontologies.length === 0) {
     return (
       <Frame>
-        <div className="m-auto flex flex-col items-center gap-3">
-          <p className="text-lead text-text-secondary">
-            {canEdit
+        <EmptyState
+          icon={Network}
+          title={
+            canEdit
               ? "No ontology yet — create your first."
-              : "No ontology yet — a workspace member can create the first one."}
-          </p>
+              : "No ontology yet — a workspace member can create the first one."
+          }
+        >
           {canEdit && (
-            <button
-              type="button"
-              onClick={handleCreateOntology}
-              className="auth-btn-3d rounded-lg px-4 py-2 text-lead font-semibold text-white"
-            >
+            <button type="button" onClick={handleCreateOntology} className={pillButton("ink", "lg")}>
               New ontology
             </button>
           )}
-        </div>
+        </EmptyState>
       </Frame>
     );
   }
@@ -348,13 +343,9 @@ export function OntologyView({
   return (
     <OntologyResourcesProvider workspaceId={workspaceId} graph={graph}>
       <Frame>
-        {/* The header sits on the page's own white panel — no surface of its own
-            here (2026-09-10: no double panel). The board below wears the dotted
-            grid — `kanban-board.tsx`. */}
-        <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-3 py-2">
-          {/* The ontology's name IS the picker (2026-09-10); while renaming it is
-              the kit's underline field in that slot, swapped rather than
-              decorated, so the chevron goes with the trigger. */}
+        {/* On the page's own white panel: name picker, quiet description, then the 36px
+            display pill, gear and ink "+ Object". */}
+        <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-4 py-3">
           {renaming ? (
             <NameField
               name={ontology.name}
@@ -373,10 +364,11 @@ export function OntologyView({
               onCreate={onCreateOntology ?? handleCreateOntology}
             />
           )}
-          {/* Inert until ontology is real: an edit on a provisional row would
+          {/* Inert until the ontology is real: an edit on a provisional row would
               debounce a PATCH at an id the server has never seen. */}
-          <div {...pendingRow(ontologyPending, "flex min-w-0 flex-1 items-center")}>
-            <DescriptionField
+          <div {...pendingRow(ontologyPending, "mx-2 flex min-w-0 flex-1 items-center")}>
+            <InPlaceDescription
+              className="flex-1"
               value={ontology.purpose}
               onChange={(purpose) =>
                 dispatch({
@@ -407,13 +399,9 @@ export function OntologyView({
             />
           )}
           {canEdit && (
-            <button
-              type="button"
-              onClick={handleNewObject}
-              {...pendingRow(ontologyPending, cn(TAB_ACTION, "gap-1.5"))}
-            >
-              <Plus size={13} aria-hidden="true" /> Object
-            </button>
+            <CreateButton disabled={ontologyPending} onClick={handleNewObject}>
+              Object
+            </CreateButton>
           )}
         </div>
 

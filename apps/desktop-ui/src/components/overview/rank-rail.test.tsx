@@ -17,13 +17,9 @@ import {
 } from "./rank-rail";
 
 /**
- * ONE RAIL RECIPE, ONE FALLBACK PER NAME.
- *
- * Both Overviews kept private, byte-identical copies of these four rails and of
- * `RailsGhost` after wave 8 extracted the card and the bar; and three
- * `EMPTY_*` names each resolved to a DIFFERENT frozen array depending on the
- * import specifier. Source pins, because a divergence is a second declaration —
- * it renders fine and no render test can see it.
+ * ONE RAIL RECIPE, ONE FALLBACK PER NAME. Three `EMPTY_*` names once resolved to a DIFFERENT
+ * frozen array depending on the import specifier. Source pins, because a divergence is a second
+ * declaration — it renders fine and no render test can see it.
  */
 
 const file = (rel: string) =>
@@ -36,7 +32,9 @@ const code = (rel: string) =>
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/^\s*\/\/.*$/gm, "");
 
-const HOME_PANELS = file("../../pages/home/overview-panels.tsx");
+const HOME_LEDGER = file(
+  "../../../../../src/features/home/components/overview/overview-ledger.tsx"
+);
 const WORKSPACE_RAILS = file("../../pages/overview/usage-rails.tsx");
 const HOME_TYPES = file("../../../../../src/features/home/overview-types.ts");
 const WORKSPACE_TYPES = file("../../../../../src/features/workspaces/types.ts");
@@ -51,34 +49,23 @@ const RAILS = [
 
 afterEach(cleanup);
 
-describe("the rails both Overviews draw", () => {
-  it("is ONE declaration — neither page declares a rail of its own", () => {
-    for (const [face, source] of [
-      ["/home", HOME_PANELS],
-      ["workspace", WORKSPACE_RAILS],
-    ] as const) {
-      for (const rail of RAILS) {
-        expect(
-          { face, rail, declared: new RegExp(`function ${rail}\\b`).test(source) },
-          `${face} re-declared ${rail} instead of importing it`
-        ).toEqual({ face, rail, declared: false });
-        expect(source).toContain(rail);
-      }
-      expect(source).toContain('from "#/components/overview/rank-rail"');
+describe("the workspace Overview's rails", () => {
+  it("is ONE declaration — the page declares no rail of its own", () => {
+    for (const rail of RAILS) {
+      expect(new RegExp(`function ${rail}\\b`).test(WORKSPACE_RAILS), rail).toBe(false);
+      expect(WORKSPACE_RAILS).toContain(rail);
     }
+    expect(WORKSPACE_RAILS).toContain('from "#/components/overview/rank-rail"');
   });
 
   it("keeps the channel ID KEY at the caller, never as a flag on the rail", () => {
-    // `workspaceId` on /home, `channelId` on a workspace — the difference the
-    // shared rail must NOT learn about.
     const shared = code("./rank-rail.tsx");
     expect(shared).not.toContain("workspaceId");
     expect(shared).not.toContain("channelId");
-    expect(HOME_PANELS).toContain("id: row.workspaceId");
     expect(WORKSPACE_RAILS).toContain("id: row.channelId");
   });
 
-  it("takes the WIDER person row — `role` is nullable, as /home sends it", () => {
+  it("takes a nullable `role` — a departed member's spend survives them", () => {
     // A departed member's spend survives them, so /home has no role to send.
     const rows: PersonRailRow[] = [
       { userId: "u-1", name: "Ada", role: null, credits: 30 },
@@ -149,11 +136,7 @@ describe("the stale-cache fallbacks (INVARIANTS §8)", () => {
 
   it("keeps a `?? EMPTY_` on every array read on both faces", () => {
     for (const [face, source, reads] of [
-      // ⚠ **`agents` LEFT THIS LIST ON 2026-09-20** — the Activity panel it
-      // guarded was deleted from /home Overview (Samuel), and the payload key
-      // went with it, so a `?? EMPTY_AGENTS` here would be a guard on a read
-      // that no longer happens. The three that remain are the rails' own.
-      ["/home", HOME_PANELS, ["channels", "people", "tools"]],
+      ["/home", HOME_LEDGER, ["channels", "people", "tools"]],
       ["workspace", WORKSPACE_RAILS, ["channels", "people", "tools"]],
     ] as const) {
       for (const key of reads) {

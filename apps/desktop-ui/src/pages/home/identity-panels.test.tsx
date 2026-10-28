@@ -417,12 +417,7 @@ describe("🔒 with no channels, PERSONAL still renders", () => {
     await openIdentities();
     await screen.findByText("Fundraise analyst");
 
-    const personal = screen.getByRole("region", {
-      name: SECTION_PRIVATE_EVERYWHERE.label,
-    });
-    const create = within(personal).getByRole("button", {
-      name: /Agent Identity/,
-    });
+    const create = screen.getByRole("button", { name: /Agent Identity/ });
     expect(create).toBeEnabled();
   });
 

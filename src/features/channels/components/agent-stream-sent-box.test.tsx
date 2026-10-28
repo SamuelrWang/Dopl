@@ -241,19 +241,43 @@ describe("the settled banner says WHERE, by name", () => {
   });
 
   /** ⚠ THE PROJECTION IS `agents-model.ts › postDestination` AND IT IS THE ONE PLACE the
-   *  `taskId === ""` wire spelling becomes a place (`spa-bridge-shapes.ts`). */
+   *  `threadId === ""` wire spelling becomes a place (`spa-bridge-shapes.ts`). */
   it("reads the place off the session, not off the presence of a title", () => {
     expect(
-      postDestination({ taskId: "", channelName: "Dopl", threadTitle: null })
+      postDestination({ threadId: "", channelName: "Dopl", threadTitle: null })
     ).toEqual({ kind: "channel", name: "Dopl" });
     expect(
-      postDestination({ taskId: "t-1", channelName: "Dopl", threadTitle: "Yada Yada" })
+      postDestination({ threadId: "t-1", channelName: "Dopl", threadTitle: "Yada Yada" })
     ).toEqual({ kind: "thread", name: "Yada Yada" });
     // A thread-scoped agent whose title has not arrived is still on a THREAD.
     expect(
-      postDestination({ taskId: "t-1", channelName: "Dopl", threadTitle: null })
+      postDestination({ threadId: "t-1", channelName: "Dopl", threadTitle: null })
     ).toEqual({ kind: "thread", name: null });
     // An older main reports no channel name; "cannot say" is not "the channel is unnamed".
-    expect(postDestination({ taskId: "" })).toEqual({ kind: "channel", name: null });
+    expect(postDestination({ threadId: "" })).toEqual({ kind: "channel", name: null });
+  });
+});
+
+/** The card's edge is the agent's colour only once the words are in the channel. */
+describe("the posted card's edge and face", () => {
+  const FACE = { photo: null, name: "Planner", ring: "agent-04" } as const;
+
+  it("wears the agent's colour on a settled post, with the agent's face in the header", () => {
+    const { container } = render(
+      <SentToChannelBox text={BODY} at={0} color="agent-04" face={FACE} />
+    );
+    const card = container.firstElementChild as HTMLElement;
+    expect(card.className).toContain("white-card");
+    expect(card.getAttribute("style")).toContain("var(--agent-color-04)");
+    expect(card.querySelector("[data-identity-face]")).not.toBeNull();
+  });
+
+  it("keeps a held draft on the neutral edge, colour or not", () => {
+    const { container } = render(
+      <SentToChannelBox text={BODY} at={0} pending color="agent-04" face={FACE} />
+    );
+    const style = (container.firstElementChild as HTMLElement).getAttribute("style");
+    expect(style).toContain("var(--border-strong)");
+    expect(style).not.toContain("agent-color");
   });
 });

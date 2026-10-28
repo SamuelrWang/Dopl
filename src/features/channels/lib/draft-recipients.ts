@@ -367,8 +367,8 @@ function agentRecipient(
  *
  * ⚠ **IT MIRRORS `server/service-wake-verdict-resilience.ts › threadOtherParty`
  * EXACTLY, INCLUDING ITS THIRD ARM.** The server reads the fold's own
- * `taskCreatedBy` / `taskTarget` stamps and answers nobody when the author is
- * neither — a legacy `task-` tag, or an unaddressed thread. A client cannot see
+ * `threadCreatedBy` / `threadTarget` stamps and answers nobody when the author is
+ * neither — a legacy `thread-` tag, or an unaddressed thread. A client cannot see
  * those stamps, so it asks the same question of the thread ROW the pane is
  * already rendering; the two agree because the stamps are re-written FROM that
  * row (fold 3).

@@ -7,9 +7,24 @@
  * Caps hand-mirror the route zod (`src/features/channels/schema.ts`); `.trim()` only where it trims.
  */
 import { z } from "zod";
-export declare const SCHEMA_MAX_CHARS = 9180;
+export declare const SCHEMA_MAX_CHARS = 10445;
 export declare const PARAM_DESCRIPTION_MAX_CHARS = 400;
 export declare const CHANNEL_INPUT_SHAPE: {
+    task: z.ZodOptional<z.ZodString>;
+    subtask: z.ZodOptional<z.ZodString>;
+    title: z.ZodOptional<z.ZodString>;
+    status: z.ZodOptional<z.ZodEnum<{
+        open: "open";
+        in_progress: "in_progress";
+        resolved: "resolved";
+    }>>;
+    state: z.ZodOptional<z.ZodEnum<{
+        done: "done";
+        in_progress: "in_progress";
+        todo: "todo";
+    }>>;
+    due: z.ZodOptional<z.ZodString>;
+    message: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
     model: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
     identity: z.ZodOptional<z.ZodString>;
@@ -113,6 +128,7 @@ export declare const CHANNEL_INPUT_SHAPE: {
         send: "send";
         manage: "manage";
         artifact: "artifact";
+        task: "task";
         status: "status";
         read: "read";
         rooms: "rooms";

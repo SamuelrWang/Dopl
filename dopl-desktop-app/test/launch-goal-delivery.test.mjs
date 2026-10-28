@@ -65,12 +65,12 @@ test("DIRECTIVE + goal: the spawn is NOT idle, and the goal is the launch goal",
 });
 
 test("DIRECTIVE + goal: a CHANNEL-LEVEL directive runs too — the shape the repro used", async () => {
-  // ⚠ The 2026-08-31 field directive carried `task_id: null`. A fix that only covered
+  // ⚠ The 2026-08-31 field directive carried `thread_id: null`. A fix that only covered
   // thread-scoped launches would have left the exact case that produced it untouched.
   const h = boot();
-  await h.api.handle(row({ goal: GOAL, task_id: null }), WS);
+  await h.api.handle(row({ goal: GOAL, thread_id: null }), WS);
   assert.equal(h.cfg.lastSpec.idle, false);
-  assert.equal(h.cfg.lastSpec.taskId, "", "'' is the channel-level scope, not a missing value");
+  assert.equal(h.cfg.lastSpec.threadId, "", "'' is the channel-level scope, not a missing value");
   assert.equal(h.cfg.lastSpec.context.scope, "channel");
 });
 
@@ -84,7 +84,7 @@ test("DIRECTIVE, no goal: still SPAWN-IDLE, and still falls back to the stand-by
   assert.equal(thread.cfg.lastSpec.idle, true);
   assert.match(thread.cfg.lastSpec.goal, /Join this thread as my agent/);
   const channel = boot();
-  await channel.api.handle(row({ goal: "", task_id: null }), WS);
+  await channel.api.handle(row({ goal: "", thread_id: null }), WS);
   assert.equal(channel.cfg.lastSpec.idle, true);
   assert.match(channel.cfg.lastSpec.goal, /Stand by in this channel/);
 });
@@ -151,7 +151,7 @@ test("DELIVERY (parked): a goal-less directive's shell still fences its stand-by
     launchGoal: "Stand by in this channel as my agent: watch the main room.",
     pendingHistory: null,
     profile: "full",
-    context: { channelName: "Ops", channelId: "c1", workspaceId: "w1", taskId: "", scope: "channel" },
+    context: { channelName: "Ops", channelId: "c1", workspaceId: "w1", threadId: "", scope: "channel" },
   };
   const woken = seed.withSeed(s, "Alice posted in the room.");
   assert.ok(woken.includes(s.launchGoal), "the goal reaches the agent");

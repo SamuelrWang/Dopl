@@ -13,8 +13,8 @@
 // THE FIVE PATHS, each driven here against the real shipped code:
 //   1. the fan-out feed          `session-dispatch.js › feedLiveSession`
 //   2. the @agent-id parse       `session-dispatch.js › mentionedAgentIds`
-//   3. the 1:1 lane              `session-reopen.js › messageByTask`
-//   4. reopen / pause / end      `session-reopen.js › reopenByTask` / `controlByTask`
+//   3. the 1:1 lane              `session-reopen.js › messageByThread`
+//   4. reopen / pause / end      `session-reopen.js › reopenByThread` / `controlByThread`
 //   5. a spawn-idle wake         `session-gate.js › feedInbound`
 //
 // ⚠ AND ONE BELT BEHIND THEM: the reducer's own first line refuses every event on a settled
@@ -39,21 +39,21 @@ const agentHandles = require(join(MAIN, "agent-handles.js"));
 const realRoomRoster = require(join(MAIN, "room-roster.js"));
 
 const CH = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
-const TASK = "11111111-2222-3333-4444-555555555555";
+const THREAD = "11111111-2222-3333-4444-555555555555";
 const AGENT = "a1b2c3d4";
-const KEY = `${CH}:${TASK}:${AGENT}`;
+const KEY = `${CH}:${THREAD}:${AGENT}`;
 const ME = "me-user";
 
 const store = {
   sessionKey: (c, t, a) => `${c}:${t}:${a || ""}`,
-  slotKey: (x) => `${x.channelId || ""}:${x.taskId || ""}:${x.agentId || ""}`,
+  slotKey: (x) => `${x.channelId || ""}:${x.threadId || ""}:${x.agentId || ""}`,
   threadKeyPrefix: (c, t) => `${c || ""}:${t || ""}:`,
 };
 
 /** A session object as the registry holds one. `settled: true` is the state `settle` leaves
  *  behind for anything still holding a reference to it. */
 const sess = (over = {}) => ({
-  key: KEY, agentId: AGENT, channelId: CH, taskId: TASK,
+  key: KEY, agentId: AGENT, channelId: CH, threadId: THREAD,
   settled: false, state: {}, context: {}, nonce: "n0nce",
   ownPostIds: new Set(),
   ...over,
@@ -74,13 +74,13 @@ test("REGISTRY: a settled session is invisible to BOTH addressing reads", () => 
   // The `settled` flag is the belt; `settle` also deletes the key, which is the braces.
   const stale = new Map([[KEY, sess({ settled: true })]]);
   const r = registry(stale);
-  assert.deepEqual(r.liveOnThread({ channelId: CH, taskId: TASK }), [], "not on the thread");
-  assert.equal(r.sessionOn({ channelId: CH, taskId: TASK }), null, "unnamed resolves nothing");
-  assert.equal(r.sessionOn({ channelId: CH, taskId: TASK, agentId: AGENT }), null, "…named too");
+  assert.deepEqual(r.liveOnThread({ channelId: CH, threadId: THREAD }), [], "not on the thread");
+  assert.equal(r.sessionOn({ channelId: CH, threadId: THREAD }), null, "unnamed resolves nothing");
+  assert.equal(r.sessionOn({ channelId: CH, threadId: THREAD, agentId: AGENT }), null, "…named too");
   // …and after `settle`'s delete there is not even a stale object.
   const gone = registry(new Map());
-  assert.deepEqual(gone.liveOnThread({ channelId: CH, taskId: TASK }), []);
-  assert.equal(gone.sessionOn({ channelId: CH, taskId: TASK, agentId: AGENT }), null);
+  assert.deepEqual(gone.liveOnThread({ channelId: CH, threadId: THREAD }), []);
+  assert.equal(gone.sessionOn({ channelId: CH, threadId: THREAD, agentId: AGENT }), null);
 });
 
 // ── 1 + 2. the fan-out feed, and the @-mention that cannot revive one ────────
@@ -106,7 +106,7 @@ function dispatch(agents) {
     "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote", "authorAddress",
     `${BLOCK}\n return { feedLiveSession, mentionedAgentIds };`
   )(
-    { firstClassTaskId: (m) => m.taskId || "" },
+    { firstClassThreadId: (m) => m.threadId || "" },
     engine,
     { displayNameFor: (id) => `name:${id}` },
     agentHandles,
@@ -122,7 +122,7 @@ function dispatch(agents) {
 
 const entry = { channel: { id: CH, name: "General" }, workspaceId: "w1" };
 const msg = (over = {}) => ({
-  kind: "message", authorUserId: "peer", body: "carry on", taskId: TASK, seq: 7, ...over,
+  kind: "message", authorUserId: "peer", body: "carry on", threadId: THREAD, seq: 7, ...over,
 });
 
 test("FEED: an ENDED agent is not fed and not queued — the message simply passes it by", async () => {
@@ -160,14 +160,14 @@ function reopen(sessions) {
   const dispatched = [];
   const api = new Function(
     "store", "framing", "floorWindowlessMessage", "privateTurn", "directedTurn",
-    `${BLOCK}\n return { bind, reopenByTask, controlByTask, setModeByTask, messageByTask };`
+    `${BLOCK}\n return { bind, reopenByThread, controlByThread, setModeByThread, messageByThread };`
   )(
     store,
     require(join(MAIN, "session-seed.js")),
     (m) => m,
-    // The REAL private-turn window (2026-08-22): `messageByTask` opens it before dispatching.
+    // The REAL private-turn window (2026-08-22): `messageByThread` opens it before dispatching.
     require(join(MAIN, "session-private.js")),
-    // ⚠ And the REAL directed-turn module (2026-08-31): `messageByTask` reads a DIRECTION off
+    // ⚠ And the REAL directed-turn module (2026-08-31): `messageByThread` reads a DIRECTION off
     // its argument now. An ENDED agent must answer `no-session` on that lane too.
     require(join(MAIN, "session-directed.js"))
   );
@@ -185,30 +185,30 @@ test("OPS: every op naming an ENDED agent answers `no-session`, and dispatches n
   // takes the oldest LIVE agent) must not become a revival path either — there is no live one.
   for (const sessions of [new Map(), new Map([[KEY, sess({ settled: true })]])]) {
     const r = reopen(sessions);
-    const addr = { channelId: CH, taskId: TASK, agentId: AGENT };
-    assert.deepEqual(r.messageByTask({ ...addr, text: "are you there" }), { ok: false, reason: "no-session" });
-    assert.deepEqual(r.reopenByTask({ ...addr, segment: "acme" }), { ok: false, reason: "no-session" });
-    assert.deepEqual(r.controlByTask({ ...addr, action: "pause" }), { ok: false, reason: "no-session" });
-    assert.deepEqual(r.controlByTask({ ...addr, action: "end" }), { ok: false, reason: "no-session" });
-    assert.deepEqual(r.setModeByTask({ ...addr, axis: "tools", mode: "bypass" }), { ok: false, reason: "no-session" });
+    const addr = { channelId: CH, threadId: THREAD, agentId: AGENT };
+    assert.deepEqual(r.messageByThread({ ...addr, text: "are you there" }), { ok: false, reason: "no-session" });
+    assert.deepEqual(r.reopenByThread({ ...addr, segment: "acme" }), { ok: false, reason: "no-session" });
+    assert.deepEqual(r.controlByThread({ ...addr, action: "pause" }), { ok: false, reason: "no-session" });
+    assert.deepEqual(r.controlByThread({ ...addr, action: "end" }), { ok: false, reason: "no-session" });
+    assert.deepEqual(r.setModeByThread({ ...addr, axis: "tools", mode: "bypass" }), { ok: false, reason: "no-session" });
     assert.deepEqual(r.dispatched, [], "nothing reached a reducer");
     // …and the same ops with NO agent named resolve nothing rather than the dead one.
-    const pair = { channelId: CH, taskId: TASK };
-    assert.deepEqual(r.messageByTask({ ...pair, text: "hello" }), { ok: false, reason: "no-session" });
+    const pair = { channelId: CH, threadId: THREAD };
+    assert.deepEqual(r.messageByThread({ ...pair, text: "hello" }), { ok: false, reason: "no-session" });
   }
 });
 
 test("OPS: a 1:1 send IN FLIGHT when the agent ends REFUSES rather than throwing", () => {
   // The edge case: the operator hit send, the agent settled between the click and main
-  // resolving it. `messageByTask` re-resolves against the registry at call time — it holds no
+  // resolving it. `messageByThread` re-resolves against the registry at call time — it holds no
   // captured session — so the answer is an honest refusal the composer can word.
   const sessions = new Map([[KEY, sess()]]);
   const r = reopen(sessions);
-  const addr = { channelId: CH, taskId: TASK, agentId: AGENT, text: "one more thing" };
-  assert.deepEqual(r.messageByTask(addr), { ok: true }, "…it lands while the agent is live");
+  const addr = { channelId: CH, threadId: THREAD, agentId: AGENT, text: "one more thing" };
+  assert.deepEqual(r.messageByThread(addr), { ok: true }, "…it lands while the agent is live");
   sessions.get(KEY).settled = true; // it ends mid-flight
-  assert.doesNotThrow(() => r.messageByTask(addr));
-  assert.deepEqual(r.messageByTask(addr), { ok: false, reason: "no-session" });
+  assert.doesNotThrow(() => r.messageByThread(addr));
+  assert.deepEqual(r.messageByThread(addr), { ok: false, reason: "no-session" });
   assert.equal(r.dispatched.length, 1, "exactly the one turn that was live when it was sent");
 });
 
@@ -226,7 +226,7 @@ test("GATE: `feedInbound` refuses a settled session — nothing is fed for a res
   const ended = sess({ settled: true });
   built.bind({ sessions: new Map([[KEY, ended]]), dispatch: () => { throw new Error("dispatched into a dead session"); } });
   assert.equal(
-    built.feedInbound({ channelId: CH, taskId: TASK, agentId: AGENT, message: "hi", seq: 8 }),
+    built.feedInbound({ channelId: CH, threadId: THREAD, agentId: AGENT, message: "hi", seq: 8 }),
     false
   );
 });
@@ -280,34 +280,34 @@ const FROZEN = [{ at: 1, kind: "assistant", text: "read the invoice" }, { at: 2,
 test("NARRATION: an ENDED agent's window reads the FROZEN ring, not an empty one", () => {
   // The key is the one `settle` wrote — `store.slotKey`, all three parts.
   const nf = narration(new Map(), new Map([[KEY, { key: KEY, entries: FROZEN }]]));
-  assert.deepEqual(nf({ channelId: CH, taskId: TASK, agentId: AGENT }), FROZEN);
+  assert.deepEqual(nf({ channelId: CH, threadId: THREAD, agentId: AGENT }), FROZEN);
   // A COPY: the caller must not be handed the durable record's own array to mutate.
-  const out = nf({ channelId: CH, taskId: TASK, agentId: AGENT });
+  const out = nf({ channelId: CH, threadId: THREAD, agentId: AGENT });
   out.push({ kind: "junk" });
-  assert.equal(nf({ channelId: CH, taskId: TASK, agentId: AGENT }).length, FROZEN.length);
+  assert.equal(nf({ channelId: CH, threadId: THREAD, agentId: AGENT }).length, FROZEN.length);
 });
 
 test("NARRATION: a LIVE agent still answers from the registry, never from the history", () => {
   const live = sess({ narration: [{ at: 9, kind: "assistant", text: "still working" }] });
   const nf = narration(new Map([[KEY, live]]), new Map([[KEY, { key: KEY, entries: FROZEN }]]));
-  assert.deepEqual(nf({ channelId: CH, taskId: TASK, agentId: AGENT }), live.narration);
+  assert.deepEqual(nf({ channelId: CH, threadId: THREAD, agentId: AGENT }), live.narration);
 });
 
 test("NARRATION: an address naming NO agent gets the live answer alone", () => {
   // `<channel>:<thread>:` matches no frozen record by construction (every history key carries an
   // agent id), so the ambiguity fallback cannot resolve a DEAD agent it was never handed.
   const nf = narration(new Map(), new Map([[KEY, { key: KEY, entries: FROZEN }]]));
-  assert.deepEqual(nf({ channelId: CH, taskId: TASK }), []);
+  assert.deepEqual(nf({ channelId: CH, threadId: THREAD }), []);
 });
 
 test("NARRATION: no history and no session is `[]`, never a throw", () => {
   const nf = narration(new Map(), new Map());
-  assert.deepEqual(nf({ channelId: CH, taskId: TASK, agentId: AGENT }), []);
+  assert.deepEqual(nf({ channelId: CH, threadId: THREAD, agentId: AGENT }), []);
   assert.deepEqual(nf({}), []);
   // A record whose `entries` did not survive the disk is UNKNOWN, and unknown renders empty
   // rather than throwing inside the bridge.
   const bad = narration(new Map(), new Map([[KEY, { key: KEY, entries: null }]]));
-  assert.deepEqual(bad({ channelId: CH, taskId: TASK, agentId: AGENT }), []);
+  assert.deepEqual(bad({ channelId: CH, threadId: THREAD, agentId: AGENT }), []);
 });
 
 test("STRUCTURE: `settle` deletes the registry entry, and freezes the history BEFORE it", () => {

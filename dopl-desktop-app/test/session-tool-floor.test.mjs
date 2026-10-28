@@ -15,7 +15,7 @@
 //     bypass                        -> bypass      (never narrowed)
 //
 // ⚠ IT IS APPLIED TO THE READ, NOT TO STATE. Axis B's floor writes STATE at two lanes
-// (`channel-prefs.js › windowlessMessageMode` at launch, `session-reopen.js › setModeByTask`
+// (`channel-prefs.js › windowlessMessageMode` at launch, `session-reopen.js › setModeByThread`
 // live); this one is applied once in `session-io.js › grantArgs`, the single read of both axes
 // at decision time, which is the one point covering every spawn shape. The reducer's stored
 // `toolMode` is deliberately NOT rewritten, so the agent view's Tools select keeps reporting
@@ -109,9 +109,9 @@ function session({ windowless = true, toolMode = "manual", messageMode = "ask" }
   return {
     profile: "full",
     channelId: "chan-1",
-    taskId: "task-1",
+    threadId: "thread-1",
     windowless,
-    state: { toolMode, messageMode, allowForTask: [] },
+    state: { toolMode, messageMode, allowForThread: [] },
   };
 }
 

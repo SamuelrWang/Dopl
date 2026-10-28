@@ -12,7 +12,7 @@ import { LINK_WORKSPACE_ID } from "./home-test-ids";
  * reads every non-test `.tsx` here.
  */
 
-/** A second container, so the by-channel rails have more than one row to sort. */
+/** A second container, so the Channels table has more than one row. */
 export const SECOND_WORKSPACE_ID = "ws-link-2";
 
 /**
@@ -25,8 +25,7 @@ export const SECOND_WORKSPACE_ID = "ws-link-2";
 export const HOME_OVERVIEW: HomeOverview = {
   range: "month",
   since: "2026-09-01T00:00:00.000Z",
-  // ⚠ CREDITS, not MCP calls, since 2026-09-01 — the rails read the
-  // `credit_usage_events` ledger now (F-328's UI half).
+  // Credits read the `credit_usage_events` ledger (F-328's UI half).
   channels: [
     {
       workspaceId: LINK_WORKSPACE_ID,
@@ -116,7 +115,7 @@ export const BILLING_STATUS = {
 };
 
 /**
- * The Overview face's three reads.
+ * The Overview face's reads.
  *
  * ⚠ **ONE BODY FOR `/api/home/overview`, WHATEVER THE QUERY.** There is no
  * scoped variant to answer — see this file's header.
@@ -133,6 +132,9 @@ export function overviewRoutes(path: string): Promise<BridgeResponse> | null {
         ? "mcp"
         : "credits";
     return Promise.resolve(ok({ ...HOME_SERIES, metric }));
+  }
+  if (bare === "/api/home/needs") {
+    return Promise.resolve(ok({ decisions: [], tasks: [], truncated: { decisions: false, tasks: false } }));
   }
   if (bare === "/api/billing/status") {
     return Promise.resolve(ok(BILLING_STATUS));

@@ -13,6 +13,7 @@ import { useStickToBottom } from "./use-stick-to-bottom";
 import { useJumpPageBack } from "./use-jump-page-back";
 import { useLoadOlder } from "./use-load-older";
 import { Transcript } from "./transcript";
+import type { AgentFeeds } from "./agent-face";
 import type { AnswerDisplay } from "../hooks/use-display-writes";
 import {
   TRANSCRIPT_FILTER_ALL,
@@ -83,9 +84,11 @@ export function ChannelsMessagePane({
   favorited = false,
   gate,
   liveAgents,
+  agentFeeds,
   newAgent,
   popOut,
   agentActivity,
+  tasksQuickView,
   peerActivity,
   chrome = "page",
   onToggleInfo = NOOP,
@@ -129,6 +132,8 @@ export function ChannelsMessagePane({
   /** Every member's live agent sessions, for the composer. Handed down: a second
    *  `use-channel-agent-sessions.ts` mount is a second poll. */
   liveAgents?: readonly LiveAgentSession[];
+  /** Who works each thread card's thread (the Agents tab's own feeds, handed down). */
+  agentFeeds?: AgentFeeds;
   /** Launch controls for the composer's New Agent icon, handed down (a second `useAgentsPanel` is a
    *  second peer poll); absent renders no button. */
   newAgent?: AgentLaunchControls;
@@ -136,6 +141,8 @@ export function ChannelsMessagePane({
   popOut?: ReactNode;
   /** My agents mid-turn, drawn at the end of the composer's recipient line. */
   agentActivity?: ReactNode;
+  /** The tasks quick view (`tasks-quick-view.tsx`), at the end of the same line. */
+  tasksQuickView?: ReactNode;
   /** Peer agents working (`peer-activity.tsx › PeerActivityRow`), between the send box and the composer. */
   peerActivity?: ReactNode;
   /** `"window"` is the pop-out thread window: no info panel, no sidebar. */
@@ -298,7 +305,7 @@ export function ChannelsMessagePane({
         {missing && (
           <p
             role="status"
-            className="mb-3 rounded-[8px] border border-border-default bg-card-surface-subtle px-2.5 py-2 text-caption text-text-muted"
+            className="mb-3 rounded-md border border-border-default bg-card-surface-subtle px-2.5 py-2 text-caption text-text-muted"
           >
             {SCROLL_TARGET_MISSING_NOTE}
           </p>
@@ -327,6 +334,7 @@ export function ChannelsMessagePane({
             rows={visibleRows}
             index={index}
             flashId={flashId}
+            agentFeeds={agentFeeds}
             canLaunchAgent={newAgent?.canLaunch ?? false}
             launchBusy={newAgent?.launchBusy ?? false}
             onLaunchAgent={(id) => void newAgent?.launchAgent(id)}
@@ -348,6 +356,7 @@ export function ChannelsMessagePane({
       {peerActivity}
       <ChannelsComposer
         working={agentActivity}
+        tasksQuickView={tasksQuickView}
         newThreadSignal={newThreadSignal}
         channelId={channelId}
         workspaceId={workspaceId}

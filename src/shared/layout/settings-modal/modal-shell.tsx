@@ -11,8 +11,9 @@ interface Props {
   /** Accessible label for the dialog. */
   label: string;
   /** `wide` = full settings page card; `narrow` = single-pane dialog;
-   *  `compact` = small confirm dialog. */
-  size?: "wide" | "narrow" | "compact";
+   *  `compact` = small confirm dialog; `panel` = a fixed white box whose content owns the scroll,
+   *  so tabs switch without the frame moving. */
+  size?: "wide" | "narrow" | "compact" | "panel";
   children: React.ReactNode;
 }
 
@@ -75,6 +76,7 @@ export function ModalShell({ open, onClose, label, size = "wide", children }: Pr
           styles.card,
           size === "narrow" && styles.cardNarrow,
           size === "compact" && styles.cardCompact,
+          size === "panel" && styles.cardPanel,
           visible && styles.cardVisible,
         )}
         role="dialog"

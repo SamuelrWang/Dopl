@@ -40,7 +40,7 @@ const CHANNEL = "mcp__dopl__dopl_channel";
 
 const decide = (over) => profiles.grantDecision({
   runtime: "cursor", profile: "full", toolMode: "allowlist", messageMode: "ask",
-  channelId: "chan-1", allowForTask: [], ...over,
+  channelId: "chan-1", allowForThread: [], ...over,
 });
 
 // ── AXIS A, IN CURSOR'S OWN WORDS ────────────────────────────────────────────────────────────
@@ -197,7 +197,7 @@ test("the universal hard deny is Dopl's own, unchanged, and openable by nothing"
   assert.deepEqual(D.axisB.hardDeny, hard);
   for (const name of hard) {
     for (const profile of ["read_only", "dopl_only", "full"]) {
-      assert.equal(decide({ profile, toolName: name, toolMode: "run-everything", allowForTask: [name] }), "deny",
+      assert.equal(decide({ profile, toolName: name, toolMode: "run-everything", allowForThread: [name] }), "deny",
         `${profile}/${name}: hard deny was opened`);
     }
   }
@@ -233,7 +233,7 @@ test("a verdict becomes a TOOL RESULT, because there is no approval channel to a
   // ⚠ FAIL CLOSED ON ANYTHING BUT AN EXPLICIT ALLOW, and a deny is `isError` rather than silence:
   // the model has to be able to tell "refused" from "empty result", or it retries the post it was
   // refused — which is the fan-out shape, not a cosmetic one.
-  for (const verdict of ["deny", "allow-task", "", null, undefined, 42, {}]) {
+  for (const verdict of ["deny", "allow-thread", "", null, undefined, 42, {}]) {
     const answer = approval.answerApproval({ message: "no" }, verdict);
     assert.equal(answer.isError, true, JSON.stringify(verdict));
     assert.equal(answer.content[0].text, "no");
@@ -242,8 +242,8 @@ test("a verdict becomes a TOOL RESULT, because there is no approval channel to a
 
 test("the thread tag is applied NATIVELY, and a tag that does not apply leaves the input alone", () => {
   const tagged = approval.stampOutbound({ op: "send", body: "hi" },
-    { action: "inject", input: { op: "send", body: "hi", thread: "task-9" } });
-  assert.equal(tagged.updatedInput.thread, "task-9");
+    { action: "inject", input: { op: "send", body: "hi", thread: "thread-9" } });
+  assert.equal(tagged.updatedInput.thread, "thread-9");
   // ⚠ `null` IS NOT A LEGAL RETURN: an un-stamped post is a fan-out/echo failure, so a tag that
   // does not apply answers the input UNCHANGED rather than nothing.
   for (const tag of [null, undefined, { action: "none" }, { action: "conflict" }]) {

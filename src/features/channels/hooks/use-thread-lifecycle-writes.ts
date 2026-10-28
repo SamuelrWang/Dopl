@@ -16,7 +16,7 @@ import {
   type MessagesCache,
   type ThreadsCache,
 } from "../lib/optimistic-cache";
-import { failed, messagesKey, threadsKey } from "./use-thread-writes-shared";
+import { failed, messagesKey, threadsKey } from "./use-writes-shared";
 import type { ChannelThread, ThreadMode } from "../types";
 
 /**
@@ -30,7 +30,7 @@ import type { ChannelThread, ThreadMode } from "../types";
  * idempotency key or renders a pending anything: these address a thread that
  * already exists, by id. Two reasons to change, two files (INVARIANTS §1); the
  * shared plumbing (`ThreadWritesParams`, the two per-channel keys, `failed`)
- * comes from `use-thread-writes-shared.ts` so no key is written twice — a key
+ * comes from `use-writes-shared.ts` so no key is written twice — a key
  * that differs by one element is a silent no-op (§8).
  *
  * ⚠ THIS IS NOT THREAD CLOSING COMING BACK. A thread still has no finished state
@@ -67,7 +67,7 @@ interface ThreadLifecycleParams {
 }
 
 /** What the failure path needs on top: the client it re-reads through. Same
- *  shape as `use-thread-writes-shared.ts › ThreadWriteDeps`, and for the same
+ *  shape as `use-writes-shared.ts › ThreadWriteDeps`, and for the same
  *  reason — the config is a pure function of its deps so a test can build one. */
 export interface ThreadLifecycleDeps extends ThreadLifecycleParams {
   client: QueryClient;
@@ -81,15 +81,14 @@ export interface ThreadLifecycleDeps extends ThreadLifecycleParams {
  */
 export function setThreadModeConfig(
   deps: ThreadLifecycleDeps
-): UseApiMutationConfig<ThreadModeDraft, { task: ChannelThread }> {
+): UseApiMutationConfig<ThreadModeDraft, { thread: ChannelThread }> {
   return {
     request: (draft) => ({
       path: channelThreadPath(draft.channelId, draft.threadId),
       method: "PATCH",
       workspaceId: deps.workspaceId,
-      // BOUNDARY: the wire op keeps the storage spelling (`set_mode`), the
-      // surface says "mode". `schema.ts › TaskUpdateSchema` is a discriminated
-      // union with exactly this one arm.
+      // `schema.ts › ThreadUpdateSchema` is a discriminated union with exactly
+      // this one arm.
       body: { op: "set_mode", mode: draft.mode },
     }),
     // The radio lights on the click rather than after the round trip. ⚠ The row
@@ -97,7 +96,7 @@ export function setThreadModeConfig(
     // a thread missing from a cold list cache is not invented here.
     optimistic: (draft) =>
       patchCache<ThreadsCache>(threadsKey(draft.channelId), (cache) => {
-        const current = cache?.tasks.find((t) => t.id === draft.threadId);
+        const current = cache?.threads.find((t) => t.id === draft.threadId);
         if (!cache || !current) return cache;
         return upsertThread(cache, { ...current, mode: draft.mode });
       }),
@@ -105,10 +104,10 @@ export function setThreadModeConfig(
     // without a read.
     reconcile: (data, draft) =>
       patchCache<ThreadsCache>(threadsKey(draft.channelId), (cache) =>
-        upsertThread(cache, data.task)
+        upsertThread(cache, data.thread)
       ),
-    // ⚠ NOTHING IS INVALIDATED. `channel_tasks.updated_at` is not an activity
-    // clock and the list is ordered off `channel_tasks_activity.last_activity_at`
+    // ⚠ NOTHING IS INVALIDATED. `channel_threads.updated_at` is not an activity
+    // clock and the list is ordered off `channel_threads_activity.last_activity_at`
     // (INVARIANTS §5, C-1), so a mode change moves no ordering and touches no
     // other read. Naming the thread list here would re-download it on every
     // click for a value the reconcile already has.
@@ -194,7 +193,7 @@ export function useThreadLifecycleWrites(params: ThreadLifecycleParams) {
   const deps: ThreadLifecycleDeps = { ...params, client: useQueryClient() };
   // ⚠ Rebuilt every render on purpose — `useApiMutationWith` reads its config
   // through a ref, so these closures are always the current render's.
-  const setMode = useApiMutationWith<ThreadModeDraft, { task: ChannelThread }>(
+  const setMode = useApiMutationWith<ThreadModeDraft, { thread: ChannelThread }>(
     channelRequest,
     setThreadModeConfig(deps)
   );

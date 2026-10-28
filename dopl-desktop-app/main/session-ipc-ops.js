@@ -56,7 +56,7 @@ function register(opts = {}) {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
     try {
-      const keys = require('./agent-retention').forgetThread(p.channelId, String(p.taskId || ''));
+      const keys = require('./agent-retention').forgetThread(p.channelId, String(p.threadId || ''));
       return { ok: true, forgotten: keys.length };
     } catch (err) {
       diag('session ipc: agents:forgetThread failed —', (err && err.message) || String(err));
@@ -70,10 +70,10 @@ function register(opts = {}) {
     if (!isUuid(p.channelId)) return { ok: false };
     const { isSafeSegment } = require('./deep-link-target');
     const engine = require('./session-engine');
-    if (typeof engine.reopenByTask !== 'function') return { ok: false };
-    return engine.reopenByTask({
+    if (typeof engine.reopenByThread !== 'function') return { ok: false };
+    return engine.reopenByThread({
       channelId: p.channelId,
-      taskId: String(p.taskId || ''),
+      threadId: String(p.threadId || ''),
       segment: isSafeSegment(p.segment) ? String(p.segment) : '',
       agentId: asAgentId(p.agentId),
     });
@@ -95,10 +95,10 @@ function register(opts = {}) {
     if (!axis) return { ok: false, reason: 'bad-axis' };
     const mode = typeof p.mode === 'string' ? p.mode.slice(0, 64) : '';
     const engine = require('./session-engine');
-    if (typeof engine.setModeByTask !== 'function') return { ok: false };
-    return engine.setModeByTask({
+    if (typeof engine.setModeByThread !== 'function') return { ok: false };
+    return engine.setModeByThread({
       channelId: p.channelId,
-      taskId: String(p.taskId || ''),
+      threadId: String(p.threadId || ''),
       agentId: asAgentId(p.agentId),
       axis: axis,
       mode: mode,
@@ -111,17 +111,17 @@ function register(opts = {}) {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
     const engine = require('./session-engine');
-    if (typeof engine.setModelByTask !== 'function') return { ok: false };
-    return engine.setModelByTask({
+    if (typeof engine.setModelByThread !== 'function') return { ok: false };
+    return engine.setModelByThread({
       channelId: p.channelId,
-      taskId: String(p.taskId || ''),
+      threadId: String(p.threadId || ''),
       agentId: asAgentId(p.agentId),
       model: typeof p.model === 'string' ? p.model.trim().slice(0, 120) : '',
     });
   }));
 
   // The op that STARTS A TURN on an existing session (the 1:1 lane; argument at `session-reopen.js ›
-  // messageByTask`): capped here too, an empty body refused, and the version floor applies.
+  // messageByThread`): capped here too, an empty body refused, and the version floor applies.
   ipcMain.handle('sessions:message', appWindowOnly('sessions:message', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
@@ -131,10 +131,10 @@ function register(opts = {}) {
       if (require('./version-gate').isBlocked()) return { ok: false, reason: 'blocked' };
     } catch (_err) {}
     const engine = require('./session-engine');
-    if (typeof engine.messageByTask !== 'function') return { ok: false };
-    return engine.messageByTask({
+    if (typeof engine.messageByThread !== 'function') return { ok: false };
+    return engine.messageByThread({
       channelId: p.channelId,
-      taskId: String(p.taskId || ''),
+      threadId: String(p.threadId || ''),
       agentId: asAgentId(p.agentId),
       text: text,
     });
@@ -148,7 +148,7 @@ function register(opts = {}) {
     if (typeof engine.narrationFor !== 'function') return { entries: [] };
     return { entries: engine.narrationFor({
       channelId: p.channelId,
-      taskId: String(p.taskId || ''),
+      threadId: String(p.threadId || ''),
       agentId: asAgentId(p.agentId),
     }) };
   }));
@@ -158,10 +158,10 @@ function register(opts = {}) {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
     const engine = require('./session-engine');
-    if (typeof engine.controlByTask !== 'function') return { ok: false };
-    return engine.controlByTask({
+    if (typeof engine.controlByThread !== 'function') return { ok: false };
+    return engine.controlByThread({
       channelId: p.channelId,
-      taskId: String(p.taskId || ''),
+      threadId: String(p.threadId || ''),
       agentId: asAgentId(p.agentId),
       action: action,
     });

@@ -97,7 +97,7 @@ export function AgentDeleteButton({
   async function handleConfirm(): Promise<void> {
     const op = getSpaBridge()?.sessions?.delete;
     if (typeof op !== "function") throw new Error("no-bridge");
-    const res = await op(agent.channelId, agent.taskId, agent.agentId ?? "");
+    const res = await op(agent.channelId, agent.threadId, agent.agentId ?? "");
     if (res?.ok !== true) throw new Error(res?.reason || "refused");
     onDeleted?.();
   }

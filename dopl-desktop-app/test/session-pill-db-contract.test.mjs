@@ -71,11 +71,13 @@ function migrationSql() {
 }
 
 // `CHECK (state IN ('a', 'b'))` -> ["a", "b"]. Collected as a LIST of definitions so a
-// second one (a re-ADD in a later migration) is visible rather than silently merged.
+// second one (a re-ADD in a later migration) is visible rather than silently merged. A CHECK
+// named for another table's constraint (`channel_task_subtasks_state_check`) is not this one.
 function stateCheckSets(sql) {
   const out = [];
-  for (const m of sql.matchAll(/CHECK\s*\(\s*state\s+IN\s*\(([^)]*)\)\s*\)/g)) {
-    out.push([...m[1].matchAll(/'([a-z_]+)'/g)].map((q) => q[1]));
+  for (const m of sql.matchAll(/(?:CONSTRAINT\s+(\w+)\s+)?CHECK\s*\(\s*state\s+IN\s*\(([^)]*)\)\s*\)/g)) {
+    if (m[1] && !m[1].startsWith("channel_sessions")) continue;
+    out.push([...m[2].matchAll(/'([a-z_]+)'/g)].map((q) => q[1]));
   }
   return out;
 }

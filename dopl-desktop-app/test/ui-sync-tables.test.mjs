@@ -151,10 +151,11 @@ test("every watched table is real: published, never dropped, workspace-scoped", 
   assert.ok(createBody("skill_versions"), "the rename follower has stopped working");
 });
 
-test("the watched set is exactly the 17 tables, in a pinned order", () => {
+test("the watched set is exactly the 18 tables, in a pinned order", () => {
   // Was 22 until 2026-08-07: the five `workflow_*` names left with the workflows
   // retirement (RETIREMENT-UNWIRING-PLAN.md Phase 5 / D8). Their absence is pinned
-  // positively by the un-published test at the bottom, not just by this list.
+  // positively by the un-published test at the bottom, not just by this list. `channel_tasks`
+  // joined 2026-10-26 with its publication (20261121190000).
   assert.deepEqual(SYNC_TABLES, [
     "knowledge_bases", "knowledge_folders", "knowledge_entries",
     "skills", "skill_versions",
@@ -162,7 +163,7 @@ test("the watched set is exactly the 17 tables, in a pinned order", () => {
     "ontology_relationships",
     "chats", "chat_messages", "chat_folders",
     "channel_consent_requests", "channels", "channel_members",
-    "channel_messages", "agent_presence",
+    "channel_messages", "agent_presence", "channel_tasks",
   ]);
   assert.equal(new Set(SYNC_TABLES).size, SYNC_TABLES.length, "duplicate binding");
   assert.ok(!SYNC_TABLES.includes("skill_files"), "skill_files no longer exists as a table");

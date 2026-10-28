@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
   SRC, BLOCK_START, load, entry, adHocEntry, fakeSummary, armed, drained, bodies,
-  CHAN_A, TASK_A, CHAN_B, TASK_B,
+  CHAN_A, THREAD_A, CHAN_B, THREAD_B,
 } from "./_session-state-push-harness.mjs";
 
 // THE ONE TRANSPORT. `api.js` carries the F-132 401 repair that `listener-io.js` shipped without and took the whole
@@ -50,9 +50,9 @@ test("ROW: the payload is the schema's shape, field for field", () => {
   // the server as a MISSING key, while `null` reaches it as the nullable column's real value. UNMEASURED is a
   // fact the wire has to be able to state.
   assert.deepEqual(m.reportRow(entry()), {
-    sessionKey: `${CHAN_A}:${TASK_A}:a1b2c3d4`,
+    sessionKey: `${CHAN_A}:${THREAD_A}:a1b2c3d4`,
     channelId: CHAN_A,
-    threadId: TASK_A,
+    threadId: THREAD_A,
     name: "a1b2c3d4",
     state: "working",
     channelName: "General",
@@ -71,6 +71,9 @@ test("ROW: the payload is the schema's shape, field for field", () => {
     // already holds. That is what exempts `color` from the `identityName` erase hazard
     // `session-store.js`'s durable whitelist records.
     color: null,
+    // ⚠ JOINED 2026-10-26 (20261121191000): the runtime, PEER-VISIBLE. NULL here because the
+    // fixture names none.
+    runtime: null,
     detail: null,
     toolLabel: null,
     model: null,
@@ -109,7 +112,7 @@ test("ROW: the payload is the schema's shape, field for field", () => {
 // on `session-summary.js` and reaching the table because nobody chose to send it. ⚠ SIXTEEN SINCE 2026-08-22 (agent
 // identities): `identityName` was added DELIBERATELY, with the column to receive it (`channel_sessions.identity_name`,
 // OPERATOR-ONLY — the server's mapper is the fence and the GRANT list is the belt, neither of which is this file's).
-test("ROW: the wire row is exactly the twenty-five columns, and no summary field rides along free", () => {
+test("ROW: the wire row is exactly the twenty-six columns, and no summary field rides along free", () => {
   const m = load();
   const wide = entry({
     detail: "tool",
@@ -136,12 +139,22 @@ test("ROW: the wire row is exactly the twenty-five columns, and no summary field
   // every one of them is a fact about how somebody's own machine is getting on.
   // ⚠ TWENTY-FIVE SINCE 2026-09-13: `color` joined, DELIBERATELY and with the column to receive
   // it (`channel_sessions.color`, PEER-VISIBLE by design — Samuel's cross-member ruling).
+  // ⚠ TWENTY-SIX SINCE 2026-10-26: `runtime`, with its column (`channel_sessions.runtime`,
+  // PEER-VISIBLE, PLAN.md R9).
   assert.deepEqual(Object.keys(m.reportRow(wide)).sort(), [
     "channelId", "channelName", "color", "contextUsed", "contextWindow", "deniedCalls", "detail",
     "displayName", "identityName", "lastActivityAt", "lastDeniedTool", "lastWakeAt", "lastWakeSeq", "model",
-    "name", "sessionKey", "stale", "startedAt", "state", "threadId",
+    "name", "runtime", "sessionKey", "stale", "startedAt", "state", "threadId",
     "threadTitle", "tokensDelta", "tokensSpent", "toolLabel", "turns",
   ]);
+  // ⚠ THE RUNTIME CROSSES ON THE SERVER'S GRAMMAR or not at all: one id the column CHECK refuses
+  // would 400 the whole workspace's push.
+  for (const id of ["claude", "codex", "cursor", "muse", "grok"]) {
+    assert.equal(m.reportRow(entry({ runtimeId: id })).runtime, id);
+  }
+  for (const bad of ["", "Claude", "9codex", "x".repeat(40), 7, undefined]) {
+    assert.equal(m.reportRow(entry({ runtimeId: bad })).runtime, null, String(bad));
+  }
   // ⚠ **THE COLOUR CROSSES MEMBERSHIP-TESTED, NOT SANITIZED**, which is the one difference from
   // `displayName` above and the reason it is asserted here rather than assumed: the set is a
   // closed sixteen, so anything outside it must become NULL ("no colour") rather than a shortened
@@ -173,7 +186,7 @@ test("ROW: the wire row is exactly the twenty-five columns, and no summary field
   assert.equal(m.reportRow(wide).state, "working");
 });
 
-// C-2 — THE FIXTURE IS THE TEST. The row above used to read `chan-1:task-1`, which the server's `SESSION_KEY_RE` and
+// C-2 — THE FIXTURE IS THE TEST. The row above used to read `chan-1:thread-1`, which the server's `SESSION_KEY_RE` and
 // `threadId: z.string().uuid()` both reject, so this suite was green about a payload that 400s. Pinned against the
 // shipped regexes so a drift in either direction fails HERE rather than in production.
 test("ROW: the fixture satisfies the server's own two rules for a session row", () => {
@@ -186,7 +199,7 @@ test("ROW: the fixture satisfies the server's own two rules for a session row", 
   const re = new RegExp(keyRe[1].slice(1, -1));
   const m = load();
   assert.ok(re.test(m.reportRow(entry()).sessionKey), "the fixture key is a key the server accepts");
-  assert.ok(re.test(m.reportRow(entry({ taskId: "" })).sessionKey), "…and so is the thread-less one");
+  assert.ok(re.test(m.reportRow(entry({ threadId: "" })).sessionKey), "…and so is the thread-less one");
   assert.equal(re.test(m.reportRow(adHocEntry()).sessionKey), false,
     "…while the ad-hoc key really is refused, which is what makes the filter load-bearing");
   assert.match(SCHEMA, /threadId: z\.string\(\)\.uuid\(\)/, "the thread column takes a uuid or nothing");
@@ -194,7 +207,7 @@ test("ROW: the fixture satisfies the server's own two rules for a session row", 
 
 test("ROW: a thread-less responder's '' becomes the NULL the column stores", () => {
   const m = load();
-  const row = m.reportRow(entry({ taskId: "" }));
+  const row = m.reportRow(entry({ threadId: "" }));
   // ⚠ THE KEY STILL CARRIES THE EMPTY MIDDLE SEGMENT — and since 2026-08-21 that shape means
   // something on its own: `<channel>::<agent>` is a CHANNEL-LEVEL agent, whose scope is the
   // main room. `threadId` is null either way; the key is what tells the two apart.
@@ -246,7 +259,7 @@ test("PUSH: an IDENTICAL projection does not post again — the whole point of t
 });
 
 test("PUSH: a real state change posts again, and only the changed workspace", async () => {
-  const other = entry({ channelId: CHAN_B, taskId: TASK_B, workspaceId: "ws-2" });
+  const other = entry({ channelId: CHAN_B, threadId: THREAD_B, workspaceId: "ws-2" });
   const { m, summary } = armed();
   summary.emit([entry(), other]);
   await drained();

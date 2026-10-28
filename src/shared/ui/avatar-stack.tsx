@@ -2,6 +2,8 @@
 
 import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import { cn } from "@/shared/lib/utils";
+import { initialFor } from "./avatar";
+import { IdentityFace, type IdentityFaceProps } from "./identity-face";
 
 export interface AvatarStackUser {
   userId: string;
@@ -14,26 +16,9 @@ export interface AvatarStackUser {
 }
 
 /**
- * ⚠ THREE OF THE FOUR KEYS ARE `avatar.tsx › SIZE`'s OWN KEYS AND PIXELS,
- * deliberately: a stack and a lone `Avatar` appear on the SAME row of the same
- * list (a home channel with one peer vs. three —
- * `pages/home/relationship-list.tsx`), and a stack one step off would make the
- * row change height when a second person joins. Added 2026-08-26 for that
- * surface; `xs` is the default, so the four callers that predate it are
- * byte-identical.
- *
- * ⚠ **`2xs` (20px) IS THE EXCEPTION AND HAS NO `Avatar` TWIN ON PURPOSE
- * (2026-09-13).** It exists for the /home channel row's SECOND line — a stack
- * beside an 18px badge under a `text-body` title, on a row whose height Samuel
- * fixed ("I like the current size of it"), where 24px grows the card. The rule
- * above is about a stack and a LONE avatar sharing a row; nothing renders a lone
- * `Avatar` on that line, so there is no twin for this to disagree with. **Do not
- * add a 20px key to `avatar.tsx` to "match"** — that would put a size in the
- * component the rule is measured against, for a caller that does not exist.
- *
- * ⚠ **THE OVERLAP MOVED INTO THIS MAP (same values, 2026-09-13)**, because the
- * fourth size made the ternary that held it a three-deep chain. The bite scales
- * with the face, or a `md` stack barely overlaps at all.
+ * `xs`/`sm`/`md` are `avatar.tsx › SIZE`'s own keys and pixels, so a stack and a lone `Avatar`
+ * on one row stand the same height; `2xs` (20px) is a compact row's. The overlap scales with the
+ * face, or a `md` stack barely overlaps at all.
  */
 const SIZE = {
   "2xs": { box: "h-5 w-5", text: "text-micro", dot: "h-2 w-2", bite: "-space-x-1" },
@@ -43,12 +28,6 @@ const SIZE = {
 } as const;
 
 export type AvatarStackSize = keyof typeof SIZE;
-
-function initials(name: string): string {
-  const parts = name.split(/[\s@]+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return (name[0] || "?").toUpperCase();
-}
 
 function Avatar({
   user,
@@ -83,7 +62,7 @@ function Avatar({
             className="h-full w-full object-cover"
           />
         ) : (
-          initials(user.displayName)
+          initialFor(user.displayName, null)
         )}
       </div>
       {user.editing && (
@@ -100,7 +79,9 @@ function Avatar({
 }
 
 /**
- * Overlapping presence stack. Dedupe + ordering are the caller's job.
+ * Overlapping PRESENCE stack (an `editing` dot, a presence ring) for the collaborative surfaces:
+ * the knowledge and skill editors, teams, search rows and the channel sidebar. Identity faces are
+ * {@link IdentityStack}. Dedupe + ordering are the caller's job.
  *
  * ⚠ **THE OVERFLOW CHIP COUNTS WHAT IS HIDDEN, NOT THE TOTAL** — `+2` beside
  * three faces means five people. A caller that wants the total says it in text
@@ -145,5 +126,41 @@ export function AvatarStack({
         </div>
       )}
     </div>
+  );
+}
+
+export type IdentityStackFace = Omit<IdentityFaceProps, "size" | "label" | "className"> & {
+  key: string;
+};
+
+/**
+ * The identity look's stack: {@link IdentityFace}s overlapping by 6px, then a muted `+N` that,
+ * as above, counts what is hidden. `label` names the whole stack (and is its tooltip); without it
+ * the stack is decorative.
+ */
+export function IdentityStack({
+  faces,
+  size,
+  max = faces.length,
+  label,
+}: {
+  faces: readonly IdentityStackFace[];
+  size: number;
+  max?: number;
+  label?: string;
+}) {
+  if (faces.length === 0) return null;
+  const shown = faces.slice(0, max);
+  const overflow = faces.length - shown.length;
+  const a11y = label
+    ? { role: "img" as const, "aria-label": label, title: label }
+    : { "aria-hidden": true };
+  return (
+    <span {...a11y} className="inline-flex flex-none items-center">
+      {shown.map(({ key, ...face }, i) => (
+        <IdentityFace key={key} size={size} {...face} className={i > 0 ? "-ml-1.5" : undefined} />
+      ))}
+      {overflow > 0 && <span className="ml-0.75 text-label text-text-muted">+{overflow}</span>}
+    </span>
   );
 }

@@ -1,26 +1,21 @@
 "use client";
 
 import { MultiplayerCard, type MultiplayerCardProps } from "./multiplayer-card";
-import { AgentProfileVisual, ChatVisual, ToolGridVisual } from "./multiplayer-visuals";
+import { RotatingWord } from "./rotating-word";
+import { MULTIPLAYER_COPY as C } from "./multiplayer-content";
+import { DeployVisual } from "./multiplayer-thread";
+import { IdentityVisual, RulesVisual } from "./multiplayer-visuals";
 import { useMultiplayerScrub } from "./use-multiplayer-scrub";
 
+/** Copy lives in ./multiplayer-content.ts. */
 const BENEFITS: MultiplayerCardProps[] = [
-  {
-    visual: <ChatVisual />,
-    title: "Agent-first primitives",
-    body: "Channels are designed for and used by agents.",
-  },
-  {
-    visual: <AgentProfileVisual />,
-    title: "Observable and traceable",
-    body: "Every agent exchange is threaded with full visibility so you're in control.",
-  },
-  {
-    visual: <ToolGridVisual />,
-    title: "One shared workspace",
-    body: "Start with one channel, or run your whole team. All in one workspace.",
-  },
+  { visual: <IdentityVisual />, title: C.identity.title, body: C.identity.body },
+  { visual: <RulesVisual />, title: C.rules.title, body: C.rules.body },
+  { visual: <DeployVisual />, title: C.deploy.title, body: C.deploy.body },
 ];
+
+/** The heading's cycling verb. */
+const IDENTITY_VERBS = ["work", "think", "write", "choose"] as const;
 
 /** Markup only. Scroll maths, beats, mode selection: ./use-multiplayer-scrub. */
 export function MultiplayerSection() {
@@ -32,7 +27,9 @@ export function MultiplayerSection() {
         <section className="lp-mp">
           <div className="lp-mp-inner">
             <p className="lp-mp-eyebrow">Multiplayer</p>
-            <h2 className="lp-mp-heading">Peer-to-peer agent collaboration</h2>
+            <h2 className="lp-mp-heading">
+              Digital identities to <RotatingWord words={IDENTITY_VERBS} /> like you
+            </h2>
 
             {/* ⚠ Cards are addressed as this row's CHILDREN by the engine —
                 keep it a plain list, one element per benefit. */}

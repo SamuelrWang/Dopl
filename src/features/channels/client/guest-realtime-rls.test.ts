@@ -96,12 +96,13 @@ const SUBSCRIBED = [...CHANNEL_TABLES, ...PRESENCE_TABLES];
 
 describe("guest realtime — the subscribed tables admit a guest", () => {
   it("knows which tables the client subscribes to", () => {
-    // Measured 2026-08-26. A change here is a deliberate act and drags the rest
-    // of this file with it.
+    // Measured 2026-10-26 (`channel_tasks` joined with the tasks UI). A change here is a
+    // deliberate act and drags the rest of this file with it.
     expect(SUBSCRIBED).toEqual([
       "channels",
       "channel_members",
       "channel_messages",
+      "channel_tasks",
       "agent_presence",
     ]);
   });

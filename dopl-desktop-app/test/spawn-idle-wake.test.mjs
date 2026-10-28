@@ -76,7 +76,7 @@ test("STAMP: `awaitingDirective` is the parked-shell flag, and it is `=== true` 
 
 test("CLEAR: both wake lanes clear the flag at the ONE dispatch funnel", () => {
   // ⚠ AT `dispatch`, NOT AT EITHER GATE. `steer` (the operator's own 1:1 message, via
-  // `session-reopen.js › messageByTask`) never passes through `session-dispatch.js` at all, and
+  // `session-reopen.js › messageByThread`) never passes through `session-dispatch.js` at all, and
   // `inbound_arrived` only reaches the reducer for a message that named this agent. Clearing at
   // the funnel is what makes "woken" mean the same thing on both.
   assert.match(ENGINE,
@@ -188,7 +188,7 @@ const seed = require(join(MAIN, "session-seed.js"));
 
 const CH = "aaaaaaaa-1111-4bbb-8ccc-dddddddddddd";
 const WS = "bbbbbbbb-2222-4ccc-8ddd-eeeeeeeeeeee";
-const TASK = "cccccccc-3333-4ddd-8eee-ffffffffffff";
+const THREAD = "cccccccc-3333-4ddd-8eee-ffffffffffff";
 const GOAL = 'Join the thread "Q3 report" as my agent: read it with dopl_channel and carry the work forward.';
 
 const woken = (over = {}) => ({
@@ -198,7 +198,7 @@ const woken = (over = {}) => ({
   freshFraming: true,
   launchGoal: GOAL,
   pendingHistory: null,
-  context: { channelName: "Ops", channelId: CH, workspaceId: WS, taskId: TASK, scope: "thread" },
+  context: { channelName: "Ops", channelId: CH, workspaceId: WS, threadId: THREAD, scope: "thread" },
   ...over,
 });
 

@@ -23,8 +23,8 @@ const { UpgradeModal } = await import("./upgrade-modal");
 const { PERSONAL_MONTHLY_CREDITS, SEAT_MONTHLY_CREDITS } = await import(
   "../credits"
 );
-const { planNumber } = await import("../plans");
-const { formatMoney, PRO_PRICE, TEAM_SEAT_PRICE } = await import("../prices");
+const { MAX_PLAN_NAME, planNumber } = await import("../plans");
+const { formatMoney, MAX_PRICE, PRO_PRICE, TEAM_SEAT_PRICE } = await import("../prices");
 const { BILLING_STATUS_PATH } = await import("./use-workspace-entitlements");
 type Status = import("./use-workspace-entitlements").WorkspaceEntitlementsStatus;
 
@@ -92,10 +92,13 @@ async function open(
 }
 
 describe("on a home space", () => {
-  it("sells Pro, flat, and never Team", async () => {
+  it("sells Pro AND Max, flat, and never Team", async () => {
     const html = await open(PERSONAL_FREE);
-    expect(html).toContain("Upgrade to Pro");
+    expect(html).toContain("Upgrade your plan");
+    expect(html).toContain(">Pro<");
+    expect(html).toContain(`>${MAX_PLAN_NAME}<`);
     expect(html).toContain(formatMoney(PRO_PRICE));
+    expect(html).toContain(formatMoney(MAX_PRICE));
     expect(html).toContain("/ month");
     // The wrong plan here is a 400 at checkout, not a cosmetic slip.
     expect(html).not.toContain("Team");
@@ -107,6 +110,9 @@ describe("on a home space", () => {
     const html = await open(PERSONAL_FREE);
     expect(html).toContain(
       `${planNumber(PERSONAL_MONTHLY_CREDITS.pro)} credits a month`
+    );
+    expect(html).toContain(
+      `${planNumber(PERSONAL_MONTHLY_CREDITS.max)} credits a month`
     );
     // The seat figure happens to be the same number, so the assertion is on the
     // wording that distinguishes them.
@@ -129,9 +135,41 @@ describe("on a home space", () => {
    */
   it("falls back to the generic upsell when asked for the add-member variant", async () => {
     const html = await open(PERSONAL_FREE, "add-member");
-    expect(html).toContain("Upgrade to Pro");
+    expect(html).toContain("Upgrade your plan");
     expect(html).not.toContain("Upgrade to add members");
     expect(html).not.toContain("limited to one member");
+  });
+});
+
+describe("a PRO home space opening the upsell (2026-10-22 review)", () => {
+  const PRO_PAID: Status = {
+    ...PERSONAL_FREE,
+    plan: "pro",
+    status: "active",
+    has_stripe_customer: true,
+  };
+
+  it("offers Max in place instead of a dead end", async () => {
+    const html = await open(PRO_PAID);
+    expect(html).toContain("You're already on Pro.");
+    expect(html).toContain(`Upgrade to ${MAX_PLAN_NAME}`);
+    expect(html).not.toContain("Continue to checkout");
+  });
+
+  it("offers nothing more on Max", async () => {
+    const html = await open({ ...PRO_PAID, plan: "max" });
+    expect(html).toContain(`You're already on ${MAX_PLAN_NAME}.`);
+    expect(html).not.toContain(`Upgrade to ${MAX_PLAN_NAME}`);
+  });
+
+  it("offers no switch on an ending or past-due Pro plan", async () => {
+    expect(await open({ ...PRO_PAID, cancelAtPeriodEnd: true })).not.toContain(
+      `Upgrade to ${MAX_PLAN_NAME}`
+    );
+    cleanup();
+    expect(await open({ ...PRO_PAID, status: "past_due" })).not.toContain(
+      `Upgrade to ${MAX_PLAN_NAME}`
+    );
   });
 });
 

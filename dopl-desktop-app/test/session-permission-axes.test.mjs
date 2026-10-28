@@ -108,11 +108,11 @@ test("AXIS A truth table: every tool class x every tool mode", () => {
   }
 });
 
-test("AXIS A: hard-deny is immovable in EVERY mode, task grant or not (contract A/§H-2)", () => {
+test("AXIS A: hard-deny is immovable in EVERY mode, thread grant or not (contract A/§H-2)", () => {
   for (const tool of ["mcp__dopl__dopl_kb_admin", "mcp__dopl__dopl_chats_admin", "mcp__dopl__dopl_cluster_admin"]) {
     for (const toolMode of TOOL_MODES) {
       assert.equal(decide({ toolName: tool, toolMode }), "deny", `${tool} @ ${toolMode}`);
-      assert.equal(decide({ toolName: tool, toolMode, allowForTask: [grantKeyFor(tool, {}, CH)] }), "deny", `${tool} @ ${toolMode} + a task grant`);
+      assert.equal(decide({ toolName: tool, toolMode, allowForThread: [grantKeyFor(tool, {}, CH)] }), "deny", `${tool} @ ${toolMode} + a thread grant`);
     }
     // ...and no MESSAGE posture reaches it either.
     for (const messageMode of MESSAGE_MODES) {
@@ -147,7 +147,7 @@ test("AXIS B truth table: only an OWN-channel post is ever auto-sent", () => {
     ["DM open", DM_OPEN, { ask: "gate", auto_inbound: "gate", auto_outbound: "gate", auto_both: "gate" }],
     ["read (M3: the INBOUND half, not the outbound one)", { op: "read" },
       { ask: "gate", auto_inbound: "allow", auto_outbound: "gate", auto_both: "allow" }],
-    ["create_task", { op: "create_task" }, { ask: "gate", auto_inbound: "gate", auto_outbound: "gate", auto_both: "gate" }],
+    ["create_thread", { op: "create_thread" }, { ask: "gate", auto_inbound: "gate", auto_outbound: "gate", auto_both: "gate" }],
   ];
   for (const [name, input, expected] of rows) {
     for (const messageMode of MESSAGE_MODES) {
@@ -202,11 +202,11 @@ test("HIGH-1: Bash keys on argv0 + a digest of the exact command", () => {
   assert.equal(grantKeyFor("Bash", { command: "ls -la" }), "Bash#ls#" + shaKey("ls -la"));
   // The whole point: one approved command does not authorize the next one.
   const granted = [grantKeyFor("Bash", { command: "ls -la" })];
-  assert.equal(decide({ toolName: "Bash", input: { command: "ls -la" }, allowForTask: granted }), "allow");
-  assert.equal(decide({ toolName: "Bash", input: { command: "rm -rf ~" }, allowForTask: granted }), "gate");
-  assert.equal(decide({ toolName: "Bash", input: { command: "ls -la /etc" }, allowForTask: granted }), "gate");
+  assert.equal(decide({ toolName: "Bash", input: { command: "ls -la" }, allowForThread: granted }), "allow");
+  assert.equal(decide({ toolName: "Bash", input: { command: "rm -rf ~" }, allowForThread: granted }), "gate");
+  assert.equal(decide({ toolName: "Bash", input: { command: "ls -la /etc" }, allowForThread: granted }), "gate");
   // ...and the bare tool name authorizes nothing at all any more.
-  assert.equal(decide({ toolName: "Bash", input: { command: "ls -la" }, allowForTask: ["Bash"] }), "gate");
+  assert.equal(decide({ toolName: "Bash", input: { command: "ls -la" }, allowForThread: ["Bash"] }), "gate");
 });
 
 test("HIGH-1: WebFetch / WebSearch key on ORIGIN (path and query do not widen it)", () => {
@@ -216,8 +216,8 @@ test("HIGH-1: WebFetch / WebSearch key on ORIGIN (path and query do not widen it
   assert.notEqual(a, grantKeyFor("WebFetch", { url: "https://evil.test/a" }), "a different host is a different key");
   assert.notEqual(a, grantKeyFor("WebFetch", { url: "http://docs.example.com/a" }), "so is a different scheme");
   const granted = [a];
-  assert.equal(decide({ toolName: "WebFetch", input: { url: "https://docs.example.com/z" }, allowForTask: granted }), "allow");
-  assert.equal(decide({ toolName: "WebFetch", input: { url: "https://evil.test/z" }, allowForTask: granted }), "gate");
+  assert.equal(decide({ toolName: "WebFetch", input: { url: "https://docs.example.com/z" }, allowForThread: granted }), "allow");
+  assert.equal(decide({ toolName: "WebFetch", input: { url: "https://evil.test/z" }, allowForThread: granted }), "gate");
   // A url-less call (a plain WebSearch) has no origin to scope by, so it falls back to the
   // INPUT hash — stricter than granting every later search at once.
   assert.equal(grantKeyFor("WebSearch", { query: "a" }), "WebSearch#" + shaKey('{"query":"a"}'));
@@ -231,8 +231,8 @@ test("HIGH-1: Write / Edit / NotebookEdit key on the RESOLVED DIRECTORY", () => 
   assert.notEqual(a, grantKeyFor("Edit", { file_path: "/repo/src/a.js" }), "and another TOOL its own again");
   assert.equal(grantKeyFor("NotebookEdit", { notebook_path: "/repo/nb/x.ipynb" }), grantKeyFor("NotebookEdit", { notebook_path: "/repo/nb/y.ipynb" }));
   const granted = [a];
-  assert.equal(decide({ toolName: "Write", input: { file_path: "/repo/src/c.js" }, allowForTask: granted }), "allow");
-  assert.equal(decide({ toolName: "Write", input: { file_path: "/repo/.ssh/id_rsa" }, allowForTask: granted }), "gate");
+  assert.equal(decide({ toolName: "Write", input: { file_path: "/repo/src/c.js" }, allowForThread: granted }), "allow");
+  assert.equal(decide({ toolName: "Write", input: { file_path: "/repo/.ssh/id_rsa" }, allowForThread: granted }), "gate");
 });
 
 test("HIGH-1: everything else keys on a STABLE hash of the whole input", () => {
@@ -258,17 +258,17 @@ test("MEDIUM-2: `to` and `kind` are folded into the post key", () => {
     "`message` is the default kind, so it adds no segment");
   // An ADDRESSED post and a LIFECYCLE post each earn their own key.
   const addressed = keyOf({ op: "send", body: "hi", to: "evil@x.com" });
-  const finished = keyOf({ op: "send", body: "hi", kind: "task_finished" });
+  const finished = keyOf({ op: "send", body: "hi", kind: "thread_finished" });
   assert.notEqual(addressed, plain);
   assert.notEqual(finished, plain);
   assert.notEqual(addressed, keyOf({ op: "send", body: "hi", to: "someone@else.com" }));
   // So one approved reply cannot post to a different member, or forge a completion.
   const granted = [plain];
-  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "send", body: "hi" }, allowForTask: granted }), "allow");
-  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "send", body: "hi", to: "evil@x.com" }, allowForTask: granted }), "gate");
-  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "send", body: "hi", kind: "task_finished" }, allowForTask: granted }), "gate");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "send", body: "hi" }, allowForThread: granted }), "allow");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "send", body: "hi", to: "evil@x.com" }, allowForThread: granted }), "gate");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "send", body: "hi", kind: "thread_finished" }, allowForThread: granted }), "gate");
   // The cross-channel key carries them too, on top of its target.
-  assert.notEqual(keyOf({ op: "send", channel: "other", kind: "task_failed" }), keyOf({ op: "send", channel: "other" }));
+  assert.notEqual(keyOf({ op: "send", channel: "other", kind: "thread_failed" }), keyOf({ op: "send", channel: "other" }));
 });
 
 // ⚠ REWRITTEN 2026-08-20 (F-228), not deleted. This test used to end with four assertions on the
@@ -279,7 +279,7 @@ test("MEDIUM-2: `to` and `kind` are folded into the post key", () => {
 // recipient and lifecycle kind, never the session's assumed counterparty — an agent that posts
 // `to: evil@x.com` must not be able to have the operator approve a card that says "David".
 test("MEDIUM-2: the gate payload carries the call's REAL to/kind, not the session peer", () => {
-  const s = { profile: "full", channelId: CH, counterpartyName: "David", state: { allowForTask: [], messageMode: "ask" },
+  const s = { profile: "full", channelId: CH, counterpartyName: "David", state: { allowForThread: [], messageMode: "ask" },
     pendingPermissions: new Map(), pendingNames: new Map() };
   const evs = [];
   const canUse = axisB.makeCanUseTool(s, (_s, ev) => evs.push(ev));
@@ -296,18 +296,18 @@ test("MEDIUM-2: the gate payload carries the call's REAL to/kind, not the sessio
   // test/session-dm-addressee-truth.test.mjs.
   assert.equal(evs[0].payload.addressed, undefined);
   // Addressed + lifecycle-kinded: the REAL recipient and the claimed kind ride the payload.
-  canUse(DOPL_CHANNEL_TOOL, { op: "send", body: "done", to: "evil@x.com", kind: "task_finished" },
+  canUse(DOPL_CHANNEL_TOOL, { op: "send", body: "done", to: "evil@x.com", kind: "thread_finished" },
     { requestId: "r2", toolUseID: "t2" });
   assert.equal(evs[1].payload.to, "evil@x.com", "not the session's counterparty");
   assert.equal(evs[1].payload.addressed, true);
-  assert.equal(evs[1].payload.postKind, "task_finished");
+  assert.equal(evs[1].payload.postKind, "thread_finished");
   for (const id of ["r1", "r2"]) s.pendingPermissions.get(id)({ behavior: "deny" });
 });
 
 test("B3: grants are in-memory only — nothing about a key is ever persisted", () => {
-  const rec = io.baseRecord({ key: "k", sessionId: "s", channelId: CH, taskId: "t", state: {
-    ...reducer.initialSessionState(), allowForTask: ["Bash#ls#deadbeefcafe"], toolMode: "bypass" } });
-  assert.equal(rec.allowForTask, undefined);
+  const rec = io.baseRecord({ key: "k", sessionId: "s", channelId: CH, threadId: "t", state: {
+    ...reducer.initialSessionState(), allowForThread: ["Bash#ls#deadbeefcafe"], toolMode: "bypass" } });
+  assert.equal(rec.allowForThread, undefined);
   assert.equal(rec.toolMode, undefined);
   assert.equal(rec.messageMode, undefined);
 });
@@ -315,8 +315,8 @@ test("B3: grants are in-memory only — nothing about a key is ever persisted", 
 // ── D. M2 (2026-08-05): THE PARK PRESERVES BOTH AXES AND THE GRANTS ──
 //
 // THE REQUIREMENT CHANGE, and it inverts this test. It used to prove A4/A5 (both axes), C9
-// (inboundForTask) and FIX F1 (allowForTask) were all cleared on park. Samuel's contract is that
-// a posture he set holds for the whole session, the for-task grants included, and he named the
+// (inboundForThread) and FIX F1 (allowForThread) were all cleared on park. Samuel's contract is that
+// a posture he set holds for the whole session, the for-thread grants included, and he named the
 // grants explicitly. F1's real defect was that the header and the state DISAGREED — a reset
 // posture beside a surviving grant — and consistency, not clearing, is what fixes that: the axes
 // and the grants now survive together, and the header goes on telling the truth about both.
@@ -330,16 +330,16 @@ test("M2: a park preserves both axes AND every standing grant", () => {
   const armed = {
     ...reducer.initialSessionState(), phase: "running",
     toolMode: "bypass", messageMode: "auto_both",
-    allowForTask: [postGrant, bashGrant],
+    allowForThread: [postGrant, bashGrant],
   };
   const r = reducer.sessionReducer(armed, { type: "idle_timeout" });
   assert.equal(r.state.parked, true, "it still parks: the query is still torn down");
   assert.equal(r.state.toolMode, "bypass");
   assert.equal(r.state.messageMode, "auto_both");
-  assert.deepEqual(r.state.allowForTask, [postGrant, bashGrant], "the grants outlive the park");
+  assert.deepEqual(r.state.allowForThread, [postGrant, bashGrant], "the grants outlive the park");
   // The WOKEN session behaves as the operator set it — asked with the woken state, as before.
   const s = { profile: "full", channelId: CH, state: r.state };
-  const woken = { ...s, allowForTask: r.state.allowForTask, toolMode: r.state.toolMode, messageMode: r.state.messageMode };
+  const woken = { ...s, allowForThread: r.state.allowForThread, toolMode: r.state.toolMode, messageMode: r.state.messageMode };
   assert.equal(grantDecision({ ...woken, toolName: "Bash", input: { command: "ls -la" } }), "allow");
   assert.equal(grantDecision({ ...woken, toolName: DOPL_CHANNEL_TOOL, input: OWN_POST }), "allow");
   assert.equal(io.postWillGate({ ...s, state: r.state }, OWN_POST), false);

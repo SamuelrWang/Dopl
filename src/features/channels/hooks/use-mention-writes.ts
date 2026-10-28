@@ -8,7 +8,7 @@ import {
 } from "@/shared/hooks/use-api-mutation";
 import { channelRequest } from "../client/api";
 import { channelKeys, channelMentionsPath } from "../client/query-keys";
-import { failed } from "./use-thread-writes-shared";
+import { failed } from "./use-writes-shared";
 import type { ChannelMention } from "../types";
 
 /**

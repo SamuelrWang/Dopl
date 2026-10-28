@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { Coins, Wallet } from "lucide-react";
 import type { WorkspaceCreditsStatus } from "@/features/billing/components/use-workspace-entitlements";
 import { CardLabel, IconTile, StatFigure } from "./overview-bits";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 /**
  * The period group: one flat inset panel carrying the label, the credit cards
@@ -50,8 +51,8 @@ export function PeriodStats({ credits }: { credits: WorkspaceCreditsStatus }) {
   ];
 
   return (
-    <section className="rounded-[14px] border border-border-default bg-bg-inset p-3.5">
-      <h2 className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+    <section className="rounded-xl border border-border-default bg-bg-inset p-3.5">
+      <h2 className={LABEL_TEXT}>
         {PERIOD_LABEL}
       </h2>
       <div className="mt-3 grid grid-cols-2 gap-3">

@@ -30,7 +30,7 @@ import type { ChannelMessage, ChannelThread } from "../types";
 import type { AvatarPerson } from "@/shared/ui/avatar";
 
 /** An agent hangs on its operator's side — never a third column (INVARIANTS §5). */
-export type MessageSide = "peer" | "me";
+type MessageSide = "peer" | "me";
 
 export interface MessageRow {
   kind: "message";
@@ -88,14 +88,14 @@ export interface MessageRow {
 }
 
 /** A `system` row (joins, topic changes) — no side, avatar or author. */
-export interface SystemRow {
+interface SystemRow {
   kind: "system";
   id: string;
   seq: number;
   body: string;
 }
 
-/** A request's card in the channel view — one per fan-out (N `channel_tasks` rows sharing a
+/** A request's card in the channel view — one per fan-out (N `channel_threads` rows sharing a
  *  server-stamped `fanoutGroup`); the threads' messages live in the thread view. */
 export interface ThreadCardRow {
   kind: "thread-card";
@@ -104,6 +104,8 @@ export interface ThreadCardRow {
   side: MessageSide;
   author: AvatarPerson;
   authorLabel: string;
+  /** The opening message was an agent's (`authorKind`); the author is still its operator. */
+  agent: boolean;
   time: string;
   /** Every thread of the request, in addressee order. Never empty. */
   threads: ChannelThread[];
@@ -138,17 +140,17 @@ export interface ReceiptRow {
   time: string;
 }
 
-/** Runtime-state kinds: never a bubble, at most a receipt. `task_progress` is absent on purpose:
+/** Runtime-state kinds: never a bubble, at most a receipt. `thread_progress` is absent on purpose:
  *  it is the milestone lane, whose body is prose a peer needs (INVARIANTS §5). */
 function isLifecycleKind(message: ChannelMessage): boolean {
   return (
-    message.kind === "task_started" ||
-    message.kind === "task_finished" ||
-    message.kind === "task_failed"
+    message.kind === "thread_started" ||
+    message.kind === "thread_finished" ||
+    message.kind === "thread_failed"
   );
 }
 
-/** A terminal lifecycle row's receipt, or null: always for `task_started` (run state lives in
+/** A terminal lifecycle row's receipt, or null: always for `thread_started` (run state lives in
  *  the Agents tab), and for a terminal row with no calm flag and no body. */
 function toReceiptRow(
   message: ChannelMessage,
@@ -311,7 +313,7 @@ export function channelRows(
       continue;
     }
     if (isLifecycleKind(message)) {
-      // A known thread's receipt belongs to its thread view; a legacy `task-<channel>-<seq>`
+      // A known thread's receipt belongs to its thread view; a legacy `thread-<channel>-<seq>`
       // tag names no thread, so it lands here.
       if (!thread) {
         const receipt = toReceiptRow(message, formatTime);
@@ -334,6 +336,7 @@ export function channelRows(
         side: message.authorUserId === index.currentUserId ? "me" : "peer",
         author: personFor(message, index),
         authorLabel: labelFor(message, index),
+        agent: message.authorKind === "agent",
         time: formatTime(message.createdAt),
         threads: cardThreads,
         openThreadId: ownThreadOf(cardThreads, index.currentUserId).id,

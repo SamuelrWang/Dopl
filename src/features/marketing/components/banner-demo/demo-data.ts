@@ -29,8 +29,8 @@ export const U = {
 
 /** `public/` paths, which `useBridgedImageSrc` returns verbatim on the web. */
 export const FACE = {
-  [U.samuel]: "/img/avatars/sam.jpg",
-  [U.grace]: "/img/avatars/grace.jpg",
+  [U.samuel]: "/img/avatars/daniel.jpg",
+  [U.grace]: "/img/avatars/grace-v2.jpg",
   [U.anthony]: "/img/avatars/anthony.jpg",
 } as const;
 
@@ -68,7 +68,7 @@ function member(
 }
 
 export const MEMBERS: ChannelMember[] = [
-  member(U.samuel, "Samuel Wang", "srwang@usc.edu", true),
+  member(U.samuel, "Daniel Ortiz", "daniel@vermillion.io", true),
   member(U.grace, "Grace Okafor", "grace@vermillion.io"),
   member(U.anthony, "Anthony Reyes", "anthony@lattice.build"),
 ];
@@ -127,7 +127,7 @@ export const DEMO_CHANNEL = channel(CHANNEL_ID, CHANNEL_NAME, {
 /**
  * **ONE THREAD PER ORCHESTRATOR** (v3, Samuel 2026-10-12).
  *
- * ⚠ **A THREAD IS JOINED TO ITS MESSAGES BY `metadata.taskId`, NOTHING ELSE**
+ * ⚠ **A THREAD IS JOINED TO ITS MESSAGES BY `metadata.threadId`, NOTHING ELSE**
  * (`view-model.ts › threadIdOf`). `channelRows` then collapses every tagged message
  * into ONE `thread-card` for the opener and suppresses the rest
  * (`view-model-rows.ts › channelRows`), and `threadRows` filters the same array back
@@ -205,6 +205,17 @@ export const AGENT_IDS = {
   wake: "wreplay1",
 } as const;
 
+/** What each agent runs on, mixed across owners so the room shows more than one runtime; the
+ *  sessions carry it as a real room's do (`runtimeId` own, `runtime` peer). */
+export const AGENT_RUNTIME: Readonly<Record<string, string>> = {
+  [AGENT_IDS.planner]: "claude",
+  [AGENT_IDS.teardown]: "claude",
+  [AGENT_IDS.triage]: "codex",
+  [AGENT_IDS.notice]: "codex",
+  [AGENT_IDS.scout]: "grok",
+  [AGENT_IDS.wake]: "grok",
+};
+
 /**
  * ONE COLOUR PER AGENT, AND NOT HAND-PICKED (Samuel, 2026-10-12: every agent gets
  * its own colour, in the real app's palette).
@@ -249,7 +260,11 @@ const [
   TEARDOWN_COLOR,
   NOTICE_COLOR,
   WAKE_COLOR,
-] = launchOrderColors(6);
+  PRIOR_COLOR,
+] = launchOrderColors(7);
+
+/** The older, off-script agent behind the inbox's prior mention (`demo-info-data.ts`). */
+export const PRIOR_AGENT_COLOR = PRIOR_COLOR;
 
 export const AGENT_COLORS = {
   [AGENT_IDS.triage]: TRIAGE_COLOR,
@@ -321,14 +336,14 @@ export const AGENT_INDEX: ReadonlyMap<string, AgentRosterEntry> = new Map([
 /**
  * Samuel's own live agents — the desktop feed the Agents tab and the panel read.
  *
- * ⚠ **`taskId` IS WHERE A SESSION POSTS, AND IT DECIDES THE SENT BOX'S CAPTION**
+ * ⚠ **`threadId` IS WHERE A SESSION POSTS, AND IT DECIDES THE SENT BOX'S CAPTION**
  * (`agents-model.ts › postDestination`): `""` is the channel ("Posted to channel"), a
  * thread id names the thread. The planner works the channel; its three coders work
  * inside the thread it opened, so only they carry one.
  */
 function ownSession(
   agentId: string,
-  taskId: string,
+  threadId: string,
   startedMinsAgo: number,
   contextUsed: number,
 ): DesktopSessionSummary {
@@ -336,11 +351,11 @@ function ownSession(
   if (!identity?.displayName) {
     throw new Error(`banner demo: no agent identity for ${agentId}`);
   }
-  const openThread = taskId === "" ? null : OPEN_THREAD.title;
+  const openThread = threadId === "" ? null : OPEN_THREAD.title;
   return {
     sessionId: `demo-session-${agentId}`,
     channelId: CHANNEL_ID,
-    taskId,
+    threadId,
     agentId,
     name: agentId,
     displayName: identity.displayName,
@@ -348,6 +363,7 @@ function ownSession(
     channelName: CHANNEL_NAME,
     threadTitle: openThread,
     identityName: identity.displayName,
+    runtimeId: AGENT_RUNTIME[agentId],
     contextUsed,
     contextWindow: 200_000,
     tokensSpent: Math.round(contextUsed * 2.4),
@@ -368,8 +384,6 @@ function ownSession(
 export const MY_SESSIONS: DesktopSessionSummary[] = [
   ownSession(AGENT_IDS.planner, "", 4, 46_000),
   ownSession(AGENT_IDS.teardown, OPEN_THREAD_ID, 2, 38_000),
-  ownSession(AGENT_IDS.notice, OPEN_THREAD_ID, 2, 24_000),
-  ownSession(AGENT_IDS.wake, OPEN_THREAD_ID, 2, 19_000),
 ];
 
 /** The session the cursor opens, and whose private lane the script writes. */
@@ -405,9 +419,10 @@ function peer(
     name: agentId,
     displayName: identity.displayName,
     color: AGENT_COLORS[agentId as keyof typeof AGENT_COLORS],
+    runtime: AGENT_RUNTIME[agentId],
     state: "working",
     channelName: CHANNEL_NAME,
-    threadTitle: null,
+    threadTitle: threadId === OPEN_THREAD_ID ? OPEN_THREAD.title : null,
     updatedAt: minsAgo(0),
     userId,
   };
@@ -416,6 +431,16 @@ function peer(
 /** The other members' orchestrators. Their coders run on their machines, not ours. */
 export const PEER_TRIAGE = peer(U.grace, AGENT_IDS.triage);
 export const PEER_SCOUT = peer(U.anthony, AGENT_IDS.scout);
+
+/**
+ * **TWO OF THE THREAD'S CODERS ARE OTHER PEOPLE'S** (Samuel, 2026-10-22: "have some of
+ * the agents be not Daniel's agents ... that really demonstrates that you can have
+ * multiple agents with different people talking to each other"). End Notice Check runs on
+ * Grace's machine and Wake Replay Trace on Anthony's, so the thread holds three owners'
+ * agents; only Teardown Order Fix is the viewer's own (`MY_SESSIONS`).
+ */
+export const PEER_NOTICE = peer(U.grace, AGENT_IDS.notice, OPEN_THREAD_ID);
+export const PEER_WAKE = peer(U.anthony, AGENT_IDS.wake, OPEN_THREAD_ID);
 
 /**
  * **THE SERVER'S SESSION PROJECTION, WHICH INCLUDES THE VIEWER'S OWN AGENTS.**
@@ -441,6 +466,6 @@ export const SERVER_SESSIONS: ChannelPeerSession[] = [
   PEER_SCOUT,
   peer(U.samuel, AGENT_IDS.planner),
   peer(U.samuel, AGENT_IDS.teardown, OPEN_THREAD_ID),
-  peer(U.samuel, AGENT_IDS.notice, OPEN_THREAD_ID),
-  peer(U.samuel, AGENT_IDS.wake, OPEN_THREAD_ID),
+  PEER_NOTICE,
+  PEER_WAKE,
 ];

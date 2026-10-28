@@ -80,7 +80,7 @@ export const row = (over = {}) => ({
   id: DID,
   workspace_id: WS,
   channel_id: CH,
-  task_id: TH,
+  thread_id: TH,
   operator_user_id: ME,
   goal: "Draft the release notes",
   model: "claude-opus-5",
@@ -109,7 +109,7 @@ export function boot(over = {}) {
     // ⚠ THE LIVE REGISTRY, as `session-engine.js › listLiveSessions` projects it. Empty by
     // default, so the ordinary `no-session` answer is what a case gets unless it says otherwise.
     live: [],
-    // What `controlByTask` answers. `{ok:true}` unless a case makes the session settle mid-flight.
+    // What `controlByThread` answers. `{ok:true}` unless a case makes the session settle mid-flight.
     control: { ok: true },
     // What `agent-names.js › rename` answers: the STORED string, or null for a sanitizer refusal.
     renameAnswer: undefined,
@@ -120,10 +120,10 @@ export function boot(over = {}) {
   const gets = [];
   const arms = [];
   const logged = [];
-  const controls = []; // every `session-engine.controlByTask` call the lane made
+  const controls = []; // every `session-engine.controlByThread` call the lane made
   const names = [];    // every `agent-names` write the lane made
   const flushes = [];  // every `session-summary.touch()` the commit wrapper announced
-  const modes = [];    // every `session-engine.setModeByTask` call the lane made (2026-09-01)
+  const modes = [];    // every `session-engine.setModeByThread` call the lane made (2026-09-01)
   const resolves = [];
   const notices = []; // every operator banner the lane raised (#3201)
   const drops = [];   // every drop/orphan post the lane made (#3201)
@@ -325,16 +325,16 @@ export function boot(over = {}) {
     if (id === "./session-engine") {
       return {
         listLiveSessions: () => cfg.live,
-        controlByTask: (a) => { controls.push(a); return cfg.control; },
+        controlByThread: (a) => { controls.push(a); return cfg.control; },
         // ⚠ THE LIVE MODE OP, STUBBED AT ITS SEAM (2026-09-01) — the real one is
-        // `session-reopen.js › setModeByTask`, where the windowless MESSAGE floor and the
+        // `session-reopen.js › setModeByThread`, where the windowless MESSAGE floor and the
         // reducer's fail-closed coercion live, and it is driven for real in
         // `session-mode-floor.test.mjs`. What THIS harness controls is which answer comes back,
         // so a case can ask what the DIRECTIVE lane does with each.
         // C2's reply shape, emulated with the REAL rules: a pinned mode clamps to the channel
         // value for the session's runtime (its own order / message bits), then the windowless
         // message floor; `{ ok, tools, messages, clamped }`. `cfg.setMode` overrides the answer.
-        setModeByTask: (a) => {
+        setModeByThread: (a) => {
           modes.push(a);
           if (cfg.setMode) return cfg.setMode;
           const live = (cfg.live || []).find((r) => r && r.agentId === a.agentId) || {};

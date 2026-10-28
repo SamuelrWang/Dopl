@@ -70,9 +70,9 @@ const sess = (over = {}) => ({
   key: `${CH}:${THREAD}:a1b2c3d4`,
   agentId: "a1b2c3d4",
   channelId: CH,
-  taskId: THREAD,
+  threadId: THREAD,
   profile: "full",
-  state: { toolMode: "manual", messageMode: "auto_both", activity: "idle", allowForTask: [] },
+  state: { toolMode: "manual", messageMode: "auto_both", activity: "idle", allowForThread: [] },
   ...over,
 });
 const post = (over = {}) => ({ op: "send", channel: CH, body: "here you go", ...over });
@@ -122,7 +122,7 @@ test("LIVE: a session whose frozen mode is `ask` still sends when the channel sa
   // Messaging: `state.messageMode` says ask/auto_inbound, and the live read must win anyway —
   // that is the whole content of "immediately".
   for (const frozen of ["ask", "auto_inbound"]) {
-    const s = sess({ state: { toolMode: "manual", messageMode: frozen, activity: "idle", allowForTask: [] } });
+    const s = sess({ state: { toolMode: "manual", messageMode: frozen, activity: "idle", allowForThread: [] } });
     assert.equal(decideWith("auto_outbound", s, post()), "allow", `frozen ${frozen} must not gate the post`);
   }
 });
@@ -160,7 +160,7 @@ test("LIVE: the frozen value is the fallback ONLY when the store cannot be read"
 // ── 2. THE INBOUND HALF IS NOT WIDENED ──────────────────────────────────────────
 
 test("LIVE: an outbound posture does not read the peer's words in unseen", () => {
-  const s = sess({ state: { toolMode: "manual", messageMode: "ask", activity: "idle", allowForTask: [] } });
+  const s = sess({ state: { toolMode: "manual", messageMode: "ask", activity: "idle", allowForThread: [] } });
   assert.equal(decideWith("auto_outbound", s, { op: "read", channel: CH }), "gate",
     "auto_outbound consents to what LEAVES; the IN half is a separate consent");
 });
@@ -171,16 +171,16 @@ test("FLOOR: a windowless session on an `ask` channel can still READ its own thr
   // ⚠ WITHOUT THE RE-FLOOR THIS IS A DENIED READ, NOT A GATED ONE — a windowless session has no
   // surface to answer a gate on. `ask` is the DEFAULT posture, so this is the common channel,
   // and the agent would be unable to look at the thread it was answering.
-  const s = sess({ windowless: true, state: { toolMode: "manual", messageMode: "ask", activity: "idle", allowForTask: [] } });
+  const s = sess({ windowless: true, state: { toolMode: "manual", messageMode: "ask", activity: "idle", allowForThread: [] } });
   assert.equal(slice(() => "ask").effectiveMessageMode(s), "auto_inbound", "the IN half is floored");
   assert.equal(decideWith("ask", s, { op: "read", channel: CH }), "allow");
 });
 
 test("FLOOR: it raises the IN half and never the OUT half", () => {
-  const s = sess({ windowless: true, state: { toolMode: "manual", messageMode: "ask", activity: "idle", allowForTask: [] } });
+  const s = sess({ windowless: true, state: { toolMode: "manual", messageMode: "ask", activity: "idle", allowForThread: [] } });
   assert.equal(decideWith("ask", s, post()), "gate", "a floored session still asks before it sends");
   // …and a windowed session is not floored at all: the pick stands as written.
-  const windowed = sess({ state: { toolMode: "manual", messageMode: "ask", activity: "idle", allowForTask: [] } });
+  const windowed = sess({ state: { toolMode: "manual", messageMode: "ask", activity: "idle", allowForThread: [] } });
   assert.equal(slice(() => "ask").effectiveMessageMode(windowed), "ask");
 });
 
@@ -207,14 +207,14 @@ test("FULL AUTO: …and it is NARROW — only the OUT half defeats it", () => {
   // Without this case the ruling reads as "private turns no longer matter", which it is not.
   for (const mode of ["ask", "auto_inbound"]) {
     const p = slice(() => mode);
-    const s = sess({ state: { toolMode: "manual", messageMode: mode, activity: "idle", allowForTask: [] } });
+    const s = sess({ state: { toolMode: "manual", messageMode: mode, activity: "idle", allowForThread: [] } });
     p.openPrivateTurn(s);
     assert.equal(decideWith(mode, s, post()), "gate", `${mode} still withdraws`);
   }
   // …and the IN half survives on every path, so an agent asked a private question about a thread
   // can still go and look at it — the deliberate deviation from "as if the mode were ask".
   const p = slice(() => "auto_inbound");
-  const s = sess({ state: { toolMode: "manual", messageMode: "auto_inbound", activity: "idle", allowForTask: [] } });
+  const s = sess({ state: { toolMode: "manual", messageMode: "auto_inbound", activity: "idle", allowForThread: [] } });
   p.openPrivateTurn(s);
   assert.equal(p.effectiveMessageMode(s), "auto_inbound");
 });

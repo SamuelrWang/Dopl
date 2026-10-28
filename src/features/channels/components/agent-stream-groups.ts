@@ -91,7 +91,7 @@ export function groupStreamItems(items: readonly StreamItem[]): StreamGroup[] {
  * ⚠ FALLS BACK TO THE ROW COUNT for a run of frames carrying neither a tool NAME
  * nor an ordinal, rather than reporting zero — the rule this function already had.
  */
-export function toolUses(items: readonly StreamItem[]): number {
+function toolUses(items: readonly StreamItem[]): number {
   const named = items.filter((item) => !!item.tool).length;
   let stamped = 0;
   for (const item of items) {

@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { apiRequest } from "@/shared/api/api-client";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import { OpenScaleButton, OPEN_SCALE_ICON } from "@/shared/ui/open-scale-button";
+import { PILL_ICON, pillButton } from "@/shared/ui/pill-button";
 import {
   RowAction,
   SettingsCard,
@@ -20,11 +20,12 @@ import { RuntimeCredentialBars } from "@/features/channels/components/runtime-cr
 import { useRuntimeCredentials } from "@/features/channels/components/runtime-signin";
 import { AGENT_APPS_PATH, type AgentApp } from "../types";
 import { useAgentApps, useInvalidateAgentApps } from "./use-devices";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 /** A card's own small heading — Overview's `RailCard` label face. */
 function CardHeading({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+    <h3 className={LABEL_TEXT}>
       {children}
     </h3>
   );
@@ -46,10 +47,15 @@ export function AgentsPanel() {
       id="settings-connect-agents"
       label="Agents"
       action={
-        <OpenScaleButton onClick={() => setConnecting((open) => !open)} aria-expanded={connecting}>
-          <Plus size={OPEN_SCALE_ICON} aria-hidden="true" />
+        <button
+          type="button"
+          onClick={() => setConnecting((open) => !open)}
+          aria-expanded={connecting}
+          className={pillButton("outline", "md")}
+        >
+          <Plus size={PILL_ICON.md} aria-hidden="true" />
           Connect an agent
-        </OpenScaleButton>
+        </button>
       }
     >
       {connecting && (
@@ -61,7 +67,7 @@ export function AgentsPanel() {
 
       <SettingsCard label="Connected agents">
         <CardHeading>Connected</CardHeading>
-        <ul aria-label="Connected agents" className="mt-1 divide-y divide-border-subtle">
+        <ul aria-label="Connected agents" className="mt-1 divide-y divide-border-default">
           {apps === null ? (
             <SettingsRowsSkeleton />
           ) : apps.length === 0 ? (
@@ -77,7 +83,7 @@ export function AgentsPanel() {
       {runtimes.length > 0 && (
         <SettingsCard label="Agent sign-ins">
           <CardHeading>Sign-ins</CardHeading>
-          <RuntimeCredentialBars variant="rows" className="mt-1" />
+          <RuntimeCredentialBars className="mt-1" />
         </SettingsCard>
       )}
     </SettingsPanel>

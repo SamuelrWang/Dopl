@@ -26,7 +26,7 @@ vi.mock("@/features/channels/server/service", () => ({
 import { POST as createPost } from "@/app/api/channels/launch-directives/route";
 import { POST as decidePost } from "@/app/api/channels/launch-directives/decide/route";
 import { createLaunchDirective, decideLaunchDirective } from "@/features/channels/server/service";
-import { AGENT_COLOR_KEYS } from "./lib/agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 import {
   LAUNCH_MESSAGE_MODES,
   LAUNCH_TOOL_MODES,

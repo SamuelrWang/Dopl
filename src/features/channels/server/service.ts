@@ -6,15 +6,15 @@ import "server-only";
  * each file has one clear purpose; cross-cutting context + gates live in
  * `service-shared.ts`.
  *   - `service-shared.ts`  — context, visibility gate, management gate, resolvers
- *   - `service-reads.ts`   — list + header + roster + tasks + cursor reads + await
+ *   - `service-reads.ts`   — list + header + roster + threads + cursor reads + await
  *                            poll + the named-agent ATTRIBUTION roster
  *   - `service-await.ts`   — the await long-poll HOLD loop (tick + recheck cadence)
  *   - `service-writes.ts`  — create (incl. direct) / update / delete, post message
  *   - `service-writes-members.ts` — channel membership (add / remove / own prefs)
  *   - `service-writes-metadata.ts` — what a post may put in `metadata` vs. what
- *                            the server stamps (addressing, task keys, the
+ *                            the server stamps (addressing, thread keys, the
  *                            fan-out group)
- *   - `service-tasks.ts`   — first-class task lifecycle (create / set mode)
+ *   - `service-threads.ts`   — first-class thread lifecycle (create / set mode)
  *   - `consent-service.ts` — OUTBOUND review requests (v1.2). ⚠ The INBOUND lane
  *                            was retired 2026-08-22 with `trust-service.ts`,
  *                            `POST|DELETE /api/channels/trust` and the
@@ -51,8 +51,8 @@ export {
 export {
   listAgents,
   listChannelMembers,
-  listChannelTasks,
-  getChannelTask,
+  listChannelThreads,
+  getChannelThread,
   readMessages,
   // THE FOLDED READ (2026-09-06, artifacts #1220 §4) — the ROUTE's read: page
   // plus its folded rendering, over the same body as `readMessages`, so there is
@@ -79,6 +79,9 @@ export {
 // that file's docblock carries the seam, and the function's carries why the
 // design's "not offered" line gave way.
 export { listChannelArtifacts } from "./service-artifacts-list";
+
+// CHANNEL TASKS (PLAN.md R5–R10): the list, one task, and the POST action union.
+export { applyTaskAction, listChannelTasks, readChannelTask } from "./service-tasks";
 // `revalidateAwaitAccess` / `pollChannelMessages` / `hasNewMessages` are NOT
 // re-exported: `service-await.ts` imports them directly, and a second name for a
 // long-poll internal only invites a handler to call one.
@@ -122,25 +125,23 @@ export {
 // in the workspace" primitive. The DM decision is in the module docblock.
 export { removeWorkspaceDepartedMember } from "./service-workspace-departure";
 
-export { createTask, setTaskMode } from "./service-tasks";
+export { createThread, setThreadMode } from "./service-threads";
 
 // THE REQUEST FAN-OUT (wiring plan Phase 3): N addressees, N threads, one card.
-// Its own module because it is a CALLER of `createTask` and nothing else — the
+// Its own module because it is a CALLER of `createThread` and nothing else — the
 // per-addressee idempotency key and the derived group id get "simplified" out of
 // a create.
-export { createTaskFanOut } from "./service-tasks-broadcast";
+export { createThreadFanOut } from "./service-threads-broadcast";
 
 // THREAD DELETION (Samuel, 2026-08-21) — HARD, cascading, creator-or-manager,
 // and NOT a finished state: a thread that exists is still live, this is how one
 // stops existing. Its own module because it is a five-table cascade with an
-// ordering argument, where `service-tasks.ts` is create + set-mode. ⚠ Reachable
-// ONLY from `DELETE /api/channels/[channelId]/tasks/[taskId]`, which is
+// ordering argument, where `service-threads.ts` is create + set-mode. ⚠ Reachable
+// ONLY from `DELETE /api/channels/[channelId]/threads/[threadId]`, which is
 // `sessionOnly` — there is no MCP op and there must not be one.
-export { deleteTask } from "./service-tasks-delete";
+export { deleteThread } from "./service-threads-delete";
 
-// THREADS NO LONGER CLOSE (wiring plan Phase 4, 2026-08-18). `service-tasks-
-// lifecycle.ts` and `service-tasks-propose.ts` are DELETED with the only writes
-// that moved `channel_tasks.status`; the column survives carrying legacy `closed`
+// THREADS DO NOT CLOSE. `channel_threads.status` survives carrying legacy `closed`
 // rows that nothing reads. The operator pauses or ends an AGENT, not a thread.
 
 export {

@@ -27,7 +27,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isAgentColorKey } from "@/features/channels/lib/agent-colors";
+import { isAgentColorKey } from "@/shared/lib/agent-colors";
 import {
   MENTIONS_METADATA_KEY,
   mentionSlug,
@@ -53,7 +53,7 @@ import {
   threadsAt,
 } from "./demo-transcript";
 import { narrationAt } from "./demo-narration";
-import { mentionsAt } from "./demo-info-data";
+import { PRIOR_MENTION_ID, mentionsAt } from "./demo-info-data";
 import { STEPS, stepIndex, type StepId } from "./demo-steps";
 
 const HERE = join(fileURLToPath(new URL(".", import.meta.url)));
@@ -127,10 +127,10 @@ describe("1. the scripted cursor is one shape for the whole demo", () => {
     expect(pathOf(demo)).toBe(pathOf(banner));
   });
 
-  it("keeps its white keyline, which the banner cursor does not need", () => {
-    // Approved deviation: this cursor rides /home's dark slab.
+  it("wears the same white keyline as the banner cursor", () => {
+    // (Samuel, 2026-10-15) The banner's first cursor now wears it too.
     expect(demo).toContain('stroke="#ffffff"');
-    expect(banner).not.toContain('stroke="#ffffff"');
+    expect(banner).toContain('stroke="#ffffff"');
   });
 });
 
@@ -222,8 +222,8 @@ describe("3. mention metadata is derived from the body, never authored beside it
   describe("the derivation itself, independent of today's copy", () => {
     const grace = MEMBERS.find((m) => (m.displayName ?? "").startsWith("Grace"));
     if (!grace) throw new Error("no Grace in the demo roster");
-    const samuel = MEMBERS.find((m) => (m.displayName ?? "").startsWith("Samuel"));
-    if (!samuel) throw new Error("no Samuel in the demo roster");
+    const samuel = MEMBERS.find((m) => (m.displayName ?? "").startsWith("Daniel"));
+    if (!samuel) throw new Error("no Daniel in the demo roster");
 
     it("resolves a tagged member to their id", () => {
       expect(mentionMetadata("@Grace can you take a look?", samuel.userId)).toEqual({
@@ -232,7 +232,7 @@ describe("3. mention metadata is derived from the body, never authored beside it
     });
 
     it("excludes the author, so tagging yourself lights nobody's inbox", () => {
-      expect(mentionMetadata("@Samuel reminding myself", samuel.userId)).toEqual({});
+      expect(mentionMetadata("@Daniel reminding myself", samuel.userId)).toEqual({});
     });
 
     /**
@@ -394,8 +394,13 @@ describe("5. the mentions inbox is live", () => {
     expect(mentionsAt(0).length).toBeLessThan(full.length);
   });
 
+  it("opens on a prior mention, never the empty inbox", () => {
+    expect(mentionsAt(0).some((m) => m.messageId === PRIOR_MENTION_ID)).toBe(true);
+  });
+
   it("reveals each row on the beat of the post it cites, and not before", () => {
-    for (const row of full) {
+    // The prior mention predates the scene and cites no scripted post (by design).
+    for (const row of full.filter((m) => m.messageId !== PRIOR_MENTION_ID)) {
       const { step } = citedMessage(row.messageId);
       const at = stepIndex(step);
       expect(
@@ -410,7 +415,7 @@ describe("5. the mentions inbox is live", () => {
   });
 
   it("agrees with the transcript about who wrote each cited post", () => {
-    for (const row of full) {
+    for (const row of full.filter((m) => m.messageId !== PRIOR_MENTION_ID)) {
       const { message, agentColor } = citedMessage(row.messageId);
       expect(row.authorUserId).toBe(message.authorUserId);
       expect(row.seq).toBe(message.seq);
@@ -476,7 +481,7 @@ describe("7. threads exist only once their opener has landed", () => {
 
   it("tags the briefs into that thread, so the thread view has a body", () => {
     const inThread = messagesAt(LAST_STEP).filter(
-      (m) => m.metadata?.taskId === OPEN_THREAD.id
+      (m) => m.metadata?.threadId === OPEN_THREAD.id
     );
     // Three launches, three briefs, the opener and the coder's reply.
     expect(inThread.length).toBeGreaterThanOrEqual(7);
@@ -487,7 +492,7 @@ describe("7. threads exist only once their opener has landed", () => {
     // it — which would have dropped one silently. Every briefing line carries an agent
     // tag, so the thread's posts are exactly where that would have shown.
     const brief = post(BRIEF_POST);
-    expect(brief.metadata?.taskId).toBe(OPEN_THREAD.id);
+    expect(brief.metadata?.threadId).toBe(OPEN_THREAD.id);
     expect(brief.body.startsWith("@")).toBe(true);
   });
 });

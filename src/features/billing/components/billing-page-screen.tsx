@@ -10,6 +10,7 @@ import { BillingPlansPane } from "./billing-plans-pane";
 import { BillingUsagePane } from "./billing-usage-pane";
 import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
 import styles from "./billing-page.module.css";
+import { LABEL_TEXT_MUTED } from "@/shared/ui/section-heading";
 
 /**
  * `/billing/[segment]` — the browser half of Dopl, after the website retires.
@@ -92,7 +93,7 @@ export function BillingPageScreen({
       )}
     >
       <header className="bento px-6 py-5">
-        <p className="text-label font-semibold uppercase tracking-wide text-text-muted">
+        <p className={LABEL_TEXT_MUTED}>
           Dopl billing
         </p>
         <h1 className="mt-1 text-display font-semibold tracking-tight text-text-primary">

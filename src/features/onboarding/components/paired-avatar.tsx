@@ -1,6 +1,8 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
+import { agentColorOrNull, agentColorVar } from "@/shared/lib/agent-colors";
+import { IDENTITY_RING_PX, IdentityFace } from "@/shared/ui/identity-face";
 import { Profile } from "./web-pieces";
 
 /**
@@ -14,30 +16,54 @@ import { Profile } from "./web-pieces";
  * are fine here: auth + onboarding are the design system's standing exemption.
  */
 
-const RAISED_SHADOW =
-  "var(--raised-light-bevel), 0 4px 7px rgba(0,0,0,0.1), 0 10px 20px rgba(0,0,0,0.08)";
-export const agentColor = (n: number) => `var(--agent-color-${String(n).padStart(2, "0")})`;
+/** A bank slot (1–16) as its colour key; an out-of-bank slot has none. */
+const slotKey = (n: number) => agentColorOrNull(`agent-${String(n).padStart(2, "0")}`);
 
+/** A bank slot's colour, or the neutral hairline outside the bank. */
+export const agentColor = (n: number) => {
+  const key = slotKey(n);
+  return key ? agentColorVar(key) : "var(--raised-light-line)";
+};
+
+/**
+ * `thinFrame` is the identity look (`@/shared/ui/identity-face › IdentityFace`, DESIGN-LANGUAGE §3).
+ * Without it, the login and onboarding journeys keep their own raised scaled frame (`Profile`),
+ * which `IdentityFace` does not draw.
+ */
 export function PairedAvatar({
   d,
   photo,
   agentLogo,
   color,
+  thinFrame = false,
 }: {
   /** The person circle's diameter; the badge is half of it. */
   d: number;
   photo?: string;
   agentLogo?: string;
+  thinFrame?: boolean;
   /** Agent colour-bank slot, 1–16, for both rings. */
   color: number;
 }) {
+  if (thinFrame) {
+    return (
+      <IdentityFace
+        size={d}
+        photo={photo}
+        runtimeLogo={agentLogo}
+        ring={slotKey(color) ?? "neutral"}
+        className="block"
+      />
+    );
+  }
   const ring = agentColor(color);
+  const rw = IDENTITY_RING_PX;
   const b = d * 0.5;
   return (
     <div style={{ position: "relative", width: d, height: d, flex: "none" }}>
-      <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `2px solid ${ring}` }}>
+      <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `${rw}px solid ${ring}` }}>
         <div style={{ position: "absolute", inset: 0 }}>
-          <Profile src={photo} d={d - 4} />
+          <Profile src={photo} d={d - 2 * rw} />
         </div>
       </div>
       <Face d={b} round ring={ring} style={{ position: "absolute", width: b, height: b, right: -b * 0.3, bottom: -b * 0.3 }}>
@@ -68,8 +94,8 @@ export function Face({
         ...style,
         borderRadius: round ? "50%" : d * 0.28,
         background: "var(--raised-light-face)",
-        border: ring ? `2px solid ${ring}` : "1px solid var(--raised-light-line)",
-        boxShadow: RAISED_SHADOW,
+        border: ring ? `${IDENTITY_RING_PX}px solid ${ring}` : `${Math.min(1, d / 26)}px solid var(--raised-light-line)`,
+        boxShadow: "var(--raised-light-drop)",
         boxSizing: "border-box",
         display: "grid",
         placeItems: "center",

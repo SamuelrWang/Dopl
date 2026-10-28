@@ -22,21 +22,22 @@ function wantsIdentity(value) {
 
 /**
  * A windowless requester-side agent, spawned IDLE (no query until its first message) and answered with its
- * ADDRESS `{ ok, agentId }`. The clicking human is the consent. `taskId` null or '' means a CHANNEL-level
+ * ADDRESS `{ ok, agentId }`. The clicking human is the consent. `threadId` null or '' means a CHANNEL-level
  * agent (keyed `<channel>::<agent>`); otherwise it must be a first-class thread's UUID.
  */
 async function launchFromButton(payload) {
   const p = payload || {};
   if (!isUuid(p.channelId)) return { ok: false };
-  const channelLevel = p.taskId == null || p.taskId === '';
-  if (!channelLevel && !isUuid(p.taskId)) return { ok: false };
+  const channelLevel = p.threadId == null || p.threadId === '';
+  if (!channelLevel && !isUuid(p.threadId)) return { ok: false };
   const engine = require('./session-engine');
   const channelPrefs = require('./channel-prefs');
   const targeting = require('./targeting');
   const listener = require('./channel-listener');
-  // Containment comes from MAIN's watched-channel DTO, never the payload, and before the identity is even
-  // fetched: an identity widens prompt content only (INVARIANTS §5A). Narrowed for a shared room (F-510).
-  const toolProfile = targeting.resolveLaunchToolProfile(listener.watchedChannel(p.channelId));
+  // Containment comes from MAIN's channel DTO (watched, else fetched by id: a launch before reconcile reached
+  // this channel), never the payload, and before the identity is even fetched: an identity widens prompt
+  // content only (INVARIANTS §5A). Narrowed for a shared room (F-510).
+  const toolProfile = targeting.resolveLaunchToolProfile(await listener.channelForLaunch(p.channelId));
   const workspaceId = typeof p.workspaceId === 'string' ? p.workspaceId : null;
 
   // The sheet's ephemeral overrides (model, field values), narrowed by main — the only validator of this
@@ -85,7 +86,7 @@ async function launchFromButton(payload) {
 
   const res = await engine.launchRequesterSession({
     channelId: p.channelId,
-    taskId: channelLevel ? '' : p.taskId,
+    threadId: channelLevel ? '' : p.threadId,
     workspaceId,
     // The panel's pre-minted id, accepted by shape (else a fresh mint); a live-slot collision answers `busy`.
     agentId: isAgentId(p.agentId) ? p.agentId : undefined,
@@ -94,10 +95,10 @@ async function launchFromButton(payload) {
     direct: p.direct === true,
     context: {
       channelName: typeof p.channelName === 'string' ? p.channelName.slice(0, 120) : '',
-      taskTitle: channelLevel ? null : (title || null),
+      threadTitle: channelLevel ? null : (title || null),
       channelId: p.channelId,
       workspaceId,
-      taskId: channelLevel ? '' : p.taskId,
+      threadId: channelLevel ? '' : p.threadId,
       // The framing cannot infer channel-level from an absent thread id, so the launch that knows states it.
       scope: channelLevel ? 'channel' : 'thread',
       workspaceSegment: typeof p.workspaceSegment === 'string' ? p.workspaceSegment : null,

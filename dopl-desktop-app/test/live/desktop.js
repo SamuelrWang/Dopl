@@ -56,7 +56,7 @@ async function load() {
     // so listener-messages can refuse a chat post ahead of the two session-STARTING routes.
     // Self-contained (its const is inside the function), so `fnOf` slices all of it.
     // `mentionsMe` (2026-08-18, wiring plan Phase 7) is the second, on identical terms: the
-    // dispatcher gates the passive task-reply notice on the answer classify's 'fyi' verdict
+    // dispatcher gates the passive thread-reply notice on the answer classify's 'fyi' verdict
     // is conjoined with, and its MENTIONS_KEY const likewise sits inside the function.
     const built = new Function(
       `${probe.fnOf(targeting, 'metaStr')}\n${legacy}\n${probe.fnOf(targeting, 'isChatIntent')}\n` +

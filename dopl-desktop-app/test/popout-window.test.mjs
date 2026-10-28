@@ -41,7 +41,7 @@ const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ")
 
 const SEGMENT = "acme-a1b2";
 const CH = "44444444-4444-4444-8444-444444444444";
-const TH = "task-1";
+const TH = "thread-1";
 
 /** A BrowserWindow-shaped fake that records everything the factory does to it. */
 function mkFakeWindow(options) {
@@ -306,8 +306,8 @@ test("asking twice for ONE thread FRONTS the window, it does not mint a second",
 
 test("a DIFFERENT thread gets its own window", () => {
   const ctx = load();
-  ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: "task-1" });
-  ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: "task-2" });
+  ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: "thread-1" });
+  ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: "thread-2" });
   assert.equal(ctx.created.length, 2);
   assert.equal(ctx.api.count(), 2);
 });
@@ -317,13 +317,13 @@ test("the window budget is a CEILING, and it refuses in the same `{ ok: false }`
   const ctx = load();
   for (let i = 0; i < ctx.api.MAX_POPOUTS; i += 1) {
     assert.deepEqual(
-      ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: `task-${i}` }),
+      ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: `thread-${i}` }),
       { ok: true },
       `pop-out ${i}`
     );
   }
   assert.deepEqual(
-    ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: "task-over" }),
+    ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: "thread-over" }),
     { ok: false },
     "over the ceiling"
   );
@@ -333,7 +333,7 @@ test("the window budget is a CEILING, and it refuses in the same `{ ok: false }`
 test("a CLOSED pop-out frees its slot", () => {
   const ctx = load();
   for (let i = 0; i < ctx.api.MAX_POPOUTS; i += 1) {
-    ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: `task-${i}` });
+    ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: `thread-${i}` });
   }
   // Electron destroys, then emits 'closed'.
   const first = ctx.created[0];
@@ -341,7 +341,7 @@ test("a CLOSED pop-out frees its slot", () => {
   first.handlers.closed();
   assert.equal(ctx.api.count(), ctx.api.MAX_POPOUTS - 1);
   assert.deepEqual(
-    ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: "task-new" }),
+    ctx.api.openThreadWindow({ segment: SEGMENT, channelId: CH, threadId: "thread-new" }),
     { ok: true }
   );
 });

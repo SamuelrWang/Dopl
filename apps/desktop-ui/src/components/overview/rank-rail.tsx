@@ -3,14 +3,8 @@ import { Skeleton } from "@/shared/ui/skeleton";
 import type { Role } from "@/features/workspaces/types";
 
 /**
- * THE COMPARISON RAIL AND ITS CARD — the one recipe both Overviews draw their
- * breakdowns with (wave 8, R-29(b)).
- *
- * ⚠ **THE FOUR RAILS THEMSELVES LIVE HERE TOO SINCE 2026-09-17.** Wave 8 moved
- * the bar geometry and the card frame out of /home's own rails file (deleted),
- * but both Overviews then kept private copies of the RAILS — byte-identical
- * apart from the channel id key, which is now the caller's `.map`. /home's face
- * is unchanged (R-40): this is a seam, not a restyle.
+ * THE COMPARISON RAIL AND ITS CARD — the workspace Overview's breakdowns (wave 8, R-29(b)). The
+ * channel id key is the caller's `.map`, so the rail itself knows no container shape.
  *
  * ⚠ MINIMAL COPY (INVARIANTS §5): labels and controls, no explainer paragraphs.
  */
@@ -27,8 +21,7 @@ export interface RankRow {
  * A comparison rail: name, bar, figure, on ONE line.
  *
  * ⚠ **NOT `UsageMeter`.** That primitive is the "used / limit" recipe — a
- * stacked label row over a `.concave-track` well — and /home has ruled that
- * nothing on it is pressed in (docs/DESIGN-SYSTEM.md). The track is a flat
+ * stacked label row over a `.concave-track` well. The track is a flat
  * `bg-bg-inset`, the fill the flat CTA ink; both plain tokens.
  *
  * ⚠ THE BAR IS RELATIVE TO THE TOP ROW, NOT TO A TOTAL, and the figure beside
@@ -108,17 +101,9 @@ export function ClippedNote({ scanned }: { scanned: number }) {
   );
 }
 
-/* ───────────────────────── THE FOUR RAILS BOTH OVERVIEWS DRAW ─────────────────
- * ⚠ ONE DECLARATION EACH. /home and the workspace Overview each kept a private
- * copy of these after the wave-8 extraction; the copies were byte-identical. */
+/* ───────────────────────────────── THE FOUR RAILS ───────────────────────────── */
 
-/**
- * CREDITS per channel.
- *
- * ⚠ **THE ID KEY IS THE CALLER'S** — /home addresses a channel by
- * `workspaceId`, a workspace by `channelId` — so this takes {@link RankRow}s the
- * page already mapped, and there is no key flag on the component.
- */
+/** CREDITS per channel, over {@link RankRow}s the page already mapped. */
 export function ChannelCreditRail({ rows }: { rows: readonly RankRow[] }) {
   return (
     <RailCard title="Credits by channel">
@@ -221,13 +206,12 @@ export function ToolRail({ rows }: { rows: readonly ToolRailRow[] }) {
   );
 }
 
-/** The 2×2 rail grid's loading state. ⚠ `h-40` is the ghost card size
- *  `home-skeleton.tsx` mirrors — move it and move that with it. */
+/** The 2×2 rail grid's loading state. */
 export function RailsGhost() {
   return (
     <div className="grid grid-cols-2 gap-3">
       {Array.from({ length: 4 }).map((_, index) => (
-        <Skeleton key={index} className="h-40 rounded-[14px]" />
+        <Skeleton key={index} className="h-40 rounded-xl" />
       ))}
     </div>
   );

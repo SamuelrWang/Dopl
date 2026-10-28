@@ -9,6 +9,7 @@ import { WorkspaceDangerZoneCore } from "@/features/workspaces/components/worksp
 // (`./agents-section-core.tsx`), account-scoped where it always belonged: it
 // renders one `/api/mcp` URL for the caller and reads no workspace at all.
 import { SectionShell } from "./section-shell";
+import { LABEL_TEXT_MUTED } from "@/shared/ui/section-heading";
 
 /** `GET /api/workspaces/{segment}` → `{ workspace, role }`. ⚠ Exported because
  *  every surface that reads or INVALIDATES this entry must spell the key
@@ -59,7 +60,7 @@ export function WorkspaceSectionBody({
     <>
       {image && (
         <div className="flex flex-col gap-2">
-          <label className="text-label font-semibold uppercase tracking-wide text-text-muted">
+          <label className={LABEL_TEXT_MUTED}>
             Workspace image
           </label>
           {image}

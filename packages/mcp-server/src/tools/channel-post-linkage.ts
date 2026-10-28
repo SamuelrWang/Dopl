@@ -11,13 +11,13 @@
  * tag is silent, so both survive as tokens the caller reads in one glance.
  *
  * ⚠ THE ANSWER IS READ OFF THE **STORED** MESSAGE, NEVER OFF THE REQUEST.
- * `metadata.taskId` is what the receiving desktop routes on, so this reports
+ * `metadata.threadId` is what the receiving desktop routes on, so this reports
  * what actually LANDED rather than what was asked for — which is the only way
  * `dropped` can be told from `threaded` at all.
  *
  * ⚠ AN AD-HOC ID IS NOT A THREAD, and the two must not render the same. A
- * first-class (uuid) id names a `channel_tasks` row; a legacy
- * `task-<channel>-<seq>` id is the label a receiving machine mints for an
+ * first-class (uuid) id names a `channel_threads` row; a legacy
+ * `thread-<channel>-<seq>` id is the label a receiving machine mints for an
  * untagged request so a reply groups with it on that machine's card. It has no
  * row, no title and nothing to join — and the remedies are OPPOSITE: an ad-hoc
  * id the caller PASSED is working and must keep being passed (dropping it forks
@@ -31,7 +31,7 @@
 import type { ChannelMessage } from "@dopl/client";
 import { metaString } from "./channel-shared";
 // ⚠ THE one predicate for "is this id a real thread" — shared with the read
-// render so the two lanes cannot disagree about what a `task-…` id is.
+// render so the two lanes cannot disagree about what a `thread-…` id is.
 import { isFirstClassThreadId } from "./channel-render-threads";
 import type { FactValue } from "./channel-facts";
 
@@ -65,7 +65,7 @@ export function threadFacts(
   message: ChannelMessage,
   askedThread: string | undefined,
 ): ThreadFacts {
-  const landedThread = metaString(message, "taskId");
+  const landedThread = metaString(message, "threadId");
   if (!landedThread) {
     return { thread: undefined, landed: askedThread ? "dropped" : "room" };
   }

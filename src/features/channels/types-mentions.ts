@@ -25,7 +25,7 @@ export type ChannelMention = {
   /** Per-channel monotonic identity; the list's order. */
   seq: number;
   channelId: string;
-  /** `metadata.taskId`, or null for a channel-level post — the navigate target. */
+  /** `metadata.threadId`, or null for a channel-level post — the navigate target. */
   threadId: string | null;
   authorUserId: string | null;
   /** Display claim only, same rule as the transcript's chip (INVARIANTS §5). */

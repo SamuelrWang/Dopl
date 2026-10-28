@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import { HOME_CHANNEL_WELLS, channelWellOf } from "./channel-wells";
-import type { HomeRow } from "./home-rows";
+import type { HomeRow } from "@/features/home/components/channels/home-rows";
 
 const HOUR = 3_600_000;
 const NOW = Date.UTC(2026, 8, 15, 12, 0, 0);

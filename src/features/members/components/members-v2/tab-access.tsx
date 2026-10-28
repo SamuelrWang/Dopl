@@ -117,7 +117,7 @@ function AccessGroup({
             >
               <span
                 className={cn(
-                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px]",
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
                   locked ? "bg-danger/10 text-danger" : "bg-bg-elevated text-text-secondary"
                 )}
               >

@@ -158,7 +158,8 @@
 
 /* ── 3D controls — the same raised surfaces as the login page ──────────── */
 
-.lp-btn--3d {
+.lp-btn--3d,
+.lp-audio-toggle[data-on-dark] {
   background: linear-gradient(180deg, #313131 0%, #1c1c1c 52%, #111 100%);
   color: #fff;
   border: 1px solid #000;
@@ -169,16 +170,18 @@
     0 6px 16px rgba(0, 0, 0, 0.2);
   transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
 }
-.lp-btn--3d:hover {
+.lp-btn--3d:hover,
+.lp-audio-toggle[data-on-dark]:hover {
   filter: brightness(1.1);
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     inset 0 -1px 0 rgba(0, 0, 0, 0.45),
     0 4px 7px rgba(0, 0, 0, 0.24),
     0 10px 24px rgba(0, 0, 0, 0.24);
 }
-.lp-btn--3d:active {
+.lp-btn--3d:active,
+.lp-audio-toggle[data-on-dark]:active {
   transform: translateY(1px);
   /* Flip the gradient + deepen the inset top shadow so a dark face reads as
      pressed-IN — a dark-on-dark inset alone is invisible. */
@@ -206,7 +209,7 @@
 .lp-btn--3d-light:hover,
 .lp-icon-btn:hover,
 .lp-menu-btn:hover {
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
   filter: brightness(0.99);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
@@ -429,7 +432,7 @@
 .lp-nav-menu-item:hover,
 .lp-nav-menu-item:focus-visible {
   outline: none;
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
   background: linear-gradient(180deg, #ffffff 0%, #f0f0f0 100%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
@@ -439,6 +442,29 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 0 0 2px rgba(24, 24, 24, 0.28);
+}
+
+/* The kit's still hit box (`src/app/globals.css`, THE LIFT'S STILL HIT BOX), restated because the
+   landing is outside the kit: while hovered, a transparent band fills the strip the lift vacated,
+   so a cursor on the bottom edge does not flicker between the hand and the arrow. */
+.lp-btn--3d,
+.lp-audio-toggle[data-on-dark],
+.lp-btn--3d-light,
+.lp-icon-btn,
+.lp-menu-btn,
+.lp-nav-menu-item {
+  --lift: 1px;
+}
+:where(.lp-btn--3d, .lp-audio-toggle[data-on-dark], .lp-btn--3d-light, .lp-icon-btn, .lp-menu-btn, .lp-nav-menu-item) {
+  position: relative;
+}
+:where(.lp-btn--3d, .lp-audio-toggle[data-on-dark], .lp-btn--3d-light, .lp-icon-btn, .lp-menu-btn, .lp-nav-menu-item):hover:not(:disabled)::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: calc(var(--lift) + 1px);
 }
 .lp-nav-menu-item:active {
   transform: translateY(1px);
@@ -885,6 +911,74 @@
   color: #0a0a0a;
 }
 
+/* Cycling verb in the heading (rotating-word.tsx). Words stack in one grid
+   cell and the slot eases to each word's width. ⚠ No overflow clip: it cut
+   the flip off before the fade finished, and an inline box with overflow
+   other than visible sits on its bottom edge instead of the text baseline. */
+.lp-rot {
+  position: relative;
+  display: inline-grid;
+  vertical-align: baseline;
+  perspective: 900px;
+  transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Prism flip: each word is a face of a rectangular prism turning upward on
+   a horizontal axle through its centre (origin pushed back half a line).
+   Outgoing face rolls up to the top (0 → 90deg); the next rolls up from the
+   bottom face (-90deg → 0). Fade rides along. */
+.lp-rot-word {
+  grid-area: 1 / 1;
+  white-space: nowrap;
+  transform-origin: 50% 50% -0.55em;
+  backface-visibility: hidden;
+}
+.lp-rot-word[data-phase="in"] {
+  animation: lp-rot-in 620ms cubic-bezier(0.45, 0, 0.2, 1) both;
+}
+.lp-rot-word[data-phase="out"] {
+  animation: lp-rot-out 620ms cubic-bezier(0.45, 0, 0.2, 1) both;
+}
+.lp-rot-measure {
+  position: absolute;
+  visibility: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.lp-rot-measure > span {
+  position: absolute;
+}
+@keyframes lp-rot-in {
+  from {
+    opacity: 0;
+    transform: rotateX(-90deg);
+  }
+  to {
+    opacity: 1;
+    transform: rotateX(0deg);
+  }
+}
+@keyframes lp-rot-out {
+  from {
+    opacity: 1;
+    transform: rotateX(0deg);
+  }
+  to {
+    opacity: 0;
+    transform: rotateX(90deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-rot {
+    transition: none;
+  }
+  .lp-rot-word[data-phase] {
+    animation: none;
+  }
+  .lp-rot-word[data-phase="out"] {
+    display: none;
+  }
+}
+
 .lp-mp-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -929,15 +1023,92 @@
   color: var(--muted);
 }
 
-/* Visual 1 — mini chat window, bled off the bottom of the grey area. */
-.lp-mp-chat {
+/* ── Multiplayer visuals — the Admin Assistant: created → ruled → deployed ──
+   Markup: multiplayer-visuals.tsx (cards 1–2), multiplayer-thread.tsx (card 3).
+   PLAY CONTRACT: every animated element carries its start time as `--d` (and a
+   window length as `--w`) inline; use-visual-play.ts writes `data-play` on the
+   visual's root — `armed` = hidden start, `in` = keyframes run once and HOLD.
+   ⚠ The BASE rules are the FINAL frame. SSR, no JS and reduced motion never get
+   the attribute, so they render the finished UI static — nothing to switch off.
+   Keyframes are `from`-only where they can be, animating TO those base rules.
+
+   SCALE: each mock is drawn at ONE design size (the 388px-wide visual of the
+   1280px row) and scaled by `--k`, stepped by container width below, so the
+   content fits the grey area at every row width instead of falling off it. */
+.lp-mp-visual {
+  container-type: inline-size;
+  --lp-mp-hair: #ececec;
+  --lp-mp-well: #fafafa;
+  --lp-mp-ext-bg: #fff3e3;
+  --lp-mp-ext-line: #f6dcb8;
+  --lp-mp-ext-ink: #a4520a;
+  /* iMessage's own system greys/blue — local to card 3's phone */
+  --lp-mp-imsg-blue: #0a84ff;
+  --lp-mp-imsg-grey: #e9e9eb;
+}
+.lp-mp-panel {
+  --k: 1;
   position: absolute;
-  inset: 26px 20px -22px;
+  left: 50%;
+  height: 350px;
+  transform: translateX(-50%) scale(var(--k));
+  transform-origin: 50% 0;
   background: #ffffff;
   border: 1px solid #ebebeb;
-  border-radius: 10px;
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.07);
   overflow: hidden;
+}
+@container (max-width: 387px) {
+  .lp-mp-panel {
+    --k: 0.948;
+  }
+}
+@container (max-width: 367px) {
+  .lp-mp-panel {
+    --k: 0.897;
+  }
+}
+@container (max-width: 347px) {
+  .lp-mp-panel {
+    --k: 0.845;
+  }
+}
+@container (max-width: 327px) {
+  .lp-mp-panel {
+    --k: 0.794;
+  }
+}
+@container (max-width: 307px) {
+  .lp-mp-panel {
+    --k: 0.742;
+  }
+}
+@container (max-width: 287px) {
+  .lp-mp-panel {
+    --k: 0.691;
+  }
+}
+@container (max-width: 267px) {
+  .lp-mp-panel {
+    --k: 0.639;
+  }
+}
+@container (max-width: 247px) {
+  .lp-mp-panel {
+    --k: 0.588;
+  }
+}
+@container (max-width: 227px) {
+  .lp-mp-panel {
+    --k: 0.536;
+  }
+}
+
+/* Cards 1–2 — a mini window, bled off the bottom of the grey area. */
+.lp-mp-panel {
+  top: calc(16px * var(--k));
+  width: 348px;
+  border-radius: 10px;
 }
 .lp-mp-chrome {
   display: flex;
@@ -958,95 +1129,578 @@
 .lp-mp-chrome span:first-child {
   background: #bcbcbc;
 }
-.lp-mp-chat-body {
+.lp-mp-panel-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px 14px;
-}
-.lp-mp-chat-line {
-  margin: 0;
-  font-size: 15px;
-  line-height: 1.35;
-  color: #9b9b9b;
-  /* one line each — the clipped tail is the look */
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.lp-mp-chat-line--user {
-  font-weight: 500;
-  color: var(--ink);
-}
-.lp-mp-chat-caret {
-  margin-right: 7px;
-  color: #b4b4b4;
+  gap: 10px;
+  padding: 13px 14px;
 }
 
-/* Visual 2 — verified agent profile card. */
-.lp-mp-profile {
+/* The avatar — mirrors onboarding/components/paired-avatar.tsx › PairedAvatar
+   (2px agent-colour ring, raised face, runtime badge inset bottom-right). Sizes
+   and the ring colour are inline; this is only the shape. */
+.lp-mp-avatar {
+  position: relative;
+  flex: none;
+  display: block;
+}
+.lp-mp-avatar-ring {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(255px, calc(100% - 44px));
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid;
+}
+.lp-mp-avatar-face {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: var(--raised-light-face);
+  border: 1px solid var(--raised-light-line);
+}
+.lp-mp-avatar-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.lp-mp-badge {
+  position: absolute;
+  display: block;
+}
+
+.lp-mp-id-head {
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 14px;
-  background: #ffffff;
-  border: 1px solid #ebebeb;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  gap: 12px;
+  min-width: 0;
 }
-.lp-mp-avatar {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 11px;
-  background: linear-gradient(150deg, #d9e8ff 0%, #a8c7fa 100%);
-}
-.lp-mp-profile-text {
+.lp-mp-id-text {
   display: flex;
   flex-direction: column;
   gap: 3px;
   min-width: 0;
 }
-.lp-mp-profile-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+.lp-mp-id-name,
+.lp-mp-id-role {
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.lp-mp-id-name {
   font-size: 15px;
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--ink);
 }
-.lp-mp-verified {
-  flex: none;
-  color: #2f7cf6;
-}
-.lp-mp-profile-meta {
-  font-size: 13px;
+.lp-mp-id-role {
+  font-size: 12px;
   color: var(--muted);
 }
-
-/* Visual 3 — 4×2 tile grid. */
-.lp-mp-grid {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(2, 1fr);
-  gap: 10px;
-  padding: 26px;
+.lp-mp-pill {
+  flex: none;
+  margin-left: auto;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--lp-mp-ext-line);
+  background: var(--lp-mp-ext-bg);
+  color: var(--lp-mp-ext-ink);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
 }
-.lp-mp-tile {
+.lp-mp-caret {
+  display: inline-block;
+  width: 1.5px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: -0.12em;
+  background: var(--ink);
+  opacity: 0;
+}
+
+.lp-mp-field {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 10px;
+}
+.lp-mp-field--stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lp-mp-label {
+  font-size: 11.5px;
+  line-height: 24px;
+  color: var(--muted);
+}
+.lp-mp-field--stack .lp-mp-label {
+  line-height: 1.2;
+  margin-bottom: 1px;
+}
+.lp-mp-chip,
+.lp-mp-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 24px;
+  border: 1px solid var(--lp-mp-hair);
+  border-radius: 7px;
+  background: var(--lp-mp-well);
+  font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.lp-mp-chip {
+  justify-self: start;
+  padding: 0 9px;
+}
+.lp-mp-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.lp-mp-row {
+  padding: 0 5px 0 8px;
+}
+.lp-mp-mark {
+  display: inline-flex;
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+.lp-mp-mark > img,
+.lp-mp-mark .lp-ont-source-mark {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+.lp-mp-mark > .lp-mp-mark-tile {
+  border-radius: 4px;
+}
+.lp-mp-glyph {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: #e6e6e6;
+  color: #5c5c5c;
+}
+.lp-mp-wave {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
+  margin-left: 3px;
+}
+.lp-mp-wave i {
+  width: 2px;
+  border-radius: 1px;
+  background: #a3a3a3;
+}
+.lp-mp-toggle {
+  position: relative;
+  flex: none;
+  margin-left: auto;
+  width: 24px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--ink);
+}
+.lp-mp-toggle i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+  transform: translateX(10px);
+}
+
+/* Card 2 — rules + escalations. */
+.lp-mp-rule {
+  gap: 9px;
+  height: 22px;
+  padding: 0 9px;
+  font-size: 11.5px;
+}
+.lp-mp-check {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--ink);
+  color: #ffffff;
+}
+
+/* Card 3 — the iMessage thread. Wears `.lp-mp-panel` too: the SAME box,
+   width and radius as cards 1–2 (Samuel 2026-10-16), minus the chrome dots. */
+.lp-mp-phone {
+  display: flex;
+  flex-direction: column;
+}
+/* iOS-style frosted header OVER the thread (the thread runs under it), so
+   older messages scroll up beneath it — and, at the end, sit behind the glass
+   banner for it to refract. */
+.lp-mp-phone-head {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
-  background: #dedede;
+  gap: 6px;
+  height: 34px;
+  background: rgba(250, 250, 250, 0.8);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+.lp-mp-contact-disc {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  /* Light on purpose: it sits under the banner at the end, and a dark disc
+     refracted through the glass read as a smudge (Samuel 2026-10-16). */
+  background: linear-gradient(180deg, #d3d6dd 0%, #b9bdc7 100%);
   color: #ffffff;
+  font-size: 8px;
+  font-weight: 600;
+}
+.lp-mp-contact-name {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+/* flex-end + overflow hidden: the newest message sits at the bottom and older
+   ones scroll up under the (overlaid) header and off, as in a real thread.
+   Top padding = the header's height, so the first messages start below it;
+   overflow runs into that padding, i.e. under the header. The bottom
+   padding = the bleed (panel top 16 + height 350 − visual 337 = 29) + a
+   constant 10px margin under the newest message. */
+.lp-mp-thread {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 36px 10px 39px;
+  overflow: hidden;
+}
+/* Each message is a 1-row grid so it can GROW in (0fr → 1fr) and push the
+   thread up. ⚠ The gap is padding on the INNER `.lp-mp-line`, never on the
+   clipped child: padding cannot collapse, so every not-yet-shown message left
+   6px behind and the thread floated above a gap that only closed on the last
+   message (Samuel 2026-10-16). */
+.lp-mp-grow,
+.lp-mp-typing {
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+}
+.lp-mp-grow > div,
+.lp-mp-typing > div {
+  min-height: 0;
+}
+.lp-mp-line {
+  display: flex;
+  padding-top: 6px;
+}
+.lp-mp-typing {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+.lp-mp-bubble {
+  max-width: 80%;
+  padding: 6px 10px;
+  border-radius: 15px;
+  background: var(--lp-mp-imsg-grey);
+  color: #0a0a0a;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.lp-mp-bubble--me {
+  margin-left: auto;
+  background: var(--lp-mp-imsg-blue);
+  color: #ffffff;
+}
+/* Incoming typing dots — bare, no bubble (Samuel 2026-10-16). */
+.lp-mp-dots {
+  display: inline-flex;
+  gap: 3px;
+  padding: 6px 6px 4px;
+  color: #8e8e93;
+}
+.lp-mp-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+}
+/* The Dopl notification — iOS banner over the top of the screen, on the
+   landing's LiquidGlass (shared/design/liquid-glass). This wrapper only places
+   and slides it.
+   ⚠ TRANSFORM ONLY — never opacity, here or on any ancestor. Opacity < 1 makes
+   the element a BACKDROP ROOT, so the glass's backdrop-filter had nothing to
+   sample while the banner faded in: it drew clear-flat, and the header and
+   bubbles read straight through it as if laid OVER it (Samuel 2026-10-16,
+   "part of it gets covered"). It starts fully above the panel's top edge, which
+   clips it like a screen edge. */
+.lp-mp-notify {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+}
+/* The rim edge's own drop (glass-edge.ts › rimDropShadow, 72px of blur) is
+   sized for a hero-scale pane and smeared grey over the whole panel; an iOS
+   banner casts a small, tight one. ⚠ The component exposes no prop for the rim
+   shadow, so this targets its shadow LAYER — the aria-hidden child whose inline
+   box-shadow is an outset one (the rim band beside it is `inset`). */
+.lp-mp-notify-glass > [aria-hidden][style*="box-shadow"]:not([style*="inset"]) {
+  box-shadow:
+    0 1px 2px rgba(8, 10, 15, 0.08),
+    0 4px 12px rgba(8, 10, 15, 0.1) !important;
+}
+.lp-mp-notify-pad {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px 11px 11px;
+}
+.lp-mp-notify-icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+}
+.lp-mp-notify-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.lp-mp-notify-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.lp-mp-notify-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.lp-mp-notify-body {
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--ink);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ── Visual play: armed (start frame) → in (run once, end on the base rules) ── */
+[data-play="armed"] :is(.lp-mp-rise, .lp-mp-pop, .lp-mp-fade) {
+  opacity: 0;
+}
+[data-play="armed"] .lp-mp-type {
+  font-size: 0;
+}
+[data-play="armed"] .lp-mp-wave i {
+  transform: scaleY(0.15);
+}
+[data-play="armed"] .lp-mp-toggle {
+  background: #d9d9d9;
+}
+[data-play="armed"] .lp-mp-toggle i {
+  transform: none;
+}
+[data-play="armed"] .lp-mp-check {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px #cfcfcf;
+}
+[data-play="armed"] .lp-mp-check svg {
+  opacity: 0;
+}
+[data-play="armed"] .lp-mp-grow {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+[data-play="armed"] .lp-mp-notify {
+  transform: translateY(calc(-100% - 12px));
+}
+
+/* ⚠ Fill is `backwards`, not `both`: every keyframe is `from`-only, so the base
+   rule IS the end frame and nothing needs holding. A held animation keeps its
+   element composited forever — the avatar photo rasterised soft that way, and
+   the notification's opacity would keep its glass flat. */
+[data-play="in"] .lp-mp-rise {
+  animation: lp-mp-rise 420ms var(--lp-mp-ease) var(--d) backwards;
+}
+[data-play="in"] .lp-mp-pop {
+  animation: lp-mp-pop 360ms var(--lp-mp-ease) var(--d) backwards;
+}
+[data-play="in"] .lp-mp-fade {
+  animation: lp-mp-fade 420ms var(--lp-mp-ease) var(--d) backwards;
+}
+/* A typed character: zero-width until its time, so the caret rides the text. */
+[data-play="in"] .lp-mp-type {
+  animation: lp-mp-type 1ms steps(1, end) var(--d) backwards;
+}
+[data-play="in"] .lp-mp-caret {
+  animation:
+    lp-mp-caret var(--w) linear var(--d),
+    lp-mp-blink 0.9s steps(1, end) var(--d) 2;
+}
+[data-play="in"] .lp-mp-wave i {
+  animation: lp-mp-wave 380ms var(--lp-mp-ease) var(--d) backwards;
+}
+/* `--d` is set on the toggle; the knob inherits it. */
+[data-play="in"] .lp-mp-toggle {
+  animation: lp-mp-toggle 220ms ease var(--d) backwards;
+}
+[data-play="in"] .lp-mp-toggle i {
+  animation: lp-mp-knob 220ms ease var(--d) backwards;
+}
+[data-play="in"] .lp-mp-check {
+  animation: lp-mp-check 200ms ease var(--d) backwards;
+}
+[data-play="in"] .lp-mp-check svg {
+  animation: lp-mp-pop 220ms var(--lp-mp-ease) var(--d) backwards;
+}
+[data-play="in"] .lp-mp-grow {
+  animation: lp-mp-grow 450ms var(--lp-mp-ease) var(--d) backwards;
+}
+[data-play="in"] .lp-mp-notify {
+  animation: lp-mp-notify 650ms cubic-bezier(0.2, 0.9, 0.3, 1) var(--d) backwards;
+}
+[data-play="in"] .lp-mp-typing {
+  animation: lp-mp-typing var(--w) var(--lp-mp-ease) var(--d);
+}
+/* Dots inherit the typing row's `--d`, and stop after its window. */
+[data-play="in"] .lp-mp-dots i {
+  animation: lp-mp-dot 1s ease-in-out var(--d) 2;
+}
+[data-play="in"] .lp-mp-dots i:nth-child(2) {
+  animation-delay: calc(var(--d) + 150ms);
+}
+[data-play="in"] .lp-mp-dots i:nth-child(3) {
+  animation-delay: calc(var(--d) + 300ms);
+}
+
+@keyframes lp-mp-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes lp-mp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes lp-mp-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+@keyframes lp-mp-type {
+  from {
+    font-size: 0;
+  }
+}
+@keyframes lp-mp-caret {
+  0%,
+  99.9% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes lp-mp-blink {
+  50% {
+    visibility: hidden;
+  }
+}
+@keyframes lp-mp-wave {
+  from {
+    transform: scaleY(0.15);
+  }
+}
+@keyframes lp-mp-toggle {
+  from {
+    background: #d9d9d9;
+  }
+}
+@keyframes lp-mp-knob {
+  from {
+    transform: none;
+  }
+}
+@keyframes lp-mp-check {
+  from {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px #cfcfcf;
+  }
+}
+@keyframes lp-mp-grow {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+@keyframes lp-mp-notify {
+  from {
+    transform: translateY(calc(-100% - 12px));
+  }
+}
+@keyframes lp-mp-typing {
+  0% {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+  15%,
+  85% {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  100% {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+@keyframes lp-mp-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* ── Multiplayer reveal — scrubbed pinned scene ────────────────────────
@@ -1190,9 +1844,7 @@
 [data-reveal] .lp-ctl-eyebrow,
 [data-reveal] .lp-ctl-heading,
 [data-reveal] .lp-ctl-item,
-[data-reveal] .lp-ctl-cta,
-[data-reveal] .lp-connect-eyebrow,
-[data-reveal] .lp-connect-heading {
+[data-reveal] .lp-ctl-cta {
   opacity: 0;
   transform: translateY(12px);
   transition:
@@ -1205,16 +1857,13 @@
 [data-reveal="in"] .lp-ctl-eyebrow,
 [data-reveal="in"] .lp-ctl-heading,
 [data-reveal="in"] .lp-ctl-item,
-[data-reveal="in"] .lp-ctl-cta,
-[data-reveal="in"] .lp-connect-eyebrow,
-[data-reveal="in"] .lp-connect-heading {
+[data-reveal="in"] .lp-ctl-cta {
   opacity: 1;
   transform: none;
 }
 
 [data-reveal="in"] .lp-ont-heading,
-[data-reveal="in"] .lp-ctl-heading,
-[data-reveal="in"] .lp-connect-heading {
+[data-reveal="in"] .lp-ctl-heading {
   transition-delay: 90ms;
 }
 
@@ -1236,15 +1885,54 @@
   transition-delay: 520ms;
 }
 
-/* ── Framework — four-stage tour ───────────────────────────────────────
+/* Integrations (connect-section.tsx wears the Control layout): its lede and
+   logo tiles take the bullets' slots, one row (5, then 4) per step, so the whole
+   left column fades up the same way Monitoring's does before the CTA. */
+[data-reveal] .lp-connect-lede,
+[data-reveal] .lp-connect-grid > li {
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 500ms var(--lp-reveal-ease),
+    transform 500ms var(--lp-reveal-ease);
+}
+[data-reveal="in"] .lp-connect-lede,
+[data-reveal="in"] .lp-connect-grid > li {
+  opacity: 1;
+  transform: none;
+}
+[data-reveal="in"] .lp-connect-lede {
+  transition-delay: 180ms;
+}
+[data-reveal="in"] .lp-connect-grid > li {
+  transition-delay: 260ms;
+}
+[data-reveal="in"] .lp-connect-grid > li:nth-child(n + 6) {
+  transition-delay: 340ms;
+}
+
+/* ── Orchestration — four-stage tour (class prefix kept: `.lp-ont-*`) ───
    Window content swaps with the tab: the component re-keys it, this file fades
-   it in and, for stage 2 alone, runs the whole stamp sequence off that same
-   remount (see "2 — the stamp", below).
-   Markup: components/ontology-section.tsx (+ ontology-windows.tsx). */
+   it in and runs that window's sequence off `data-play` (contract below).
+   Markup: components/ontology-section.tsx (+ ontology-windows.tsx,
+   ontology-command.tsx; every word in ontology-content.ts). */
 
 .lp-ont {
   width: 100%;
   padding: 96px 0 44px;
+  /* section-local palette — the only colours the four windows use */
+  --lp-ont-hair: #ececec;
+  --lp-ont-rule: #f1f1f1;
+  --lp-ont-well: #f5f5f5;
+  --lp-ont-dash: #c9c9c9;
+  --lp-ont-text: #3d3d3d;
+  --lp-ont-live: #2fa45a;
+  --lp-ont-working-bg: #fff4e0;
+  --lp-ont-working-ink: #a8701f;
+  --lp-ont-done-bg: #e8f5ec;
+  --lp-ont-done-ink: #2f7a4c;
+  /* ⚠ decelerating and NOT past 1 — nothing here overshoots */
+  --lp-ont-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 .lp-ont-inner {
   max-width: 1280px;
@@ -1259,13 +1947,9 @@
   color: var(--muted);
 }
 
-/* ⚠ Heading MUST set two lines. Cap in `em`, not px, so it tracks the clamped
-   font size instead of re-breaking at each step: 13.2em fits "Unify
-   disconnected data into" (~11.7em) and turns "structured" (~11.1em) onto
-   line two. */
+/* One line, like the other section headings (wraps naturally when narrow). */
 .lp-ont-heading {
   margin: 0 0 44px;
-  max-width: 13.2em;
   font-family: var(--grotesk);
   font-size: clamp(23px, 2.5vw, 37px);
   font-weight: 400;
@@ -1276,11 +1960,12 @@
 
 /* ⚠ Source art is PORTRAIT (1170×2080) in a ~2:1 band, so `cover` crops hard.
    `object-position` keeps the peak in frame — nudge that percentage, not the
-   height. */
+   height. ⚠ The floor (420px) is the pinned window + its 22px margins, so the
+   glass never overhangs the band. */
 .lp-ont-banner {
   position: relative;
   width: 100%;
-  height: clamp(340px, 44vw, 620px);
+  height: clamp(420px, 44vw, 620px);
   border-radius: 24px;
   overflow: hidden;
   background: #eaeaea;
@@ -1293,102 +1978,143 @@
   object-position: center 40%;
 }
 
-
 /* Glass panel centred on the picture; window inset by a px margin, so % of
-   width vs height can never skew the gap. Static box, so backdrop-filter is
-   safe here. */
+   width vs height can never skew the gap. */
 .lp-ont-glass {
   position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: min(544px, 92%);
+  width: min(704px, 92%);
 }
 .lp-ont-glass-card {
   width: 100%;
 }
 
-/* ── Ontology glass — scrubbed square → panel ──────────────────────────
+/* ── Glass — scrubbed square → panel ───────────────────────────────────
    Maths and breakpoints live in components/use-glass-scrub.ts; this file
    only reacts to `data-glass` and the one custom property that hook writes.
-   `static` (SSR / no-JS / reduced-motion / narrow) gets none of it and keeps
-   the stylesheet's own full-size box above.
-
-   ⚠ These rules are also the ONE painted frame between `data-glass` landing and
-   the first rAF, so they must not restate a size — the hook measures the full
-   box by CLEARING its inline width/height and reading what the rules above give
-   it. Anything set here would be measured instead, and the panel would settle
-   at the wrong size. */
-/* ⚠ NO `overflow: hidden` on `.lp-ont-glass`, and it is not an oversight. The
-   fixed-height window is already clipped by LiquidGlass's own `overflow-hidden`
-   root at its 20px radius. Clipping the WRAPPER as well produces dark wedges at
-   all four corners: the card's drop shadow paints outside its rounded corners
-   but inside the wrapper's SQUARE clip, surviving exactly in the notches. */
+   `static` (SSR / no-JS / reduced-motion / narrow) gets none of it.
+   ⚠ These rules must not restate a size — the hook measures the full box by
+   CLEARING its inline width/height and reading what the rules above give it.
+   ⚠ NO `overflow: hidden` on `.lp-ont-glass`: LiquidGlass already clips at its
+   20px radius, and a square wrapper clip leaves dark shadow wedges in the
+   corners. */
 .lp-ont-banner[data-glass="scrub"] .lp-ont-glass-card {
-  /* The wrapper is now height-driven too, so the card has to fill it — left at
-     content height the glass would keep its full size and only the wrapper
-     would shrink. */
   height: 100%;
 }
-/* No fill-mode fight here any more: the tab-swap fade now lives on
-   `.lp-ont-window-swap` INSIDE the panel, so the scrub owns this element's
-   opacity outright. */
+/* The var is a FLIP (0 or 1, threshold-triggered in use-glass-scrub) and this
+   transition is the whole of the fade. use-ontology-play.ts reads the same
+   flip, so a window only plays once it is actually showing. */
 .lp-ont-banner[data-glass="scrub"] .lp-ont-window {
   opacity: var(--lp-glass-panel-opacity, 1);
-  /* The var is a FLIP (0 or 1, threshold-triggered in use-glass-scrub) and
-     this transition is the whole of the fade — fixed duration, so the panel is
-     never parked half-transparent by a scroll that stops mid-band. */
   transition: opacity 320ms ease;
 }
 
-/* ⚠ Height is PINNED, not content-driven — the four vignettes have four
-   natural heights and a glass panel resizing along the tab row reads as a bug.
-   Pin = the tallest ("Unify Data"), so nothing had to shrink.
-
-   320.5px is measured, not eyeballed: .lp-ont-kb = 19+19 padding + 12.5px label
-   on 1.5 line-height (18.75) + title 6 + 20×1.5 + 20 (56) + three file rows at
-   11 + 14×1.5 + 11 with two hairlines (131) + foot 18 + 18.75 (36.75) = 280.5,
-   inside .lp-ont-win--unify's 20+20 padding. Change any of those and re-derive;
-   the three shorter vignettes centre inside whatever this says. */
+/* ⚠ Height is PINNED, not content-driven — four windows, four natural heights,
+   and a glass panel resizing along the tab row reads as a bug. use-glass-scrub
+   relies on it too (the full box is the same on every tab). A window that
+   outgrows this is a bug in the window. */
 .lp-ont-window {
-  --lp-ont-window-h: 320.5px;
+  --lp-ont-window-h: 360px;
 
   position: relative;
   margin: 22px;
   height: var(--lp-ont-window-h);
   display: flex;
-  /* ⚠ LITERALS, NOT `var(--glass-card-*)`, AND THAT IS MEASURED RATHER THAN
-     PREFERRED. These three were briefly swapped for the shared tokens so this
-     panel and onboarding's card on the auth banner could not drift. On the WEB
-     build the result was a panel with no fill, no radius and no shadow:
-     `.lp-ont-window` computed `background-color: rgba(0, 0, 0, 0)` and
-     `border-radius: 0px`, because the served stylesheet did not carry the
-     declarations at all (`curl …/_next/static/css/app/layout.css | grep -c
-     glass-card-fill` → 0). `--seg-fill` next to them survives, and the
-     difference is that it is also referenced from INSIDE globals.css, so the
-     token graph keeps it; a token declared in `:root` and consumed ONLY from
-     another stylesheet was dropped from the output. The desktop SPA resolved
-     all three correctly, which is what hid it.
-     ⚠ So the sharing is deliberately ONE-WAY: `--glass-card-*` stays, and
-     onboarding's card (desktop SPA only) uses it. This file does not, because
-     a cross-stylesheet `var()` is not reliably served here. The cost is that
-     these numbers are stated twice; the guard against drift is
-     `marketing-glass-card-literals.test.ts`, not a shared token.
+  /* ⚠ LITERALS, NOT `var(--glass-card-*)` — a `:root` token consumed only from
+     this stylesheet was dropped from the served web CSS (the panel rendered
+     with no fill, radius or shadow). Guard: marketing-css-vars.test.ts.
      Values are byte-identical to 96930123^. */
   background: #ffffff;
   border-radius: 14px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
 }
-/* The tab-swap surface INSIDE the fixed white panel — the component keys THIS
-   per stage, so only the contents fade on a tab switch while the panel itself
-   never leaves (keying the panel reads as it being replaced). Fills the flex
-   row so the vignettes lay out exactly as under `.lp-ont-window`. */
+/* The tab-swap surface INSIDE the fixed white panel — keyed per stage, so only
+   the contents fade on a tab switch. Carries `data-play`. */
 .lp-ont-window-swap {
   display: flex;
   flex: 1;
   min-width: 0;
   animation: lp-ont-fade 200ms ease both;
 }
+@media (prefers-reduced-motion: reduce) {
+  .lp-ont-window-swap {
+    animation: none;
+  }
+}
+
+/* ── Play contract (components/ontology-bits.tsx) ──────────────────────
+   `--d` = start, `--w` = window length, both inline. `data-play` on the swap:
+   `armed` = start frame, `in` = run once. ⚠ BASE RULES ARE THE FINAL FRAME —
+   SSR, no JS and reduced motion never get the attribute. Keyframes are
+   `from`-only and fill `backwards`, animating TO the base rules, so nothing
+   stays composited after it lands. `.lp-ont-on` / `-off` use fill NONE on
+   purpose: that is what confines them to their window. */
+[data-play="armed"] :is(.lp-ont-rise, .lp-ont-fade, .lp-ont-draw) {
+  opacity: 0;
+}
+[data-play="armed"] .lp-ont-grow {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+[data-play="armed"] .lp-ont-fill {
+  transform: scaleX(0);
+}
+[data-play="armed"] .lp-ont-type {
+  font-size: 0;
+}
+.lp-ont-on {
+  opacity: 0;
+}
+
+[data-play="in"] .lp-ont-rise {
+  animation: lp-ont-rise 420ms var(--lp-ont-ease) var(--d) backwards;
+}
+[data-play="in"] .lp-ont-fade {
+  animation: lp-ont-fade 360ms var(--lp-ont-ease) var(--d) backwards;
+}
+[data-play="in"] .lp-ont-draw {
+  animation: lp-ont-draw 700ms cubic-bezier(0.33, 0, 0.2, 1) var(--d) backwards;
+}
+[data-play="in"] .lp-ont-grow {
+  animation: lp-ont-grow 450ms var(--lp-ont-ease) var(--d) backwards;
+}
+/* a bar that GROWS from --k0 of its width to its base width over --w */
+[data-play="in"] .lp-ont-ramp {
+  animation: lp-ont-ramp var(--w) linear var(--d) backwards;
+}
+[data-play="in"] .lp-ont-fill {
+  animation: lp-ont-fill 700ms var(--lp-ont-ease) var(--d) backwards;
+}
+[data-play="in"] .lp-ont-type {
+  animation: lp-ont-type 1ms steps(1, end) var(--d) backwards;
+}
+[data-play="in"] .lp-ont-on {
+  animation: lp-ont-shown var(--w) linear var(--d);
+}
+[data-play="in"] .lp-ont-off {
+  animation: lp-ont-hidden var(--w) linear var(--d);
+}
+[data-play="in"] .lp-ont-typing {
+  animation: lp-ont-typing var(--w) var(--lp-ont-ease) var(--d);
+}
+[data-play="in"] .lp-ont-dots i {
+  animation: lp-ont-dot 1s ease-in-out infinite;
+}
+[data-play="in"] .lp-ont-dots i:nth-child(2) {
+  animation-delay: 150ms;
+}
+[data-play="in"] .lp-ont-dots i:nth-child(3) {
+  animation-delay: 300ms;
+}
+[data-play="in"] .lp-ont-tick--working {
+  animation: lp-ont-spin 900ms linear infinite;
+}
+[data-play="in"] .lp-ont-caret {
+  animation: lp-ont-blink 0.9s steps(1, end) infinite;
+}
+
 @keyframes lp-ont-fade {
   from {
     opacity: 0;
@@ -1397,199 +2123,249 @@
     opacity: 1;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .lp-ont-window-swap {
-    animation: none;
+@keyframes lp-ont-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes lp-ont-draw {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+@keyframes lp-ont-grow {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+@keyframes lp-ont-ramp {
+  from {
+    transform: scaleX(var(--k0));
+  }
+}
+@keyframes lp-ont-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes lp-ont-type {
+  from {
+    font-size: 0;
+  }
+}
+@keyframes lp-ont-shown {
+  from,
+  to {
+    opacity: 1;
+  }
+}
+@keyframes lp-ont-hidden {
+  from,
+  to {
+    opacity: 0;
+  }
+}
+@keyframes lp-ont-typing {
+  0% {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+  20%,
+  80% {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  100% {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+@keyframes lp-ont-dot {
+  0%,
+  60%,
+  100% {
+    transform: none;
+    opacity: 0.45;
+  }
+  30% {
+    transform: translateY(-2px);
+    opacity: 1;
+  }
+}
+@keyframes lp-ont-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes lp-ont-blink {
+  50% {
+    visibility: hidden;
   }
 }
 
-/* ── Window vignettes — components/ontology-windows.tsx ─────────────── */
+/* ── Shared window pieces ──────────────────────────────────────────── */
 .lp-ont-win {
   flex: 1;
   display: flex;
-  flex-direction: column;
-  padding: 26px 28px;
+  min-width: 0;
+  gap: 14px;
+  padding: 18px;
 }
 .lp-ont-win-label {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--muted);
 }
 .lp-ont-win-title {
-  margin: 6px 0 20px;
+  margin: 4px 0 12px;
   font-family: var(--grotesk);
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 500;
   letter-spacing: -0.02em;
   color: var(--ink);
 }
 .lp-ont-win-foot {
   margin: auto 0 0;
-  padding-top: 18px;
-  font-size: 12.5px;
+  padding-top: 12px;
+  font-size: 11.5px;
   color: var(--muted);
 }
-
-.lp-ont-win--unify,
-.lp-ont-win--objects,
-.lp-ont-win--action {
-  flex-direction: row;
-  align-items: stretch;
-  padding: 20px;
-}
-.lp-ont-win--rel {
-  padding: 20px;
-}
-/* stage 3 keeps a footer line under the graph, so the graph is its own row */
-.lp-ont-rel-row {
-  flex: 1;
-  display: flex;
-  align-items: stretch;
-  min-height: 176px;
-}
-
-/* ⚠ Item columns and connectors share ONE vertical geometry: 3 × 44px boxes
-   with 22px gaps = the 176 user units of every connector viewBox here, so the
-   curve endpoints land on box centres at every width. Change a box height or a
-   gap and you MUST change that viewBox too (ontology-windows.tsx ›
-   FUNNEL_PATHS / FANOUT_PATHS / SPLIT_PATHS). Hence these stacks keep their
-   height at every breakpoint — only the connectors compress. */
-.lp-ont-sources {
+.lp-ont-avatar {
   flex: none;
-  align-self: center;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--lp-ont-rule);
 }
-.lp-ont-source {
-  flex: none;
-  display: flex;
+/* Overlapping faces; the white ring separates neighbours. */
+.lp-ont-faces {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: #ffffff;
-  border: 1px solid #ececec;
-  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.07);
 }
-/* same tile, one size down — stage 4's destination rows */
-.lp-ont-source--sm {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+.lp-ont-faces > * + * {
+  margin-left: -6px;
+}
+.lp-ont-faces .lp-ont-avatar {
+  box-shadow: 0 0 0 2px #ffffff;
+}
+/* States that replace each other in ONE slot (ontology-bits › Sequence). */
+.lp-ont-stack {
+  display: inline-grid;
+  align-items: center;
+  justify-items: start;
+}
+.lp-ont-stack > * {
+  grid-area: 1 / 1;
+}
+.lp-ont-stack--end {
+  justify-items: end;
 }
 .lp-ont-source-mark {
   display: block;
   width: 25px;
   height: 25px;
 }
-.lp-ont-source--sm .lp-ont-source-mark {
-  width: 17px;
-  height: 17px;
-}
-.lp-ont-source-img {
-  display: block;
-  width: 19px;
-  height: 19px;
-  border-radius: 5px;
-}
-
-/* the only parts allowed to give up width */
-.lp-ont-funnel {
-  flex: 0 1 72px;
-  min-width: 22px;
-  align-self: center;
-  height: 176px;
-}
-.lp-ont-funnel--out {
-  flex-basis: 56px;
-}
-/* Same slot as .lp-ont-funnel, but three stacked layers so the sequence can
-   reveal them separately (ontology-windows.tsx › SplitConnector) */
-.lp-ont-fan {
-  position: relative;
-  flex: 0 1 72px;
-  min-width: 22px;
-  align-self: center;
-  height: 176px;
-}
-.lp-ont-fan-line {
-  position: absolute;
-  inset: 0;
-}
-.lp-ont-fan-svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-.lp-ont-wire {
-  flex: 0 1 30px;
-  min-width: 14px;
-  align-self: center;
-  height: 176px;
-}
-/* stands in for .lp-ont-wire once stage 4 stacks. ⚠ Gradient reproduces the
-   SVG's "3 4" dash exactly — keep them identical. */
-.lp-ont-vwire {
-  display: none;
+.lp-ont-badge {
   flex: none;
-  width: 1px;
-  height: 22px;
-  margin: 4px 0;
-  background: repeating-linear-gradient(
-    to bottom,
-    #c9c9c9 0 3px,
-    transparent 3px 7px
-  );
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--lp-ont-well);
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--muted);
+}
+.lp-ont-dots {
+  display: inline-flex;
+  gap: 2px;
+}
+.lp-ont-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.45;
+}
+/* A message row GROWS in (0fr → 1fr) at the bottom of a flex-end column, so
+   earlier rows scroll up. ⚠ Gaps are margins on the INNER element, never on
+   the clipped child, or every not-yet-shown row leaves a gap behind. */
+.lp-ont-grow,
+.lp-ont-typing {
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+}
+.lp-ont-grow > div,
+.lp-ont-typing > div {
+  min-height: 0;
+}
+.lp-ont-typing {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+.lp-ont-typing-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.lp-ont-at {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--lp-ont-well);
+  font-weight: 500;
+  color: var(--ink);
 }
 
+/* ── 1 · Context ───────────────────────────────────────────────────── */
 .lp-ont-kb,
-.lp-ont-tpl,
-.lp-ont-client,
-.lp-ont-actor {
+.lp-ont-client {
+  flex: 1 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  padding: 19px 20px;
-  border: 1px solid #ececec;
+  padding: 16px 18px;
+  border: 1px solid var(--lp-ont-hair);
   border-radius: 12px;
   background: #ffffff;
 }
-.lp-ont-kb,
-.lp-ont-tpl,
-.lp-ont-client {
-  flex: 1 1 auto;
+.lp-ont-writer {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 4px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  background: var(--lp-ont-well);
+  font-size: 11.5px;
 }
-/* Window is pinned to stage 1's height, so every OTHER card is stretched taller
-   than its content — centre it. .lp-ont-kb is exempt: the pin was measured from
-   it and its foot line already does this with `margin: auto 0 0`. */
-.lp-ont-tpl,
-.lp-ont-client,
-.lp-ont-actor {
-  justify-content: center;
+.lp-ont-writer-name {
+  font-weight: 500;
+  color: var(--ink);
 }
-.lp-ont-actor {
-  flex: none;
-  width: 146px;
-  padding: 14px;
+.lp-ont-writer-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  white-space: nowrap;
 }
-
 .lp-ont-files {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
 }
 .lp-ont-file {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 11px 0;
-  font-size: 14px;
+  gap: 8px;
+  padding: 7px 0;
+  font-size: 13px;
   color: var(--ink);
-  border-top: 1px solid #f1f1f1;
+  border-top: 1px solid var(--lp-ont-rule);
 }
 .lp-ont-file:first-child {
   border-top: 0;
@@ -1598,469 +2374,54 @@
   flex: none;
   color: #b4b4b4;
 }
-
-.lp-ont-traits {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-.lp-ont-trait {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 0;
-  border-top: 1px solid #f1f1f1;
-}
-.lp-ont-trait:first-child {
-  border-top: 0;
-}
-.lp-ont-trait-name {
+.lp-ont-file-name {
+  flex: 1;
   min-width: 0;
-  font-size: 13.5px;
-  line-height: 1.25;
-  color: var(--ink);
-  overflow-wrap: anywhere;
-}
-.lp-ont-badge {
-  flex: none;
-  padding: 3px 7px;
-  border-radius: 6px;
-  background: #f3f3f3;
-  font-size: 10.5px;
-  line-height: 1.3;
-  color: var(--muted);
-}
-/* Badge worn as a VALUE, not a type — stage 2's resolved slugs.
-   ⚠ Must stay BEFORE --skill: a value naming a skill still takes the coral, so
-   this rule must not win the colour. */
-.lp-ont-badge--val {
-  border-radius: 999px;
-  font-size: 10px;
-  color: var(--ink);
-}
-/* skills borrow the Claude coral the stage-4 tile carries */
-.lp-ont-badge--skill {
-  background: #fbf0eb;
-  color: #b4694a;
-}
-
-/* .lp-ont-stamp is the positioning context the expanded Sam hangs off, so the
-   column's width + placement live on IT — the <ul> only stacks. */
-.lp-ont-stamp {
-  position: relative;
-  flex: none;
-  align-self: center;
-  width: var(--lp-ont-inst-w);
-}
-.lp-ont-instances {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-.lp-ont-inst {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  height: 44px;
-  padding: 0 9px;
-  border: 1px solid #ececec;
-  border-radius: 999px;
-  background: #ffffff;
-  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.07);
-}
-.lp-ont-avatar {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: #f1f1f1;
-}
-.lp-ont-who {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.lp-ont-who-name {
-  font-size: 12.5px;
-  font-weight: 500;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-}
-.lp-ont-who-role {
-  font-size: 10.5px;
-  line-height: 1.2;
-  color: var(--muted);
-}
-
-/* ── 2 — the stamp ─────────────────────────────────────────────────────
-   The ONE animated vignette: @keyframes + animation-delay, no state, no timers.
-   Replays because ontology-section.tsx keys the tab panel on the stage id.
-
-   THE TIMELINE, once. Each number reappears on the rule that owns it.
-
-     0.40s  template field rows rise (520ms), 340ms apart ...... ends 1.60s
-     1.70s  TOP line draws (900ms), template edge ▸ Sam ........ ends 2.60s
-     2.40s  expanded Sam opens, fully opaque by ................. 2.83s
-     3.00s  real compact Sam is SWITCHED ON under the opaque panel — one
-            frame, no fade; hidden until the panel dissolves off him
-     3.10s  Sam's resolved fields rise (460ms), 320ms apart ..... ends 4.20s
-     4.20s  ▸▸ THE HOLD ◂◂ resolved pills still + legible ....... 0.90s
-     5.10s  panel condenses (900ms); field list drops over first 340ms
-     5.99s  panel fades out, uncovering the Sam already sitting there
-     6.20s  MIDDLE line draws (820ms) · 6.55s BOTTOM line (820ms)
-     7.00s  Anthony, 7.40s Grace ............................... ends 7.86s
-
-   ⚠ THE HOLD AT 4.20s IS A REAL STEP, not slack. Three numbers to protect when
-   re-timing: "last field row ends" ▸ "condense begins" must stay ≥ ~0.8s; the
-   270ms between panel fade-in done (2.83s) and first field row (3.10s) — nested
-   opacities multiply, so rows rising through an arriving panel read faint; and
-   Sam's 3.00s switch-on, which must stay INSIDE the panel's opaque window
-   (2.83s → 5.99s) or the flip becomes visible.
-
-   ⚠ THE END STATE IS THE STATIC LAYOUT. Every rule animates TO what the base
-   rule already says, `both` fill holding the start during its delay — which is
-   why reduced-motion is one `animation: none` plus hiding one panel. */
-.lp-ont-win--objects {
-  /* compact card column — also the width the expanded panel collapses TO */
-  --lp-ont-inst-w: 128px;
-  /* expanded panel; overhangs the column left over the fan's tail so its field
-     rows get their own line without a reflow */
-  --lp-ont-sam-w: 146px;
-  /* Pinned — a height animation needs two numbers. Measured: 42 id row + 3
-     field rows at 9+15+4+19 with two hairlines (170) + 10 bottom padding + 2
-     borders. */
-  --lp-ont-sam-h: 224px;
-  /* ⚠ decelerating and NOT past 1 — nothing here overshoots */
-  --lp-ont-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
-}
-
-.lp-ont-sam {
-  position: absolute;
-  top: 0;
-  right: 0;
-}
-/* ⚠ Base state IS the END state: compact pill, box for box identical to
-   .lp-ont-inst, so when the panel dissolves off at 5.99s the box underneath is
-   already in exactly those pixels and only the role line (@sam ▸ Sales Rep)
-   actually changes. The panel opens by running the condense keyframes BACKWARDS
-   via `both` fill during the delay. */
-.lp-ont-sam-card {
   overflow: hidden;
-  width: var(--lp-ont-inst-w);
-  height: 44px;
-  padding: 0 9px 10px;
-  border: 1px solid #ececec;
-  border-radius: 999px;
-  background: #ffffff;
-  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.07);
-}
-/* 42px = .lp-ont-inst's CONTENT box (44 less two borders). Collapsed, this row
-   IS the pill. */
-.lp-ont-sam-id {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  height: 42px;
-}
-/* at 146px name + value can never share a line, so they never try */
-.lp-ont-sam-list .lp-ont-trait {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding: 9px 0;
-}
-.lp-ont-sam-list .lp-ont-trait-name {
-  font-size: 12px;
-}
-
-/* 0.40s — the template's field rows, top to bottom */
-.lp-ont-tpl .lp-ont-trait {
-  animation: lp-ont-rise 520ms var(--lp-ont-ease) both;
-}
-.lp-ont-tpl .lp-ont-trait:nth-child(1) {
-  animation-delay: 400ms;
-}
-.lp-ont-tpl .lp-ont-trait:nth-child(2) {
-  animation-delay: 740ms;
-}
-.lp-ont-tpl .lp-ont-trait:nth-child(3) {
-  animation-delay: 1080ms;
-}
-
-/* 1.70s / 6.20s / 6.55s — top line alone first, other two after Sam settles.
-   ⚠ DOM order is top ▸ middle ▸ bottom (› SPLIT_PATHS). */
-.lp-ont-fan-line {
-  animation: lp-ont-draw 900ms cubic-bezier(0.33, 0, 0.2, 1) both;
-}
-.lp-ont-fan-line:nth-child(1) {
-  animation-delay: 1700ms;
-}
-.lp-ont-fan-line:nth-child(2) {
-  animation-duration: 820ms;
-  animation-delay: 6200ms;
-}
-.lp-ont-fan-line:nth-child(3) {
-  animation-duration: 820ms;
-  animation-delay: 6550ms;
-}
-
-/* 2.40s in, 5.99s out. ⚠ ONE keyframe set for the panel's whole life — two
-   animations on one element fight over `opacity` and the second's backwards
-   fill wins before the first runs. ⚠ The 3900ms span is what lp-ont-sam-life's
-   percentages read: 11% ends fade-in (2.83s), 92% starts fade-out (5.99s).
-   Change this duration and both stops move; re-derive them. */
-.lp-ont-sam {
-  animation: lp-ont-sam-life 3900ms 2400ms both;
-}
-/* 5.10s — condense. Geometry only, so it never touches the fade above. */
-.lp-ont-sam-card {
-  animation: lp-ont-sam-condense 900ms cubic-bezier(0.4, 0, 0.2, 1) 5100ms both;
-}
-.lp-ont-sam-list {
-  animation: lp-ont-drop 340ms ease 5100ms both;
-}
-/* 3.10s — Sam's resolved fields. ⚠ Starts 270ms AFTER the panel finishes
-   fading in (2.83s): nested opacities multiply, and a row rising through a
-   still-arriving panel is the "faint pills" bug. Holds via `both` until the
-   list drops at 5.10s — the 0.90s read window in the table above. */
-.lp-ont-sam-list .lp-ont-trait {
-  animation: lp-ont-rise 460ms var(--lp-ont-ease) both;
-}
-.lp-ont-sam-list .lp-ont-trait:nth-child(1) {
-  animation-delay: 3100ms;
-}
-.lp-ont-sam-list .lp-ont-trait:nth-child(2) {
-  animation-delay: 3420ms;
-}
-.lp-ont-sam-list .lp-ont-trait:nth-child(3) {
-  animation-delay: 3740ms;
-}
-
-/* 3.00s — Sam is SWITCHED ON, not faded in. ⚠ `step-end` is the entire point:
-   opacity holds at 0 through the delay, flips to 1 in ONE frame at 3.00s, and
-   forward-fills. The 200ms duration is where that single step sits, NOT a
-   transition — do not "simplify" it to an ease, and do not treat 3.00s as a
-   number you may nudge freely: it must land inside the panel's opaque window
-   (2.83s → 5.99s), because the flip has to happen UNDER the panel where nobody
-   can see it. Sam then just IS there when the panel dissolves off him.
-   An earlier cut faded him up at 6.00s against the panel's own fade-out; two
-   transitions over one box read as a blink, which is the bug this replaces.
-   Anthony and Grace still rise — they are genuinely arriving. */
-.lp-ont-instances .lp-ont-inst:nth-child(1) {
-  animation: lp-ont-cut-in 200ms step-end 2800ms both;
-}
-.lp-ont-instances .lp-ont-inst:nth-child(2) {
-  animation: lp-ont-rise 460ms var(--lp-ont-ease) 7000ms both;
-}
-.lp-ont-instances .lp-ont-inst:nth-child(3) {
-  animation: lp-ont-rise 460ms var(--lp-ont-ease) 7400ms both;
-}
-
-@keyframes lp-ont-rise {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-@keyframes lp-ont-drop {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-/* Only ever paired with `step-end`: the two stops are the two states of a
-   switch, and nothing should interpolate between them. */
-@keyframes lp-ont-cut-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-/* Dashes are the stroke's OWN dasharray, so stroke-dashoffset is taken; the
-   reveal is a clip on the wrapping box. ⚠ The 99% stop lands on `none` rather
-   than a rect flush with the border box, which would shave the half-pixel of
-   the last round cap. inset ▸ none can't interpolate, hence the last 1%. */
-@keyframes lp-ont-draw {
-  from {
-    clip-path: inset(0 100% 0 0);
-  }
-  99% {
-    clip-path: inset(0 0 0 0);
-  }
-  to {
-    clip-path: none;
-  }
-}
-/* ⚠ Stops are PERCENTAGES of the 3900ms on .lp-ont-sam: 11% = 429ms fade-in
-   (done 2.83s), flat 81%, then 8% = 312ms fade-out from 5.99s. This is the ONLY
-   fade in the hand-off: the compact Sam underneath has been at opacity 1 since
-   3.00s, so the panel dissolves onto a solid box instead of two fades crossing
-   (which read as a blink). */
-@keyframes lp-ont-sam-life {
-  0% {
-    opacity: 0;
-    transform: translateY(8px);
-    animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
-  }
-  11% {
-    opacity: 1;
-    transform: none;
-  }
-  92% {
-    opacity: 1;
-    transform: none;
-    animation-timing-function: ease-in;
-  }
-  100% {
-    opacity: 0;
-    transform: none;
-  }
-}
-/* ⚠ `to` RADIUS IS 22px, NOT the 999px the base rule carries — do not "tidy"
-   it back. 999px is a pill IDIOM, clamped at paint time to half the shorter
-   side; INTERPOLATED it is a literal length, so 12px ▸ 999px puts the used
-   radius at ~71px 300ms in while the box is still 190px tall, and `overflow:
-   hidden` makes that arc a MASK that eats the avatar. 22px is the same final
-   pill (44 ÷ 2) and never exceeds half of any intermediate height.
-   ⚠ Keep this `to` in step with .lp-ont-inst's HEIGHT, not its border-radius. */
-@keyframes lp-ont-sam-condense {
-  from {
-    width: var(--lp-ont-sam-w);
-    height: var(--lp-ont-sam-h);
-    border-radius: 12px;
-  }
-  to {
-    width: var(--lp-ont-inst-w);
-    height: 44px;
-    border-radius: 22px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  /* Base rules already say the end state, so dropping the animations IS it.
-
-     ⚠ Compact cards listed BY :nth-child, not `.lp-ont-instances .lp-ont-inst`:
-     each carries its own `animation` on a :nth-child selector, and a plainer
-     selector loses on specificity and silently leaves the sequence running.
-     Any new step naming a row individually must be named individually here. */
-  .lp-ont-tpl .lp-ont-trait,
-  .lp-ont-fan-line,
-  .lp-ont-sam-list,
-  .lp-ont-sam-list .lp-ont-trait,
-  .lp-ont-instances .lp-ont-inst:nth-child(1),
-  .lp-ont-instances .lp-ont-inst:nth-child(2),
-  .lp-ont-instances .lp-ont-inst:nth-child(3) {
-    animation: none;
-  }
-  /* the one thing with no place in the end state */
-  .lp-ont-sam {
-    display: none;
-  }
-}
-
-/* 3 — relationship chips: stage 2's instances, worn down to a pill */
-.lp-ont-chips {
-  flex: none;
-  align-self: center;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-.lp-ont-chip {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  height: 44px;
-  padding: 0 14px 0 7px;
-  border: 1px solid #ececec;
-  border-radius: 999px;
-  background: #ffffff;
-  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.07);
-}
-.lp-ont-chip-name {
-  font-size: 12.5px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: var(--ink);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Own line under the graph, not floating over the wires: an overlay label has
-   nowhere to go at a 264px window and lands on the chips it annotates. */
-.lp-ont-rule {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin: 16px 0 0;
-  padding-top: 14px;
-  border-top: 1px dashed #e2e2e2;
-  font-size: 12.5px;
-  color: var(--muted);
-}
-
-/* 4 — the actor, the Claude tile, and what came out the other side */
-.lp-ont-actor-id {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding-bottom: 13px;
-}
-/* actor card maxes at 146px, so its traits stack the badge at EVERY size */
-.lp-ont-actor .lp-ont-trait {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding: 9px 0;
-}
-.lp-ont-actor .lp-ont-trait-name {
-  font-size: 12px;
-}
-.lp-ont-brain {
-  align-self: center;
-}
-.lp-ont-outcomes {
-  flex: 1 1 auto;
+/* entry name over its one-line detail (venue · price · flight) */
+.lp-ont-file-text {
+  flex: 1;
   min-width: 0;
-  align-self: center;
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 2px;
 }
-.lp-ont-outcome {
+.lp-ont-file-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+.lp-ont-srcs {
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 44px;
+  gap: 6px;
 }
-.lp-ont-outcome-text {
-  min-width: 0;
-  font-size: 12.5px;
-  line-height: 1.32;
-  color: var(--muted);
-  overflow-wrap: anywhere;
+.lp-ont-srcs .lp-ont-source-mark {
+  width: 13px;
+  height: 13px;
 }
-
+/* KB ▸ ontology: one dashed wire ("3 4", same as the old connectors) */
+.lp-ont-link {
+  position: relative;
+  flex: 0 0 26px;
+  align-self: center;
+  height: 1px;
+  background: repeating-linear-gradient(to right, var(--lp-ont-dash) 0 3px, transparent 3px 7px);
+}
+.lp-ont-link i {
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--lp-ont-dash);
+}
 .lp-ont-fields {
   margin: 0;
   display: flex;
@@ -2070,22 +2431,641 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 11px 0;
-  border-top: 1px solid #f1f1f1;
+  gap: 12px;
+  min-height: 34px;
+  border-top: 1px solid var(--lp-ont-rule);
 }
 .lp-ont-field:first-child {
   border-top: 0;
 }
 .lp-ont-field-key {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--muted);
 }
 .lp-ont-field-value {
   margin: 0;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+/* linked people, each with their home airport */
+.lp-ont-people {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lp-ont-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+}
+.lp-ont-person-more {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.lp-ont-rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: auto 0 0;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e2e2;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* ── 2 · Channels ──────────────────────────────────────────────────── */
+/* feed (left, flexible) | agent rail (right, ontology-agent-rail.tsx) */
+.lp-ont-win--chan {
+  gap: 0;
+  padding: 0;
+}
+.lp-ont-feed {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lp-ont-chan-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--lp-ont-rule);
+}
+.lp-ont-chan-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 14px;
   font-weight: 500;
   color: var(--ink);
+}
+.lp-ont-chan-name svg {
+  color: var(--muted);
+}
+.lp-ont-thread {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  padding: 0 16px 14px;
+}
+.lp-ont-post {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 9px;
+}
+/* The product's agent post accent: a 3px side bar in the agent's colour. */
+.lp-ont-post--agent {
+  padding-left: 9px;
+  border-left: 3px solid var(--ac);
+}
+.lp-ont-post-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lp-ont-post-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.lp-ont-post-runtime {
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.lp-ont-post-text {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--lp-ont-text);
+}
+/* The agent rail — the app's agent card at landing scale. */
+.lp-ont-rail {
+  flex: 0 0 39%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* ⚠ four cards fill the 360px window: 8 + 4 × (5 + 79) + 8 */
+  padding: 8px 10px;
+  border-left: 1px solid var(--lp-ont-rule);
+  background: var(--lp-ont-well);
+}
+.lp-ont-acard {
+  margin-top: 5px;
+  padding: 6px 10px;
+  line-height: 1.25;
+  border: 1px solid var(--lp-ont-hair);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.lp-ont-acard-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.lp-ont-acard-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.lp-ont-apill {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--lp-ont-rule);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.lp-ont-apill--working {
+  background: var(--ink);
+  color: #ffffff;
+}
+.lp-ont-apill--posting {
+  background: var(--ac);
+  color: #ffffff;
+}
+.lp-ont-apill--done {
+  color: var(--ink);
+}
+/* "↳ #channel · identity" left, tokens spent right */
+.lp-ont-acard-where {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 4px 0 0;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.lp-ont-acard-where > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lp-ont-acard-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 5px 0 3px;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.lp-ont-acard-value {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.lp-ont-acard-track {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--lp-ont-hair);
+  overflow: hidden;
+}
+.lp-ont-acard-track b {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ac);
+  transform-origin: left;
+}
+.lp-ont-acard-spent {
+  flex: none;
+  white-space: nowrap;
+}
+
+.lp-ont-event {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 9px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ── 3 · Tasks ──── */
+.lp-ont-win--tasks {
+  flex-direction: column;
+  gap: 4px;
+}
+.lp-ont-tasks-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lp-ont-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.lp-ont-progress-count {
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.lp-ont-segs {
+  display: flex;
+  gap: 3px;
+}
+.lp-ont-segs i {
+  display: block;
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--lp-ont-hair);
+  overflow: hidden;
+}
+.lp-ont-segs b,
+.lp-ont-meter b {
+  display: block;
+  height: 100%;
+  transform-origin: left;
+}
+.lp-ont-segs b {
+  background: var(--ink);
+}
+.lp-ont-tasks {
+  list-style: none;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid var(--lp-ont-hair);
+  border-radius: 12px;
+}
+.lp-ont-task {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto 84px;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  border-top: 1px solid var(--lp-ont-rule);
+}
+.lp-ont-task:first-child {
+  border-top: 0;
+}
+.lp-ont-task-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--ink);
+}
+.lp-ont-task-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.lp-ont-tick {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid #d2d2d2;
+  border-radius: 50%;
+}
+.lp-ont-tick--working {
+  border-color: var(--lp-ont-hair);
+  border-top-color: var(--ink);
+}
+.lp-ont-tick--done {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #ffffff;
+}
+.lp-ont-status {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--lp-ont-well);
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.lp-ont-status--working {
+  background: var(--lp-ont-working-bg);
+  color: var(--lp-ont-working-ink);
+}
+.lp-ont-status--done {
+  background: var(--lp-ont-done-bg);
+  color: var(--lp-ont-done-ink);
+}
+.lp-ont-status--needs {
+  background: var(--ink);
+  color: #ffffff;
+}
+
+/* ── 4 · Command — notifications | the drilled-into agent ──────────── */
+.lp-ont-notifs {
+  flex: 0 0 212px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lp-ont-notif-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.lp-ont-notif {
+  display: flex;
+  gap: 9px;
+  margin-bottom: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--lp-ont-hair);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+.lp-ont-notif-mark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+}
+.lp-ont-notif-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.lp-ont-notif-title {
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.lp-ont-notif-body {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+.lp-ont-notif-actions {
+  display: flex;
+  gap: 5px;
+  margin-top: 6px;
+}
+.lp-ont-btn {
+  padding: 2px 9px;
+  border: 1px solid var(--lp-ont-hair);
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 10.5px;
+  color: var(--ink);
+}
+.lp-ont-btn--ink {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #ffffff;
+}
+/* Breadcrumb sits above the agent box, the box takes the rest. */
+.lp-ont-agent-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lp-ont-agent {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--lp-ont-hair);
+  border-radius: 12px;
+}
+.lp-ont-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  font-size: 11.5px;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.lp-ont-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.lp-ont-crumb--here {
+  font-weight: 500;
+  color: var(--ink);
+}
+.lp-ont-crumb-face {
+  display: inline-flex;
+}
+.lp-ont-crumb-sep {
+  color: var(--lp-ont-dash);
+}
+.lp-ont-agent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.lp-ont-agent-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+.lp-ont-agent-name {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.lp-ont-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.lp-ont-live i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--lp-ont-live);
+}
+.lp-ont-info {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: var(--lp-ont-well);
+}
+.lp-ont-info dt {
+  margin-bottom: 4px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.lp-ont-info dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.lp-ont-meter {
+  flex-basis: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: #e2e2e2;
+  overflow: hidden;
+}
+.lp-ont-meter b {
+  background: var(--ac);
+}
+/* Permission as a dropdown face: the level plus a caret. */
+.lp-ont-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px 1px 7px;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.lp-ont-select svg {
+  color: var(--muted);
+}
+/* A message with its sender's face beside it (user right, agent left). */
+.lp-ont-msg {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+.lp-ont-msg--me {
+  justify-content: flex-end;
+}
+.lp-ont-msg .lp-ont-bubble {
+  margin-top: 0;
+}
+.lp-ont-msg--me .lp-ont-bubble--me {
+  margin-left: 0;
+}
+.lp-ont-info-logo {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+.lp-ont-lane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+.lp-ont-stream {
+  margin: 6px 0 0;
+  padding-left: 9px;
+  border-left: 3px solid var(--ac);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.lp-ont-bubble {
+  width: fit-content;
+  max-width: 85%;
+  margin: 6px 0 0;
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: var(--lp-ont-well);
+  box-shadow: inset 3px 0 0 var(--ac);
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.lp-ont-bubble--me {
+  margin-left: auto;
+  background: var(--ink);
+  box-shadow: none;
+  color: #ffffff;
+}
+.lp-ont-composer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 5px 5px 12px;
+  border: 1px solid var(--lp-ont-hair);
+  border-radius: 999px;
+}
+.lp-ont-composer-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--ink);
+}
+.lp-ont-composer-hint {
+  color: var(--muted);
+}
+.lp-ont-caret {
+  display: inline-block;
+  width: 1px;
+  height: 13px;
+  margin-left: 1px;
+  vertical-align: -2px;
+  background: var(--ink);
+}
+.lp-ont-send {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #ffffff;
 }
 
 /* ── Tab row — four equal columns; only the active one carries a blurb ── */
@@ -2096,6 +3076,7 @@
   margin-top: 44px;
 }
 .lp-ont-tab {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -2134,6 +3115,44 @@
   line-height: 1.5;
   color: var(--muted);
 }
+/* The tour's clock: its `animationend` advances the tab
+   (ontology-section.tsx), so pausing it pauses the tour. Duration is inline. */
+.lp-ont-tab-meter {
+  position: absolute;
+  top: -16px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--lp-ont-hair);
+  overflow: hidden;
+}
+.lp-ont-tab-meter i {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+  transform-origin: left;
+  animation-name: lp-ont-meter;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+  animation-play-state: paused;
+}
+.lp-ont-tab-meter i[data-running="true"] {
+  animation-play-state: running;
+}
+/* Static (reduced motion, no JS): the bar shows full and never animates. */
+.lp-ont-tab-meter i[data-static="true"] {
+  animation: none;
+  transform: none;
+}
+@keyframes lp-ont-meter {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: none;
+  }
+}
 
 .lp-ont-cta {
   display: flex;
@@ -2160,165 +3179,142 @@
     margin-bottom: 32px;
   }
   .lp-ont-banner {
-    height: clamp(320px, 66vw, 460px);
+    height: 460px;
   }
   .lp-ont-tabs {
     grid-template-columns: repeat(2, 1fr);
-    gap: 28px 24px;
-    margin-top: 32px;
+    gap: 36px 24px;
+    margin-top: 36px;
   }
   .lp-ont-cta {
     margin-top: 36px;
   }
 }
 
+/* ⚠ 699px = use-glass-scrub's MIN_WIDTH - 1: below it the glass is always
+   `static`, so the band can stop being a fixed box and grow with the window.
+   The windows stack, and the height pin becomes per-window. */
+@media (max-width: 699px) {
+  .lp-ont-banner {
+    height: auto;
+    padding: 12px;
+  }
+  .lp-ont-banner-img {
+    position: absolute;
+    inset: 0;
+  }
+  .lp-ont-glass {
+    position: relative;
+    left: auto;
+    top: auto;
+    transform: none;
+    width: 100%;
+  }
+  /* ⚠ A FLOOR, not a pin: one shared minimum (the tallest stacked window,
+     Command, measured at a 375px viewport) so the tabs below never jump. */
+  .lp-ont-window {
+    height: auto;
+    min-height: 610px;
+    margin: 12px;
+  }
+  .lp-ont-win {
+    flex-direction: column;
+    padding: 14px;
+  }
+  .lp-ont-srcs {
+    display: none;
+  }
+  .lp-ont-link {
+    flex: none;
+    align-self: center;
+    width: 1px;
+    height: 18px;
+    background: repeating-linear-gradient(to bottom, var(--lp-ont-dash) 0 3px, transparent 3px 7px);
+  }
+  .lp-ont-link i {
+    top: auto;
+    right: -2px;
+    bottom: -2px;
+  }
+  .lp-ont-kb,
+  .lp-ont-client {
+    padding: 14px;
+  }
+  .lp-ont-rule {
+    margin-top: 10px;
+  }
+  .lp-ont-win--chan {
+    padding: 0;
+  }
+  /* the rail goes under the feed, cards down to their head rows */
+  .lp-ont-rail {
+    flex: none;
+    border-left: 0;
+    border-top: 1px solid var(--lp-ont-rule);
+  }
+  .lp-ont-acard-where,
+  .lp-ont-acard-row,
+  .lp-ont-acard-track,
+  .lp-ont-acard-spent {
+    display: none;
+  }
+  .lp-ont-win--tasks {
+    justify-content: center;
+  }
+  /* titles wrap rather than ellipsize next to the owner + status columns */
+  .lp-ont-task {
+    grid-template-columns: 16px minmax(0, 1fr) auto 76px;
+    gap: 8px;
+    height: auto;
+    min-height: 46px;
+    padding: 8px 0;
+  }
+  .lp-ont-task-title {
+    white-space: normal;
+    font-size: 12.5px;
+  }
+  /* face only — the name has no room beside the title */
+  .lp-ont-task-owner {
+    font-size: 0;
+  }
+  .lp-ont-segs i {
+    width: 14px;
+  }
+  .lp-ont-notifs {
+    flex: none;
+  }
+  /* the two newest notifications */
+  .lp-ont-notif-list {
+    max-height: 132px;
+  }
+  .lp-ont-info {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* crumbs keep their names; the faces go */
+  .lp-ont-crumb-face {
+    display: none;
+  }
+  .lp-ont-composer-text {
+    font-size: 11px;
+  }
+  .lp-ont-lane {
+    flex: none;
+    height: 150px;
+  }
+}
+
 @media (max-width: 560px) {
   .lp-ont-tabs {
     grid-template-columns: 1fr;
-    gap: 22px;
-  }
-  /* Re-derived for this breakpoint: .lp-ont-kb = 16+16 padding + 18.75 label +
-     56 title + three 13px file rows (41.5 each, two hairlines) + 36.75 foot =
-     270, inside .lp-ont-win--unify's 16+16.
-
-     ⚠ HERE IT IS A FLOOR, NOT A PIN. Stage 4 stops being a row down here
-     (~400px stacked), so pinning would clip it. Stages 1-3 all measure under
-     302 and stay exactly equal. */
-  .lp-ont-window {
-    --lp-ont-window-h: 302px;
-
-    height: auto;
-    min-height: var(--lp-ont-window-h);
-  }
-  .lp-ont-win {
-    padding: 20px 20px;
-  }
-  /* ⚠ Must stay after .lp-ont-win — same specificity, source order decides.
-     Item stacks are fixed (half of each connector's geometry), so card room
-     comes from window padding, card padding, then connectors, in that order.
-     375px viewport ▸ window ~264px: gutter 20 ▸ banner 335 ▸ glass 92% ▸
-     margin 22. */
-  .lp-ont-win--unify,
-  .lp-ont-win--objects,
-  .lp-ont-win--rel,
-  .lp-ont-win--action {
-    padding: 16px 14px;
-  }
-  /* narrower than stage 1's 40px: stages 2 and 3 have a card on BOTH sides */
-  .lp-ont-funnel,
-  .lp-ont-fan {
-    flex-basis: 30px;
-  }
-  .lp-ont-kb,
-  .lp-ont-tpl,
-  .lp-ont-client {
-    padding: 16px 14px;
-  }
-  .lp-ont-tpl .lp-ont-win-title,
-  .lp-ont-client .lp-ont-win-title {
-    font-size: 16px;
-    margin-bottom: 12px;
-  }
-  /* longest name "call-transcript.md" clears the card at 13px on 375px */
-  .lp-ont-kb .lp-ont-file {
-    font-size: 13px;
-  }
-
-  /* 2 — badge off the trait name's line; nothing else gets the template card
-     under ~110px next to the instance column */
-  .lp-ont-trait {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    padding: 8px 0;
-  }
-  .lp-ont-trait-name {
-    font-size: 12px;
-  }
-  /* Panel keeps its 224px — its rows are held at desktop size by two-class
-     selectors, so only WIDTH gives. 118 leaves the fan 12 of its 30px showing
-     while open, and hands all 30 back on condense. */
-  .lp-ont-win--objects {
-    --lp-ont-inst-w: 100px;
-    --lp-ont-sam-w: 118px;
-  }
-  .lp-ont-inst,
-  .lp-ont-sam-id {
-    gap: 7px;
-  }
-  .lp-ont-inst {
-    padding: 0 7px;
-  }
-  .lp-ont-sam-card {
-    padding: 0 7px 10px;
-  }
-  .lp-ont-avatar {
-    width: 26px;
-    height: 26px;
-  }
-  .lp-ont-who-name {
-    font-size: 11.5px;
-  }
-  .lp-ont-who-role {
-    font-size: 9.5px;
-  }
-
-  /* 3 — client card gives last, so the chips give first */
-  .lp-ont-chip {
-    padding: 0 10px 0 6px;
-    gap: 7px;
-  }
-  .lp-ont-chip-name,
-  .lp-ont-field-key,
-  .lp-ont-field-value {
-    font-size: 11.5px;
-  }
-  /* key over value — client card is ~80px of content here, "Stage ·
-     Evaluating" won't fit on one line */
-  .lp-ont-client .lp-ont-field {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-    padding: 8px 0;
-  }
-  .lp-ont-rule {
-    font-size: 11.5px;
-  }
-
-  /* 4 — cannot survive as a row: three destination rows need ~170px of text
-     column, which is gone once the actor card and tile are paid for. Becomes a
-     column; .lp-ont-vwire takes over from the horizontal wires, because a
-     squeezed viewBox can compress a connector but not rotate one. */
-  .lp-ont-win--action {
-    flex-direction: column;
-    align-items: center;
-  }
-  .lp-ont-win--action .lp-ont-wire,
-  .lp-ont-win--action .lp-ont-funnel--out {
-    display: none;
-  }
-  .lp-ont-win--action .lp-ont-vwire {
-    display: block;
-  }
-  .lp-ont-actor,
-  .lp-ont-outcomes {
-    width: 100%;
-  }
-  .lp-ont-outcomes {
-    gap: 12px;
-  }
-  .lp-ont-outcome {
-    height: auto;
-    min-height: 30px;
-  }
-  .lp-ont-outcome-text {
-    font-size: 11.5px;
+    gap: 36px;
   }
 }
 
 /* ── Control ───────────────────────────────────────────────────────────
-   Two columns: claim left, gray panel + floating white identity card right.
-   ⚠ Static — no scroll choreography, no modes.
+   Two columns: claim + gray panel. Monitoring flips them (`.lp-ctl--flip`:
+   panel left, holding the activity log) on desktop.
+   ⚠ connect-section.tsx wears these layout classes too (see Integrations),
+   unflipped.
    Markup: components/control-section.tsx. */
 
 .lp-ctl {
@@ -2401,251 +3397,284 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 10px 30px rgba(0, 0, 0, 0.06);
   padding: 24px 26px 22px;
 }
-.lp-ctl-card-head {
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  gap: 20px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 22px 24px;
+
+/* Monitoring only: panel LEFT, claim RIGHT on desktop. CSS `order`, not DOM
+   order, so the claim stays first for reading and on phones (reset below).
+   ⚠ Connect wears `.lp-ctl-*` WITHOUT this modifier; keep every flip rule
+   behind `.lp-ctl--flip`. Side padding as Connect's window takes, so the log's
+   chip row fits on one line. */
+.lp-ctl--flip .lp-ctl-inner {
+  grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
 }
-.lp-ctl-card-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+.lp-ctl--flip .lp-ctl-panel {
+  order: -1;
+  padding-inline: clamp(24px, 3.5vw, 56px);
 }
-.lp-ctl-card-name {
-  display: inline-flex;
+
+/* ── Monitoring activity log (components/control-log.tsx) ──────────────
+   Rides the Orchestration PLAY CONTRACT (`.lp-ont-grow`, `-on`, `-fade`,
+   `-stack`; see "Play contract"): base rules are the final frame. Rows are a
+   fixed height and never wrap, so the list's pinned height holds exactly four
+   (newest on top; older rows slide out the bottom) and the panel never
+   resizes while it plays. Kept to the old card's height (Samuel, 2026-10-22). */
+.lp-ctl-log {
+  --lp-ctl-log-row: 52px;
+  padding: 18px 20px 6px;
+}
+.lp-ctl-log-head {
+  display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 19px;
+  justify-content: space-between;
+}
+.lp-ctl-log-title {
+  font-size: 15px;
   font-weight: 600;
   color: #0d0d0d;
 }
-.lp-ctl-verified {
-  color: #1d9bf0;
-  fill: #1d9bf0;
-  stroke: #ffffff;
-}
-.lp-ctl-card-handle {
-  margin-top: 3px;
-  font-size: 14px;
+.lp-ctl-log-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
   color: var(--muted);
 }
-.lp-ctl-card-actions {
-  margin-top: 20px;
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
+.lp-ctl-log-live i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22a55a;
 }
-.lp-ctl-card-pill {
+.lp-ctl-log-chips {
+  margin: 14px 0 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lp-ctl-log-chip {
   display: inline-flex;
   align-items: center;
-  height: 34px;
-  padding: 0 15px;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
   border-radius: 999px;
   background: #f1f1f0;
-  font-size: 13.5px;
+  font-size: 12px;
   font-weight: 500;
+  white-space: nowrap;
   color: #161616;
 }
-.lp-ctl-card-kebab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  color: #161616;
+.lp-ctl-log-chip[data-on] {
+  background: #0d0d0d;
+  color: #ffffff;
 }
-.lp-ctl-card-avatar {
+/* Paused: dimmed, with the pause glyph. Armed it is an ordinary chip; at --d
+   it dims and the glyph opens its own width (keyframes run FROM the chip's
+   ordinary look TO these base rules). */
+.lp-ctl-log-chip--paused {
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+  background: #ffffff;
+}
+.lp-ctl-log-chip--paused svg {
   flex: none;
-  width: 132px;
-  border-radius: 10px;
-  background: linear-gradient(160deg, #a8c6e8 0%, #6d9fd8 55%, #4d83c4 100%);
+  width: 11px;
+}
+[data-play="armed"] .lp-ctl-log-chip--paused {
+  color: #161616;
+  box-shadow: none;
+  background: #f1f1f0;
+}
+[data-play="armed"] .lp-ctl-log-chip--paused svg {
+  width: 0;
+  margin-right: -5px;
+  opacity: 0;
+}
+[data-play="in"] .lp-ctl-log-chip--paused {
+  animation: lp-ctl-log-pause 320ms var(--lp-ont-ease) var(--d) backwards;
+}
+[data-play="in"] .lp-ctl-log-chip--paused svg {
+  animation: lp-ctl-log-pause-glyph 320ms var(--lp-ont-ease) var(--d) backwards;
+}
+@keyframes lp-ctl-log-pause {
+  from {
+    color: #161616;
+    box-shadow: none;
+    background: #f1f1f0;
+  }
+}
+@keyframes lp-ctl-log-pause-glyph {
+  from {
+    width: 0;
+    margin-right: -5px;
+    opacity: 0;
+  }
 }
 
-.lp-ctl-rows {
-  margin: 26px 2px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
+.lp-ctl-log-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  height: calc(4 * var(--lp-ctl-log-row));
+  overflow: hidden;
 }
-.lp-ctl-row {
+.lp-ctl-log-row {
+  box-sizing: border-box;
+  height: var(--lp-ctl-log-row);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
 }
-.lp-ctl-row-key {
-  font-size: 14.5px;
-  color: #161616;
+.lp-ont-grow:last-child .lp-ctl-log-row {
+  border-bottom: 0;
 }
-.lp-ctl-row-value {
+.lp-ctl-log-body {
+  flex: 1;
+  min-width: 0;
+}
+.lp-ctl-log-name,
+.lp-ctl-log-did {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 18px;
+}
+.lp-ctl-log-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0d0d0d;
+}
+.lp-ctl-log-time {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.lp-ctl-log-did {
+  margin-top: 2px;
+  font-size: 13px;
+  color: #3a3a3a;
+}
+.lp-ctl-log-where {
+  color: var(--muted);
+}
+.lp-ctl-log-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: #161616;
-}
-.lp-ctl-row-copy {
-  flex: none;
-  color: #a3a3a3;
-}
-.lp-ctl-row-avatar {
-  flex: none;
-  width: 18px;
-  height: 18px;
+  gap: 4px;
+  height: 22px;
+  padding: 0 9px;
   border-radius: 999px;
-  background: linear-gradient(150deg, #d8c8b8 0%, #b09a86 100%);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  background: #f1f1f0;
+  color: #3a3a3a;
+}
+.lp-ctl-log-pill[data-tone="waiting"] {
+  background: #fdf1dc;
+  color: #8a5a00;
+}
+.lp-ctl-log-pill[data-tone="approved"] {
+  background: #e6f4ea;
+  color: #1e6b3a;
+}
+.lp-ctl-log-pill[data-tone="paused"] {
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+}
+/* G1's face: PairedAvatar's ring around the robot glyph (inline: ring colour
+   and size; the badge is PairedAvatar's own `Face`). */
+.lp-ctl-log-robot {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  border: 2px solid;
+  border-radius: 50%;
+  background: var(--raised-light-face);
+  color: #161616;
 }
 
 @media (max-width: 900px) {
   .lp-ctl {
     margin-top: 90px;
   }
-  .lp-ctl-inner {
+  .lp-ctl-inner,
+  .lp-ctl--flip .lp-ctl-inner {
     grid-template-columns: 1fr;
     gap: 44px;
   }
-  .lp-ctl-card-avatar {
-    width: 96px;
+  /* Phones: claim first, then the log. */
+  .lp-ctl--flip .lp-ctl-panel {
+    order: 0;
+  }
+}
+@media (max-width: 560px) {
+  .lp-ctl--flip .lp-ctl-panel {
+    padding: 28px 16px 32px;
+  }
+  .lp-ctl-log {
+    padding: 16px 14px 4px;
   }
 }
 
 
-/* ── Developers — last section, owns the page's bottom edge ────────────
-   Tab swaps the command; this file only fades it.
-   Markup: components/connect-section.tsx.
-   ⚠ padding-bottom here is what keeps the page from ending flush against the
-   CTA — .lp-hero's 48px is not enough on its own. */
+/* ── Integrations (connect) ──────────────────────────────────────────
+   Wears Control's two-column layout BY CLASS (`.lp-ctl`, `-inner`, `-copy`,
+   `-eyebrow`, `-heading`, `-cta`, `-secondary`, `-panel`), so the two sections
+   cannot drift; only Connect's own pieces live here: the lede, the logo tiles
+   and the `dopl-mcp` code window floating in Control's grey panel.
+   Markup: components/connect-section.tsx. The page's bottom edge belongs to
+   sdk.css (`.lp-sdk` padding-bottom). */
 
-.lp-connect {
-  width: 100%;
-  margin-top: 140px;
-  padding-bottom: 64px;
-}
-.lp-connect-inner {
-  max-width: 1280px;
-  margin: 0 auto;
-}
-
-.lp-connect-eyebrow {
-  margin: 0 0 18px;
-  font-size: 14px;
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  color: var(--muted);
+.lp-connect-lede {
+  margin: 0 0 28px;
+  max-width: 26em;
+  font-size: 15.5px;
+  line-height: 1.5;
+  color: #161616;
 }
 
-/* ⚠ Heading MUST set two lines, breaking after the first comma. Cap in `em` so
-   it tracks the clamped size: at ~0.42em/char, "Connect your agent via MCP,"
-   lands near 11.8em and adding " SDK," passes 13.4em — 12.6em sits between, so
-   the break falls after "MCP," at every size in the clamp. */
-.lp-connect-heading {
-  margin: 0 0 44px;
-  max-width: 12.6em;
-  font-family: var(--grotesk);
-  font-size: clamp(23px, 2.5vw, 37px);
-  font-weight: 400;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  color: #0a0a0a;
-}
-
-/* Sky band. Photo is public/img/dev-clouds.jpg (867×483, soft focus so the
-   upscale is invisible). ⚠ Tab glyph cutouts read `--lp-connect-glyph-bg` —
-   white on the active pill, sampled sky lavender on ghosts — because a photo
-   cannot be referenced from an SVG fill. */
-.lp-connect-band {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: clamp(440px, 48vw, 680px);
-  border-radius: 24px;
-  overflow: hidden;
-  background: url("/img/dev-clouds.jpg") center / cover no-repeat;
-}
-
-/* The scrub-driven BOX (use-glass-scrub sizes it inline in `scrub`); the
-   glass card fills whatever the box says. Width lives HERE, not on the glass —
-   the hook measures the full size by clearing its inline styles and reading
-   these rules. */
-.lp-connect-glass-box {
-  width: min(62%, 840px);
-}
-.lp-connect-glass {
-  width: 100%;
-}
-.lp-connect-band[data-glass="scrub"] .lp-connect-glass {
-  /* Height-driven too while scrubbed — left content-tall, the card would keep
-     its full size and only the box would shrink. */
-  height: 100%;
-}
-.lp-connect-band[data-glass="scrub"] .lp-connect-glass-pad {
-  /* Everything in the glass (tabs + terminal) fades as one, after the box has
-     fully grown — the Connect analog of `.lp-ont-window`'s rule above, same
-     flip-plus-transition contract. */
-  opacity: var(--lp-glass-panel-opacity, 1);
-  transition: opacity 320ms ease;
-}
-.lp-connect-glass-pad {
-  padding: 16px;
-}
-.lp-connect-tabs {
-  display: flex;
-  justify-content: flex-start;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-.lp-connect-tab {
-  --lp-connect-glyph-bg: #c6c4d2; /* sampled sky — ghost glyph cutouts */
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 38px;
-  padding: 0 16px;
+/* Logo tiles. */
+.lp-connect-grid {
+  display: grid;
+  /* Nine logos (connect-section.tsx): five on the first row, four on the second. */
+  grid-template-columns: repeat(5, 56px);
+  gap: 10px;
   margin: 0;
-  border: 0;
-  border-radius: 10px;
-  background: none;
-  font-family: var(--grotesk);
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: rgba(255, 255, 255, 0.65);
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease;
+  padding: 0;
+  list-style: none;
 }
-.lp-connect-tab:hover {
-  color: rgba(255, 255, 255, 0.92);
+/* Tile face = `.lp-icon-btn` (the landing's white 3D button, composed in the
+   TSX); this only resizes it to a rounded square. Not a control, so no
+   pointer. Later in the file than `.lp-icon-btn`, so equal specificity wins. */
+.lp-connect-grid-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  cursor: default;
 }
-/* after the hover rule on purpose — the active tab never dims */
-.lp-connect-tab[data-active="true"] {
-  --lp-connect-glyph-bg: #ffffff; /* cutouts match the white pill */
-  background: #ffffff;
-  color: #0d0d0d;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.12);
+.lp-connect-grid-logo {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
 }
-.lp-connect-tab:focus-visible {
-  outline: 2px solid #ffffff;
-  outline-offset: 3px;
-}
-.lp-connect-tab[data-active="true"]:focus-visible {
-  outline-color: #0d0d0d;
-}
-.lp-connect-tab-icon {
-  flex: none;
+/* Full-bleed app icon (Grok Bot); round it like the OS does. */
+.lp-connect-grid-logo[data-app-icon] {
+  border-radius: 7px;
 }
 
+/* ⚠ SHARED WINDOW: `.lp-connect-term` + `-term-bar` + `.lp-connect-dots` are
+   also worn by sdk-section.tsx (the Developers window, deltas in sdk.css).
+   Restyling them restyles both. Connect-only rules go on the `.lp-connect-code`
+   family below. */
 .lp-connect-term {
   width: 100%;
+  min-width: 0;
   background: #ffffff;
   border-radius: 12px;
   overflow: hidden;
@@ -2676,21 +3705,74 @@
 .lp-connect-dots i:first-child {
   background: #b9b9b9;
 }
-.lp-connect-copy {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 30px;
-  padding: 0 8px;
-  margin: 0;
-  border: 0;
-  border-radius: 7px;
-  background: none;
-  font-family: var(--grotesk);
+/* Same as sdk.css `.lp-sdk-file` (file name in the bar). */
+.lp-connect-file {
+  padding-right: 8px;
   font-size: 13.5px;
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--muted);
+}
+
+/* Code body: values from sdk.css `.lp-sdk-code` (mono stack, 13.5/1.7,
+   #161616), comments in its `.lp-sdk-kw` grey, values in its `.lp-sdk-str`
+   blue. No marketing mono token exists, so the stack is spelled out. */
+.lp-connect-code {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px 16px 22px 24px;
+}
+.lp-connect-comment,
+.lp-connect-cmd {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 13.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.lp-connect-comment {
+  color: #8c8c8c;
+  font-weight: 600;
+}
+.lp-connect-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.lp-connect-cmd {
+  flex: 1;
+  min-width: 0;
+  color: #161616;
+}
+.lp-connect-str {
+  color: #4d83c4;
+}
+.lp-connect-install {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.lp-connect-install:hover {
+  color: #161616;
+}
+.lp-connect-copy {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 23px;
+  padding: 0 6px;
+  margin: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font-family: var(--grotesk);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #b8b8b8;
   cursor: pointer;
   transition: color 0.15s ease;
 }
@@ -2705,104 +3787,38 @@
   outline-offset: 2px;
 }
 
-/* ⚠ FIXED height, sized for TWO lines: the Claude Code command wraps and the
-   others don't, so a content-driven box would move on every tab switch. */
-.lp-connect-term-body {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  height: 118px;
-  padding: 26px 26px 0;
-  overflow: hidden;
-  animation: lp-connect-fade 160ms ease both;
-}
-@keyframes lp-connect-fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .lp-connect-term-body {
-    animation: none;
-  }
-}
-/* No mono token exists for marketing (the page owns one grotesk), so the stack
-   is spelled out rather than invented as a var. */
-.lp-connect-prompt,
-.lp-connect-cmd {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
-    "Liberation Mono", monospace;
-  font-size: 14px;
-  line-height: 1.55;
-}
-.lp-connect-prompt {
-  flex: none;
-  color: #b8b8b8;
-}
-.lp-connect-cmd {
-  color: #161616;
-  overflow-wrap: anywhere;
-}
-
-/* ⚠ FIXED height, rendered for every tab (empty on SDK): the glass-scrub hook
-   measures the pad once, so the row must not resize with the selected tab —
-   same rationale as `.lp-connect-term-body`. Tall enough to seat the
-   `.lp-btn--sm` (40px) on the Cursor tab. */
-.lp-connect-hint {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  height: 56px;
-  padding: 0 26px;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--muted);
-  overflow: hidden;
-  animation: lp-connect-fade 160ms ease both;
-}
-@media (prefers-reduced-motion: reduce) {
-  .lp-connect-hint {
-    animation: none;
-  }
-}
-
-.lp-connect-cta {
-  display: flex;
-  align-items: center;
-  margin-top: 44px;
+/* Window in Control's panel: a little less side padding than Control's card
+   gets, so the Codex command keeps to one line on desktop. */
+.lp-connect .lp-ctl-panel {
+  padding-inline: clamp(24px, 3.5vw, 56px);
 }
 
 @media (max-width: 900px) {
-  .lp-connect {
-    margin-top: 90px;
-    padding-bottom: 40px;
-  }
-  .lp-connect-heading {
-    margin-bottom: 32px;
-  }
-  /* auto height so the band still closes cleanly once the tabs wrap */
-  .lp-connect-band {
-    height: auto;
-    padding: clamp(40px, 8vw, 72px) 0 clamp(48px, 10vw, 88px);
-  }
-  .lp-connect-tabs {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
+  .lp-connect-grid {
+    grid-template-columns: repeat(5, 44px);
     gap: 8px;
-    width: min(340px, 88%);
   }
-  .lp-connect-term {
-    width: 92%;
+  .lp-connect-grid-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
   }
-  .lp-connect-term-body {
-    height: 132px;
-    padding: 22px 20px 0;
+  .lp-connect-grid-logo {
+    width: 22px;
+    height: 22px;
   }
-  .lp-connect-cta {
-    margin-top: 32px;
+}
+/* Same step-down sdk.css takes for its window at this width. */
+@media (max-width: 560px) {
+  .lp-connect .lp-ctl-panel {
+    padding: 28px 16px 32px;
+  }
+  .lp-connect-code {
+    padding: 18px 12px 18px 16px;
+  }
+  .lp-connect-comment,
+  .lp-connect-cmd {
+    font-size: 12.5px;
   }
 }
 
@@ -2855,6 +3871,11 @@
   gap: 20px;
   align-items: stretch;
 }
+/* Three cards for a three-plan group (Personal: Free / Pro / Max, 2026-10-22).
+   A MODIFIER, so the two-card Workspaces group keeps its two full columns. */
+.lp-plans--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
 
 .lp-plan {
   display: flex;
@@ -2884,12 +3905,6 @@
   border-radius: 999px;
   padding: 4px 11px;
 }
-.lp-plan-badge--soft {
-  color: var(--ink);
-  background: #f0f0f0;
-  border: 1px solid var(--line);
-}
-
 .lp-plan-name {
   font-family: var(--grotesk);
   font-size: 34px;
@@ -2913,6 +3928,14 @@
 .lp-plan-price-note {
   font-size: 14px;
   color: var(--muted);
+}
+/* The launch offer's struck reference price (`prices.ts › launchOfferFor`),
+   quieter than the real figure beside it. */
+.lp-plan-price-was {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: line-through;
 }
 /* min-height keeps the CTAs roughly aligned across cards. */
 .lp-plan-summary {
@@ -3077,6 +4100,12 @@
 .lp-audio-toggle:hover {
   color: var(--ink);
 }
+/* Over a dark band (ambient-audio.tsx sets `data-on-dark`) the face swaps to
+   the dark 3D recipe — selectors added to `.lp-btn--3d` above. */
+.lp-audio-toggle[data-on-dark],
+.lp-audio-toggle[data-on-dark]:hover {
+  color: #fff;
+}
 /* ⚠ Keyboard focus must survive the button's transform/shadow states. */
 .lp-audio-toggle:focus-visible {
   outline: 2px solid var(--ink);
@@ -3092,11 +4121,9 @@
 
 /* ── Banner demo — the /home account surface in the slot ──────────────
    Markup: components/banner-demo/. The RECORD PANE is the product's own
-   channels surface (which is what /home itself mounts); since 2026-09-17 the
-   /home CHROME around it composes the product's own recipes too — the black
-   page pill, the face selector's options, the three gray wells and the channel
-   ROW all moved into the root tree so this scene can read them
-   (`banner-demo/demo-home-chrome.tsx` lists them). /home's own PAGES still live
+   channels surface (which is what /home itself mounts); the /home chrome around
+   it is the demo's own faces (`banner-demo/demo-home-faces.tsx`) over the
+   product's tab and well sets. /home's own PAGES still live
    in `apps/desktop-ui`, which the Next tree cannot import. This file owns the
    demo's stage — the scale wrapper, the frame geometry, the scripted cursor and
    its click ripple.
@@ -3232,7 +4259,7 @@
   margin-top: 4px;
 }
 
-/* THE PANEL — the kit's `.page-float` (fill, 2px line, 14px radius, float
+/* THE PANEL — the kit's `.page-float` (fill, 1px line, 14px radius, float
    margins, shadow) composed in the TSX; this adds layout only, plus the
    flush-left margin. ⚠ `margin-left: 0` is `index.tsx`'s `!ml-0`: the dark
    column the eye reads must be the 54px rail and nothing wider, or the rail's
@@ -3251,7 +4278,7 @@
   overflow: hidden;
 }
 
-/* THE RECORD PANE — a white card bounded by the account palette's 2px line,
+/* THE RECORD PANE — a white card bounded by the account palette's line,
    NOT an elevation. ⚠ No shadow, deliberately (`index.tsx`): the pane has no
    top or left margin, so the upward half of a drop printed straight into the
    gap under the header as a gray smudge beside the info column's tab pills.
@@ -3264,7 +4291,7 @@
   min-width: 0;
   overflow: hidden;
   margin: 0 12px 12px 0;
-  border: 2px solid var(--home-panel-line);
+  border: 1px solid var(--home-panel-line);
   border-radius: 14px;
   background: var(--home-card);
 }
@@ -3275,6 +4302,265 @@
    is where the skin lives now, so the scene wears `data-frame-skin`
    (`banner-demo/demo-scene.tsx`). ⚠ **DO NOT RE-PORT THEM**: a fourth copy is
    what the ruling deleted. */
+
+/* ── /home TOP BAR, the demo's own face (Samuel, 2026-10-22) ──────────
+   `banner-demo/demo-home-faces.tsx › DemoTopBar`, the same cells and 36px height as
+   desktop `home-header.tsx`: the list-width lead cell, the tabs, search, profile. */
+.lp-demo-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 12px 0;
+}
+.lp-demo-top-lead {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+/* The list-width cell, so the track starts on the record pane's left edge. */
+.lp-demo-top-cell {
+  width: var(--home-list-w);
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+}
+.lp-demo-top-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 15px 0 12px;
+  border-radius: 999px;
+  background: var(--surface-cta);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.1);
+  font-size: var(--text-small);
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--text-on-cta);
+}
+/* An UNDERLINE tab bar (Samuel, 2026-10-22: the pill track "doesn't look
+   modern"): plain text tabs, and only the active one carries a 2px ink
+   underline. No hairline under the others (Samuel: "just the black line under
+   the selected"). The row stays 36px like the track it replaced. */
+.lp-demo-top-tabs {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 22px;
+  height: 36px;
+  padding: 0 2px;
+}
+.lp-demo-top-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-small);
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--text-muted);
+  transition: color 120ms ease;
+}
+.lp-demo-top-tab:hover {
+  color: var(--text-secondary);
+}
+.lp-demo-top-tab[data-selected="true"] {
+  color: var(--text-primary);
+}
+.lp-demo-top-tab[data-selected="true"]::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text-primary);
+}
+.lp-demo-top-trail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lp-demo-top-search,
+.lp-demo-top-profile {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.04);
+  font-size: var(--text-small);
+  white-space: nowrap;
+}
+.lp-demo-top-search {
+  width: 260px;
+  gap: 8px;
+  padding: 0 14px;
+  color: var(--text-muted);
+}
+.lp-demo-top-profile {
+  gap: 8px;
+  padding: 0 14px 0 4px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.lp-demo-top-profile img {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* ── /home CHANNEL SWITCHER, the demo's own face (Samuel, 2026-10-22) ───
+   `banner-demo/demo-home-faces.tsx › DemoChannelSwitcher`. Plain quiet headings
+   over the rows, and every channel its OWN bounded card (Samuel: "I can't really
+   tell where each channel begins and ends"): white, 1px hairline, 12px radius,
+   6px apart. The selected row is the same card filled solid ink. */
+.lp-demo-sw {
+  width: var(--home-list-w);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+  padding: 4px 12px 12px;
+}
+.lp-demo-sw-section {
+  display: flex;
+  flex-direction: column;
+}
+.lp-demo-sw-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  padding: 6px 4px;
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.lp-demo-sw-caret {
+  transform: rotate(-90deg);
+}
+.lp-demo-sw-caret[data-open="true"] {
+  transform: none;
+}
+.lp-demo-sw-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lp-demo-sw-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+/* The selected channel is the same card in solid ink (Samuel, 2026-10-22: "what
+   would it look like if the entire box just became black"). Same shape and size:
+   the border takes the ink too, so nothing grows. */
+.lp-demo-sw-row[data-selected="true"] {
+  border-color: var(--surface-cta);
+  background: var(--surface-cta);
+}
+.lp-demo-sw-row[data-selected="true"] .lp-demo-sw-name {
+  font-weight: 600;
+  color: var(--text-on-cta);
+}
+.lp-demo-sw-row[data-selected="true"] .lp-demo-sw-time,
+.lp-demo-sw-row[data-selected="true"] .lp-demo-sw-desc {
+  color: var(--text-on-cta);
+  opacity: 0.7;
+}
+.lp-demo-sw-row[data-selected="true"] .lp-demo-sw-dot {
+  background: var(--text-on-cta);
+}
+.lp-demo-sw-row[data-selected="true"] .lp-demo-sw-pill {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--text-on-cta);
+}
+.lp-demo-sw-row[data-selected="true"] .lp-demo-sw-pill--ink {
+  background: var(--text-on-cta);
+  color: var(--surface-cta);
+}
+.lp-demo-sw-line {
+  display: flex;
+  min-height: 18px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.lp-demo-sw-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-body);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.lp-demo-sw-time {
+  flex: none;
+  font-size: var(--text-micro);
+  color: var(--text-muted);
+}
+.lp-demo-sw-desc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+}
+.lp-demo-sw-faces {
+  display: flex;
+}
+.lp-demo-sw-faces img {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.lp-demo-sw-faces img + img {
+  margin-left: -5px;
+}
+.lp-demo-sw-marks {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.lp-demo-sw-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-primary);
+}
+.lp-demo-sw-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--bg-inset);
+  font-size: var(--text-micro);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.lp-demo-sw-pill--ink {
+  background: var(--surface-cta);
+  color: var(--text-on-cta);
+}
 
 /* ── Scripted cursor + click ripple ── */
 .lp-demo-cursor {

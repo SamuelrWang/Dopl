@@ -21,30 +21,25 @@
  * app is running. ⚠ IT WAS CLIENT-SIDE ARITHMETIC OVER `lastSeenAt` UNTIL
  * 2026-09-08, and failing toward OFFLINE was the reported defect.
  *
- * ⚠ THE AGENTS SECTION RUNS THE TAB ROW'S OWN DERIVATIONS (`ownAgentsFor` /
- * `peerCardsFor`), never a third filter here — a second copy is F-142's defect.
+ * ⚠ THE AGENTS SECTION IS THE THREAD CARD'S LIST (`thread-card-agents.ts ›
+ * threadCardAgents`, itself the tab row's `ownAgentsFor` / `peerCardsFor`), never a
+ * third filter here — a second copy is F-142's defect.
  */
 
-import { Bot, Calendar, Hash, Radio, UserRound, Users } from "lucide-react";
-import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
+import { Calendar, Hash, Radio, UserRound, Users } from "lucide-react";
+import { StatusPill } from "@/shared/ui/status-pill";
 import { formatDate } from "@/shared/lib/format-time";
-import { cn } from "@/shared/lib/utils";
 import { THREAD_MODE_LABELS } from "../constants";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
 import { CREATED_ROW_LABEL } from "../lib/channel-display";
 import type { ChannelMember, ChannelThread } from "../types";
 import { MetaRow, MetaRowDivider, PanelHeading } from "./bits";
-import { AgentLiveness } from "./agent-bits";
-import {
-  agentDisplayName,
-  agentKey,
-  agentLiveness,
-  ownAgentsFor,
-  peerCardsFor,
-  type AgentLivenessState,
-} from "./agents-model";
-import { isPresentForViewer, memberPerson } from "./view-model";
+import { AgentStatusPill } from "./agent-bits";
+import { AgentFace } from "./agent-face";
+import { MemberRow } from "./member-roster";
+import { threadCardAgents, type ThreadCardAgent } from "./thread-card-agents";
+import { isPresentForViewer, type AuthorIndex } from "./view-model";
 
 // ⚠ `MODE_LABEL` STOOD HERE and is now `constants.ts › THREAD_MODE_LABELS`
 // (2026-08-21): `thread-settings-tab.tsx` lets the creator CHOOSE the mode, and a
@@ -53,14 +48,15 @@ import { isPresentForViewer, memberPerson } from "./view-model";
 export function ThreadInfoTab({
   thread,
   members,
-  currentUserId,
+  index,
   agentSessions,
   peerSessions = [],
 }: {
   thread: ChannelThread;
   /** The channel roster — the two parties are resolved through it. */
   members: ChannelMember[];
-  currentUserId: string;
+  /** The viewer, the faces and the agents' colours. */
+  index: AuthorIndex;
   /** THIS MACHINE'S live feed, or `null` for "could not ask". ⚠ Carried as
    *  `null`, never collapsed to `[]`: the section words the two differently. */
   agentSessions: readonly DesktopSessionSummary[] | null;
@@ -73,11 +69,15 @@ export function ThreadInfoTab({
     ? (byUser.get(thread.targetUserId) ?? null)
     : null;
 
-  const mine = agentSessions
-    ? ownAgentsFor(agentSessions, thread.channelId, thread.id)
-    : [];
-  const peers = peerCardsFor(peerSessions, currentUserId, thread.id);
-  const agentCount = agentSessions === null ? null : mine.length + peers.length;
+  const currentUserId = index.currentUserId;
+  const agents =
+    threadCardAgents(
+      { sessions: agentSessions, peers: peerSessions },
+      thread.channelId,
+      thread.id,
+      index
+    ) ?? [];
+  const agentCount = agentSessions === null ? null : agents.length;
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pb-6">
@@ -86,7 +86,7 @@ export function ThreadInfoTab({
         <MetaRow icon={Hash} label="Title">
           <span
             title={thread.title}
-            className="max-w-[180px] truncate text-body text-text-primary"
+            className="max-w-45 truncate text-body text-text-primary"
           >
             {thread.title}
           </span>
@@ -152,23 +152,8 @@ export function ThreadInfoTab({
         }
       />
       <div className="flex flex-col gap-px px-2">
-        {mine.map((agent) => (
-          <AgentStateRow
-            key={agentKey(agent)}
-            label={agentDisplayName(agent)}
-            sub="Yours"
-            liveness={agentLiveness(agent)}
-          />
-        ))}
-        {peers.map((peer) => (
-          <AgentStateRow
-            key={`${peer.userId}:${peer.name}:${peer.threadId ?? ""}`}
-            label={peer.name}
-            sub={`${byUser.get(peer.userId)?.displayName || "A teammate"}'s`}
-            // ⚠ NOTHING FINER FOR A PEER: the cross-machine wire carries the
-            // coarse state alone, and the shared mapping invents no third word.
-            liveness={agentLiveness(peer)}
-          />
+        {agents.map((agent) => (
+          <AgentStateRow key={agent.key} agent={agent} />
         ))}
         {agentSessions === null ? (
           <p className="px-2 py-2 text-caption text-text-muted">
@@ -187,9 +172,8 @@ export function ThreadInfoTab({
 }
 
 /**
- * One party of the exchange, on the roster row's own recipe (`info-tab.tsx ›
- * MemberRow`): `AvatarWithPresence`'s ring for presence — never a standalone dot —
- * the email as subline, and a chip stating which side of the thread they are.
+ * One party of the exchange: the roster's own row (`member-roster.tsx › MemberRow`) with a chip
+ * stating which side of the thread they are.
  *
  * ⚠ AN UNRESOLVED PARTY RENDERS AS AN ABSENCE, NEVER AS A UUID: an id is not a
  * name (the rule the Creator row follows, and `view-model.ts › threadParties`
@@ -212,7 +196,7 @@ function PartyRow({
 }) {
   if (!member) {
     return (
-      <div className="flex h-[46px] items-center gap-2.5 rounded-[8px] px-2">
+      <div className="flex h-11.5 items-center gap-2.5 rounded-md px-2">
         <Fallback size={16} aria-hidden className="shrink-0 text-text-muted" />
         <span className="min-w-0 flex-1 truncate text-body text-text-muted">
           {missing}
@@ -221,32 +205,12 @@ function PartyRow({
       </div>
     );
   }
-  const online = isPresentForViewer(member, viewerUserId);
   return (
-    <div
-      className={cn(
-        "flex h-[46px] items-center gap-2.5 rounded-[8px] px-2",
-        !online && "opacity-60"
-      )}
-    >
-      <AvatarWithPresence
-        person={memberPerson(member)}
-        online={online}
-        size="sm"
-        title={online ? "Agent listening" : "Agent offline"}
-      />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-body font-semibold text-text-primary">
-          {member.displayName ?? member.email ?? "Member"}
-        </span>
-        {member.email && (
-          <span className="truncate text-caption text-text-muted">
-            {member.email}
-          </span>
-        )}
-      </span>
-      <SidePill label={side} />
-    </div>
+    <MemberRow
+      member={member}
+      online={isPresentForViewer(member, viewerUserId)}
+      chip={<SidePill label={side} />}
+    />
   );
 }
 
@@ -255,32 +219,27 @@ function PartyRow({
  *  read as a claim about permissions on the thread. */
 function SidePill({ label }: { label: string }) {
   return (
-    <span className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-2 py-px text-micro font-medium text-text-secondary">
+    <StatusPill className="shrink-0">
       {label}
-    </span>
+    </StatusPill>
   );
 }
 
-/** One live agent standing on this thread: its ID and what it is doing. The
+/** One live agent standing on this thread: who it is, whose, and what it is doing. The
  *  Agents tab owns the CARD with the meters; this is the glance. */
-function AgentStateRow({
-  label,
-  sub,
-  liveness,
-}: {
-  label: string;
-  sub: string;
-  /** From the ONE mapping (`agents-model.ts › agentLiveness`) — this row states
-   *  a verdict, it does not compute one. */
-  liveness: AgentLivenessState;
-}) {
+function AgentStateRow({ agent }: { agent: ThreadCardAgent }) {
   return (
-    <div className="flex h-[38px] items-center gap-2 rounded-[8px] px-2">
-      <Bot size={14} aria-hidden className="shrink-0 text-text-muted" />
-      <span className="min-w-0 truncate text-body text-text-primary">{label}</span>
-      <span className="shrink-0 text-caption text-text-muted">{sub}</span>
-      <span className="flex-1" />
-      <AgentLiveness {...liveness} />
+    <div className="flex h-9.5 items-center gap-2.25 px-2">
+      <AgentFace
+        size={26}
+        photo={agent.photo}
+        name={agent.name}
+        color={agent.color}
+        runtime={agent.runtime}
+      />
+      <span className="min-w-0 truncate text-body font-medium text-text-primary">{agent.name}</span>
+      <span className="min-w-0 flex-1 truncate text-caption text-text-muted">{agent.owner}</span>
+      <AgentStatusPill {...agent.liveness} />
     </div>
   );
 }

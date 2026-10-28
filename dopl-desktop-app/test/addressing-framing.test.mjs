@@ -262,8 +262,8 @@ test("HOUSE: every addressing branch is fence-safe, newline-free and em-dash-fre
       assert.ok(!line.includes("—"), `em dash in: ${line}`);
       assert.ok(!/BEGIN-REQUEST|END-REQUEST/i.test(line), `fence token in: ${line}`);
       assert.ok(!line.includes("\n"), `raw newline in: ${JSON.stringify(line)}`);
-      // FIX S1: `thread` is the argument, `task` is not one — nowhere, not even in prose.
-      assert.ok(!/\btask\s*=/.test(line) && !/\btask "/.test(line), `teaches a task argument: ${line}`);
+      // FIX S1: thread replies use `thread=`; addressing never names the tasks op's `task` argument.
+      assert.ok(!/\btask\s*=/.test(line) && !/\btask "/.test(line), `teaches task= where a reply takes thread=: ${line}`);
     }
   }
 });
@@ -311,16 +311,16 @@ test("frameContinuation with NO addressee is byte-identical to the pre-ruling tu
 
 const CH = "aaaaaaaa-1111-4bbb-8ccc-dddddddddddd";
 const WS = "bbbbbbbb-2222-4ccc-8ddd-eeeeeeeeeeee";
-const TASK = "cccccccc-3333-4ddd-8eee-ffffffffffff";
+const THREAD = "cccccccc-3333-4ddd-8eee-ffffffffffff";
 const turn = (over = {}) => framing.buildFencedTurn({
   side: "requester", message: "x", nonce: "w1",
-  context: { channelName: "Ops", channelId: CH, workspaceId: WS, taskId: TASK, ...over },
+  context: { channelName: "Ops", channelId: CH, workspaceId: WS, threadId: THREAD, ...over },
 });
 
 test("a WOKEN requester (`scope: 'thread'`) IS ordered to read the thread it is joining", () => {
   const out = turn({ scope: "thread" });
   assert.match(out, /Your SECOND action is to read the exchange you are joining/);
-  assert.ok(out.includes(`with op "read", channel "${CH}", container "${WS}", thread "${TASK}"`), out);
+  assert.ok(out.includes(`with op "read", channel "${CH}", container "${WS}", thread "${THREAD}"`), out);
   assert.equal(out.split('op "read"').length - 1, 1, "stated once");
 });
 
@@ -347,7 +347,7 @@ test("a scope-less requester still gets NO read (the older shape opened its own 
     assert.ok(!/SECOND action/.test(turn(over)), `${JSON.stringify(over)}: no orphan step`);
   }
   // A half-known address never half-states the call, woken or not.
-  for (const over of [{ scope: "thread", taskId: "" }, { scope: "thread", channelId: null }]) {
+  for (const over of [{ scope: "thread", threadId: "" }, { scope: "thread", channelId: null }]) {
     const out = turn(over);
     assert.ok(!out.includes('op "read"'), `${JSON.stringify(over)}: no half-addressed read`);
     assert.ok(!/undefined|null/.test(out), `${JSON.stringify(over)}: no placeholder leaks`);
@@ -360,7 +360,7 @@ test("a scope-less requester still gets NO read (the older shape opened its own 
 test("the thread read keeps its imperative and loses the false exclusivity", () => {
   const responder = framing.buildFencedTurn({
     side: "responder", message: "x", nonce: "w2",
-    context: { channelName: "Ops", channelId: CH, workspaceId: WS, taskId: TASK },
+    context: { channelName: "Ops", channelId: CH, workspaceId: WS, threadId: THREAD },
   });
   // The block word-wraps, so phrase checks run whitespace-collapsed (adjacency is the point).
   for (const out of [turn({ scope: "thread" }), responder].map((s) => s.replace(/\s+/g, " "))) {

@@ -61,7 +61,7 @@ function session(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: THREAD_ID,
+    threadId: THREAD_ID,
     name: "flint",
     state: "working",
     ...over,
@@ -134,7 +134,7 @@ describe("delete thread", () => {
     await waitFor(() => expect(order).toEqual(["end", "delete"]));
     expect(control).toHaveBeenCalledWith("end", {
       channelId: CHANNEL_ID,
-      taskId: THREAD_ID,
+      threadId: THREAD_ID,
     });
   });
 
@@ -154,7 +154,7 @@ describe("delete thread", () => {
   });
 
   it("touches agents on OTHER threads not at all", async () => {
-    mount({ agentSessions: [session({ taskId: "t-other" })] });
+    mount({ agentSessions: [session({ threadId: "t-other" })] });
     await confirmDelete();
     await waitFor(() => expect(removeMutateAsync).toHaveBeenCalled());
     expect(control).not.toHaveBeenCalled();
@@ -200,7 +200,7 @@ describe("who sees what", () => {
   });
 
   /** A manager may delete somebody else's thread and may NOT set its mode — the
-   *  server's split (`setTaskMode` is creator-only), mirrored so neither row is
+   *  server's split (`setThreadMode` is creator-only), mirrored so neither row is
    *  inert. */
   it("gives a channel manager Delete alone on somebody else's thread", () => {
     mount({ createdBy: "u-someone", canManageChannel: true });

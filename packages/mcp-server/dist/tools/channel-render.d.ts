@@ -57,7 +57,7 @@ export declare function formatChannelLine(c: Channel): string;
  * Legacy `closed` rows exist and are rendered exactly like every other thread —
  * they are still readable, still postable, still in the list.
  *
- * ⚠ `title` is creator- or target-typed and `listChannelTasks` is
+ * ⚠ `title` is creator- or target-typed and `listChannelThreads` is
  * channel-transparent — ANY channel member receives it; neutralized, and
  * empty-after-neutralize renders `(untitled)`.
  *

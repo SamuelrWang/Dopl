@@ -1,7 +1,9 @@
 import { useRouteError } from "react-router";
+import { PageError } from "@/shared/ui/page-error";
 import { PageShellSkeleton, TwoPaneListSkeleton } from "@/shared/ui/skeleton";
-import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { ApiError } from "#/lib/api";
+
+export { PageError };
 
 /**
  * The two states every page renders besides its content, plus the router-level
@@ -51,34 +53,6 @@ export function PageLoading({
  */
 export function isUnauthorized(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401;
-}
-
-function reloadApp(): void {
-  window.location.reload();
-}
-
-export function PageError({
-  error,
-  onRetry,
-}: {
-  error: unknown;
-  onRetry?: () => void;
-}) {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3" role="alert">
-      <p className="text-body text-text-primary">{userFacingMessage(error)}</p>
-      <div className="flex items-center gap-2">
-        {onRetry ? (
-          <button type="button" className="btn-light text-small px-3 py-1" onClick={onRetry}>
-            Try again
-          </button>
-        ) : null}
-        <button type="button" className="btn-light text-small px-3 py-1" onClick={reloadApp}>
-          Reload
-        </button>
-      </div>
-    </div>
-  );
 }
 
 /** Router `errorElement` — catches render/loader throws under the app layout. */

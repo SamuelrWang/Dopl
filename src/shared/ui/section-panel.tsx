@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
-import { SECTION_HEADING_TEXT } from "./section-heading";
+import { IDENTITY_NAME_TEXT, SECTION_HEADING_TEXT } from "./section-heading";
 
 /**
  * THE FLAT SECTION — a labelled region whose header and content sit on ONE
@@ -28,6 +28,10 @@ import { SECTION_HEADING_TEXT } from "./section-heading";
  *
  * ⚠ AN EMPTY SECTION KEEPS ITS HEADER. A panel that vanished when empty makes
  * "you have none" and "there are none to have" the same picture.
+ *
+ * `flat` is the one other face: no well at all, the header flush with the content and the heading
+ * in the 14px name face (`section-heading.ts › IDENTITY_NAME_TEXT`, the ontology switcher's), for a
+ * section standing on a white pane (/home Identities).
  */
 /**
  * THE GROUND — a gray WELL, the frame model's last step (Samuel, 2026-08-30:
@@ -56,20 +60,20 @@ export const SECTION_PANEL_GROUND =
  * THE WELL'S GEOMETRY — radius + padding, the half `SectionPanel` paints for
  * every caller regardless of the ground it is handed.
  *
- * ⚠ **EXPORTED SO THE WELL IS ONE RECIPE AND NOT A MEASUREMENT** (2026-09-13,
- * the object panel's field sections). `ontology/components/panel-section.tsx ›
- * PANEL_WELL` is the Token-spend well — `bg-home-panel` on this geometry, no
- * hairline (the same face `SECTION_PANEL_GROUND` has carried on every page since
- * R-39 flattened it) — reached by IMPORT rather than by retyping `rounded-[14px] p-3`, so the day
- * the well's radius or padding moves it moves on both surfaces at once.
+ * ⚠ **EXPORTED SO THE WELL IS ONE RECIPE AND NOT A MEASUREMENT.** `shared/ui/panel-well.ts ›
+ * PANEL_WELL` is the gray well — `bg-home-panel` on this geometry, no hairline (the same
+ * face `SECTION_PANEL_GROUND` has carried on every page since R-39 flattened it) — reached by
+ * IMPORT rather than by retyping `rounded-xl p-3`, so the day the well's radius or padding
+ * moves it moves on every surface at once.
  */
-export const SECTION_PANEL_SHELL = "rounded-[14px] p-3";
+export const SECTION_PANEL_SHELL = "rounded-xl p-3";
 
 export function SectionPanel({
   id,
   label,
   action,
   caption,
+  flat = false,
   className,
   children,
 }: {
@@ -81,6 +85,9 @@ export function SectionPanel({
   /** ONE quiet line under the heading. ⚠ Minimal-copy ruling (INVARIANTS §5):
    *  a RULE the operator needs, never an explainer paragraph. */
   caption?: ReactNode;
+  /** No well: the section sits on the page and its heading wears `IDENTITY_NAME_TEXT`, so the
+   *  cards' own hairlines do the separating. */
+  flat?: boolean;
   /** OVERRIDES the ground. See the docblock — the default is painted. */
   className?: string;
   children: ReactNode;
@@ -89,9 +96,14 @@ export function SectionPanel({
     <section
       aria-labelledby={id}
       data-section-panel
-      className={cn(SECTION_PANEL_SHELL, SECTION_PANEL_GROUND, className)}
+      className={cn(!flat && SECTION_PANEL_SHELL, !flat && SECTION_PANEL_GROUND, className)}
     >
-      <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2.5">
+      <div
+        className={cn(
+          "flex min-h-5.5 items-center justify-between gap-2 pb-2.5",
+          !flat && "px-1"
+        )}
+      >
         {/* ⚠ ONE HEADING FACE, EVERY PAGE — `section-heading.ts ›
             SECTION_HEADING_TEXT` (Samuel, 2026-09-13: the /home "Usage" trial
             is the rule now, "applied to each of the headers for each section").
@@ -99,14 +111,14 @@ export function SectionPanel({
             with the trial's promotion. */}
         <h2
           id={id}
-          className={cn("truncate", SECTION_HEADING_TEXT)}
+          className={cn("truncate", flat ? IDENTITY_NAME_TEXT : SECTION_HEADING_TEXT)}
         >
           {label}
         </h2>
         {action}
       </div>
       {caption && (
-        <p className="px-1 pb-2.5 text-caption text-text-muted">{caption}</p>
+        <p className={cn("pb-2.5 text-caption text-text-muted", !flat && "px-1")}>{caption}</p>
       )}
       {children}
     </section>

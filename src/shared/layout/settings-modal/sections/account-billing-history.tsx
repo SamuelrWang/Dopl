@@ -78,7 +78,7 @@ export function AccountBillingHistory({
     <SettingsPanel id="settings-account-billing-history" label="Billing history">
       {loading ? (
         <div
-          className="bento space-y-3 p-3.5"
+          className="white-card space-y-3 p-3.5"
           role="status"
           aria-busy="true"
           aria-label="Loading billing history"
@@ -87,7 +87,7 @@ export function AccountBillingHistory({
           <SkeletonLine w="66%" />
         </div>
       ) : isError ? (
-        <p className="bento p-3.5 text-caption text-danger" role="alert">
+        <p className="white-card p-3.5 text-caption text-danger" role="alert">
           Couldn&apos;t load billing history.{" "}
           <button
             type="button"
@@ -129,7 +129,7 @@ export function AccountBillingHistory({
                 </button>
               ) : (
                 // Holds the column so amounts stay aligned.
-                <span className="w-[13px] shrink-0" aria-hidden />
+                <span className="w-3.25 shrink-0" aria-hidden />
               )}
             </li>
           ))}

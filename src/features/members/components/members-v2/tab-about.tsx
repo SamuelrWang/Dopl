@@ -13,6 +13,7 @@ import { FieldRow, PaneHeading } from "./bits";
 import { MemberFacts } from "./member-facts";
 import { displayNameOf } from "./view-model";
 import type { MemberVisibility } from "./visibility";
+import { LABEL_TEXT_MUTED } from "@/shared/ui/section-heading";
 
 /**
  * About: identity + how the member is scoped. Self-view edits `display_name`
@@ -144,7 +145,7 @@ function BioEditor({
 
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-label font-semibold uppercase tracking-wide text-text-muted">
+      <span className={LABEL_TEXT_MUTED}>
         Bio
       </span>
       <textarea
@@ -165,7 +166,7 @@ function BioEditor({
         }}
         rows={3}
         maxLength={2000}
-        className="concave-field w-full resize-none rounded-[9px] px-3 py-2 text-lead leading-relaxed text-text-primary outline-none placeholder:text-text-muted disabled:opacity-60"
+        className="concave-field w-full resize-none rounded-field px-3 py-2 text-lead leading-relaxed text-text-primary outline-none placeholder:text-text-muted disabled:opacity-60"
         placeholder="A line or two about what you work on."
       />
     </label>

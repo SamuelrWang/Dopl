@@ -50,7 +50,7 @@ import assert from "node:assert/strict";
 // fan-out: `agent()` carries neither `awaitingDirective` nor a parked `state`, so every case here
 // drives the NOT-DORMANT path — the one no wake tier governs.
 import {
-  BLOCK, CODE, harness, agent, idle, entry, peerMsg, verdictMsg, ME, PEER, TASK, A1, A2,
+  BLOCK, CODE, harness, agent, idle, entry, peerMsg, verdictMsg, ME, PEER, THREAD, A1, A2,
 } from "./_wake-dispatch-harness.mjs";
 
 // Referenced by the pins at the foot of this file; the slice + purity proof happen in the harness.
@@ -64,7 +64,7 @@ test("feed: EVERY live agent on the thread is fed, and each is told which it is"
   assert.equal(h.calls.feedInbound.length, 2, "a thread is a GROUP of my agents, not one");
   assert.deepEqual(h.calls.feedInbound.map((c) => c.agentId), [A1, A2]);
   assert.deepEqual(h.calls.feedInbound[0], {
-    channelId: "c1", taskId: TASK, agentId: A1, message: "reply body",
+    channelId: "c1", threadId: THREAD, agentId: A1, message: "reply body",
     seq: 7, // the turn's seq — the windowless outbound bridge's thread join
     authorName: `name:${PEER}`,
     // ⚠ `authorNote` JOINED THE FEED 2026-09-18 (`room-roster.js › agentAuthorNote`): one line
@@ -103,13 +103,13 @@ test("receipt: one per FED session, each carrying that session's own outcome", a
   // ⚠ A2's key, because A2 is the addressee that took the turn — the `delivered` arm. And it is
   // `s.key` verbatim: `session-store.js › sessionKey` owns the format, and composing one here
   // would make this module a second authority on it.
-  assert.equal(sessionKey, `c1:${TASK}:${A2}`);
+  assert.equal(sessionKey, `c1:${THREAD}:${A2}`);
 
   // …and on the FALLBACK lane, where the sibling is still fed, it files its own weaker word.
   const old = harness({ agents: [agent(A1), agent(A2)] });
   await old.feedLiveSession(entry, peerMsg({ body: `@${A2} take this one` }), ME);
   assert.deepEqual(old.calls.acks.map((a) => [a[3], a[5]]), [
-    ["idle", `c1:${TASK}:${A1}`], ["delivered", `c1:${TASK}:${A2}`],
+    ["idle", `c1:${THREAD}:${A1}`], ["delivered", `c1:${THREAD}:${A2}`],
   ], "the buffer ranks them; this loop only reports what each session did");
 });
 
@@ -118,7 +118,7 @@ test("receipt: an ordinary fan-out reports `idle`, keyed to a session it actuall
   await h.feedLiveSession(entry, peerMsg(), ME);
   const [, , , verdict, , sessionKey] = h.calls.acks[0];
   assert.equal(verdict, "idle");
-  assert.equal(sessionKey, `c1:${TASK}:${A1}`);
+  assert.equal(sessionKey, `c1:${THREAD}:${A1}`);
 });
 
 // ⚠ THIS REPLACES "a THIRD party in the same channel never injects a turn (FIX L1)". That
@@ -162,7 +162,7 @@ test("feed: a session is never fed a post its own SESSION KEY authored, whatever
     authorUserId: ME,
     authorKind: "agent",
     clientMsgId: "anthony-hello-reply-2", // the agent's own key — no stamp to read
-    metadata: { session_id: `c1:${TASK}:${A1}` },
+    metadata: { session_id: `c1:${THREAD}:${A1}` },
     recipientAgentIds: [A1], // and the server had stored the self-wake
     wakeVerdict: "agent",
   });
@@ -180,7 +180,7 @@ test("feed: the session-key belt names ONE session — a sibling's post still la
     authorUserId: ME,
     authorKind: "agent",
     clientMsgId: "sibling-own-key",
-    metadata: { session_id: `c1:${TASK}:${A2}` },
+    metadata: { session_id: `c1:${THREAD}:${A2}` },
     recipientAgentIds: [A1],
     wakeVerdict: "agent",
   });
@@ -273,9 +273,9 @@ test("feed: no live session -> false (falls through to classify)", async () => {
 test("feed: a non-message kind and a NULL identity still fail closed", async () => {
   const h = harness({ agents: [agent(A1)] });
   // ⚠ THE kind FILTER IS THE LAST WORD ON THIS MACHINE — a non-'message' post reaches no
-  // session at all, so the lifecycle markers and `task_progress` milestones on the wire cannot
+  // session at all, so the lifecycle markers and `thread_progress` milestones on the wire cannot
   // spend a peer turn each. classify states the same rule for the same reason.
-  for (const kind of ["task_started", "task_failed", "task_finished", "task_progress"]) {
+  for (const kind of ["thread_started", "thread_failed", "thread_finished", "thread_progress"]) {
     assert.equal(await h.feedLiveSession(entry, peerMsg({ kind }), ME), false, kind);
   }
   // The listener owns identity resolution and passes it in. It no longer EXCLUDES my own posts
@@ -367,11 +367,11 @@ test("the module exports ONE route, and nothing that was deleted comes back", ()
 // routes were deleted, and all four opened on `if (!settings.getWindowMode()) return false;` —
 // the master switch Samuel's live-test ruling turned permanently off. What each block pinned:
 //
-//   (2) maybeOpenRequesterSession — seven tests: "my own create_task launches a requester
+//   (2) maybeOpenRequesterSession — seven tests: "my own create_thread launches a requester
 //       window", "the launch context carries the channel + workspace ids" (prompt-framing's
 //       delivery section reads ONLY the context), "H2 — the server's is_direct flag rides the
-//       launch, strictly", "an already-live task is deduped (one window per (channel,task))",
-//       "a window-cap skip returns false AND posts a passive notice", "not my create_task ->
+//       launch, strictly", "an already-live thread is deduped (one window per (channel,thread))",
+//       "a window-cap skip returns false AND posts a passive notice", "not my create_thread ->
 //       false". The route minted a REQUESTER WINDOW on the operator's OWN thread opener and
 //       launched their agent against their own message — the self-trigger bug the retirement
 //       was ruled from. There is no requester window to open.
@@ -380,13 +380,13 @@ test("the module exports ONE route, and nothing that was deleted comes back", ()
 //       reads the resume map itself", "a still-LIVE session is left to the live path", "a
 //       reply where I am NOT the requester never reopens", "window-mode OFF and
 //       my-own-message short-circuit". It held a peer's reply at a settled requester window's
-//       inbound gate; `session-engine.feedInboundForTask` and `session-park.recreateParkedShell`
+//       inbound gate; `session-engine.feedInboundForThread` and `session-park.recreateParkedShell`
 //       are deleted under it, so there is no gate and no shell to hold it at.
 //
 // ⚠ WHAT DID NOT GO WITH THEM. Route (3)'s "a reply where I am NOT the requester never
-// reopens" was a REQUESTER/RESPONDER pairing check — `taskCreatedBy === me` AND
-// `taskTarget === author` — and that pair is not this module's rule at all: it is
-// `targeting.classify`'s task-reply branch, which is untouched and is pinned in
+// reopens" was a REQUESTER/RESPONDER pairing check — `threadCreatedBy === me` AND
+// `threadTarget === author` — and that pair is not this module's rule at all: it is
+// `targeting.classify`'s thread-reply branch, which is untouched and is pinned in
 // test/classify.test.mjs and test/legacy-thread-reply.test.mjs. Nothing here was the only
 // reader of it.
 

@@ -111,7 +111,7 @@ describe("a RECORD is a post for nobody, and no arm repairs it", () => {
   it("does not become `thread` merely because it carries a thread tag", async () => {
     // ⚠ `thread` reaches the sessions already working that thread and wakes
     // nothing — weaker than a wake and still not nobody. A record is nobody.
-    const out = await resolve("filing this against the thread", { taskId: "t1" }, {
+    const out = await resolve("filing this against the thread", { threadId: "t1" }, {
       authorKind: "agent",
       intent: "chat",
     });

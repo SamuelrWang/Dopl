@@ -153,7 +153,7 @@ describe("held migrations cannot be applied by accident", () => {
       // survival the hold protects. It is held by Samuel's ruling (2026-10-12,
       // "write them, NEVER apply them"), and the README documents its release
       // checklist.
-      "20261122120000_channel_per_channel_numbering.sql",
+      "20261124120000_channel_per_channel_numbering.sql",
     ]);
   });
 });

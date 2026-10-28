@@ -14,7 +14,7 @@
  *
  * Three claims:
  *
- *   1. `CreateButton` wears `PAGE_ACTION_BTN` — the "New channel" button's own
+ *   1. `CreateButton` wears `pillButton("ink", "lg")` — the "New channel" button's own
  *      class list — by RENDERING it, not by reading its source.
  *   2. That constant is the only declaration of the recipe in `pages/home`: the
  *      three call sites that spelled it out by hand read it now, so a restyle
@@ -34,17 +34,16 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { BaseCard } from "@/features/knowledge/components/knowledge-v2/home/base-card";
 import type { KnowledgeBase } from "@/features/knowledge/types";
-import { LaunchIntoChannelButton } from "./identity-card-launch";
-import { CreateButton, PAGE_ACTION_BTN, PAGE_ACTION_ICON } from "./panel-buttons";
-import { HOME_CARD_FACE_SELECTED } from "@/shared/ui/home-card-marks";
+import { LaunchIntoChannelButton } from "@/features/agent-identities/components/identity-card-actions";
+import { CreateButton, PILL_ICON, pillButton } from "@/shared/ui/pill-button";
 
 /** This directory, and the knowledge module up in the web tree. See the note
  *  in the scan below for why neither is written inline. */
 const HERE = "./";
 const KNOWLEDGE_CSS =
   "../../../../../src/features/knowledge/components/knowledge-v2/knowledge-v2.module.css";
-/** The ROOT tree's shared UI — where both black recipes are declared since
- *  2026-09-17. ⚠ A variable for the same reason `HERE` is one, below. */
+/** The ROOT tree's shared UI, where the black recipe is declared. A variable for the same
+ *  reason `HERE` is one, below. */
 const SHARED_UI_REL = "../../../../../src/shared/ui/";
 
 const BASE = {
@@ -62,20 +61,19 @@ function faceOf(name: RegExp | string): Set<string> {
 }
 
 describe("the /home section button IS the page's black action button", () => {
-  it("🔒 wears `PAGE_ACTION_BTN`, class for class", () => {
+  it("🔒 wears the ink lg pill, class for class", () => {
     render(<CreateButton onClick={() => {}}>Knowledge base</CreateButton>);
 
     // Each adds exactly what a section header needs of it and nothing else:
     // the glyph gap, and the disabled ink it already had.
     const expected = new Set([
-      ...PAGE_ACTION_BTN.split(/\s+/),
-      "gap-1.5",
+      ...pillButton("ink", "lg").split(/\s+/),
       "disabled:opacity-60",
     ]);
     expect(faceOf("Knowledge base")).toEqual(expected);
     // …and that face is really the black pill, not two empty class lists
     // agreeing with each other.
-    expect(expected.has("auth-btn-3d")).toBe(true);
+    expect(expected.has("raise-ink")).toBe(true);
     expect(expected.has("h-9")).toBe(true);
   });
 
@@ -87,7 +85,7 @@ describe("the /home section button IS the page's black action button", () => {
       .getByRole("button", { name: "Knowledge base" })
       .querySelector("svg");
     expect(svg).not.toBeNull();
-    expect(svg?.getAttribute("width")).toBe(String(PAGE_ACTION_ICON));
+    expect(svg?.getAttribute("width")).toBe(String(PILL_ICON.lg));
   });
 });
 
@@ -145,89 +143,53 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
     }
   });
 
-  it("🔒 the black recipe is spelled in TWO places, and each is a different SHAPE", () => {
-    // It stood, byte-identically, on /home's "New channel" button, on "Add
-    // person" and (from 2026-09-09) would have stood on the four section
-    // creates — four copies of one page action. `auth-btn-3d` followed by a
-    // SPACE is the black face; `auth-btn-3d-light` is the raised WHITE one the
-    // rows and the search pill wear, and that is a different recipe with its
-    // own home in the kit.
-    //
-    // 🔒 **THE SECOND ENTRY ARRIVED 2026-09-15 (Samuel):** *"for the channel
-    // picker, for the selected channel, can we have it turn into like the black
-    // button UI?"* — `HOME_CARD_FACE_SELECTED`. ⚠ **THIS LIST MAY ONLY EVER HOLD
-    // A NEW SHAPE, NEVER A SECOND SPELLING OF AN OLD ONE.** What this case
-    // protects is that the page's black PILL is declared once; the selected row
-    // is the black CARD — the kit face at the row's own radius, carrying the
-    // row's ink — and the two share the kit class, which is the point, rather
-    // than a copied gradient. **A third entry is a bug unless it is a third
-    // shape, and a copy of either of these two is the defect this case was
-    // written for.**
-    //
-    // ⚠ **BOTH DECLARATIONS LEFT THIS DIRECTORY ON 2026-09-17 AND THE SCAN
-    // FOLLOWED THEM.** They live in the ROOT tree now
-    // (`src/shared/ui/page-action-button.ts`, `src/shared/ui/home-card-marks.tsx`)
-    // because the landing page's hero demo renders /home's chrome and the Next
-    // tree cannot import `apps/` at all. The claim is unchanged and is now
-    // stronger: `pages/home` may declare NEITHER, and the shared tree declares
-    // each exactly once.
+  it("🔒 the black recipe is declared once, in the shared tree, and never in pages/home", () => {
+    // The black faces: `raise-ink` (the ink pill) and `auth-btn-3d` followed by a SPACE (`-light` is
+    // a different recipe).
     const local = sources
-      .filter(([, text]) => /"auth-btn-3d /.test(text))
-      .map(([file]) => file)
-      .sort();
+      .filter(([, text]) => /"(auth-btn-3d|raise-ink) /.test(text))
+      .map(([file]) => file);
     expect(local).toEqual([]);
-
-    // ⚠ **NAMED FILES, NOT A SCAN OF `shared/ui`.** That directory holds black
-    // faces belonging to other surfaces (the form dialog's confirm, the
-    // composer's send); this case's subject is /home's page ACTION and /home's
-    // selected ROW, so it reads those two declarations and asserts they are
-    // still two different shapes of one kit class.
-    const declared = [
-      ["page-action-button.ts", PAGE_ACTION_BTN],
-      ["home-card-marks.tsx", HOME_CARD_FACE_SELECTED],
-    ] as const;
-    for (const [file, recipe] of declared) {
-      expect(`${file}: ${recipe.startsWith("auth-btn-3d ")}`).toBe(`${file}: true`);
-      expect(readFileSync(`${SHARED_UI}${file}`, "utf8")).toContain(`"${recipe}"`);
-    }
-    expect(PAGE_ACTION_BTN).not.toEqual(HOME_CARD_FACE_SELECTED);
+    expect(pillButton("ink", "lg").startsWith("raise-ink ")).toBe(true);
   });
 
   it("🔒 `CreateButton` is declared exactly once", () => {
     const declaring = sources
       .filter(([, text]) => /function CreateButton\b/.test(text))
       .map(([file]) => file);
-    expect(declaring).toEqual(["panel-buttons.tsx"]);
+    expect(declaring).toEqual([]);
+    expect(readFileSync(`${SHARED_UI}pill-button.tsx`, "utf8")).toMatch(
+      /function CreateButton\b/
+    );
   });
 });
 
 describe("the CARD-scale pill survives where the ruling did not reach", () => {
-  it("🔒 `LaunchIntoChannelButton` is still the card Open's face", () => {
-    // ⚠ THE HALF THAT DID NOT MOVE. It sits ON an identity card beside the
-    // card's own controls, not in a section header, so the 2026-08-28 ruling
-    // still governs it — and the two buttons parting company is exactly the
-    // thing that made this comparison worth rendering in the first place.
+  it("🔒 the knowledge card's Open is still the shared card-scale pill", () => {
     render(
-      <>
-        <BaseCard
-          base={BASE}
-          ownerLabel="You"
-          starred={false}
-          onOpen={() => {}}
-          onToggleStar={() => {}}
-        />
-        <LaunchIntoChannelButton onClick={() => {}} disabled={false} busy={false} />
-      </>
+      <BaseCard
+        base={BASE}
+        ownerLabel="You"
+        starred={false}
+        onOpen={() => {}}
+        onToggleStar={() => {}}
+      />
     );
-
     const open = faceOf(/Open Renewals/);
-    // ⚠ THE LAYOUT GAP IS THE CALLER'S, exactly as `open-scale-button.tsx`
-    // says: the pill is the FACE and the spinner's spacing is not part of it.
-    expect(faceOf("Launch")).toEqual(
-      new Set([...open, "gap-1.5", "disabled:opacity-60"])
-    );
     expect(open.has("btn-light")).toBe(true);
     expect(open.size).toBeGreaterThan(1);
+  });
+
+  it("🔒 `LaunchIntoChannelButton` is the small ink pill, not a 3D or full-width face", () => {
+    render(<LaunchIntoChannelButton onClick={() => {}} disabled={false} busy={false} />);
+    const launch = faceOf("Launch");
+    // The recipe's face, with the card's own icon gap in place of the size's.
+    for (const cls of pillButton("ink", "sm").split(/\s+/)) {
+      if (!cls.startsWith("gap-")) expect(launch.has(cls)).toBe(true);
+    }
+    expect(launch.has("gap-1.5")).toBe(true);
+    expect(launch.has("w-full")).toBe(false);
+    expect(launch.has("btn-light")).toBe(false);
   });
 
   it("🔒 the knowledge module no longer declares the pill", () => {

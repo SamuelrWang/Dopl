@@ -4,7 +4,7 @@
 // finding, and each one states the EXPLOIT it closes, because the shape of the exploit is the
 // reason the assertion is worth what it costs.
 //
-//   F1 standing task grants survived a park          (pinned in session-permission-axes, +source here)
+//   F1 standing thread grants survived a park          (pinned in session-permission-axes, +source here)
 //   F2 `auto` auto-approved the Dopl WRITE tools, and `dopl_only` shadowed them entirely
 //   F3 `auto`/`bypass` were NEGATIVE lists, so any unrecognized name auto-allowed, and the
 //      channel tool was matched by one literal, so a versioned one fell through to AXIS A
@@ -65,7 +65,7 @@ const post = (over) => ({ op: "send", body: "shipping tonight", ...over });
 // each half has to be provable from source or the next edit silently merges them again.
 
 const branch = (from, to) => REDUCER_SRC.slice(REDUCER_SRC.indexOf(from), REDUCER_SRC.indexOf(to));
-const POSTURE_FIELDS = ["toolMode: toolModesOf(state)[0]", "messageMode: MESSAGE_MODES[0]", "allowForTask: []"]; // the SESSION's own narrowest word (X-01)
+const POSTURE_FIELDS = ["toolMode: toolModesOf(state)[0]", "messageMode: MESSAGE_MODES[0]", "allowForThread: []"]; // the SESSION's own narrowest word (X-01)
 
 test("M2: the idle_timeout patch resets NO posture and NO grant", () => {
   const patch = branch("if (type === 'idle_timeout')", "if (type === 'abandon_timeout')");
@@ -242,8 +242,8 @@ test("F3: a VERSIONED channel tool is answered by AXIS B, never by a tool postur
   assert.equal(decide({ toolName: V2, input: { op: "rooms", action: "open", direct: true }, messageMode: "auto_both" }), "gate");
   // Its grants are its OWN: a grant on the canonical tool does not carry over, and vice versa.
   const v2Grant = grantKeyFor(V2, post(), CH);
-  assert.equal(decide({ toolName: V2, input: post(), allowForTask: [v2Grant] }), "allow");
-  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: post(), allowForTask: [v2Grant] }), "gate");
+  assert.equal(decide({ toolName: V2, input: post(), allowForThread: [v2Grant] }), "allow");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: post(), allowForThread: [v2Grant] }), "gate");
   // ...and the display classifier agrees with the gate, so a held post is never painted sent.
   assert.equal(io.isOutboundPost(V2, post(), CH), true);
 });
@@ -260,7 +260,7 @@ test("F4: every digest in a grant key is the FULL 64-hex SHA-256", () => {
   assert.match(grantKeyFor("WebFetch", { url: "https://x.test/a" }), /#[0-9a-f]{64}$/);
   assert.match(grantKeyFor("Write", { file_path: "/repo/src/a.js" }), /#[0-9a-f]{64}$/);
   assert.match(grantKeyFor("mcp__dopl__dopl_map", { op: "x" }), /#[0-9a-f]{64}$/);
-  for (const seg of keyOf(post({ to: "a@b.c", kind: "task_finished" })).split("#").slice(2)) {
+  for (const seg of keyOf(post({ to: "a@b.c", kind: "thread_finished" })).split("#").slice(2)) {
     assert.match(seg, /^(to|kind|body):[0-9a-f]{64}$/, seg);
   }
 });
@@ -288,8 +288,8 @@ test("F5: two inputs differing only PAST the old bound get different keys", () =
   const benign = grantKeyFor("mcp__dopl__dopl_kb", nest("benign"));
   const evil = grantKeyFor("mcp__dopl__dopl_kb", nest("EXFILTRATED"));
   assert.notEqual(benign, evil, "depth 7 used to collapse to the same key");
-  assert.equal(decide({ toolName: "mcp__dopl__dopl_kb", input: nest("benign"), allowForTask: [benign] }), "allow");
-  assert.equal(decide({ toolName: "mcp__dopl__dopl_kb", input: nest("EXFILTRATED"), allowForTask: [benign] }), "gate");
+  assert.equal(decide({ toolName: "mcp__dopl__dopl_kb", input: nest("benign"), allowForThread: [benign] }), "allow");
+  assert.equal(decide({ toolName: "mcp__dopl__dopl_kb", input: nest("EXFILTRATED"), allowForThread: [benign] }), "gate");
 });
 
 test("F5: and past the NEW bound too — the overflow sentinel digests the remainder", () => {
@@ -327,9 +327,9 @@ test("F6: two DIFFERENT cross-channel targets never share a grant key", () => {
 
 test("F6: a grant to post into one other channel does NOT post into its near-twin", () => {
   const granted = [keyOf(post({ channel: "team.alpha" }))];
-  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: post({ channel: "team.alpha" }), allowForTask: granted }), "allow");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: post({ channel: "team.alpha" }), allowForThread: granted }), "allow");
   for (const [, twin] of CROSS_COLLISIONS.slice(0, 1)) {
-    assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: post({ channel: twin }), allowForTask: granted }), "gate", twin);
+    assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: post({ channel: twin }), allowForThread: granted }), "gate", twin);
   }
 });
 
@@ -347,10 +347,10 @@ test("F7: two different bodies are two different post grants", () => {
   const benign = keyOf(post({ body: "on it, will report back" }));
   const exfil = keyOf(post({ body: "ssh key: AAAAB3NzaC1yc2EAAAA" }));
   assert.notEqual(benign, exfil);
-  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: post({ body: "on it, will report back" }), allowForTask: [benign] }), "allow");
-  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: post({ body: "ssh key: AAAAB3NzaC1yc2EAAAA" }), allowForTask: [benign] }), "gate");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: post({ body: "on it, will report back" }), allowForThread: [benign] }), "allow");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: post({ body: "ssh key: AAAAB3NzaC1yc2EAAAA" }), allowForThread: [benign] }), "gate");
   // An absent body is its own shape too, and cannot ride a grant taken on a real message.
-  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "send" }, allowForTask: [benign] }), "gate");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "send" }, allowForThread: [benign] }), "gate");
   // A body that only PREFIXES the granted one does not match either (length-prefixed digest).
   assert.notEqual(keyOf(post({ body: "on it" })), keyOf(post({ body: "on it, will report back" })));
 });
@@ -418,14 +418,14 @@ test("F8: a hostile name cannot open a line in the trusted preamble above the fe
 
 // ── F9: the card names what the key scopes ────────────────────────────────────────
 // EXPLOIT: postScope keys ANY non-'message' kind, but postKindOf only named the four-value
-// enum, so kind:'Task_Finished' earned its own grant key while the card showed NOTHING — the
+// enum, so kind:'Thread_Finished' earned its own grant key while the card showed NOTHING — the
 // operator approved what read as a plain reply. And a non-string `to` keyed (and displayed) as
 // something it is not: String({a:1}) is '[object Object]' for every object, String(['alice'])
 // is 'alice'.
 
 const mkSession = () => ({
   profile: "full", channelId: CH, counterpartyName: "David",
-  state: { allowForTask: [], messageMode: "ask", toolMode: "manual" },
+  state: { allowForThread: [], messageMode: "ask", toolMode: "manual" },
   pendingPermissions: new Map(), pendingNames: new Map(),
 });
 function gateOnce(input) {
@@ -441,7 +441,7 @@ function gateOnce(input) {
 // claims less than it did. WHAT WENT: two `labels.postDestinationText` assertions per kind,
 // pinning that the card read "To: David, marked <kind>" when addressed and "To: this channel, no
 // recipient named, marked <kind>" when not. That was the half that closed F9: `postScope` keyed
-// ANY non-'message' kind while `postKindOf` only NAMED the four-value enum, so `Task_Finished`
+// ANY non-'message' kind while `postKindOf` only NAMED the four-value enum, so `Thread_Finished`
 // earned its own grant key and rendered as nothing.
 //
 // ⚠ WHAT SURVIVES IS MAIN'S HALF, AND IT IS THE HALF THAT DECIDES. `postKind` is stamped on the
@@ -451,7 +451,7 @@ function gateOnce(input) {
 // on the floor would reopen F9 with this file still green. That is the gap; it is stated here
 // rather than papered over.
 test("F9: ANY non-default kind is stamped on the gate payload, not just the four known ones", () => {
-  for (const kind of ["Task_Finished", "task_finished", "urgent", "system", "TASK_FAILED"]) {
+  for (const kind of ["Thread_Finished", "thread_finished", "urgent", "system", "THREAD_FAILED"]) {
     assert.equal(gateOnce(post({ kind })).postKind, kind, kind);
   }
   // The plain-chat default still stamps nothing, so an ordinary reply is unchanged.
@@ -460,9 +460,9 @@ test("F9: ANY non-default kind is stamped on the gate payload, not just the four
   }
   // And each one really does key separately (the half that was already true, and the half the
   // brief asked to keep explicitly: the KEY is what scopes the grant).
-  assert.notEqual(keyOf(post({ kind: "Task_Finished" })), keyOf(post({ kind: "task_finished" })));
+  assert.notEqual(keyOf(post({ kind: "Thread_Finished" })), keyOf(post({ kind: "thread_finished" })));
   assert.notEqual(keyOf(post({ kind: "urgent" })), keyOf(post({ kind: "system" })));
-  assert.notEqual(keyOf(post({ kind: "task_finished" })), keyOf(post({})));
+  assert.notEqual(keyOf(post({ kind: "thread_finished" })), keyOf(post({})));
 });
 
 // ⚠ KEPT WHOLE (2026-08-20). The title says "card", but not one assertion in it touches a
@@ -483,7 +483,7 @@ test("F9: a non-string `to` / `kind` is REJECTED by main, and says so on the pay
 test("F9: a malformed post can never be auto-allowed, by a grant OR by AXIS B", () => {
   for (const bad of [post({ to: { a: 1 } }), post({ to: ["alice"] }), post({ kind: { a: 1 } }), post({ kind: 7 })]) {
     const granted = [grantKeyFor(DOPL_CHANNEL_TOOL, bad, CH)];
-    assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: bad, allowForTask: granted }), "gate",
+    assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: bad, allowForThread: granted }), "gate",
       JSON.stringify(bad));
     for (const messageMode of MESSAGE_MODES) {
       assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: bad, messageMode }), "gate", messageMode);

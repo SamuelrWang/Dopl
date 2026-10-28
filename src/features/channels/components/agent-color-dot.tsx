@@ -3,9 +3,9 @@
  * docs/specs/agent-colors.md item 8: *"the Agents-tab card and the pop-out rail row show a
  * small colour dot before the name for live agents"*).
  *
- * ⚠ **ITS OWN FILE BECAUSE FOUR SURFACES DRAW IT AND A DOT THAT DRIFTS IS WORSE THAN NO
- * DOT.** The Agents-tab cards, the pop-out rail rows and the transcript filter's option
- * rows all answer the same question — *which agent is this* — and the whole value of the
+ * ⚠ **ITS OWN FILE BECAUSE SEVERAL SURFACES DRAW IT AND A DOT THAT DRIFTS IS WORSE THAN NO
+ * DOT.** The pop-out rail rows and the transcript filter's option rows (the Agents-tab cards
+ * carry the colour as their identity face's ring) all answer the same question — *which agent is this* — and the whole value of the
  * answer is that the reader has already learned the hue somewhere else. Four local
  * `<span className="size-2 rounded-full">`s is four chances for one of them to end up 10px
  * or square, at which point it stops reading as the same mark.
@@ -18,7 +18,7 @@
  */
 
 import { cn } from "@/shared/lib/utils";
-import { agentColorVar } from "../lib/agent-colors";
+import { agentColorVar } from "@/shared/lib/agent-colors";
 import type { AgentColorKey } from "../types";
 
 /**
@@ -79,9 +79,9 @@ export function AgentColorDot({
  * `agent-color-circles.tsx › CIRCLE` is `h-5 w-5`. On the tree's spacing scale, not an arbitrary
  * `w-[20px]`, and it sits inside the rail's 36px `TILE` with room for the selected row's tint.
  *
- * ⚠ **THE INK IS `--text-on-cta`, THE APP'S ONE ON-DARK TOKEN** — `attribution-pill.tsx ›
- * AgentChip` states the rule (*"not `text-white`: a literal white is a colour a restyle cannot
- * follow"*), and it is safe across the WHOLE bank rather than per hue: all sixteen
+ * ⚠ **THE INK IS `--text-on-cta`, THE APP'S ONE ON-DARK TOKEN** — not `text-white`, a literal
+ * white being a colour a restyle cannot follow — and it is safe across the WHOLE bank rather than
+ * per hue: all sixteen
  * `--agent-color-NN` values are `oklch(0.44 …)`, one lightness, so one on-colour ink is correct
  * for every key by construction.
  */

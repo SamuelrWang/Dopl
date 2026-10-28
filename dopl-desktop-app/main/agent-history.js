@@ -44,12 +44,13 @@ function durableHistory(rec) {
     agentId: String(r.agentId || ''),
     sessionId: String(r.sessionId || ''),
     channelId: String(r.channelId || ''),
-    taskId: String(r.taskId || ''),
+    threadId: String(r.threadId || ''),
     workspaceId: String(r.workspaceId || ''),
     channelName: historyName(r.channelName),
     threadTitle: historyName(r.threadTitle),
     // At the column's 120, not the 80 display default: clipping at the write reports a name no identity has (F-287).
     identityName: historyName(r.identityName, 120),
+    identityId: historyName(r.identityId, 36),
     endedAt: Number(r.endedAt) || 0,
     // Why the run stopped, when not the operator's doing (F-692).
     diag: historyName(r.diag, 200),

@@ -41,7 +41,8 @@
       "select": "topic",
       "pulled": [
         "knowledge",
-        "displays"
+        "displays",
+        "tasks"
       ],
       "read": true
     },
@@ -55,7 +56,8 @@
       "bind": {
         "status": "dopl_channel:status",
         "members": "dopl_channel:rooms.members",
-        "threads": "dopl_channel:rooms.threads"
+        "threads": "dopl_channel:rooms.threads",
+        "tasks": "dopl_channel:rooms.tasks"
       },
       "select": "action",
       "read": true
@@ -128,6 +130,21 @@
         "add": "dopl_channel:artifact.add",
         "remove": "dopl_channel:artifact.remove",
         "dissolve": "dopl_channel:artifact.dissolve"
+      },
+      "select": "action",
+      "read": false
+    },
+    {
+      "name": "dopl_manage_task",
+      "bind": {
+        "create": "dopl_channel:task.create_task",
+        "update": "dopl_channel:task.update_task",
+        "set_status": "dopl_channel:task.set_status",
+        "assign": "dopl_channel:task.assign",
+        "unassign": "dopl_channel:task.unassign",
+        "add_subtask": "dopl_channel:task.add_subtask",
+        "update_subtask": "dopl_channel:task.update_subtask",
+        "add_note": "dopl_channel:task.add_note"
       },
       "select": "action",
       "read": false

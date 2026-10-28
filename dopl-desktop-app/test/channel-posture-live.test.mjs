@@ -17,7 +17,7 @@
 // SPAWN and never again.
 //
 // THE FIX IS A FAN-OUT, NOT A NEW MECHANISM, and §1 pins that. main already had a correct
-// live-apply op — `session-reopen.js › setModeByTask`, which moves ONE running session's axes
+// live-apply op — `session-reopen.js › setModeByThread`, which moves ONE running session's axes
 // through the reducer's own `set_tool_mode` / `set_message_mode`, and `session-io.js › grantArgs`
 // reads both axes off `s.state` at CALL time. What was missing is that
 // `channel-dir-ipc.js › channels:setLaunchPosture` wrote the durable record and stopped.
@@ -61,7 +61,7 @@ function runApply(opts) {
   const diags = [];
   const engine = {
     listLiveSessions: opts.listLiveSessions === null ? undefined : (opts.listLiveSessions || (() => opts.rows || [])),
-    setModeByTask: opts.setModeByTask === null ? undefined : (opts.setModeByTask || ((a) => {
+    setModeByThread: opts.setModeByThread === null ? undefined : (opts.setModeByThread || ((a) => {
       calls.push(a);
       return { ok: true };
     })),
@@ -84,7 +84,7 @@ function runApply(opts) {
   return { applied, calls, diags };
 }
 
-const row = (agentId, channelId = CH, taskId = "", runtimeId = "claude") => ({ channelId, taskId, agentId, runtimeId });
+const row = (agentId, channelId = CH, threadId = "", runtimeId = "claude") => ({ channelId, threadId, agentId, runtimeId });
 
 // ── 1. THE FAN-OUT ───────────────────────────────────────────────────────────
 
@@ -112,11 +112,11 @@ test("sessions in OTHER channels are untouched — the record is per channel", (
 });
 
 test("a session that settled between the listing and the dispatch is not counted", () => {
-  // `setModeByTask` answers {ok:false, reason:'no-session'} for a settled session. Best-effort:
+  // `setModeByThread` answers {ok:false, reason:'no-session'} for a settled session. Best-effort:
   // it is skipped, and the sessions that DID move are still reported.
   const r = runApply({
     rows: [row("live"), row("gone")],
-    setModeByTask: (a) => (a.agentId === "gone" ? { ok: false, reason: "no-session" } : { ok: true }),
+    setModeByThread: (a) => (a.agentId === "gone" ? { ok: false, reason: "no-session" } : { ok: true }),
   });
   assert.equal(r.applied, 1);
 });
@@ -173,7 +173,7 @@ test("a throwing engine returns what landed and does NOT propagate", () => {
 
 test("an engine without the two ops is a no-op, not a crash", () => {
   assert.equal(runApply({ rows: [row("a")], listLiveSessions: null }).applied, 0);
-  assert.equal(runApply({ rows: [row("a")], setModeByTask: null }).applied, 0);
+  assert.equal(runApply({ rows: [row("a")], setModeByThread: null }).applied, 0);
 });
 
 test("a missing record on either side applies NOTHING", () => {
@@ -199,11 +199,11 @@ test("the fan-out runs only AFTER the durable write succeeded, and never replace
   assert.match(body, /applied:/, "and the count comes back so a caller can say what moved");
 });
 
-test("⚠ the fan-out reuses setModeByTask rather than writing the axes itself", () => {
+test("⚠ the fan-out reuses setModeByThread rather than writing the axes itself", () => {
   // That op is where the windowless message FLOOR (F-236) and the reducer's fail-closed coercion
   // live. A second writer to the same two fields is how two readers come to disagree about one
   // posture — and it would re-open the exact hole F-236 closed.
-  assert.match(APPLY, /setModeByTask/);
+  assert.match(APPLY, /setModeByThread/);
   assert.ok(!/set_tool_mode|set_message_mode/.test(APPLY), "no direct reducer dispatch here");
   assert.ok(!/floorWindowless/.test(APPLY), "and no second copy of the floor");
 });

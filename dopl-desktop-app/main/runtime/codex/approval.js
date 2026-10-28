@@ -27,7 +27,7 @@ const REQUEST_NAMES = Object.freeze({
 const MCP_TOOL_CALL_KIND = 'mcp_tool_call';
 
 // The gate's name for a request Dopl does not recognise — the SHARED prefix (`../sdk-shape.js`), so the gate's
-// one rule applies: no standing task grant, denied on a restricted profile.
+// one rule applies: no standing thread grant, denied on a restricted profile.
 const UNKNOWN_PREFIX = require('../sdk-shape').UNRECOGNISED_REQUEST_PREFIX;
 
 // The request's only per-tool identity: Codex copies the called tool's `title` here

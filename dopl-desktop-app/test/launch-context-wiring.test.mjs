@@ -21,14 +21,17 @@ const require_ = createRequire(import.meta.url);
 const M = (p) => join(MAIN, p);
 
 const PEER = "99999999-8888-4777-8666-555555555555";
-const TASK = "33333333-4444-4555-8666-777777777777";
+const THREAD = "33333333-4444-4555-8666-777777777777";
 const WATCHED = { id: CHANNEL, name: "Ops", toolProfile: "channel_agent", memberCount: 2, isDirect: false };
 
 // The listener's watched-channel DTO (the containment input every lane reads).
 const listenerPath = require_.resolve(M("channel-listener.js"));
 require_.cache[listenerPath] = {
   id: listenerPath, filename: listenerPath, loaded: true, children: [], paths: [],
-  exports: { watchedChannel: (id) => (id === CHANNEL ? WATCHED : null) },
+  exports: {
+    watchedChannel: (id) => (id === CHANNEL ? WATCHED : null),
+    channelForLaunch: async (id) => (id === CHANNEL ? WATCHED : null),
+  },
 };
 
 // The roster's two server reads. The OPERATOR is on both — as a member and as the owner of an agent
@@ -90,7 +93,7 @@ const directiveRow = (over = {}) => ({
   id: "66666666-6666-4666-8666-666666666666",
   workspace_id: WORKSPACE,
   channel_id: CHANNEL,
-  task_id: "",
+  thread_id: "",
   operator_user_id: ME,
   goal: "Draft the release notes",
   status: "pending",
@@ -103,7 +106,7 @@ test("RESPONDER lane: the first turn carries the agent's id, and the roster excl
   const before = rt.handles.length;
   const entry = { channel: { ...WATCHED }, workspaceId: WORKSPACE, workspaceSegment: null };
   const m = { seq: 7, body: "Can you check the build?", authorUserId: PEER, authorKind: "human", metadata: {} };
-  assert.equal(await trigger.launchResponderSession(entry, m, { taskId: TASK, toolProfile: "channel_agent", requesterName: "Pat Peer" }), true);
+  assert.equal(await trigger.launchResponderSession(entry, m, { threadId: THREAD, toolProfile: "channel_agent", requesterName: "Pat Peer" }), true);
   await settle();
   const turn = firstTurnOf(rt.handles[before]);
   // Before DMP-005 the eager first turn was built from a context with NO agent id, so the self
@@ -140,12 +143,12 @@ test("DIRECTIVE lane (goal): the FINAL unique name is in the first turn, and the
 
 test("NEW AGENT lane: the rename the SPA sends after launch is in the first (wake) turn, and survives a later rename", async () => {
   const before = rt.handles.length;
-  const res = await buttonLane.launchFromButton({ channelId: CHANNEL, taskId: null, workspaceId: WORKSPACE, channelName: "Ops", runtime: "claude" });
+  const res = await buttonLane.launchFromButton({ channelId: CHANNEL, threadId: null, workspaceId: WORKSPACE, channelName: "Ops", runtime: "claude" });
   assert.equal(res.ok, true, JSON.stringify(res));
   // `use-agent-launch-run.ts › launchWithIdentity` renames straight after the idle launch.
   assert.equal(commit.commitRename(res.agentId, "Reviewer").ok, true);
   assert.equal(rt.handles.length, before, "spawn-idle: no runtime started yet");
-  assert.deepEqual(engine.messageByTask({ channelId: CHANNEL, taskId: "", agentId: res.agentId, text: "start" }), { ok: true });
+  assert.deepEqual(engine.messageByThread({ channelId: CHANNEL, threadId: "", agentId: res.agentId, text: "start" }), { ok: true });
   await settle();
   const h = rt.handles[before];
   const turn = firstTurnOf(h);
@@ -154,14 +157,14 @@ test("NEW AGENT lane: the rename the SPA sends after launch is in the first (wak
 
   // CONTEXT REFRESH: every push re-stamps the context from the rename store, so a rename (or a
   // park + resume, which rebuilds from a record that carries no name) lands on the current name.
-  const s = registryReads.sessionOn({ channelId: CHANNEL, taskId: "", agentId: res.agentId });
+  const s = registryReads.sessionOn({ channelId: CHANNEL, threadId: "", agentId: res.agentId });
   assert.equal(s.context.agentName, "Reviewer");
   assert.equal(commit.commitRename(res.agentId, "Lead Reviewer").ok, true);
-  assert.deepEqual(engine.messageByTask({ channelId: CHANNEL, taskId: "", agentId: res.agentId, text: "next" }), { ok: true });
+  assert.deepEqual(engine.messageByThread({ channelId: CHANNEL, threadId: "", agentId: res.agentId, text: "next" }), { ok: true });
   await settle();
   assert.equal(s.context.agentName, "Lead Reviewer");
   assert.equal(commit.commitRename(res.agentId, "").ok, true, "the clear gesture");
-  assert.deepEqual(engine.messageByTask({ channelId: CHANNEL, taskId: "", agentId: res.agentId, text: "again" }), { ok: true });
+  assert.deepEqual(engine.messageByThread({ channelId: CHANNEL, threadId: "", agentId: res.agentId, text: "again" }), { ok: true });
   await settle();
   assert.equal(s.context.agentName, undefined, "a cleared name is not left stale on the context");
 });
@@ -173,7 +176,7 @@ test("RESUME: a record rebuilt at boot is stamped with its stored name on its fi
   STORE.sessionRecords = {
     ...(STORE.sessionRecords || {}),
     [KEY]: {
-      key: KEY, sessionId: "11111111-2222-3333-4444-666666666666", channelId: CHANNEL, taskId: "",
+      key: KEY, sessionId: "11111111-2222-3333-4444-666666666666", channelId: CHANNEL, threadId: "",
       workspaceId: WORKSPACE, side: "requester", profile: "channel_agent", mode: "interactive",
       phase: "parked", startedAt: Date.now() - 60000, parkedAt: Date.now() - 1000, agentId: AGENT,
       turns: 2, ownPostSeq: 1, runtimeId: "claude", usageBaseline: "resets",
@@ -181,9 +184,9 @@ test("RESUME: a record rebuilt at boot is stamped with its stored name on its fi
   };
   STORE.sessionIds = { ...(STORE.sessionIds || {}), [KEY]: "sdk-parked-resume" };
   await engine.init();
-  const s = registryReads.sessionOn({ channelId: CHANNEL, taskId: "", agentId: AGENT });
+  const s = registryReads.sessionOn({ channelId: CHANNEL, threadId: "", agentId: AGENT });
   assert.ok(s, "re-parked");
-  assert.deepEqual(engine.messageByTask({ channelId: CHANNEL, taskId: "", agentId: AGENT, text: "continue" }), { ok: true });
+  assert.deepEqual(engine.messageByThread({ channelId: CHANNEL, threadId: "", agentId: AGENT, text: "continue" }), { ok: true });
   await settle();
   assert.equal(s.context.agentId, AGENT);
   assert.equal(s.context.agentName, "Night Shift");
@@ -194,9 +197,9 @@ test("the funnel reads the operator from the ENGINE, never from a caller's paylo
   // A payload claiming another user is ignored: the roster still excludes the real operator and
   // still lists the peer (it would drop the peer if the payload's id were believed).
   const res = await engine.launchResponderSession({
-    windowless: true, channelId: CHANNEL, taskId: "44444444-5555-4666-8777-888888888888", workspaceId: WORKSPACE,
+    windowless: true, channelId: CHANNEL, threadId: "44444444-5555-4666-8777-888888888888", workspaceId: WORKSPACE,
     runtime: "claude", message: "hi", counterpartyId: PEER, direct: false,
-    context: { channelName: "Ops", channelId: CHANNEL, workspaceId: WORKSPACE, taskId: "44444444-5555-4666-8777-888888888888" },
+    context: { channelName: "Ops", channelId: CHANNEL, workspaceId: WORKSPACE, threadId: "44444444-5555-4666-8777-888888888888" },
     toolProfile: "channel_agent", mode: "autonomous", selfUserId: PEER,
     startModes: { tools: "manual", messages: "ask" },
   });

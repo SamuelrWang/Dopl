@@ -27,16 +27,16 @@ let lastFocusKey = '';
 // No electron/require refs below.
 
 // One window-tab per agent instance; an absent agentId degrades to the old (channel, thread) key.
-function agentWindowKey(channelId, taskId, agentId) {
+function agentWindowKey(channelId, threadId, agentId) {
   const agent = String(agentId || '');
-  return agent ? `${channelId}|${taskId}|${agent}` : `${channelId}|${taskId}`;
+  return agent ? `${channelId}|${threadId}|${agent}` : `${channelId}|${threadId}`;
 }
 
 // The hash-router path. Inputs are already character-checked by the caller (no second copy of that rule); the
 // thread and agent ride as a query selection. A channel-level agent has no thread; one of the two must be present.
-function agentRoute(segment, page, channelId, taskId, agentId) {
+function agentRoute(segment, page, channelId, threadId, agentId) {
   if (!segment || !page || !channelId) return null;
-  const thread = String(taskId || '');
+  const thread = String(threadId || '');
   const agent = String(agentId || '');
   if (!thread && !agent) return null;
   const query = [thread ? `thread=${thread}` : '', agent ? `agent=${agent}` : '']
@@ -125,15 +125,15 @@ function createAgentWindow(route) {
  *  Answers `{ ok }` in the one refusal shape. */
 function openAgentWindow(target) {
   const t = target || {};
-  const route = agentRoute(t.segment, AGENT_WINDOW_PAGE, t.channelId, t.taskId, t.agentId);
+  const route = agentRoute(t.segment, AGENT_WINDOW_PAGE, t.channelId, t.threadId, t.agentId);
   if (!route) return { ok: false };
 
-  const key = agentWindowKey(t.channelId, t.taskId, t.agentId);
+  const key = agentWindowKey(t.channelId, t.threadId, t.agentId);
   const tab = {
     key,
     segment: String(t.segment || ''),
     channelId: String(t.channelId || ''),
-    taskId: String(t.taskId || ''),
+    threadId: String(t.threadId || ''),
     agentId: String(t.agentId || ''),
   };
   sweep();
@@ -211,7 +211,7 @@ function closeAgentTab(key) {
  *  view must not keep a live composer pointed at nothing. Best effort. */
 function closeAgentWindow(target) {
   const t = target || {};
-  return closeAgentTab(agentWindowKey(t.channelId, t.taskId, t.agentId));
+  return closeAgentTab(agentWindowKey(t.channelId, t.threadId, t.agentId));
 }
 
 /** Live agent-tab count, for diagnostics and tests. */

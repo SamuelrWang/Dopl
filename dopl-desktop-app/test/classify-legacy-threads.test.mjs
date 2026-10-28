@@ -13,11 +13,11 @@ import { build, makeEntry, ME, U2, U3 } from "./_classify-harness.mjs";
 
 // ── LEGACY thread replies (incident 2026-07-31) ──────────────────────────────
 // A request that arrives WITHOUT create_thread gets a deterministic legacy id
-// (`task-<channel>-<seq>`) minted by the responder's desktop. That id is not a UUID,
-// so it resolves to no channel_tasks row and the server stamps NONE of the task keys
-// the branch above needs (service-writes-metadata.ts deletes taskMode /
-// taskCreatedBy / taskTitle / taskTarget unconditionally and re-adds them only from a
-// resolved task). The reply therefore carried metadata.taskId and nothing else — and
+// (`thread-<channel>-<seq>`) minted by the responder's desktop. That id is not a UUID,
+// so it resolves to no channel_threads row and the server stamps NONE of the thread keys
+// the branch above needs (service-writes-metadata.ts deletes threadMode /
+// threadCreatedBy / threadTitle / threadTarget unconditionally and re-adds them only from a
+// resolved thread). The reply therefore carried metadata.threadId and nothing else — and
 // once it did not even carry that, it read as a brand-new request and the requester
 // spawned a counter-session against the answer to its own question.
 //
@@ -26,7 +26,7 @@ import { build, makeEntry, ME, U2, U3 } from "./_classify-harness.mjs";
 // and only a reply tagged with one of those ids, from the member it addressed, is
 // passive news. Everything else falls through to the addressed rule -> 'trigger'.
 const CHAN = "chan-abcdef01"; // the id makeEntry() builds
-const legacyId = (seq) => `task-${CHAN}-${seq}`;
+const legacyId = (seq) => `thread-${CHAN}-${seq}`;
 // MY OWN outbound request at `seq`, addressed to `to` (the shape that records).
 const myAsk = (seq, to = U2, over = {}) => ({
   id: "o", seq, kind: "message", body: "please do X", authorKind: "agent",
@@ -35,20 +35,20 @@ const myAsk = (seq, to = U2, over = {}) => ({
 // The peer's reply, tagged with the legacy id of MY message at `openerSeq`.
 const legacyReply = (openerSeq, over = {}) => ({
   id: "r", seq: 20, kind: "message", body: "here is the answer", authorKind: "agent",
-  authorUserId: U2, metadata: { to_user_id: ME, taskId: legacyId(openerSeq), ...over },
+  authorUserId: U2, metadata: { to_user_id: ME, threadId: legacyId(openerSeq), ...over },
 });
 const chan = () => makeEntry({ memberCount: 2, isMember: true });
 // A fresh scope per test: the registry is module state, so no test may inherit another's.
 const fresh = () => build().classify;
 
-test("(legacy-a) THE INCIDENT: my ask, then the peer's legacy-tagged reply -> task-reply", () => {
+test("(legacy-a) THE INCIDENT: my ask, then the peer's legacy-tagged reply -> thread-reply", () => {
   const c = fresh();
   assert.equal(c(myAsk(7), chan(), ME), "ignore", "my own message is still 'ignore' for targeting");
-  // No taskMode, no taskCreatedBy, no taskTarget: exactly what the server stores for a
+  // No threadMode, no threadCreatedBy, no threadTarget: exactly what the server stores for a
   // legacy id. The first-class branch cannot fire here; the local record is what does.
-  assert.equal(c(legacyReply(7), chan(), ME), "task-reply");
+  assert.equal(c(legacyReply(7), chan(), ME), "thread-reply");
   // Explicitly addressed, so member count / membership / mute do not change it.
-  assert.equal(c(legacyReply(7), makeEntry({ memberCount: 5, isMember: false }), ME), "task-reply");
+  assert.equal(c(legacyReply(7), makeEntry({ memberCount: 5, isMember: false }), ME), "thread-reply");
 });
 
 test("(legacy-b) a legacy tag this machine does NOT know -> trigger (unchanged)", () => {
@@ -61,7 +61,7 @@ test("(legacy-b) a legacy tag this machine does NOT know -> trigger (unchanged)"
   // Known seq, WRONG channel — the id embeds the channel, so a tag minted elsewhere misses.
   const d = fresh();
   d(myAsk(7), chan(), ME);
-  assert.equal(d({ ...legacyReply(7), metadata: { to_user_id: ME, taskId: "task-other-7" } }, chan(), ME), "trigger");
+  assert.equal(d({ ...legacyReply(7), metadata: { to_user_id: ME, threadId: "thread-other-7" } }, chan(), ME), "trigger");
 });
 
 test("(legacy-c) an UNTAGGED addressed message -> trigger (unchanged), even on a known thread", () => {
@@ -70,8 +70,8 @@ test("(legacy-c) an UNTAGGED addressed message -> trigger (unchanged), even on a
   const untagged = { ...legacyReply(7), metadata: { to_user_id: ME } };
   assert.equal(c(untagged, chan(), ME), "trigger");
   // An empty / non-string tag is the same as no tag.
-  assert.equal(c({ ...legacyReply(7), metadata: { to_user_id: ME, taskId: "  " } }, chan(), ME), "trigger");
-  assert.equal(c({ ...legacyReply(7), metadata: { to_user_id: ME, taskId: 7 } }, chan(), ME), "trigger");
+  assert.equal(c({ ...legacyReply(7), metadata: { to_user_id: ME, threadId: "  " } }, chan(), ME), "trigger");
+  assert.equal(c({ ...legacyReply(7), metadata: { to_user_id: ME, threadId: 7 } }, chan(), ME), "trigger");
 });
 
 test("(legacy-d) only the member I ADDRESSED can answer my thread", () => {
@@ -87,7 +87,7 @@ test("(legacy-e) a HUMAN reply on a thread I opened suppresses too (widened 2026
   // against the requester's own thread. The kind guard still wins.
   const c = fresh();
   c(myAsk(7), chan(), ME);
-  assert.equal(c({ ...legacyReply(7), authorKind: "user" }, chan(), ME), "task-reply");
+  assert.equal(c({ ...legacyReply(7), authorKind: "user" }, chan(), ME), "thread-reply");
   assert.equal(c({ ...legacyReply(7), authorKind: "system" }, chan(), ME), "ignore"); // guard wins
 });
 
@@ -97,7 +97,7 @@ test("(legacy-e) a HUMAN reply on a thread I opened suppresses too (widened 2026
 test("(legacy-f) the kind guard still wins over a known legacy thread", () => {
   const c = fresh();
   c(myAsk(7), chan(), ME);
-  assert.equal(c({ ...legacyReply(7), kind: "task_finished" }, chan(), ME), "ignore");
+  assert.equal(c({ ...legacyReply(7), kind: "thread_finished" }, chan(), ME), "ignore");
 });
 
 

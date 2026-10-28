@@ -7,7 +7,7 @@
  *     per-member preference, exposed ONLY on the caller's OWN row so no one can
  *     see who muted the channel;
  *   - the read-watermark loop guard (content-derived + monotonic);
- *   - the THREAD SCOPE on `readMessages` — the `metadata.taskId` filter that
+ *   - the THREAD SCOPE on `readMessages` — the `metadata.threadId` filter that
  *     isolates one exchange, its legacy-id tolerance, and the two things it must
  *     NOT do: move the watermark, or soften the read-visibility gate.
  */
@@ -17,35 +17,35 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-collab");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 vi.mock("@/features/workspaces/server/repository");
 
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as collab from "./repository-collab";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import * as workspaceRepo from "@/features/workspaces/server/repository";
 import {
-  getChannelTask,
+  getChannelThread,
   listChannelMembers,
-  listChannelTasks,
+  listChannelThreads,
   readMessages,
 } from "./service-reads";
-import { ChannelNotFoundError, TaskNotFoundError } from "./errors";
+import { ChannelNotFoundError, ThreadNotFoundError } from "./errors";
 import type { ChannelContext } from "./service-shared";
 import type {
   ChannelMemberRow,
   ChannelMessageRow,
   ChannelRow,
-  ChannelTaskActivityRow,
-  ChannelTaskRow,
+  ChannelThreadActivityRow,
+  ChannelThreadRow,
 } from "./dto";
 
 const WS = "ws-1";
 const USER = "user-1";
 const OTHER = "user-2";
-/** A first-class thread id (`metadata.taskId`), as the read scope receives it. */
-const TASK_THREAD_ID = "660e8400-e29b-41d4-a716-446655440111";
+/** A first-class thread id (`metadata.threadId`), as the read scope receives it. */
+const THREAD_THREAD_ID = "660e8400-e29b-41d4-a716-446655440111";
 
 const ctx: ChannelContext = {
   workspaceId: WS,
@@ -285,13 +285,13 @@ describe("readMessages — read-watermark loop guard (2026-07-27 CPU incident)",
     vi.mocked(repoMessages.listMessages).mockResolvedValue([
       messageRow(9, "2026-07-27T18:00:00.000Z"),
     ]);
-    await readMessages(ctx, "general", { limit: 50, thread: TASK_THREAD_ID });
+    await readMessages(ctx, "general", { limit: 50, thread: THREAD_THREAD_ID });
     expect(repo.updateLastRead).not.toHaveBeenCalled();
   });
 });
 
 describe("readMessages — thread scope", () => {
-  function threadRow(seq: number, taskId: string): ChannelMessageRow {
+  function threadRow(seq: number, threadId: string): ChannelMessageRow {
     return {
       id: `msg-${seq}`,
       seq,
@@ -301,7 +301,7 @@ describe("readMessages — thread scope", () => {
       author_kind: "user",
       kind: "message",
       body: "hi",
-      metadata: { taskId },
+      metadata: { threadId },
       client_msg_id: null,
       created_at: "2026-07-31T00:00:00Z",
     };
@@ -309,24 +309,24 @@ describe("readMessages — thread scope", () => {
 
   it("passes the thread id down to the repository as threadId", async () => {
     vi.mocked(repoMessages.listMessages).mockResolvedValue([
-      threadRow(4, TASK_THREAD_ID),
+      threadRow(4, THREAD_THREAD_ID),
     ]);
 
     const messages = await readMessages(ctx, "general", {
       limit: 50,
-      thread: TASK_THREAD_ID,
+      thread: THREAD_THREAD_ID,
     });
 
     expect(repoMessages.listMessages).toHaveBeenCalledWith("chan-1", {
       since: undefined,
       limit: 50,
-      threadId: TASK_THREAD_ID,
+      threadId: THREAD_THREAD_ID,
     });
     expect(messages.map((m) => m.seq)).toEqual([4]);
   });
 
-  it("accepts a legacy task-<channelId>-<seq> id unchanged", async () => {
-    const legacy = "task-chan-1-42";
+  it("accepts a legacy thread-<channelId>-<seq> id unchanged", async () => {
+    const legacy = "thread-chan-1-42";
     vi.mocked(repoMessages.listMessages).mockResolvedValue([threadRow(6, legacy)]);
 
     await readMessages(ctx, "general", { limit: 50, thread: legacy });
@@ -340,7 +340,7 @@ describe("readMessages — thread scope", () => {
     vi.mocked(repoMessages.listMessages).mockResolvedValue([]);
 
     await expect(
-      readMessages(ctx, "general", { limit: 50, thread: "task-nothing-0" })
+      readMessages(ctx, "general", { limit: 50, thread: "thread-nothing-0" })
     ).resolves.toEqual([]);
   });
 
@@ -361,18 +361,18 @@ describe("readMessages — thread scope", () => {
     vi.mocked(repo.findMembership).mockResolvedValue(null);
 
     await expect(
-      readMessages(ctx, "general", { limit: 50, thread: TASK_THREAD_ID })
+      readMessages(ctx, "general", { limit: 50, thread: THREAD_THREAD_ID })
     ).rejects.toBeInstanceOf(ChannelNotFoundError);
     expect(repoMessages.listMessages).not.toHaveBeenCalled();
   });
 });
 
-describe("listChannelTasks / getChannelTask — reads", () => {
-  const TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
+describe("listChannelThreads / getChannelThread — reads", () => {
+  const THREAD_ID = "660e8400-e29b-41d4-a716-446655440111";
 
-  function taskRow(overrides: Partial<ChannelTaskActivityRow> = {}): ChannelTaskActivityRow {
+  function threadRow(overrides: Partial<ChannelThreadActivityRow> = {}): ChannelThreadActivityRow {
     return {
-      id: TASK_ID,
+      id: THREAD_ID,
       channel_id: "chan-1",
       workspace_id: WS,
       title: "Ship it",
@@ -390,19 +390,19 @@ describe("listChannelTasks / getChannelTask — reads", () => {
     };
   }
 
-  /** The row shape a SINGLE-thread read returns — `channel_tasks` has no
+  /** The row shape a SINGLE-thread read returns — `channel_threads` has no
    *  activity column, so the derived one is simply not there. */
-  function withoutActivity(row: ChannelTaskActivityRow): ChannelTaskRow {
+  function withoutActivity(row: ChannelThreadActivityRow): ChannelThreadRow {
     const copy: Record<string, unknown> = { ...row };
     delete copy.last_activity_at;
-    return copy as unknown as ChannelTaskRow;
+    return copy as unknown as ChannelThreadRow;
   }
 
-  it("lists the channel's tasks (visibility-gated) as DTOs", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+  it("lists the channel's threads (visibility-gated) as DTOs", async () => {
+    vi.mocked(repoThreads.listThreadsByChannel).mockResolvedValue({
       rows: [
-        taskRow({ id: TASK_ID, title: "A" }),
-        taskRow({
+        threadRow({ id: THREAD_ID, title: "A" }),
+        threadRow({
           id: "other",
           title: "B",
           status: "closed",
@@ -412,9 +412,9 @@ describe("listChannelTasks / getChannelTask — reads", () => {
       truncated: false,
     });
 
-    const { threads, truncated } = await listChannelTasks(ctx, "general");
+    const { threads, truncated } = await listChannelThreads(ctx, "general");
 
-    expect(repoTasks.listTasksByChannel).toHaveBeenCalledWith("chan-1");
+    expect(repoThreads.listThreadsByChannel).toHaveBeenCalledWith("chan-1");
     // ⚠ The REPOSITORY's order rides through untouched — the service does not
     // re-sort, because the repository's LIMIT clipped against that order.
     expect(threads.map((t) => t.title)).toEqual(["A", "B"]);
@@ -423,12 +423,12 @@ describe("listChannelTasks / getChannelTask — reads", () => {
   });
 
   it("carries the derived activity clock onto the DTO", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
-      rows: [taskRow({ last_activity_at: "2026-08-18T09:00:00Z" })],
+    vi.mocked(repoThreads.listThreadsByChannel).mockResolvedValue({
+      rows: [threadRow({ last_activity_at: "2026-08-18T09:00:00Z" })],
       truncated: false,
     });
 
-    const { threads } = await listChannelTasks(ctx, "general");
+    const { threads } = await listChannelThreads(ctx, "general");
 
     // The sidebar's 24h window is arithmetic over THIS field, so losing it in
     // the mapper renders every thread inactive rather than failing.
@@ -439,46 +439,46 @@ describe("listChannelTasks / getChannelTask — reads", () => {
     // A bounded read at its ceiling is indistinguishable from an exhausted one
     // (INVARIANTS §9) — the flag is the only thing that tells them apart, and a
     // service that drops it presents a partial list as the whole one.
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
-      rows: [taskRow()],
+    vi.mocked(repoThreads.listThreadsByChannel).mockResolvedValue({
+      rows: [threadRow()],
       truncated: true,
     });
 
-    const { truncated } = await listChannelTasks(ctx, "general");
+    const { truncated } = await listChannelThreads(ctx, "general");
 
     expect(truncated).toBe(true);
   });
 
   it("does NOT claim an activity clock on a single-thread read", async () => {
-    // `get_thread` loads one row off `channel_tasks`, which has no such column.
+    // `get_thread` loads one row off `channel_threads`, which has no such column.
     // ⚠ Absent means "this view did not derive it", never "no activity" — a
     // fallback to `createdAt` here would sort a live thread as cold.
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      withoutActivity(taskRow())
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      withoutActivity(threadRow())
     );
 
-    const task = await getChannelTask(ctx, "general", TASK_ID);
+    const thread = await getChannelThread(ctx, "general", THREAD_ID);
 
-    expect(task.lastActivityAt).toBeUndefined();
+    expect(thread.lastActivityAt).toBeUndefined();
   });
 
-  it("returns one task by id, scoped to the channel", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ outcome_summary: "done" })
+  it("returns one thread by id, scoped to the channel", async () => {
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      threadRow({ outcome_summary: "done" })
     );
 
-    const task = await getChannelTask(ctx, "general", TASK_ID);
+    const thread = await getChannelThread(ctx, "general", THREAD_ID);
 
-    expect(repoTasks.findTaskByChannelAndId).toHaveBeenCalledWith("chan-1", TASK_ID);
-    expect(task.id).toBe(TASK_ID);
-    expect(task.outcomeSummary).toBe("done");
+    expect(repoThreads.findThreadByChannelAndId).toHaveBeenCalledWith("chan-1", THREAD_ID);
+    expect(thread.id).toBe(THREAD_ID);
+    expect(thread.outcomeSummary).toBe("done");
   });
 
-  it("404s a task id that is not in this channel (id can't be probed)", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
+  it("404s a thread id that is not in this channel (id can't be probed)", async () => {
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(null);
     await expect(
-      getChannelTask(ctx, "general", TASK_ID)
-    ).rejects.toBeInstanceOf(TaskNotFoundError);
+      getChannelThread(ctx, "general", THREAD_ID)
+    ).rejects.toBeInstanceOf(ThreadNotFoundError);
   });
 
 });

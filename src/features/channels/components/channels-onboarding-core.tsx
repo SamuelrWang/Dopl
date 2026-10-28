@@ -52,7 +52,7 @@ export function ChannelsOnboardingCore({
     >
       {settled &&
         (solo ? (
-          <div className="mt-1.5 w-full max-w-[440px]">
+          <div className="mt-1.5 w-full max-w-110">
             <StepCard
               icon={UserPlus}
               title="Invite teammates first"
@@ -64,7 +64,7 @@ export function ChannelsOnboardingCore({
           </div>
         ) : (
           <>
-            <div className="mt-1.5 flex w-full max-w-[440px] flex-col gap-2">
+            <div className="mt-1.5 flex w-full max-w-110 flex-col gap-2">
               <StepCard
                 icon={MonitorSmartphone}
                 title="Install the desktop app"
@@ -95,7 +95,7 @@ export function ChannelsOnboardingCore({
               <button
                 type="button"
                 onClick={onCreate}
-                className="btn-light mt-1 rounded-[9px] px-4 py-2 text-small font-medium text-text-primary"
+                className="btn-light mt-1 rounded-field px-4 py-2 text-small font-medium text-text-primary"
               >
                 Create a channel
               </button>
@@ -130,7 +130,7 @@ function StepCard({
 
   return (
     <div className="bento flex items-start gap-3 px-3.5 py-2.5 text-left">
-      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-bg-inset text-text-secondary">
+      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-bg-inset text-text-secondary">
         <Icon size={15} />
       </span>
       <span className="min-w-0">

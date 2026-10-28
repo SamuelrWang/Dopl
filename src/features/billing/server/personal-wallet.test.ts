@@ -137,6 +137,33 @@ describe("personalWalletTier", () => {
     });
   });
 
+  it("a live MAX row: verdict max, 20,000, on the same subscription anchor (2026-10-22)", () => {
+    expect(personalWalletTier(billing({ plan: "max", stripePriceId: "price_personal_max" }))).toEqual({
+      verdict: "max",
+      limit: 20_000,
+      periodStart: ANCHOR_START,
+      periodEnd: ANCHOR_END,
+    });
+  });
+
+  it("🔒 an upgrade mid-period keeps the PERIOD KEY — spend carries, the limit rises", () => {
+    // Pro → Max keeps Stripe's billing date, so the counter keyed on
+    // `periodStart` is the same row measured against the bigger allowance.
+    const pro = personalWalletTier(billing());
+    const max = personalWalletTier(billing({ plan: "max" }));
+    expect(max.periodStart).toBe(pro.periodStart);
+    expect(max.limit).toBeGreaterThan(pro.limit);
+  });
+
+  it("a CANCELED max row drops to the free tier and the calendar month", () => {
+    expect(personalWalletTier(billing({ plan: "max", status: "canceled" }))).toEqual({
+      verdict: "free",
+      limit: 500,
+      periodStart: CALENDAR_START,
+      periodEnd: CALENDAR_END,
+    });
+  });
+
   it("past_due keeps the Pro tier (grace)", () => {
     expect(personalWalletTier(billing({ status: "past_due" }))).toMatchObject({
       verdict: "pro",

@@ -13,7 +13,7 @@ import type { AgentLaunchControls } from "@/features/channels/components/use-age
 import type { ChannelThread } from "@/features/channels/types";
 import { ChannelsMessagePane } from "@/features/channels/components/message-pane";
 import { ChannelsInfoPanel } from "@/features/channels/components/info-panel";
-import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { indexMembers } from "@/features/channels/components/view-model";
 import {
   channelRows,
@@ -24,10 +24,10 @@ import {
   AgentActivityRows,
   ownAgentsWorking,
 } from "@/features/channels/components/agent-activity";
-import { agentColorVar } from "@/features/channels/lib/agent-colors";
 import {
   liveAgentsFromKey,
   liveAgentsKey,
+  useWorkingColors,
 } from "@/features/channels/lib/live-agents";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { reached } from "./demo-steps";
@@ -41,29 +41,34 @@ import {
   MEMBERS,
   MY_SESSION,
   MY_SESSIONS,
+  PEER_NOTICE,
   PEER_SCOUT,
   PEER_TRIAGE,
+  PEER_WAKE,
   SERVER_SESSIONS,
   WORKSPACE_ID,
 } from "./demo-data";
 import {
   messagesAt,
   threadsAt,
+  typedMessageAt,
 } from "./demo-transcript";
-import { narrationAt } from "./demo-narration";
+import { narrationAt, typedDmAt } from "./demo-narration";
+import { revealBody } from "./typed-reveal";
 import { ACTIVITY_BINS, mentionsAt } from "./demo-info-data";
 import { HOME_ROW_ID, VIEWER, homeRowsAt } from "./demo-home-rows";
-import {
-  DemoAccountRail,
-  DemoChannelList,
-  DemoHomeHeader,
-} from "./demo-home-chrome";
+import { DemoAccountRail } from "./demo-home-chrome";
+import { DemoChannelSwitcher, DemoTopBar } from "./demo-home-faces";
+import { ownerPhoto } from "./demo-identities";
 import { DemoAgentView } from "./demo-agent-view";
+import { openTaskAt, tasksAt, tasksTabSignalAt } from "./demo-tasks";
+import { useSceneTaskSlots, type SceneTasks } from "./scene-tasks";
 
 /** The composer's writes never fire (the slot is inert), so the gate is a stub. */
 const DEMO_GATE: MutationGate = { begin() {}, end() {} };
 
 const NOOP = () => {};
+const NOOP_ASYNC = () => Promise.resolve();
 
 /** `canLaunch` draws the composer's Bot glyph, as desktop /home does; every handler refuses. */
 const DEMO_LAUNCH: AgentLaunchControls = {
@@ -83,6 +88,7 @@ export function DemoScene({
   thread = null,
   onOpenThread = NOOP,
   onExitThread = NOOP,
+  typedWords,
 }: {
   step: number;
   /** Bumped per loop so the info column's tab state resets on every replay. */
@@ -104,9 +110,32 @@ export function DemoScene({
   onOpenThread?: () => void;
   /** The breadcrumb's channel crumb fires this — the way back out. */
   onExitThread?: () => void;
+  /**
+   * Words shown of the human line landing on this step (`typed-reveal.ts`);
+   * absent shows it whole (tests, reduced motion).
+   */
+  typedWords?: number;
 }) {
   const [qc] = useState(() => new QueryClient());
-  const messages = useMemo(() => messagesAt(step), [step]);
+  // The typed line is cut in the DATA, so the real transcript renders it as is.
+  const messages = useMemo(() => {
+    const all = messagesAt(step);
+    const typed = typedWords === undefined ? null : typedMessageAt(step);
+    if (!typed) return all;
+    return all.map((m) =>
+      m.id === typed.id ? { ...m, body: revealBody(m.body, typedWords ?? 0) } : m
+    );
+  }, [step, typedWords]);
+  const narration = useMemo(() => {
+    const all = narrationAt(step);
+    const typed = typedWords === undefined ? null : typedDmAt(step);
+    if (!typed) return all;
+    return all.map((e) =>
+      e === typed && e.text
+        ? { ...e, text: revealBody(e.text, typedWords ?? 0) }
+        : e
+    );
+  }, [step, typedWords]);
   const index = useMemo(
     () => indexMembers(MEMBERS, CURRENT_USER_ID, AGENT_INDEX),
     []
@@ -135,14 +164,15 @@ export function DemoScene({
     const live: typeof MY_SESSIONS = [];
     if (reached(step, "launch-2")) live.push(MY_SESSIONS[0]);
     if (reached(step, "thread-launch-1")) live.push(MY_SESSIONS[1]);
-    if (reached(step, "thread-launch-2")) live.push(MY_SESSIONS[2]);
-    if (reached(step, "thread-launch-3")) live.push(MY_SESSIONS[3]);
     return live;
   }, [step]);
   const peers = useMemo(() => {
     const out = [];
     if (reached(step, "launch-1")) out.push(PEER_TRIAGE);
     if (reached(step, "launch-3")) out.push(PEER_SCOUT);
+    // Grace's and Anthony's coders, on the same beats the planner's launch lines name.
+    if (reached(step, "thread-launch-2")) out.push(PEER_NOTICE);
+    if (reached(step, "thread-launch-3")) out.push(PEER_WAKE);
     return out;
   }, [step]);
   /**
@@ -165,6 +195,7 @@ export function DemoScene({
     [step]
   );
   const homeRows = useMemo(() => homeRowsAt(step), [step]);
+  const agentFeeds = useMemo(() => ({ sessions, peers }), [sessions, peers]);
 
   /**
    * **THE COMPOSER'S LIVE SET** (Samuel, 2026-10-12: show the agents currently working
@@ -185,13 +216,28 @@ export function DemoScene({
     [serverSessions, sessions]
   );
   /** `agentId` → a `var()` reference, resolved by the host exactly as the real one does. */
-  const workingColors = useMemo(() => {
-    const out = new Map<string, string>();
-    for (const agent of live) {
-      if (agent.color) out.set(agent.name, agentColorVar(agent.color));
-    }
-    return out;
-  }, [live]);
+  const workingColors = useWorkingColors(live);
+
+  const tasks = useMemo<SceneTasks>(
+    () => ({
+      list: tasksAt(step),
+      onSetStatus: NOOP,
+      onToggleSubtask: NOOP,
+      onAddNote: NOOP_ASYNC,
+    }),
+    [step]
+  );
+  // The open task and the Tasks tab follow the step; the pressed controls only close their own pop-up.
+  const taskSlots = useSceneTaskSlots({
+    tasks,
+    index,
+    feeds: agentFeeds,
+    openTaskId: openTaskAt(step),
+    onSelectTask: NOOP,
+    onOpenTask: NOOP,
+    onOpenLink: NOOP,
+    defaultResolvedOpen: true,
+  });
 
   return (
     <QueryClientProvider client={qc}>
@@ -199,9 +245,9 @@ export function DemoScene({
           <div className="lp-demo-home antialiased">
             <DemoAccountRail />
             <main className="page-float lp-demo-panel">
-              <DemoHomeHeader />
+              <DemoTopBar viewer={VIEWER} />
               <div className="flex min-h-0 flex-1">
-                <DemoChannelList rows={homeRows} selectedId={HOME_ROW_ID} />
+                <DemoChannelSwitcher rows={homeRows} selectedId={HOME_ROW_ID} />
                 {/* The record pane: a line-bounded card, not an elevation, as on /home.
                     `data-frame-skin` applies the kit's account palette; the pane is
                     the agent view's containing block. */}
@@ -224,6 +270,8 @@ export function DemoScene({
                     // The composer's live set: the tint, the mention picker and the
                     // reach line ("→ @handle", the auto-tag control) all read it.
                     liveAgents={live}
+                    agentFeeds={agentFeeds}
+                    tasksQuickView={taskSlots.quickView}
                     // The working strip above the input, scoped to whatever the composer
                     // is pointed at — so it narrows to the thread's coders inside it.
                     agentActivity={
@@ -246,6 +294,9 @@ export function DemoScene({
                   <div className="channel-info-slide" data-open="true">
                     <ChannelsInfoPanel
                       key={`info-${run}`}
+                      tasks={taskSlots.panel}
+                      activeTaskCount={taskSlots.activeTaskCount}
+                      tasksTabSignal={tasksTabSignalAt(step)}
                       channel={DEMO_CHANNEL}
                       channelName={CHANNEL_NAME}
                       members={MEMBERS}
@@ -276,7 +327,7 @@ export function DemoScene({
                       infoExtras={{
                         belowRoster: (
                           <div className="px-3.5 pt-2.5">
-                            <span className={PAGE_ACTION_BTN}>Add person</span>
+                            <span className={pillButton("ink", "lg")}>Add person</span>
                           </div>
                         ),
                       }}
@@ -285,7 +336,8 @@ export function DemoScene({
                   <DemoAgentView
                     open={agentOpen}
                     agent={MY_SESSION}
-                    entries={narrationAt(step)}
+                    ownerPhoto={ownerPhoto(MY_SESSION.agentId)}
+                    entries={narration}
                     messages={messages}
                     currentUserId={CURRENT_USER_ID}
                     viewer={VIEWER}

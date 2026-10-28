@@ -33,7 +33,7 @@ import {
 } from "./repository-session-colors";
 import { resolveDirectiveColor } from "./service-launch-color";
 import { AgentColorTakenError } from "./errors";
-import { AGENT_COLOR_KEYS } from "../lib/agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 import type { ChannelContext } from "./service-shared";
 
 const WS = "22222222-2222-2222-2222-222222222222";

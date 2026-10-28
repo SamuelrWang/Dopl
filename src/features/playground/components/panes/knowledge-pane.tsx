@@ -29,10 +29,7 @@ import {
   type KnowledgeViewFolder,
 } from "./knowledge-pane-live";
 import styles from "./knowledge-pane.module.css";
-
-/** App-wide icon-button recipe (knowledge-v2 detail-panel.tsx). */
-const ICON_BTN =
-  "flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
+import { CHROME_ICON_BUTTON } from "@/shared/ui/chrome-icon-button";
 
 /* ── Static demo corpus, themed on the real seed (Dopl Guide KB) ────────── */
 
@@ -196,15 +193,15 @@ export function KnowledgePane() {
               size="sm"
             />
           </div>
-          <button className={ICON_BTN} type="button" aria-label="Download knowledge base">
+          <button className={CHROME_ICON_BUTTON} type="button" aria-label="Download knowledge base">
             <Download size={16} />
           </button>
-          <button className={ICON_BTN} type="button" aria-label="Knowledge base settings">
+          <button className={CHROME_ICON_BUTTON} type="button" aria-label="Knowledge base settings">
             <Settings size={16} />
           </button>
           <span className={styles.divider} />
           <button
-            className={cn(ICON_BTN, "hover:text-danger")}
+            className={cn(CHROME_ICON_BUTTON, "hover:text-danger")}
             type="button"
             aria-label="Delete knowledge base"
           >
@@ -245,7 +242,7 @@ export function KnowledgePane() {
           ) : doc ? (
             /* Doc header card (doc-pane.tsx): overview strip + title/description. */
             <article className="flex flex-col">
-              <div className="mx-auto mt-4 mb-1 w-[calc(100%-3rem)] max-w-3xl overflow-hidden rounded-[14px] border border-border-strong">
+              <div className="mx-auto mt-4 mb-1 w-[calc(100%-3rem)] max-w-3xl overflow-hidden rounded-xl border border-border-strong">
                 <div className="flex items-center gap-3 bg-card-surface-subtle px-4 py-1.5">
                   <span className="flex-1 text-label font-semibold uppercase tracking-wide text-text-secondary">
                     Overview

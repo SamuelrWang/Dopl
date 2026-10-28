@@ -48,7 +48,7 @@
  * of these is the channel-membership fence in the service layer
  * (`loadVisibleChannel` hides a private channel from a non-member — and since
  * 2026-08-26 hides a PUBLIC one from a guest too, `service-shared.ts ›
- * mayReadPublicChannels`; `postMessage` / `createTaskFanOut` refuse
+ * mayReadPublicChannels`; `postMessage` / `createThreadFanOut` refuse
  * `!membership`). This pin guards the tripwire; the fence tests guard the gate.
  * Do not weaken either.
  *
@@ -147,9 +147,9 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   [`${CHANNELS_REL}/[channelId]/messages/landed/route.ts`, "GET"],
   [`${CHANNELS_REL}/[channelId]/await/route.ts`, "GET"], // long-poll one channel
   [`${CHANNELS_REL}/await/route.ts`, "GET"], // long-poll workspace-wide
-  [`${CHANNELS_REL}/[channelId]/tasks/route.ts`, "GET"], // list threads
-  [`${CHANNELS_REL}/[channelId]/tasks/route.ts`, "POST"], // create a thread (Q1)
-  [`${CHANNELS_REL}/[channelId]/tasks/[taskId]/route.ts`, "GET"], // read one thread
+  [`${CHANNELS_REL}/[channelId]/threads/route.ts`, "GET"], // list threads
+  [`${CHANNELS_REL}/[channelId]/threads/route.ts`, "POST"], // create a thread (Q1)
+  [`${CHANNELS_REL}/[channelId]/threads/[threadId]/route.ts`, "GET"], // read one thread
   [`${CHANNELS_REL}/[channelId]/members/route.ts`, "GET"], // see the roster
   [`${CHANNELS_REL}/presence/route.ts`, "POST"], // presence heartbeat (Q2)
   // ⚠ THE MENTIONS PAIR, AND THE COMMENT TABLE THAT USED TO SIT HERE HAD IT
@@ -183,6 +183,10 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   // posts: the messages route's floor, behind the same service fence.
   [`${CHANNELS_REL}/[channelId]/artifacts/route.ts`, "GET"],
   [`${CHANNELS_REL}/[channelId]/artifacts/route.ts`, "POST"],
+  // CHANNEL TASKS (2026-10-26, R8): a guest reads tasks and adds notes; the service refuses the
+  // rest (`service-tasks-shared.ts › requireTaskEditor`).
+  [`${CHANNELS_REL}/[channelId]/tasks/route.ts`, "GET"],
+  [`${CHANNELS_REL}/[channelId]/tasks/route.ts`, "POST"],
   // ⚠ THREE `personal-arming` ROWS STOOD HERE AND ARE DELETED WITH THE ROUTE
   // (2026-09-07) — see this file's header.
   //
@@ -244,18 +248,18 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
 const ALLOWED_KEYS = new Set(GUEST_ALLOWED.map(([f, m]) => `${f}#${m}`));
 
 describe("guest route floor — the guest-allowed set is exactly what runs at minRole:guest", () => {
-  it("has 27 entries (pins the size against a silent add/drop)", () => {
+  it("has 29 entries (pins the size against a silent add/drop)", () => {
     // 19 until 2026-09-06 (artifacts ×2), 24 while the three personal-arming
     // verbs existed, 21 once they were deleted with the route (2026-09-07), 27
     // with the ontology lane (2026-09-09, F-685), 30 with that lane's CHANGELOG
     // (the same day, F-686 part 2); 15 until Home Knowledge Panels M2, and **26
     // since R-18 took the four knowledge-lane entries out (2026-09-17)**, 27 with the composer's
-    // own-send `messages/landed` check (2026-10-08).
+    // own-send `messages/landed` check (2026-10-08), 29 with channel tasks (2026-10-26).
     // ⚠ ENTRIES, NOT FILES, which is why B2
     // counts occurrences. The number blesses nothing; set B proves the tree.
     // Re-derive both, never quote:
     //   grep -rc 'minRole: "guest"' $(grep -rl 'minRole: "guest"' src/app/api)
-    expect(ALLOWED_KEYS.size).toBe(27);
+    expect(ALLOWED_KEYS.size).toBe(29);
   });
 
   it.each(GUEST_ALLOWED)("A: %s %s is at minRole:guest", (file, method) => {
@@ -365,7 +369,7 @@ describe("the floors guard a real gate, not just a list", () => {
     // `[\s\S]*?` and not `[^)]*`), and the last pin reads the helper itself so
     // the pair still proves a REFUSAL exists rather than just a function call.
     //
-    // ⚠ `service-tasks-broadcast.ts` NO LONGER NAMES `loadVisibleChannel` — the
+    // ⚠ `service-threads-broadcast.ts` NO LONGER NAMES `loadVisibleChannel` — the
     // dedupe took it out with the throw, so its old belt is asserted on the
     // helper it now calls: `requireMemberChannel` must both RESOLVE through
     // `loadVisibleChannel` and THROW on a null membership. Nothing was relaxed;
@@ -376,11 +380,11 @@ describe("the floors guard a real gate, not just a list", () => {
     // split; `service-writes.ts` keeps the message lane. Read the lane's file.
     const writes = readFileSync(join(featureRoot, "service-writes.ts"), "utf8");
     const header = readFileSync(join(featureRoot, "service-writes-channel.ts"), "utf8");
-    const fanout = readFileSync(join(featureRoot, "service-tasks-broadcast.ts"), "utf8");
+    const fanout = readFileSync(join(featureRoot, "service-threads-broadcast.ts"), "utf8");
     const shared = readFileSync(join(featureRoot, "service-shared.ts"), "utf8");
     expect(header).toMatch(/loadVisibleChannel/);
     expect(writes).toMatch(/requireMemberChannel\([\s\S]*?"post to this channel"\s*\)/);
-    expect(fanout).toMatch(/requireMemberChannel\([\s\S]*?"create a task in this channel"\s*\)/);
+    expect(fanout).toMatch(/requireMemberChannel\([\s\S]*?"create a thread in this channel"\s*\)/);
     expect(shared).toMatch(
       /function requireMemberChannel[\s\S]*?loadVisibleChannel\(ctx, ref\)/
     );

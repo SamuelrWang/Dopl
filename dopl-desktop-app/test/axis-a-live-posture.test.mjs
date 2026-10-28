@@ -46,7 +46,7 @@ const sess = (state = {}, over = {}) => {
     key: `${CH}:${THREAD}:a1b2c3d4`,
     agentId: "a1b2c3d4",
     channelId: CH,
-    taskId: THREAD,
+    threadId: THREAD,
     profile: "full",
     runtimeId,
     state: {

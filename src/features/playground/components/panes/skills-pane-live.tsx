@@ -128,7 +128,7 @@ export function LiveSkillsPane({ skills }: { skills: LiveSkillSummary[] }) {
   return (
     <div className="page-float flex antialiased">
       {/* List pane */}
-      <div className="flex w-[372px] shrink-0 flex-col border-r border-border-default">
+      <div className="flex w-93 shrink-0 flex-col border-r border-border-default">
         <div className="flex items-center gap-2 px-3.5 pb-2.5 pt-3.5">
           <h1 className="text-title font-semibold tracking-tight text-text-primary">
             Skills
@@ -138,7 +138,7 @@ export function LiveSkillsPane({ skills }: { skills: LiveSkillSummary[] }) {
           <span
             title="New skill"
             aria-hidden
-            className="flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary"
+            className="flex h-7 w-7 items-center justify-center rounded-tile text-text-secondary"
           >
             <Plus size={16} />
           </span>
@@ -256,7 +256,7 @@ function SkillBody({
   // Member/agent-authored markdown, shown as plain text in the demo's prose
   // recipe (see the typography note in ./skills-pane.tsx). Never HTML.
   return (
-    <div className="whitespace-pre-wrap text-[16px] leading-[1.7] text-text-primary/90">
+    <div className="whitespace-pre-wrap text-(length:--doc-text) leading-[1.7] text-text-primary/90">
       {body}
     </div>
   );
@@ -289,7 +289,7 @@ export function SkillRow({
       )}
     >
       {selected && (
-        <span className="absolute bottom-1.5 left-0 top-1.5 w-[3px] rounded-r-[3px] bg-text-primary" />
+        <span className="absolute bottom-1.5 left-0 top-1.5 w-0.75 rounded-r-[3px] bg-text-primary" />
       )}
       <span className="flex w-full items-center gap-1.5">
         <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">

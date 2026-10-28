@@ -380,7 +380,7 @@ describe("X-Dopl-Runtime reaches the handler context (WAKE-V1)", () => {
    * refused it. `desktop-session` is deliberately NOT bounded: a desktop-spawned
    * session authenticates with exactly that device token.
    *
-   * ⚠ Consequence (F-145): `targeting.requesterTaskOpen` accepts EITHER stamp,
+   * ⚠ Consequence (F-145): `targeting.requesterThreadOpen` accepts EITHER stamp,
    * so an agent token sending `desktop-session` clears the stamp conjunct. The
    * stopper for a PEER is the identity pair; for the account itself it is TOKEN
    * CUSTODY. These cases pin what the bound actually is.

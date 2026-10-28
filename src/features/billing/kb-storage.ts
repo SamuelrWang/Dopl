@@ -18,7 +18,7 @@ import type { PlanId } from "./plans";
  * (5_000_000, not 5 × 1024²) — `shared/lib/format-bytes.ts` divides by the same
  * 1000s, so bar and map agree.
  *
- * solo === team === pro on purpose: every paid plan buys the same room, kept as
+ * solo === team === pro === max on purpose: every paid plan buys the same room, kept as
  * separate entries so splitting them later is a value edit. `pro` was added
  * 2026-09-08 with the personal paid tier and takes the paid figure — a paying
  * home space on the free cap would pay for a base it cannot fill.
@@ -28,6 +28,8 @@ export const KB_STORAGE_BYTES: Record<PlanId, number> = {
   solo: 100_000_000,
   team: 100_000_000,
   pro: 100_000_000,
+  // Max (2026-10-22) is a paid personal tier: same room as every paid plan.
+  max: 100_000_000,
 };
 
 /** Cap for an entitlement-resolved plan — never raw `workspace_billing.plan`

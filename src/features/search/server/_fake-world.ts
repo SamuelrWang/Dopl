@@ -76,7 +76,7 @@ function world(): FakeTables {
         created_at: "2026-09-01T00:00:00Z",
       }
     ),
-    channel_tasks: pair(
+    channel_threads: pair(
       {
         id: "thr-mine",
         title: "zephyr plan",

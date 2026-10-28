@@ -60,8 +60,6 @@
 }
 .root *, .root *::before, .root *::after { box-sizing: border-box; }
 
-.serif { font-family: var(--font-app), system-ui, sans-serif; }
-
 .body { flex: 1; display: flex; min-height: 0; }
 
 .surface {
@@ -102,7 +100,7 @@
 /* ── THE ONE GRAY PANEL, and the white card inside it ─────────────────────
    Structure and the reason for it are in this file's header. `.panel` is
    composed IN THE TSX as `cn("page-float", styles.panel)` — the FACE (fill,
-   2px line, radius, float margins, shadow) is the kit's `.page-float`, the
+   line, radius, float margins, shadow) is the kit's `.page-float`, the
    exact recipe /home's `<main>` wears, so there is one statement of the panel
    and the two surfaces cannot drift. This class adds LAYOUT ONLY. */
 .panel {
@@ -125,11 +123,10 @@
   overflow: visible;
 }
 
-/* THE ROUTED PAGE, as a white card floating in the gray — /home's record pane,
-   class for class: `rounded-[14px] border-2 border-home-panel-line bg-home-card`
-   (`pages/home/index.tsx`). Stated here rather than as utilities on the mount
-   because it is shell chrome, and pinned against /home's own line in
-   `apps/desktop-ui/src/components/app-shell/frame-palette.test.ts`.
+/* THE ROUTED PAGE, as a white card floating in the gray — /home's record pane
+   (`home/components/shell/home-frame.tsx`), whose line is 1px since 2026-10-26 while this one
+   keeps 2px. Stated here rather than as utilities on the mount because it is shell
+   chrome; pinned in `apps/desktop-ui/src/components/app-shell/frame-palette.test.ts`.
 
    ⚠ THE MARGIN IS `12px 12px 12px 0`, WHICH IS /home's PANE PLUS A TOP. That
    pane takes `mb-3 mr-3` and NO top or left — it butts the page header above it
@@ -325,38 +322,12 @@
   width: 100%;
   text-align: center;
   color: #fff;
-  background: linear-gradient(180deg, #313131 0%, #1c1c1c 52%, #111 100%);
-  border: 1px solid #000;
   border-radius: 8px;
   padding: 8px 0;
   font: inherit;
   font-size: 15px;
   font-weight: 600;
-  cursor: pointer;
   text-decoration: none;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
-    0 2px 3px rgba(0, 0, 0, 0.22),
-    0 6px 16px rgba(0, 0, 0, 0.2);
-  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
-}
-.upgradeBtn:hover {
-  filter: brightness(1.1);
-  transform: translateY(-1px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
-    0 4px 7px rgba(0, 0, 0, 0.24),
-    0 10px 24px rgba(0, 0, 0, 0.24);
-}
-.upgradeBtn:active {
-  transform: translateY(1px);
-  filter: brightness(0.96);
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 /* LAYOUT ONLY, like `.nav`. Rows are the same kit `.nav-chip` (<button>, not
@@ -369,19 +340,6 @@
   gap: 7px;
   padding-top: 12px;
 }
-
-.main {
-  flex: 1;
-  min-width: 0;
-  background: var(--panel);
-  border-top-left-radius: var(--shell-panel-radius);
-  padding: 34px 0 0 38px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.scroll { flex: 1; overflow-y: auto; padding-right: 38px; padding-bottom: 40px; }
-.scroll::-webkit-scrollbar { width: 0; }
 
 /* No-op: re-declares the exact values it already inherits from the global
    :root. Kept to avoid churn; deletable together with its usages. */
@@ -432,6 +390,5 @@
   --surface-cta: #1c2127;
   --text-on-cta: #ffffff;
   --border-active: #3e3a3b;
-  --agent-on: oklch(0.52 0.14 162);
   --scrim: oklch(0 0 0 / 40%);
 }

@@ -1,5 +1,5 @@
 /**
- * `20261122120000_channel_per_channel_numbering.sql`, READ AS THE CONTRACT IT IS.
+ * `20261124120000_channel_per_channel_numbering.sql`, READ AS THE CONTRACT IT IS.
  *
  * ⚠ **THIS IS NOT A REPLAY, AND IT CANNOT BE.** Docker is unavailable on this
  * machine, and the file is HELD — `supabase/migrations-held/` is excluded from
@@ -25,7 +25,7 @@
  *     read the same `MAX`.
  *   • **Both aggregates are channel-fenced**, so neither can scan the table.
  *   • **The thread counter keys on the RAW TEXT tag**, never a join to
- *     `channel_tasks` — 43 of 96 live tags have no row there.
+ *     `channel_threads` — 43 of 96 live tags have no row there.
  *   • **The backfill keeps its `CASE`.** Without it every untagged row is
  *     numbered as though the main room were one giant thread.
  *   • **`seq` is not touched.** The account-wide cursor and the workspace hold
@@ -42,7 +42,7 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
-const NAME = "20261122120000_channel_per_channel_numbering.sql";
+const NAME = "20261124120000_channel_per_channel_numbering.sql";
 const HELD_DIR = resolve(process.cwd(), "supabase", "migrations-held");
 const APPLIED_DIR = resolve(process.cwd(), "supabase", "migrations");
 
@@ -63,7 +63,7 @@ const statements = sql
  * ⚠ The closing `DO $$` block RAISEs messages containing the words "thread_seq",
  * "CASE was lost" and "channel_seq" — assertions ABOUT the properties, not the
  * properties. A scan that kept them would read a guard as the thing it guards.
- * Presence assertions that need a quoted identifier (`->> 'taskId'`) use
+ * Presence assertions that need a quoted identifier (`->> 'threadId'`) use
  * {@link statements} instead, where the quotes survive.
  */
 const body = statements.replace(/'(?:[^']|'')*'/g, "''");
@@ -147,11 +147,11 @@ describe("the columns it adds", () => {
 describe("the backfill", () => {
   it("🔒 keeps the CASE that stops the main room being numbered as one thread", () => {
     // ⚠ THE TRAP, MEASURED. Dry-run read-only on production 2026-10-12: without
-    // this `CASE`, `PARTITION BY (channel_id, metadata->>'taskId')` collapses
+    // this `CASE`, `PARTITION BY (channel_id, metadata->>'threadId')` collapses
     // every untagged row into ONE null partition and numbers the main room
     // 1..1941. Delete the CASE and this test, and the migration's own 6d block,
     // both fire.
-    const threadWindow = /CASE\s+WHEN\s+metadata\s*\?\s*'taskId'\s+THEN\s+row_number\(\)\s+OVER\s*\(\s*PARTITION\s+BY\s+channel_id,\s*metadata\s*->>\s*'taskId'/i;
+    const threadWindow = /CASE\s+WHEN\s+metadata\s*\?\s*'threadId'\s+THEN\s+row_number\(\)\s+OVER\s*\(\s*PARTITION\s+BY\s+channel_id,\s*metadata\s*->>\s*'threadId'/i;
     expect(statements).toMatch(threadWindow);
   });
 
@@ -194,7 +194,7 @@ describe("the unique indexes — the ratchet on the lock", () => {
 
   it("🔒 the thread index is UNIQUE and PARTIAL on thread_seq IS NOT NULL", () => {
     expect(statements).toMatch(
-      /CREATE\s+UNIQUE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+channel_messages_thread_no_key\s+ON\s+public\.channel_messages\s*\(\s*channel_id,\s*\(metadata\s*->>\s*'taskId'\),\s*thread_seq\s*\)\s*WHERE\s+thread_seq\s+IS\s+NOT\s+NULL/i
+      /CREATE\s+UNIQUE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+channel_messages_thread_no_key\s+ON\s+public\.channel_messages\s*\(\s*channel_id,\s*\(metadata\s*->>\s*'threadId'\),\s*thread_seq\s*\)\s*WHERE\s+thread_seq\s+IS\s+NOT\s+NULL/i
     );
   });
 });
@@ -232,13 +232,13 @@ describe("the RPC allocates both numbers under the lock it already holds", () =>
     expect(fnBody).toMatch(threadSelect);
   });
 
-  it("🔒 the thread counter keys on the RAW TEXT tag, never on channel_tasks", () => {
-    // 43 of 96 distinct tags in production have no `channel_tasks` row (31 legacy
-    // `task-<channelId>-<seq>` ids that installed desktops still mint, 12 UUIDs
+  it("🔒 the thread counter keys on the RAW TEXT tag, never on channel_threads", () => {
+    // 43 of 96 distinct tags in production have no `channel_threads` row (31 legacy
+    // `thread-<channelId>-<seq>` ids that installed desktops still mint, 12 UUIDs
     // whose thread row is gone — measured 2026-10-12). An FK-keyed counter would
     // silently number none of them.
-    expect(fnBody).toMatch(/metadata\s*->>\s*'taskId'\s*=\s*v_thread_tag/i);
-    expect(fnBody).not.toMatch(/channel_tasks/i);
+    expect(fnBody).toMatch(/metadata\s*->>\s*'threadId'\s*=\s*v_thread_tag/i);
+    expect(fnBody).not.toMatch(/channel_threads/i);
   });
 
   it("🔒 thread_seq is allocated only for a tagged post", () => {
@@ -293,7 +293,7 @@ describe("the closing block asserts the outcome rather than trusting it", () => 
   it("🔒 asserts the backfill trap: an untagged row must hold NULL", () => {
     // The assertion that fires if the `CASE` is ever lost.
     expect(statements).toMatch(
-      /NOT\s*\(\s*metadata\s*\?\s*'taskId'\s*\)\s+AND\s+thread_seq\s+IS\s+NOT\s+NULL/i
+      /NOT\s*\(\s*metadata\s*\?\s*'threadId'\s*\)\s+AND\s+thread_seq\s+IS\s+NOT\s+NULL/i
     );
   });
 

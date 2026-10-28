@@ -1,16 +1,14 @@
 /**
- * /home's left column: the demo's channel rows and which gray well each sits in.
- * Pure data; the markup is `demo-home-chrome.tsx` and the row's face is the
- * product's own (`shared/ui/home-channel-row.tsx`).
+ * /home's left column: the demo's channel rows and which well each sits in.
+ * Pure data; the markup is `demo-home-faces.tsx › DemoChannelSwitcher`.
  *
  * Its own file because these rows are the one part of the demo's data that is NOT
  * a wire shape — everything in `demo-data.ts` is a real product shape, and these
  * are a flattened stand-in for what `GET /api/channels?scope=account` answers.
  *
- * The fields are `HomeChannelRowFacts` — the OUTPUTS of /home's row derivations,
- * not their input. The demo has no payload behind it, so it authors those answers
- * and the same component renders them: the derivations are what the demo cannot
- * host, the face is what it must not fork.
+ * The fields are `HomeChannelRowFacts` (`shared/ui/home-channel-row.tsx`) — the
+ * OUTPUTS of /home's row derivations, not their input. The demo has no payload
+ * behind it, so it authors those answers.
  *
  * The well is authored here too, the one honest difference:
  * `channel-wells.ts › channelWellOf` reads `myFavoritedAt` and a 24h cut, which
@@ -39,6 +37,9 @@ import {
 export type HomeRowMock = HomeChannelRowFacts & {
   id: string;
   well: HomeChannelWellId;
+  /** Landing-only: an "Invited" pill at line two's far right, where the `@ N`
+   *  pill sits (Samuel, 2026-10-15), in place of the product's "Link out" chip. */
+  invited?: boolean;
 };
 
 /** The row the scene sits in — the channel the record pane plays.
@@ -46,16 +47,15 @@ export type HomeRowMock = HomeChannelRowFacts & {
 export const HOME_ROW_ID = "rel:demo-ws-debt";
 
 /**
- * The operator, as the agent view's viewer identity. (2026-09-15) The header
- * takes no viewer: its operator control is a bare black pill reading "Profile".
+ * The operator: the agent view's viewer identity and the top bar's Profile pill.
  * `avatarUrl` is a bundled `public/` path, which `useBridgedImageSrc` returns
  * verbatim on the web.
  */
 export const VIEWER: AvatarPerson = {
   userId: CURRENT_USER_ID,
-  email: "srwang@usc.edu",
-  displayName: "Samuel Wang",
-  avatarUrl: "/img/avatars/sam.jpg",
+  email: "daniel@vermillion.io",
+  displayName: "Daniel Ortiz",
+  avatarUrl: "/img/avatars/daniel.jpg",
 };
 
 /**
@@ -138,7 +138,7 @@ const HOME_ROWS: ReadonlyArray<HomeRowMock> = [
     well: "recent",
     name: "api-v2-migration",
     faces: [PEERS[1]],
-    linkOut: true,
+    invited: true,
     unread: true,
     at: minsAgo(60 * 5),
   },
@@ -156,7 +156,7 @@ const HOME_ROWS: ReadonlyArray<HomeRowMock> = [
     well: "earlier",
     name: "Mira Castellanos",
     faces: [],
-    linkOut: true,
+    invited: true,
     pending: true,
     pendingLine: "Not yet claimed",
     at: minsAgo(60 * 74),

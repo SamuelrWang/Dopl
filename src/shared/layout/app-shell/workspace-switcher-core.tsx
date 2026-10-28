@@ -91,9 +91,9 @@ export function WorkspaceSwitcherCore({
         <ChevronsUpDown size={15} className={styles.brandChevron} />
       </button>
 
-      {/* Width only — radius, padding, border, shadow come from the kit's
-          `.menu-card` (globals.css). */}
-      <Popover open={open} onClose={close} className="w-[248px]">
+      {/* No width: the kit's `.menu-card` fits the widest row and caps it, along with the
+          radius, padding, border and shadow (globals.css). */}
+      <Popover open={open} onClose={close}>
         <div className="flex items-start gap-2.5 px-2.5 py-2">
           <WorkspaceGlyph
             name={active?.name ?? workspaceName}

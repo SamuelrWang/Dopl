@@ -10,6 +10,11 @@ import {
   type CastId,
   type ChatItem,
 } from "./agents-chat-script";
+import {
+  CHAT_REVEAL_KEYFRAMES,
+  CHAT_ROW_ANIMATION,
+  CHAT_WORD_ANIMATION,
+} from "@/shared/ui/chat-reveal";
 
 type CardRect = GlassCardContext["regions"]["main"];
 
@@ -24,8 +29,8 @@ type CardRect = GlassCardContext["regions"]["main"];
  *   - authored row: `authored-row.tsx` — 3px agent-colour bar on the outer
  *     side, the header pill framed in that colour, body under it; the user's
  *     own row mirrored to the right with a plain bento pill.
- *   - header pill: `attribution-pill.tsx` — avatar, bold name, the coloured
- *     "agent" chip (`AgentChip`).
+ *   - header pill: `attribution-pill.tsx` — avatar, bold name, and here a
+ *     coloured "agent" chip.
  *   - launch line: `transcript.tsx`'s system row — one centred muted line.
  *   - @-mention: `message-markdown-mentions.tsx` — medium weight, `--link`.
  *   - working pills: `agent-activity.tsx › AgentActivityRows` — agent-colour
@@ -41,10 +46,8 @@ const BENTO = "0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06)";
 
 export type CastImages = Partial<Record<CastFace, string>>;
 
-export const AGENTS_KEYFRAMES = `
-@keyframes dopl-ch-word { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
-@keyframes dopl-ch-row { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-`;
+/** The reveal now lives in `@/shared/ui/chat-reveal` (also used by the landing demo). */
+export const AGENTS_KEYFRAMES = CHAT_REVEAL_KEYFRAMES;
 
 export function AgentsTranscript({
   rect,
@@ -120,7 +123,7 @@ export function AgentsTranscript({
                   textAlign: "center",
                   fontSize: fs * 0.86,
                   color: MUTED,
-                  animation: still ? undefined : "dopl-ch-row 260ms ease-out both",
+                  animation: still ? undefined : CHAT_ROW_ANIMATION,
                 }}
               >
                 {item.text}
@@ -235,7 +238,7 @@ function MessageRow({
         display: "flex",
         flexDirection: mine ? "row-reverse" : "row",
         alignItems: "stretch",
-        animation: still ? undefined : "dopl-ch-row 260ms ease-out both",
+        animation: still ? undefined : CHAT_ROW_ANIMATION,
       }}
     >
       {paint && <span style={{ width: bar, flex: "none", background: paint, borderRadius: "0 0 999px 999px" }} />}
@@ -269,7 +272,7 @@ function Typed({ parts, shown, still }: { parts: Parameters<typeof tokens>[0]; s
           key={k}
           style={{
             display: "inline-block",
-            animation: still ? undefined : "dopl-ch-word 220ms ease-out both",
+            animation: still ? undefined : CHAT_WORD_ANIMATION,
             ...(t.mention ? { color: "var(--link)", fontWeight: 500 } : null),
           }}
         >

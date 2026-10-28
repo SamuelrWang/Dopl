@@ -102,7 +102,7 @@ const btn = (name: string) => screen.getByRole("button", { name });
 /**
  * THE OPEN FACE, AS FOUR CLAIMS. ⚠ **`rounded-full`'s ABSENCE IS ONE OF THEM** — the whole
  * ruling is a square corner where a circle was, and the circle came from a class the glyph wears
- * in its closed state, so "it gained `rounded-[7px]`" is not enough: tailwind-merge resolves a
+ * in its closed state, so "it gained `rounded-tile`" is not enough: tailwind-merge resolves a
  * composed pair by string order and a face that carried both would still paint round.
  */
 function expectOpenFace(el: HTMLElement) {
@@ -111,7 +111,7 @@ function expectOpenFace(el: HTMLElement) {
   expect(classes).toContain("bg-surface-cta");
   expect(classes).toContain("text-text-on-cta");
   // A ROUNDED SQUARE: `icon-button.tsx`'s own radius, and NOT the closed state's circle.
-  expect(classes).toContain("rounded-[7px]");
+  expect(classes).toContain("rounded-tile");
   expect(classes).not.toContain("rounded-full");
   // ⚠ THE RULING "the open face must win over the hover fill", in its only observable form.
   expect(classes).toContain("hover:bg-surface-cta");

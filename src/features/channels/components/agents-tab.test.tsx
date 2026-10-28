@@ -1,17 +1,14 @@
 // @vitest-environment jsdom
 /**
- * The Agents tab and the agent view, WIRED (wiring plan Phase 5, 2026-08-18).
- * Each property here fails QUIETLY, which is why it is pinned:
+ * The Agents tab, WIRED (wiring plan Phase 5, 2026-08-18); the agent view's half is
+ * `agents-tab-agent-view.test.tsx`. Each property here fails QUIETLY, which is why it is pinned:
  *  - `null` (could not ask) is not `[]` (nothing running) — INVARIANTS §11.
  *  - An unmeasured metric renders as an absence, never as 0.
  *  - One session per member's window, so it never needs a qualifier (§5).
- *  - The sent lane is the viewer's own agent on THIS thread — the derivation's
- *    own cases live in `agent-sent-messages.test.ts`.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import { cleanup, render, screen } from "@testing-library/react";
 
 /**
  * ⚠ THE IDENTITY PICKER'S READ IS MOCKED because the tab MOUNTS the picker since
@@ -29,38 +26,14 @@ vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
 }));
 
 import { AgentsTab } from "./agents-tab";
-import { ChannelsAgentPanel } from "./agent-panel";
-// ⚠ The control strip is its own module since 2026-08-22 (split at the 500-line
-// cap when the 1:1 composer landed in the panel); its copy travelled with it.
-import { AGENT_CONTROL_REFUSED } from "./agent-panel-controls";
 import { agentKey, agentsForChannel, NO_THREAD_LABEL } from "./agents-model";
 import { formatTokens } from "@/shared/lib/format-tokens";
-import { CHANNEL_ID, ME, message } from "./test-fixtures";
+import { CHANNEL_ID, ME, PEER, member, sessionSummary as summary } from "./test-fixtures";
 
 afterEach(() => {
   cleanup();
   delete (window as { dopl?: unknown }).dopl;
 });
-
-const HOUR = 3_600_000;
-
-function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummary {
-  return {
-    sessionId: "s-1",
-    channelId: CHANNEL_ID,
-    taskId: "t-1",
-    name: "flint",
-    state: "working",
-    channelName: "Website",
-    threadTitle: "UI-kit design",
-    contextUsed: 84_000,
-    contextWindow: 200_000,
-    tokensSpent: 1_200_000,
-    startedAt: Date.now() - 2 * HOUR,
-    lastActivityAt: Date.now() - 60_000,
-    ...over,
-  };
-}
 
 const noop = () => {};
 
@@ -95,9 +68,8 @@ describe("AgentsTab — the cards", () => {
       />
     );
     expect(screen.getByText("flint")).toBeTruthy();
-    expect(screen.getByText("UI-kit design")).toBeTruthy();
-    expect(screen.getByText(/Tokens spent: 1\.2M/)).toBeTruthy();
-    // The meter's own label, from the shared UsageMeter.
+    expect(screen.getByText(/^↳ UI-kit design/)).toBeTruthy();
+    expect(screen.getByText("1.2M tokens spent")).toBeTruthy();
     expect(screen.getByText("Context tokens")).toBeTruthy();
   });
 
@@ -127,6 +99,7 @@ describe("AgentsTab — the cards", () => {
     // one spawn-idle agent looked different depending on where it was read and each surface had a
     // green test defending its own answer. The same finding as the thread-title case below.
     expect(screen.getByText("Context tokens")).toBeTruthy();
+    expect(screen.getByText("Context tokens").textContent).not.toContain("/");
     // ⚠ EVERY OTHER ABSENCE IS STILL AN ABSENCE. The ruling is about the BAR, not about inventing
     // facts: a number with no measurement says so, and a missing stamp renders nothing at all.
     expect(screen.getByText(/Tokens spent: not measured yet/)).toBeTruthy();
@@ -146,7 +119,7 @@ describe("AgentsTab — the cards", () => {
   it("names the CHANNEL for a session on no first-class thread, as the panel does", () => {
     render(
       <AgentsTab
-        sessions={[summary({ taskId: "", threadTitle: null })]}
+        sessions={[summary({ threadId: "", threadTitle: null })]}
         channelId={CHANNEL_ID}
         openAgent={null}
         onOpenAgent={noop}
@@ -170,6 +143,41 @@ describe("AgentsTab — the cards", () => {
     expect(screen.getByRole("button", { name: "Viewing" })).toBeTruthy();
   });
 
+  it("draws each agent as its owner's identity face with its runtime's badge", () => {
+    const { container } = render(
+      <AgentsTab
+        sessions={[summary({ agentId: "aa11bb22", runtimeId: "claude" })]}
+        peers={[
+          {
+            userId: PEER,
+            channelId: CHANNEL_ID,
+            threadId: "t-1",
+            name: "cc33dd44",
+            displayName: "Rover",
+            runtime: "grok",
+            state: "working",
+            channelName: "Website",
+            threadTitle: "UI-kit design",
+            updatedAt: new Date().toISOString(),
+          },
+        ]}
+        members={[member({ userId: ME }), member({ userId: PEER, displayName: "Diana Taylor" })]}
+        currentUserId={ME}
+        channelId={CHANNEL_ID}
+        openAgent={null}
+        onOpenAgent={noop}
+      />
+    );
+    expect(container.querySelectorAll("[data-identity-face]")).toHaveLength(2);
+    expect(container.querySelector("svg.lucide-bot")).toBeNull();
+    const badges = [...container.querySelectorAll("[data-identity-face] img")].map((i) =>
+      i.getAttribute("src")
+    );
+    expect(badges).toContain("/img/onboarding/claude-logo.svg");
+    expect(badges).toContain("/img/onboarding/grok-logo.svg");
+    expect(screen.getByText(/^↳ Diana Taylor's agent/)).toBeTruthy();
+  });
+
   it("NEVER writes 'agent session' or 'channel session' (INVARIANTS §5)", () => {
     const { container } = render(
       <AgentsTab
@@ -189,11 +197,11 @@ describe("agentsForChannel / agentKey", () => {
   it("groups agents sharing a thread together, keeping feed order within one", () => {
     // ⚠ THE SHARED-THREAD CASE IS THE NORMAL ONE SINCE 2026-08-21 (multiplayer
     // agents): every launch mints a new instance, so N of them sit on one
-    // taskId. The grouping keeps them adjacent and must not reorder anything.
+    // threadId. The grouping keeps them adjacent and must not reorder anything.
     const rows = [
-      summary({ sessionId: "a", taskId: "t-1", name: "one" }),
-      summary({ sessionId: "b", taskId: "t-2", name: "two" }),
-      summary({ sessionId: "c", taskId: "t-1", name: "three" }),
+      summary({ sessionId: "a", threadId: "t-1", name: "one" }),
+      summary({ sessionId: "b", threadId: "t-2", name: "two" }),
+      summary({ sessionId: "c", threadId: "t-1", name: "three" }),
     ];
     expect(agentsForChannel(rows, CHANNEL_ID).map((s) => s.name)).toEqual([
       "one",
@@ -237,261 +245,5 @@ describe("formatTokens", () => {
     expect(formatTokens(1)).toBe("1");
     expect(formatTokens(999)).toBe("999");
     expect(formatTokens(0)).toBe("0");
-  });
-});
-
-describe("ChannelsAgentPanel", () => {
-  it("shows the real sent lane and STATES the two lanes with no backing", () => {
-    const agent = summary();
-    render(
-      <ChannelsAgentPanel
-        openAgent={agentKey(agent)}
-        sessions={[agent]}
-        messages={[
-          message({
-            id: "m-sent",
-            authorUserId: ME,
-            authorKind: "agent",
-            body: "Renamed btn/secondary to btn/light.",
-            metadata: { taskId: "t-1" },
-          }),
-        ]}
-        currentUserId={ME}
-        onClose={noop}
-      />
-    );
-    expect(screen.getByText("Renamed btn/secondary to btn/light.")).toBeTruthy();
-    // ⚠ THE POST WEARS THE v1 SENT BOX (2026-08-22), whose banner says where it
-    // went — the "→ sent to X · date" meta line under each item is DELETED, and
-    // its one useful fact moved into the banner rather than being lost.
-    expect(screen.getByText("Posted to UI-kit design thread")).toBeTruthy();
-    // ⚠ THE FOOTER EXPLAINER IS GONE (Samuel's minimal-copy ruling, 2026-08-22).
-    // It pointed at another surface for lanes this one now renders itself.
-    expect(screen.queryByText(/only what it sent/i)).toBeNull();
-    // ⚠ And the direct lane's input is NOT rendered. An inert field that looks
-    // like every field that does send is the worse failure (F-212).
-    expect(screen.queryByLabelText(/Message this agent directly/i)).toBeNull();
-  });
-
-  it("hides EVERY control when the bridge cannot offer any of them", () => {
-    // No `window.dopl` at all — a plain browser, or a main older than the ops.
-    const agent = summary();
-    render(
-      <ChannelsAgentPanel
-        openAgent={agentKey(agent)}
-        sessions={[agent]}
-        messages={[]}
-        currentUserId={ME}
-        onClose={noop}
-      />
-    );
-    expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "End" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Open window" })).toBeNull();
-  });
-
-  it("offers pause / end on a live agent and calls the bridge with (channel, thread)", () => {
-    const pause = vi.fn().mockResolvedValue({ ok: true });
-    const end = vi.fn().mockResolvedValue({ ok: true });
-    (window as { dopl?: unknown }).dopl = {
-      apiRequest: vi.fn(),
-      sessions: { reopen: vi.fn(), pause, end },
-    };
-    const agent = summary();
-    render(
-      <ChannelsAgentPanel
-        openAgent={agentKey(agent)}
-        sessions={[agent]}
-        messages={[]}
-        currentUserId={ME}
-        onClose={noop}
-      />
-    );
-    screen.getByRole("button", { name: "Pause" }).click();
-    // ⚠ NEVER the sessionId — that id does not survive a park+recreate, and main
-    // resolves the pair against its own registry (which is what makes these
-    // own-agents-only).
-    expect(pause).toHaveBeenCalledWith(CHANNEL_ID, "t-1", undefined);
-    expect(end).not.toHaveBeenCalled();
-  });
-
-  it("disables both stop verbs on an ENDED agent — there is nothing left to stop", () => {
-    (window as { dopl?: unknown }).dopl = {
-      apiRequest: vi.fn(),
-      sessions: { reopen: vi.fn(), pause: vi.fn(), end: vi.fn() },
-    };
-    const agent = summary({ state: "ended" });
-    render(
-      <ChannelsAgentPanel
-        openAgent={agentKey(agent)}
-        sessions={[agent]}
-        messages={[]}
-        currentUserId={ME}
-        onClose={noop}
-      />
-    );
-    expect(
-      (screen.getByRole("button", { name: "Pause" }) as HTMLButtonElement).disabled
-    ).toBe(true);
-    expect(
-      (screen.getByRole("button", { name: "End" }) as HTMLButtonElement).disabled
-    ).toBe(true);
-  });
-
-  it("NEVER writes 'agent session' or 'channel session' (INVARIANTS §5)", () => {
-    const agent = summary();
-    const { container } = render(
-      <ChannelsAgentPanel
-        openAgent={agentKey(agent)}
-        sessions={[agent]}
-        messages={[]}
-        currentUserId={ME}
-        onClose={noop}
-      />
-    );
-    const text = (container.textContent ?? "").toLowerCase();
-    expect(text).not.toContain("agent session");
-    expect(text).not.toContain("channel session");
-  });
-});
-
-/**
- * THE THREE CAPABILITIES ARE THREE GATES.
- *
- * ⚠ `reopen` is the OLD op, shared by both preloads (main has ONE reopen path);
- * `pause` / `end` arrived with the SPA. A single `canControlAgents()` gate over
- * the whole strip therefore hid "Open window" on every main that has `reopen`
- * and neither stop verb — a real build shape, and the affordance it hid is the
- * one that still worked. The matrix below is the old-preload matrix: a feed
- * with no controls, and controls with no reopen.
- */
-describe("the agent view's control strip — one gate per capability", () => {
-  const mountPanel = (agent = summary()) =>
-    render(
-      <ChannelsAgentPanel
-        openAgent={agentKey(agent)}
-        sessions={[agent]}
-        messages={[]}
-        currentUserId={ME}
-        onClose={noop}
-      />
-    );
-
-  // ⚠ "Open window" became "Open agent" on 2026-08-20 (F-212) and is "Open
-  // window" again since 2026-08-25 (Samuel) — the panel IS the agent, so the
-  // verb named what the operator was already looking at. The ORIGINAL note: a window is a VIEW,
-  // not a runtime property, so the noun is what the operator is asking for.
-  it("offers OPEN AGENT on a main that has reopen and neither stop verb", () => {
-    (window as { dopl?: unknown }).dopl = {
-      apiRequest: vi.fn(),
-      sessions: { reopen: vi.fn() },
-    };
-    mountPanel();
-    expect(screen.getByRole("button", { name: "Open window" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "End" })).toBeNull();
-  });
-
-  it("offers the STOP VERBS on a main that has them and no reopen", () => {
-    (window as { dopl?: unknown }).dopl = {
-      apiRequest: vi.fn(),
-      sessions: { pause: vi.fn(), end: vi.fn() },
-    };
-    mountPanel();
-    expect(screen.getByRole("button", { name: "Pause" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "End" })).toBeTruthy();
-    // ⚠ And NOT a button that would throw "reopen is not a function".
-    expect(screen.queryByRole("button", { name: "Open window" })).toBeNull();
-  });
-
-  // ⚠ WHAT THE BUTTON CALLS moved to `agents-detail.test.tsx` on 2026-08-20, whole:
-  // that file owns the open-agent behaviour (prefer the new op, fall back to `reopen`,
-  // carry the workspace segment), and asserting the same click in two files is how two
-  // suites come to disagree about one button. This block keeps what it is ABOUT — which
-  // capability shows which control.
-});
-
-/**
- * A REFUSED STOP VERB IS SAID OUT LOUD.
- *
- * ⚠ `state === "ended"` is a frame old at best: an agent that ends between the
- * paint and the click leaves both buttons enabled, main answers `{ok:false}`,
- * and the boolean used to be DISCARDED — the operator saw a pressed button and
- * no consequence, indistinguishable from success. And because main changed
- * NOTHING, no push follows to correct the panel, which is why the feed is
- * re-read on the same path.
- */
-describe("the just-ended race", () => {
-  const mountPanel = (onRefreshSessions?: () => void) => {
-    const agent = summary();
-    render(
-      <ChannelsAgentPanel
-        openAgent={agentKey(agent)}
-        sessions={[agent]}
-        messages={[]}
-        currentUserId={ME}
-        onClose={noop}
-        onRefreshSessions={onRefreshSessions}
-      />
-    );
-  };
-
-  it("shows the refusal and re-reads the feed when main says {ok:false}", async () => {
-    const pause = vi.fn().mockResolvedValue({ ok: false, reason: "no such session" });
-    (window as { dopl?: unknown }).dopl = {
-      apiRequest: vi.fn(),
-      sessions: { reopen: vi.fn(), pause, end: vi.fn() },
-    };
-    const refresh = vi.fn();
-    mountPanel(refresh);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Pause" }));
-    });
-
-    expect(pause).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(AGENT_CONTROL_REFUSED)).toBeTruthy();
-    expect(refresh).toHaveBeenCalledTimes(1);
-  });
-
-  it("stays silent on a control that WORKED", async () => {
-    const end = vi.fn().mockResolvedValue({ ok: true });
-    (window as { dopl?: unknown }).dopl = {
-      apiRequest: vi.fn(),
-      sessions: { reopen: vi.fn(), pause: vi.fn(), end },
-    };
-    const refresh = vi.fn();
-    mountPanel(refresh);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "End" }));
-    });
-
-    expect(screen.queryByText(AGENT_CONTROL_REFUSED)).toBeNull();
-    // ⚠ No re-read on success either: a successful stop DOES move main's
-    // projection, and the push is the delivery path. This must not become a poll.
-    expect(refresh).not.toHaveBeenCalled();
-  });
-
-  it("clears the notice when the operator tries again", async () => {
-    const pause = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValueOnce({ ok: true });
-    (window as { dopl?: unknown }).dopl = {
-      apiRequest: vi.fn(),
-      sessions: { reopen: vi.fn(), pause, end: vi.fn() },
-    };
-    mountPanel();
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Pause" }));
-    });
-    expect(screen.getByText(AGENT_CONTROL_REFUSED)).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Pause" }));
-    });
-    expect(screen.queryByText(AGENT_CONTROL_REFUSED)).toBeNull();
   });
 });

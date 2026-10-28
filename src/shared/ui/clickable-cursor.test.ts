@@ -184,13 +184,13 @@ const ALLOWED: Record<string, { count: number; why: string }> = {
     count: 2,
     why: "click-to-focus prose; the inner surface already declares `cursor-text`, which is what a click there starts",
   },
-  "src/features/ontology/components/kanban-column-header.tsx": {
+  "src/features/ontology/components/object-type-actions.tsx": {
     count: 1,
-    why: "a `stopPropagation` wrapper around the actions menu — it swallows a click, it does not act on one",
+    why: "a `stopPropagation` wrapper around the type's actions — it swallows a click, it does not act on one",
   },
   "src/features/members/components/member-bits.tsx": {
     count: 1,
-    why: "a `stopPropagation` wrapper around the role menu, same as kanban-column-header's",
+    why: "a `stopPropagation` wrapper around the role menu, same as object-type-actions'",
   },
 };
 

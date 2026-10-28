@@ -85,9 +85,9 @@ function span(count: number, firstSeq: number, lastSeq: number): ArtifactSpan {
  */
 describe("readNamesMessages — the addressing pin", () => {
   it("never folds a thread-scoped read: a thread is already a named subset", () => {
-    expect(readNamesMessages({ thread: "task-1" })).toBe(true);
-    expect(readNamesMessages({ thread: "task-1", since: 10 })).toBe(true);
-    expect(readNamesMessages({ thread: "task-1", since: 10, before: 20 })).toBe(true);
+    expect(readNamesMessages({ thread: "thread-1" })).toBe(true);
+    expect(readNamesMessages({ thread: "thread-1", since: 10 })).toBe(true);
+    expect(readNamesMessages({ thread: "thread-1", since: 10, before: 20 })).toBe(true);
   });
 
   it("never folds a BOUNDED WINDOW — since AND before is the range naming a message", () => {

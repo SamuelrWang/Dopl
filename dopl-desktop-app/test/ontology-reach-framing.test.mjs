@@ -32,7 +32,7 @@ const { ontologyReachLines } = require_(M("prompt-framing-ontology.js"));
 const NONCE = "N0NCE";
 const CTX = {
   channelName: "General",
-  taskTitle: "Ship it",
+  threadTitle: "Ship it",
   channelId: "c1",
   workspaceId: "w1",
 };

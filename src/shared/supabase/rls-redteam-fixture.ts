@@ -180,6 +180,11 @@ export async function revokeFromScope(ref: GrantRef): Promise<void> {
   if (error) throw error;
 }
 
+/** The caller-scoped client itself, for a table {@link readableIds} cannot filter (no `workspace_id`). */
+export function callerClient(userId: string) {
+  return callerScopedClient(scopeFor(userId));
+}
+
 /** Ids of the rows `userId` can actually SELECT from `table` in `workspaceId`. */
 export async function readableIds(
   userId: string,

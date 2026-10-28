@@ -23,14 +23,14 @@ type CardRect = GlassCardContext["regions"]["main"];
  * bookmark + raised "Open →".
  *
  * ⚠ A MIRROR, BUILT FROM THE REAL PIECES — not a mount. The live cell is
- * `apps/desktop-ui/src/pages/home/knowledge-panel-cards.tsx › BaseCell` around
- * `knowledge-v2/home/base-card.tsx › BaseCard`; the former lives in the SPA
- * (unreachable from `src/`) and the latter has no slot to drop its meta line.
+ * `src/features/knowledge/components/home/home-knowledge-cards.tsx › BaseCell` around
+ * `knowledge-v2/home/base-card.tsx › BaseCard`, which has no slot to drop its
+ * meta line.
  * So this takes their CLASSES instead: the wells are `SectionPanel`'s shell +
  * ground + heading face, the card is `knowledge-v2.module.css`'s `.card*`
  * rules, the bar is `UsageMeter`'s `.concave-track` + success fill, and Open
  * is `OpenScaleButton`'s `btn-light` + `.openScale`. The `--kv-*` rebinds the
- * card reads are /home's (`home.module.css › .kbCards`), restated inline.
+ * card reads are /home's (`home-knowledge.module.css › .kbCards`), restated inline.
  *
  * Laid out at the PRODUCT's size and scaled as a whole to fit `rect` — its
  * full width, no gap on the right (`./use-fit-to-rect.ts`) — so the
@@ -44,15 +44,13 @@ const WELL_GAP = 14;
 /** Growth cap, so a 1920 card doesn't blow the type up past the stack's. */
 const MAX_SCALE = 1.25;
 
-/** `home.module.css › .kbCards`'s rebinds, which `.card*` reads. */
+/** `home-knowledge.module.css › .kbCards`'s rebinds, which `.card*` reads. */
 const KV_VARS = {
-  "--kv-panel": "var(--panel-surface)",
   "--kv-border": "var(--border-default)",
   "--kv-border-strong": "var(--border-strong)",
   "--kv-text": "var(--text-primary)",
   "--kv-text-2": "var(--text-secondary)",
   "--kv-text-3": "var(--text-muted)",
-  "--kv-accent": "var(--text-primary)",
   "--kv-card-desc-lines": 2,
 } as CSSProperties;
 

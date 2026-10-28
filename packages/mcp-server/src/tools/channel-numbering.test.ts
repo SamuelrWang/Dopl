@@ -108,7 +108,7 @@ describe("the rendered transcript", () => {
       msg({
         channelSeq: 2421,
         threadSeq: 3,
-        metadata: { taskId: "11111111-2222-4333-8444-555555555555" },
+        metadata: { threadId: "11111111-2222-4333-8444-555555555555" },
       }),
     ]);
     expect(head).toContain("#3");
@@ -117,7 +117,7 @@ describe("the rendered transcript", () => {
 
   it("🔒 omits the thread count rather than printing #0 or #null", async () => {
     const head = await headOf([
-      msg({ metadata: { taskId: "11111111-2222-4333-8444-555555555555" } }),
+      msg({ metadata: { threadId: "11111111-2222-4333-8444-555555555555" } }),
     ]);
     expect(head).not.toContain("#null");
     expect(head).not.toContain("#0");

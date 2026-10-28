@@ -25,7 +25,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-collab");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 vi.mock("@/features/workspaces/server/repository");
 
 import * as repo from "./repository";

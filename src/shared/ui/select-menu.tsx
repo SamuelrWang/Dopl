@@ -5,6 +5,7 @@
  * explanation (a native `<select>` cannot show per-option descriptions). Composes `Popover` +
  * `MenuItem`, in coordinate mode, not trigger-anchored: these controls sit in scrolling,
  * overflow-clipping panes where an anchored panel renders as a clipped sliver.
+ * The menu fits its options (no fixed width): floored at the trigger's width, capped by the kit.
  * Each `variant` owns its whole trigger face (weight, size, padding included), so faces never
  * compose and a caller's `className` never fights them in the same layer.
  */
@@ -12,6 +13,8 @@
 import { useRef, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { pillButton } from "@/shared/ui/pill-button";
+import { TEXT_LINK_BUTTON } from "@/shared/ui/text-link";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 
 export interface SelectMenuOption<T extends string> {
@@ -21,13 +24,33 @@ export interface SelectMenuOption<T extends string> {
   description?: string;
 }
 
-/** Trigger faces, whole: alternatives, not layers. */
+/**
+ * No chrome at all: the value in ink and a muted chevron, the identity look's settings-card
+ * dropdown (DESIGN-LANGUAGE §4). The chevron is the only hint of a menu and the hover is ink only,
+ * since any fill here is the pill coming back. Exported for a clickable VALUE that is not a menu
+ * (the working folder), so the two read as one vocabulary.
+ */
+export const BARE_TRIGGER_FACE = cn(
+  "px-0 py-0 text-caption font-medium text-text-primary",
+  "transition-colors hover:text-text-secondary disabled:hover:text-text-primary",
+  "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-primary"
+);
+
+/** Trigger faces, whole: alternatives, not layers. `bare` and `text` both drop the pill and stay
+ *  two: `bare` is a value on a white card (caption, ink hover), `text` a value on a body-type
+ *  settings or editor row (the menu-hover fill). */
 const TRIGGER_FACE = {
+  bare: BARE_TRIGGER_FACE,
   flat: cn(
     "border border-border-strong bg-bg-inset px-2.5 py-1 text-caption font-medium text-text-secondary",
     "transition-colors hover:bg-surface-raised-2 hover:text-text-primary"
   ),
   raised: "auth-btn-3d-light h-9 px-3 text-body font-medium text-text-primary",
+  /** A hairline pill at caption size on a white card (the Overview's usage scope). */
+  outline: cn(pillButton("outline", "xs"), "px-2 font-normal"),
+  /** A TEXT LINK and a chevron, no face: the value takes the underline on hover and focus (the
+   *  ontology board's display picker in the page header). */
+  link: cn(TEXT_LINK_BUTTON, "h-9 rounded-none px-0 text-small font-medium text-text-primary"),
   /** `raised` at field-row height (composer panels' Identity and Model rows): the same face, only
    *  the box shrinks, so the row matches its ~40px text-row siblings. */
   raisedField: "auth-btn-3d-light h-6 px-2 text-small font-medium text-text-primary",
@@ -43,6 +66,11 @@ const TRIGGER_FACE = {
     "transition-colors hover:bg-menu-item-hover-bg disabled:hover:bg-transparent"
   ),
 } as const;
+
+/** `bare`'s chevron is the affordance, so it is not the ink. */
+const CHEVRON_FACE: Partial<Record<keyof typeof TRIGGER_FACE, string>> = {
+  bare: "text-text-muted",
+};
 
 export function SelectMenu<T extends string>({
   value,
@@ -68,10 +96,12 @@ export function SelectMenu<T extends string>({
   /** Trigger face. `"raised"` is the dialog dropdown. */
   variant?: keyof typeof TRIGGER_FACE;
   className?: string;
+  /** Width override for the menu. Omit it: the kit fits the menu to its options, floored at
+   *  this trigger's width (`popover-menu.tsx` header). */
   menuClassName?: string;
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [anchor, setAnchor] = useState<{ x: number; y: number; width: number } | null>(null);
   const selected = options.find((o) => o.value === value) ?? options[0];
 
   function toggle() {
@@ -80,7 +110,7 @@ export function SelectMenu<T extends string>({
       return;
     }
     const rect = triggerRef.current?.getBoundingClientRect();
-    if (rect) setAnchor({ x: rect.left, y: rect.bottom + 4 });
+    if (rect) setAnchor({ x: rect.left, y: rect.bottom + 4, width: rect.width });
   }
 
   return (
@@ -104,16 +134,17 @@ export function SelectMenu<T extends string>({
       >
         {icon}
         {prefix && <span className="shrink-0 text-text-muted">{prefix}</span>}
-        <span className="min-w-0 truncate text-text-primary">
+        <span className={cn("min-w-0 truncate", variant !== "bare" && "text-text-primary")}>
           {selected?.label ?? value}
         </span>
-        <ChevronDown size={11} className="shrink-0" />
+        <ChevronDown size={11} className={cn("shrink-0", CHEVRON_FACE[variant])} />
       </button>
       <Popover
         open={anchor !== null}
         at={anchor ?? undefined}
+        triggerWidth={anchor?.width}
         onClose={() => setAnchor(null)}
-        className={cn("min-w-[280px] max-w-[340px]", menuClassName)}
+        className={menuClassName}
       >
         {options.map((option) => (
           <MenuItem

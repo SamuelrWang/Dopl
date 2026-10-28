@@ -242,6 +242,30 @@ describe("getWorkspaceEntitlements — pro (the home space)", () => {
   });
 });
 
+describe("getWorkspaceEntitlements — max (the home space, 2026-10-22)", () => {
+  it("max active is entitled exactly like pro — uncapped, full history, no seatCount", async () => {
+    setup({ billing: billing({ plan: "max", seatCount: null }), members: 1, objects: 5_000 });
+    const ent = await getWorkspaceEntitlements(WS);
+    expect(ent.plan).toBe("max");
+    expect(ent.objectCap).toBeNull();
+    expect(ent.chatsWindowDays).toBeNull();
+    expect(ent.seatCount).toBeNull();
+  });
+
+  it("max past_due keeps it (grace); max canceled reverts to free", async () => {
+    setup({ billing: billing({ plan: "max", status: "past_due" }), members: 1, objects: 0 });
+    expect((await getWorkspaceEntitlements(WS)).plan).toBe("max");
+    setup({ billing: billing({ plan: "max", status: "canceled" }), members: 1, objects: 0 });
+    expect((await getWorkspaceEntitlements(WS)).plan).toBe("free");
+  });
+
+  it("entitledPlanFor answers max for a live max row, free for a dead one", () => {
+    expect(entitledPlanFor({ plan: "max", status: "active" }, 1)).toBe("max");
+    expect(entitledPlanFor({ plan: "max", status: "past_due" }, 2)).toBe("max");
+    expect(entitledPlanFor({ plan: "max", status: "canceled" }, 1)).toBe("free");
+  });
+});
+
 describe("entitledPlanFor — the lean verdict the credit path uses", () => {
   it("answers pro for a live pro row at any member count", () => {
     expect(entitledPlanFor({ plan: "pro", status: "active" }, 1)).toBe("pro");

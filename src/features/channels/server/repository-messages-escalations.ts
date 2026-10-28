@@ -78,7 +78,8 @@ export async function listRecentEscalations(
 
 /**
  * Which of those cards are already ANSWERED — the "open" half of "most recent
- * open card".
+ * open card", and of /home's Needs you across the reader's channels
+ * (`home/server/service-needs.ts`).
  *
  * ⚠ IT ASKS THE STORED ANSWER, never a body or a render: the same
  * `metadata->escalationAnswer->>escalationMessageId` expression the partial
@@ -91,7 +92,7 @@ export async function listRecentEscalations(
  * index's problem, exactly as it is for the button path.
  */
 export async function listAnsweredEscalationIds(
-  channelId: string,
+  channelIds: readonly string[],
   escalationIds: string[]
 ): Promise<Set<string>> {
   const out = new Set<string>();
@@ -100,7 +101,7 @@ export async function listAnsweredEscalationIds(
   const { data, error } = await db
     .from("channel_messages")
     .select("metadata")
-    .eq("channel_id", channelId)
+    .in("channel_id", channelIds)
     .in(
       `metadata->${ESCALATION_ANSWER_METADATA_KEY}->>escalationMessageId`,
       escalationIds

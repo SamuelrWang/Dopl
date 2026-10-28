@@ -244,19 +244,19 @@ function gateSession(over = {}) {
     agentId: "a1b2c3d4",
     profile: "full",
     channelId: "ch1",
-    taskId: "",
+    threadId: "",
     tokensSpent: 9_000,
     lastOwnPostAt: 1_000,
     tokensAtLastPost: 111,
     pendingPermissions: new Map(),
     pendingNames: new Map(),
-    state: { allowForTask: [], messageMode: "ask", toolMode: "manual" },
+    state: { allowForThread: [], messageMode: "ask", toolMode: "manual" },
     ...over,
   };
 }
 
 test("STALENESS: an ALLOWED own-channel post moves the clock and the token baseline", () => {
-  const s = gateSession({ state: { allowForTask: [], messageMode: "auto_outbound" } });
+  const s = gateSession({ state: { allowForThread: [], messageMode: "auto_outbound" } });
   const out = bridge.gateCall(s, CHANNEL_TOOL, A_POST, {}, () => {}, () => {});
   assert.equal(out.verdict, "allow");
   assert.ok(s.lastOwnPostAt > 1_000, "it spoke, so the quiet window restarts");
@@ -292,7 +292,7 @@ test("STALENESS: a PARKED post stamps on the operator's ALLOW and never on their
 });
 
 test("STALENESS: a non-post tool call never touches it, allowed or not", () => {
-  const s = gateSession({ state: { allowForTask: [], toolMode: "bypass", messageMode: "ask" } });
+  const s = gateSession({ state: { allowForThread: [], toolMode: "bypass", messageMode: "ask" } });
   bridge.gateCall(s, "Bash", { command: "ls" }, {}, () => {}, () => {});
   assert.equal(s.lastOwnPostAt, 1_000, "a Bash call is not this session speaking");
   assert.equal(s.tokensAtLastPost, 111);

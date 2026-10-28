@@ -8,23 +8,17 @@
  * replies. Every message has a monotonic `seq` cursor, so a listener can ask
  * for "everything after seq N" (`op="read"`, `since=`).
  *
- * ⚠ **SIX OPS** — `send` · `read` · `status` · `manage` · `rooms` · `artifact`.
- * Five of them since 2026-09-02 (v2 wave B slice B8, Samuel's ruling B9), down
- * from twenty-three: the other twenty-two names parsed for one release and
- * answered ONE line naming their replacement, and slice B16 closed that window,
- * so the enum is exactly as wide at runtime as in the published schema and a
- * retired name is refused by `channel-schema.ts › unknownOpRefusal`. ⚠ `artifact`
- * joined on 2026-09-06 (design #1220 §5, accepted #1222) — the collapse was
- * about twenty-three names for the work of five, not a promise never to grow;
- * this one folds EXISTING messages into a card and belongs to no other op.
+ * ⚠ **THE OPS** are `channel-vocab.ts › CHANNEL_OPS`. Twenty-three names collapsed to five on
+ * 2026-09-02 (v2 wave B slice B8, Samuel's ruling B9) and slice B16 closed the redirect window, so
+ * a retired name is refused by `channel-schema.ts › unknownOpRefusal`. `artifact` (2026-09-06)
+ * folds existing messages into a card and `task` (2026-10-26) keeps channel tasks; neither writes
+ * a message, so neither is a `send` kind.
  *
  * Thin registrar: owns the single tool schema + op routing, delegating to
  *   - `channel-shared.ts`        — ref resolution + the ONE neutralizer every
  *                                  peer-authored string must pass through
- *   - `channel-ops-write.ts`     — the send lane (+ `channel-post-linkage.ts`
- *                                  and `channel-facts.ts` for its result line)
- *   - `channel-ops-threads.ts`   — thread="new"
- *   - `channel-ops-escalate.ts`  — kind="decision"
+ *   - `channel-send-route.ts`    — op="send" to its lane (`channel-ops-write.ts`,
+ *                                  `channel-ops-threads.ts`, `channel-ops-escalate.ts`)
  *   - `channel-ops-read.ts` / `channel-ops-account.ts` / `channel-ops-hold*.ts`
  *                                — the page, the account-wide page, the hold
  *   - `channel-ops-status.ts`    — sessions + the direction mailbox
@@ -32,15 +26,12 @@
  *   - `channel-dispatch-rooms.ts`  — op="rooms"
  *   - `channel-ops-artifact.ts`    — op="artifact" (dispatch AND render, for
  *                                    the reason in its own header)
+ *   - `channel-ops-task.ts`        — op="task" (dispatch AND render)
  *   - `channel-render.ts`        — read renderers + untrusted-content headers
  *
  * ⚠ A channel reaches PEOPLE. `to` names ONE party — a member, or one of the
  * caller's OWN agents — and the server resolves it; with one the message is a
  * REQUEST, without one it is chat and reaches nobody.
- *
- * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`. Ops and params
- * say `thread`; `channel_tasks`, `metadata.taskId`, `task_*` kinds and the
- * `/tasks` routes keep the storage name.
  *
  * ⚠ No `dopl_channel_admin` twin — no destructive ops over MCP (archive/delete
  * are human decisions in the web UI).
@@ -61,20 +52,14 @@ const channel_dispatch_rooms_1 = require("./channel-dispatch-rooms");
 // ONE file where the other two split, because all four of its actions share one
 // result shape and therefore one renderer — see that module's header.
 const channel_ops_artifact_1 = require("./channel-ops-artifact");
+const channel_ops_task_1 = require("./channel-ops-task");
 const channel_ops_read_1 = require("./channel-ops-read");
 const channel_ops_hold_1 = require("./channel-ops-hold");
 // ⚠ WORKSPACE-WIDE hold is a SIBLING handler, not a branch inside `opHold`:
 // the per-channel result vocabulary splices `ref` into every sentence, and
 // threading an absent ref through it would produce guidance with a hole in it.
 const channel_ops_hold_workspace_1 = require("./channel-ops-hold-workspace");
-// ⚠ G14's cap travels WITH the lane it bounds — the seam enforces it, the
-// send lane owns the number and the sentence.
-const channel_ops_write_1 = require("./channel-ops-write");
-const channel_ops_threads_1 = require("./channel-ops-threads");
-// ⚠ A structured SEND, not a second delivery path — it delegates to `opPost`.
-const channel_ops_escalate_1 = require("./channel-ops-escalate");
-// ⚠ THE ONE DISPLAY DOOR (`dopl_show`), also a send kind — see that module.
-const channel_ops_show_1 = require("./channel-ops-show");
+const channel_send_route_1 = require("./channel-send-route");
 // THE ACCOUNT-WIDE READ (2026-09-01, T22) — `read` with no `channel`. ⚠ A
 // SIBLING MODULE, not a branch inside the per-channel handler: its whole result
 // vocabulary splices one `ref`, and its scope is one room.
@@ -132,138 +117,8 @@ directory) {
     // channels (`channel-home-rooms.ts`). `status` is account-wide and filters by the ref itself.
     (args) => (0, channel_home_rooms_1.routeHomeChannel)(client, directory, args.op === "status" ? undefined : args.channel, async () => {
         switch (args.op) {
-            // ── THE ONE WRITE ────────────────────────────────────────────────
-            //
-            // ⚠ THREE LANES, ONE OP, AND THE `kind` IS FIXED AT THIS SEAM rather
-            // than left to the caller's spelling. `milestone` stores
-            // `task_progress`; `decision` MUST stay `kind='message'` or
-            // `dopl-desktop-app/main/targeting.js › classify` drops the card and the
-            // human it asks is never notified. Both delegate to `opPost` rather than
-            // growing a second delivery path.
-            case "send": {
-                // ⚠ A DISPLAY IS `dopl_show` (granular), routed BEFORE the channel-required check: its
-                // channel is optional (the session's), and a legacy call carries no blocks to show.
-                if (args.kind === "display")
-                    return (0, channel_ops_show_1.opShow)(client, args);
-                const miss = (0, respond_1.missingParams)("send", args, ["channel", "body"]);
-                if (miss)
-                    return miss;
-                const channel = args.channel;
-                const body = args.body;
-                // ⚠ `thread="new"` OPENS THE EXCHANGE, and it is checked FIRST because
-                // it decides which ROUTE the send goes to. `summary` is the title —
-                // one field, one meaning, and the create route's own `.min(1)` is what
-                // refuses a whitespace-only one after trimming.
-                // ⚠ `to` names the other party; kind="record" takes none and opens a
-                // thread for nobody (the only way to open one in a one-member room).
-                // Any other kind without `to` is the address-or-record refusal.
-                if (args.thread === "new") {
-                    const missNew = (0, respond_1.missingParams)('send thread="new"', args, ["summary"]);
-                    if (missNew)
-                        return missNew;
-                    const record = args.kind === "record";
-                    const refused = record
-                        ? (0, channel_ops_write_1.recordAddressedRefusal)(Boolean(args.to))
-                        : (0, channel_ops_write_1.unaddressedRefusal)(Boolean(args.to), false);
-                    if (refused)
-                        return refused;
-                    return (0, channel_ops_threads_1.opCreateThread)(client, channel, args.summary, body, args.to, undefined, args.client_msg_id, runtime, undefined, record);
-                }
-                // ⚠ `thread` is REQUIRED here where a plain send leaves it optional —
-                // an untagged milestone groups into nothing, the one shape of this
-                // call that is always a mistake. ⚠ `to` is NOT routed through: a
-                // milestone marks the thread and addresses nobody.
-                if (args.kind === "milestone") {
-                    const missM = (0, respond_1.missingParams)('send kind="milestone"', args, [
-                        "thread",
-                    ]);
-                    if (missM)
-                        return missM;
-                    const oversize = (0, channel_ops_write_1.milestoneRefusal)(body);
-                    if (oversize)
-                        return oversize;
-                    return (0, channel_ops_write_1.opPost)(client, channel, body, {
-                        kind: "task_progress",
-                        thread: args.thread,
-                        summary: args.summary,
-                        runtime,
-                        // ⚠ ITS OWN VERB. A milestone result opening `posted` would report
-                        // the wrong act on the one lane whose whole point is that it is
-                        // NOT a delivery — see `PostOptions.resultHead`.
-                        resultHead: "milestone",
-                    });
-                }
-                // ⚠ `summary` IS THE ISSUE AND `body` IS THE CONTEXT (B8). The card
-                // used to take four dedicated params; two of them were the two fields
-                // every send already has, under other names. ⚠ `to` is deliberately
-                // NOT routed through: addressing a member starts THEIR agent
-                // (INVARIANTS §5), and a decision exists precisely because a PERSON
-                // has to decide — the @-tag in the body is the inbox mechanism and it
-                // starts nobody.
-                if (args.kind === "decision") {
-                    const missD = (0, respond_1.missingParams)('send kind="decision"', args, [
-                        "summary",
-                        "options",
-                    ]);
-                    if (missD)
-                        return missD;
-                    const oversize = (0, channel_ops_write_1.decisionRefusal)(body);
-                    if (oversize)
-                        return oversize;
-                    return (0, channel_ops_escalate_1.opEscalate)(client, channel, {
-                        issue: args.summary,
-                        context: body,
-                        options: args.options,
-                        recommendation: args.recommendation ?? null,
-                    }, {
-                        thread: args.thread,
-                        clientMsgId: args.client_msg_id,
-                        runtime,
-                    });
-                }
-                // ⚠ **THE RECORD LANE, AND IT IS THE SECOND HALF OF THE ADDRESSING
-                // STRUCTURE** (2026-09-18, Samuel's ruling). It stores `intent:"chat"`
-                // on an ordinary `message` row — an existing concept given a name
-                // rather than a new stored shape — and the server then refuses to
-                // repair its address, so it wakes and feeds nobody. ⚠ `to` is REFUSED
-                // here rather than ignored: the two say opposite things, and the
-                // server's own 400 for the same contradiction narrates as a
-                // membership problem.
-                if (args.kind === "record") {
-                    const addressed = (0, channel_ops_write_1.recordAddressedRefusal)(Boolean(args.to));
-                    if (addressed)
-                        return addressed;
-                    return (0, channel_ops_write_1.opPost)(client, channel, body, {
-                        clientMsgId: args.client_msg_id,
-                        intent: "chat",
-                        summary: args.summary,
-                        thread: args.thread,
-                        runtime,
-                        // ⚠ ITS OWN VERB, on `milestone`'s precedent: a result opening
-                        // `posted` would report a delivery on the one lane whose contract
-                        // is that there was none.
-                        resultHead: "recorded",
-                    });
-                }
-                // ⚠ **A PLAIN SEND ADDRESSES SOMEBODY OR IT IS REFUSED** — the other
-                // half of the same ruling. Checked AFTER the three kinds above, each
-                // of which is already an address or already a post for nobody, and
-                // carved out for a THREAD send, where the thread's two parties are the
-                // address (INVARIANTS §5, RR1).
-                const bare = (0, channel_ops_write_1.unaddressedRefusal)(Boolean(args.to), Boolean(args.thread));
-                if (bare)
-                    return bare;
-                const crowded = (0, channel_ops_write_1.tooManyRecipientsRefusal)(args.to);
-                if (crowded)
-                    return crowded;
-                return (0, channel_ops_write_1.opPost)(client, channel, body, {
-                    clientMsgId: args.client_msg_id,
-                    to: args.to,
-                    summary: args.summary,
-                    thread: args.thread,
-                    runtime,
-                });
-            }
+            case "send":
+                return (0, channel_send_route_1.routeSend)(client, args, runtime);
             // ── THE ONE READ, AND THE HOLD THAT USED TO BE AN OP ──────────────
             //
             // ⚠ THREE SCOPES, AND THEY ARE NOT THE SAME — do not "unify" them: a
@@ -312,8 +167,8 @@ directory) {
                     !(0, identity_1.isDesktopRun)(caller));
                 }
                 return (0, channel_ops_read_1.opRead)(client, args.channel, args.since, args.limit, selfUserId, 
-                // ⚠ Any non-empty string is legal — legacy `task-<channelId>-<seq>`
-                // ids are real `metadata.taskId` values and must stay filterable.
+                // ⚠ Any non-empty string is legal — legacy `thread-<channelId>-<seq>`
+                // ids are real `metadata.threadId` values and must stay filterable.
                 args.thread, args.response_format, (0, channel_poll_detector_1.pollSubject)(caller), 
                 // ⚠ See the account branch above for why the uncertain case marks.
                 !(0, identity_1.isDesktopRun)(caller));
@@ -326,10 +181,10 @@ directory) {
                     agent: args.to,
                     format: args.response_format,
                 });
-            // ── THE THREE DISPATCHERS ─────────────────────────────────────────
+            // ── THE DISPATCHERS ─────────────────────────────────────────
             //
             // ⚠ `action` IS REQUIRED AND THE PAIRING IS CHECKED, because it is ONE
-            // flat enum over three disjoint vocabularies: the schema cannot express
+            // flat enum over disjoint vocabularies: the schema cannot express
             // "this word belongs to that op", so `manage(action="open")` has to be
             // refused HERE rather than dispatched into a switch that has no arm for
             // it. The refusal names the op that does take the word, which is the one
@@ -377,10 +232,20 @@ directory) {
                 }
                 return (0, channel_ops_artifact_1.dispatchArtifactAction)(action, args, client);
             }
+            case "task": {
+                const missA = (0, respond_1.missingParams)("task", args, ["action"]);
+                if (missA)
+                    return missA;
+                const action = args.action;
+                if (!(0, channel_ops_task_1.isTaskAction)(action)) {
+                    return (0, respond_1.err)((0, channel_vocab_1.unknownActionRefusal)("task", action));
+                }
+                return (0, channel_ops_task_1.dispatchTaskAction)(action, args, client);
+            }
             // ── THE BELT ──────────────────────────────────────────────────────
             //
-            // ⚠ **UNREACHABLE BY TYPE, AND KEPT ANYWAY.** `args.op` is the five
-            // published names and the five are handled above, so TypeScript narrows
+            // ⚠ **UNREACHABLE BY TYPE, AND KEPT ANYWAY.** `args.op` is the
+            // published names and each is handled above, so TypeScript narrows
             // this arm to `never` — zod refuses anything else before a handler runs,
             // with this same sentence (`channel-schema.ts › unknownOpRefusal`). What
             // it covers is a build where that validation did not happen: an

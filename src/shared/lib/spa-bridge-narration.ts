@@ -122,7 +122,7 @@ export interface DesktopNarrationEntry {
    * (`agent-01` … `agent-16`), joined server-side onto the message
    * (`channels/types.ts › ChannelMessage.authorAgentColor`) and passed through main untouched.
    *
-   * ⚠ **A KEY, NEVER A COLOUR VALUE** — `channels/lib/agent-colors.ts › agentColorVar` is the only
+   * ⚠ **A KEY, NEVER A COLOUR VALUE** — `shared/lib/agent-colors.ts › agentColorVar` is the only
    * place one becomes a `var()`, and main does not own the palette.
    * ⚠ **UNNARROWED ON THIS WIRE, ON PURPOSE**: a newer server may name a seventeenth key, and
    * `agentColorOrNull` is the ONE membership test — it runs where the item is built, so an unknown

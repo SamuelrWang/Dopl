@@ -1,0 +1,311 @@
+/* ── Glasses HUD — the live G2 lens + grain over the glasses card ─────
+   Markup: components/glasses-hud.tsx; copy: components/glasses-hud-content.ts.
+   Sits inside `.lp-dev-overlay` (devices.css). Every size is in `cqw` of the
+   card (`.lp-dev-media` is the size container), so the lens scales with it.
+
+   Layers: photo (devices.css, grain baked in) → HUD. The HUD carries its
+   own grain as a MASK (see `.lp-dev-hud`), so only the green light is grainy.
+
+   Box geometry started from the lens box in the ORIGINAL photo (left 17.8%,
+   top 33.4%, width 64.3%, measured on a 1169-wide copy). Since 2026-10-15 it
+   sits higher (`--lp-hud-top`) and is a fixed height (`--lp-hud-box-h`) so its
+   bottom clears the lens rim.
+
+   Font: the G2 draws one weight of a plain sans with no monospace look, so
+   the landing's own grotesk (`--grotesk`, Helvetica Neue) at regular weight
+   is the closest match with no new asset. */
+
+.lp-dev-hud-layers {
+  /* Tuning knobs. The look to match is the lens box in the ORIGINAL baked
+     photo: thick-ish strokes, soft out-of-focus light, halation. */
+  --lp-hud-green: #36d45a; /* #3ceb64 × 0.9 per channel — a touch darker */
+  --lp-hud-glow: rgba(54, 212, 90, 0.6);
+  --lp-hud-haze: rgba(54, 212, 90, 0.3);
+  --lp-hud-stroke: 0.34cqw; /* 2× the first pass */
+  --lp-hud-soften: 0.11cqw; /* core blur (≈0.6px on a 520px card) */
+  --lp-hud-bloom: 0.5cqw; /* tight glow */
+  --lp-hud-halo: 1.8cqw; /* wide halation */
+  --lp-hud-level: 0.86; /* < 1 lowers contrast so it sits in the photo */
+  /* Box top, % of the card's height (was 33.4% = the original photo's box). */
+  --lp-hud-top: 28%;
+  /* FIXED box height (Samuel, 2026-10-15: no resizing). Header + ~4 feed
+     lines + the footer row; older feed lines scroll out of the top. */
+  --lp-hud-box-h: 24.5cqw;
+  /* Dopl mark. The plugin draws it 22px on the 576px G2 canvas (logo.ts) ≈
+     2.5cqw here; Samuel asked for it a bit larger. */
+  --lp-hud-mark: 3.4cqw;
+  /* Half-width of the gap in the box's bottom edge around the mark. */
+  --lp-hud-mark-gap: 2.6cqw;
+  --lp-hud-bleed: 3cqw; /* room around the box so the mask never clips the halo */
+
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Projected-light look: additive over the photo. One filter chain over the
+   whole lens (text, outline, mark alike): soften the core, then two
+   drop-shadows for bloom + halation.
+
+   Grain = a static MASK on the same element. The mask image is SVG fractal
+   noise written into the ALPHA channel (feColorMatrix: alpha = 1.8·noise −
+   0.2), so it speckles the lens's own pixels — text, outline, mark, glow —
+   and can never touch the photo, which has no HUD pixels to mask. Masking
+   runs after the filter, so the halo is grained too. Alpha (not luminance)
+   masking, for Safari. Static, no JS. Knobs: baseFrequency (lower =
+   coarser), the 0.5 / 0.72 pair (alpha = 0.5 × noise + 0.72: grain contrast / floor; keep the floor high so text stays readable),
+   mask-size (grain scale).
+
+   The element is the box plus `--lp-hud-bleed` on every side: a mask clips
+   to the border box, and without the bleed it would cut the halo off. */
+.lp-dev-hud {
+  position: absolute;
+  left: calc(17.8% - var(--lp-hud-bleed));
+  top: calc(var(--lp-hud-top) - var(--lp-hud-bleed));
+  width: calc(64.3% + 2 * var(--lp-hud-bleed));
+  padding: var(--lp-hud-bleed);
+  box-sizing: border-box;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.62' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.5 0 0 0 0.72'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") 0 0 / 300px 300px repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.62' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.5 0 0 0 0.72'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") 0 0 / 300px 300px repeat;
+  color: var(--lp-hud-green);
+  opacity: var(--lp-hud-level);
+  mix-blend-mode: screen;
+  filter: blur(var(--lp-hud-soften)) drop-shadow(0 0 var(--lp-hud-bloom) var(--lp-hud-glow))
+    drop-shadow(0 0 var(--lp-hud-halo) var(--lp-hud-haze));
+}
+
+.lp-dev-hud-box {
+  position: relative;
+  height: var(--lp-hud-box-h);
+  box-sizing: border-box;
+  padding: 1.5cqw 2.1cqw 2.6cqw;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45cqw;
+}
+
+/* The outline, with a gap in the bottom edge where the Dopl mark sits — the
+   mark's breathing room only; nothing green encloses it. Two
+   mask layers, unioned: everything above the bottom band, plus the bottom
+   band minus a centred gap. */
+.lp-dev-hud-frame {
+  position: absolute;
+  inset: 0;
+  border: var(--lp-hud-stroke) solid var(--lp-hud-green);
+  border-radius: 0.8cqw;
+  -webkit-mask:
+    linear-gradient(#000 0 0) top / 100% calc(100% - 0.8cqw) no-repeat,
+    linear-gradient(to right, #000 calc(50% - var(--lp-hud-mark-gap)), transparent 0
+        calc(50% + var(--lp-hud-mark-gap)), #000 0)
+      bottom / 100% 0.8cqw no-repeat;
+  mask:
+    linear-gradient(#000 0 0) top / 100% calc(100% - 0.8cqw) no-repeat,
+    linear-gradient(to right, #000 calc(50% - var(--lp-hud-mark-gap)), transparent 0
+        calc(50% + var(--lp-hud-mark-gap)), #000 0)
+      bottom / 100% 0.8cqw no-repeat;
+}
+
+/* The Dopl mark, centred on the box's bottom edge (where the stock lens has
+   its pager). Same green, soft-focus and grain as the rest of the HUD. */
+.lp-dev-hud-mark {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: var(--lp-hud-mark);
+  height: var(--lp-hud-mark);
+  transform: translate(-50%, 50%);
+  color: var(--lp-hud-green);
+}
+
+/* Pinned header + footer never give up height to the feed. */
+.lp-dev-hud-box > .lp-dev-hud-line {
+  flex: none;
+}
+
+/* Voice footer: level bars, and — while the user is "talking" — the
+   dictation typing in beside them. Idle: bars still + dimmed. Fixed height,
+   one line; a long dictation ellipsizes instead of growing the box. */
+.lp-dev-hud-voice {
+  flex: none;
+  height: 3.4cqw;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 1cqw;
+}
+.lp-dev-hud-levels {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3cqw;
+  height: 2cqw;
+  opacity: 0.62;
+  transition: opacity 200ms ease;
+}
+.lp-dev-hud-voice[data-live] .lp-dev-hud-levels {
+  opacity: 1;
+}
+.lp-dev-hud-levels i {
+  width: 0.32cqw;
+  height: 100%;
+  border-radius: 0.2cqw;
+  background: currentColor;
+  transform: scaleY(0.4);
+}
+.lp-dev-hud-levels i:nth-child(2) {
+  transform: scaleY(0.65);
+}
+.lp-dev-hud-voice[data-live] .lp-dev-hud-levels i {
+  animation: lp-hud-level 620ms ease-in-out infinite alternate;
+}
+.lp-dev-hud-voice[data-live] .lp-dev-hud-levels i:nth-child(2) {
+  animation-delay: -210ms;
+  animation-duration: 480ms;
+}
+.lp-dev-hud-voice[data-live] .lp-dev-hud-levels i:nth-child(3) {
+  animation-delay: -390ms;
+  animation-duration: 700ms;
+}
+.lp-dev-hud-dictation {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The feed: a fixed window between the pinned header and footer. Content is
+   bottom-aligned, so new lines enter at the bottom and older ones are pushed
+   up and out of the top (soft fade there). The slide is a FLIP from
+   glasses-hud.tsx riding this transition. */
+.lp-dev-hud-viewport {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  -webkit-mask: linear-gradient(transparent, #000 1.6cqw);
+  mask: linear-gradient(transparent, #000 1.6cqw);
+}
+.lp-dev-hud-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45cqw;
+  transition:
+    transform 520ms var(--lp-reveal-ease),
+    opacity 450ms ease;
+}
+/* Loop point: the whole feed fades before restarting (HUD_LOOP_FADE_MS). */
+.lp-dev-hud-feed[data-fading] {
+  opacity: 0;
+}
+.lp-dev-hud-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45cqw;
+  animation: lp-hud-in 280ms steps(4, end) both;
+}
+.lp-dev-hud-line {
+  margin: 0;
+  font-family: var(--grotesk);
+  font-weight: 400;
+  font-size: 2.35cqw;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  /* A touch heavier than the regular cut, like the photo's projected type. */
+  -webkit-text-stroke: 0.03em currentColor;
+}
+.lp-dev-hud-line[data-tone="dim"] {
+  opacity: 0.68;
+}
+/* A custom screen (glasses_render): headline over bars in lens green. Bars
+   are laid out from the start and rise when revealed, so nothing reflows. */
+.lp-dev-hud-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6cqw;
+}
+.lp-dev-hud-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.1cqw;
+  height: 8.6cqw;
+}
+.lp-dev-hud-bar {
+  height: 100%;
+  width: 4.2cqw;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.4cqw;
+}
+.lp-dev-hud-bar i {
+  display: block;
+  width: 100%;
+  /* `--h` = value / max, set inline; the track is the column minus the label. */
+  height: calc(var(--h, 1) * 5.8cqw);
+  background: currentColor;
+  border-radius: 0.3cqw;
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition: transform 260ms var(--lp-reveal-ease);
+}
+.lp-dev-hud-bar i[data-on] {
+  transform: none;
+}
+.lp-dev-hud-bar b {
+  font-family: var(--grotesk);
+  font-weight: 400;
+  font-size: 2cqw;
+  line-height: 1;
+}
+.lp-dev-hud-caret {
+  display: inline-block;
+  width: 0.7em;
+  margin-right: -0.7em;
+  animation: lp-hud-blink 0.9s steps(1, end) infinite;
+}
+.lp-dev-hud-ghost {
+  visibility: hidden;
+}
+
+@keyframes lp-hud-in {
+  0% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.55;
+  }
+  75% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes lp-hud-level {
+  from {
+    transform: scaleY(0.3);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes lp-hud-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-dev-hud-msg,
+  .lp-dev-hud-caret,
+  .lp-dev-hud-voice[data-live] .lp-dev-hud-levels i {
+    animation: none;
+  }
+  .lp-dev-hud-feed,
+  .lp-dev-hud-bar i {
+    transition: none;
+  }
+}

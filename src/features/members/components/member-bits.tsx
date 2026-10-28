@@ -119,7 +119,7 @@ export function RoleSelect({
         <span>{value}</span>
         {!disabled && <ChevronDown size={10} className="opacity-70" />}
       </button>
-      <Popover open={open && !disabled} onClose={() => setOpen(false)} className="w-56">
+      <Popover open={open && !disabled} onClose={() => setOpen(false)}>
         {ROLE_OPTIONS.map((opt) => (
           <MenuItem
             key={opt.value}

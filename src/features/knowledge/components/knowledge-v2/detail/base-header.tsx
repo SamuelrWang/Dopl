@@ -1,12 +1,10 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Download, Settings, Trash2 } from "lucide-react";
-import {
-  OPEN_SCALE_ICON_ONLY,
-  OpenScaleIconButton,
-} from "@/shared/ui/open-scale-button";
+import { Download, Settings, Trash2 } from "lucide-react";
+import { Breadcrumb, type BreadcrumbItem } from "@/shared/ui/breadcrumb";
+import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import { cn } from "@/shared/lib/utils";
 import { DeleteBaseConfirm } from "../../delete-base-confirm";
 import { KnowledgeSearch } from "../../knowledge-search";
@@ -59,13 +57,12 @@ function folderChainOf(
  * The panel's one header, spanning both columns of the opened base (ruling
  * 2026-08-28).
  *
- * One breadcrumb for the whole panel: `Knowledge › {base} › {folders…} ›
- * {file}`, keeping the `aria-label` "Knowledge base breadcrumb" that host tests
- * address it by. The base crumb selects the BASE, not its first file — the
- * resting face is the base.
+ * One breadcrumb for the whole panel (`shared/ui/breadcrumb.tsx`): `Knowledge ›
+ * {base} › {folders…} › {file}`, keeping the `aria-label` "Knowledge base
+ * breadcrumb" that host tests address it by. The base crumb selects the BASE, not
+ * its first file — the resting face is the base.
  *
- * Download / settings / delete are `shared/ui/open-scale-button.tsx ›
- * OpenScaleIconButton`, not a file-private icon-button recipe.
+ * Download / settings / delete are naked glyphs (`shared/ui/naked-icon-button.ts`).
  */
 export function BaseHeader({
   selection,
@@ -83,7 +80,7 @@ export function BaseHeader({
   const [deleting, setDeleting] = useState(false);
   const queryClient = useQueryClient();
 
-  // The same flow as base-settings-form.tsx's danger-zone delete, by construction.
+  // The same flow as base-settings-general.tsx's danger-zone delete, by construction.
   async function handleDeleteBase() {
     setDeleting(true);
     try {
@@ -94,88 +91,75 @@ export function BaseHeader({
   }
 
   const folders = selectedTree?.status === "ready" ? selectedTree.folders : [];
-  const folderChain =
+  const { base } = selection;
+  const crumbs: BreadcrumbItem[] = [
+    { key: "knowledge", label: "Knowledge", onSelect: onGoHome },
     selection.kind === "entry"
-      ? folderChainOf(folders, selection.entry.folderId)
-      : [];
+      ? { key: base.id, label: base.name, onSelect: () => onSelectBaseRoot(base) }
+      : { key: base.id, label: base.name },
+    ...(selection.kind === "entry"
+      ? [
+          ...folderChainOf(folders, selection.entry.folderId).map((f) => ({
+            key: f.id,
+            label: f.name,
+            onSelect: () => onSelectFolder(base, f.id),
+          })),
+          { key: selection.entry.id, label: selection.entry.title || "Untitled" },
+        ]
+      : []),
+  ];
 
   return (
     <div className={cn(styles.baseHead, "border-b border-border-default")}>
-      <nav
-        className={cn(styles.detailTopTitle, styles.crumbs)}
-        aria-label="Knowledge base breadcrumb"
-      >
-        <button type="button" className={styles.crumbBtn} onClick={onGoHome}>
-          Knowledge
-        </button>
-        <ChevronRight size={12} className={styles.crumbSep} />
-        {selection.kind === "entry" ? (
-          <>
-            <button
-              type="button"
-              className={styles.crumbBtn}
-              onClick={() => onSelectBaseRoot(selection.base)}
-            >
-              {selection.base.name}
-            </button>
-            {folderChain.map((f) => (
-              <Fragment key={f.id}>
-                <ChevronRight size={12} className={styles.crumbSep} />
-                <button
-                  type="button"
-                  className={styles.crumbBtn}
-                  onClick={() => onSelectFolder(selection.base, f.id)}
-                >
-                  {f.name}
-                </button>
-              </Fragment>
-            ))}
-            <ChevronRight size={12} className={styles.crumbSep} />
-            <span className={styles.crumbCurrent}>{selection.entry.title}</span>
-          </>
-        ) : (
-          <span className={styles.crumbCurrent}>{selection.base.name}</span>
-        )}
-      </nav>
+      <Breadcrumb
+        items={crumbs}
+        ariaLabel="Knowledge base breadcrumb"
+        className="text-title"
+      />
 
       <div className={styles.headSpacer} />
 
-      <div className={cn(appShell.lightScope, "hidden lg:block w-52")}>
+      <div className={cn(appShell.lightScope, "mr-1 hidden w-52 lg:block")}>
         <KnowledgeSearch
           workspaceId={workspaceId}
-          baseSlug={selection.base.slug}
+          baseSlug={base.slug}
           onSelectEntry={onSelectSearchEntry}
         />
       </div>
 
-      <OpenScaleIconButton
+      <button
+        type="button"
+        className={NAKED_ICON_BUTTON}
         aria-label="Download knowledge base"
         title="Download this knowledge base"
-        onClick={() => onExportBase(selection.base.id)}
+        onClick={() => onExportBase(base.id)}
       >
-        <Download size={OPEN_SCALE_ICON_ONLY} />
-      </OpenScaleIconButton>
-      <OpenScaleIconButton
+        <Download size={NAKED_ICON} />
+      </button>
+      <button
+        type="button"
+        className={NAKED_ICON_BUTTON}
         aria-label="Knowledge base settings"
         title="Settings"
         onClick={onOpenSettings}
       >
-        <Settings size={OPEN_SCALE_ICON_ONLY} />
-      </OpenScaleIconButton>
-      <OpenScaleIconButton
-        className="hover:text-danger"
+        <Settings size={NAKED_ICON} />
+      </button>
+      <button
+        type="button"
+        className={cn(NAKED_ICON_BUTTON, "hover:text-danger disabled:opacity-50")}
         aria-label="Delete knowledge base"
         title="Delete this knowledge base"
         disabled={deleting}
         onClick={() => setConfirmDeleteOpen(true)}
       >
-        <Trash2 size={OPEN_SCALE_ICON_ONLY} />
-      </OpenScaleIconButton>
+        <Trash2 size={NAKED_ICON} />
+      </button>
 
       <DeleteBaseConfirm
         open={confirmDeleteOpen}
         onOpenChange={setConfirmDeleteOpen}
-        baseName={selection.base.name}
+        baseName={base.name}
         onConfirm={handleDeleteBase}
       />
     </div>

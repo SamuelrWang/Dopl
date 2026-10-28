@@ -70,16 +70,12 @@ describe("MetaCard storage meter", () => {
     expect(screen.queryByText(/Nothing was deleted/)).toBeNull();
   });
 
-  it("🔒 keeps the description field inside the section", () => {
-    // Samuel's live review, 2026-08-28: the textarea overflowed its card. This
-    // pins the markup half (`RAISED_INPUT`'s `w-full` + the module's capped
-    // block); the CSS half is pinned in `../layout-rules.test.ts`, because jsdom
-    // has no layout to overflow.
+  it("edits the name and the description in place, on the document head's faces", () => {
     renderCard();
-    const field = screen.getByPlaceholderText(/What's in this knowledge base/);
-    expect(field.tagName).toBe("TEXTAREA");
-    expect(field.className).toContain("w-full");
-    expect(field.className).toContain("fieldBlock");
+    expect(screen.getByRole("textbox", { name: "Name" }).tagName).toBe("INPUT");
+    const description = screen.getByRole("textbox", { name: "Description for agents" });
+    expect(description.tagName).toBe("TEXTAREA");
+    expect(description.getAttribute("placeholder")).toMatch(/What's in this knowledge base/);
   });
 
   it("leaves the rest of the Details card exactly as it was", () => {

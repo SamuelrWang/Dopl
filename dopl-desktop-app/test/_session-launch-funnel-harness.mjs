@@ -73,7 +73,7 @@ export const LAUNCH_CODE = codeOf(LAUNCH_SRC);
 
 export const CH = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 export const AGENT = "a1b2c3d4";
-export const TASK = "11111111-2222-3333-4444-555555555555";
+export const THREAD = "11111111-2222-3333-4444-555555555555";
 
 export function harness(cfg = {}) {
   const calls = { started: [], diag: [], acquired: [], signIn: [] };

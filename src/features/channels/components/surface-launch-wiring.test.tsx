@@ -106,7 +106,7 @@ vi.mock("../hooks/use-launch-selection", async () => {
 
 import { StandaloneChannelSurface } from "./channel-surface-standalone";
 import { REAL_DEFAULT_RUNTIME, REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
-import { AGENT_COLOR_KEYS } from "../lib/agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 
 /** A runtime that is NOT the channel's, so only a forwarded pick can put it on the launch. */
 const OTHER = REAL_DESCRIPTORS.find((d) => d.id !== REAL_DEFAULT_RUNTIME)!;

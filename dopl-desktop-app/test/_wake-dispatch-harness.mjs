@@ -49,7 +49,7 @@ export const CODE = SRC.split("\n").filter((l) => !l.trimStart().startsWith("//"
 
 export const ME = "me-user";
 export const PEER = "peer-user";
-export const TASK = "11111111-2222-3333-4444-555555555555";
+export const THREAD = "11111111-2222-3333-4444-555555555555";
 export const A1 = "a1b2c3d4";
 export const A2 = "z9y8x7w6";
 export const A3 = "q1w2e3r4";
@@ -58,7 +58,7 @@ export const entry = { channel: { id: "c1", name: "General" }, workspaceId: "w1"
 // ⚠ **NO `wakeVerdict`, DELIBERATELY.** A row without one is what an OLD SERVER writes, and the
 // machine answers it with its own body parse and the 2026-08-21 fan-out — so every case built on
 // this fixture drives the COMPATIBILITY path. `verdictMsg` below is the narrowed one.
-export const peerMsg = (over = {}) => ({ kind: "message", authorUserId: PEER, body: "reply body", taskId: TASK, seq: 7, meta: {}, ...over });
+export const peerMsg = (over = {}) => ({ kind: "message", authorUserId: PEER, body: "reply body", threadId: THREAD, seq: 7, meta: {}, ...over });
 
 // A message carrying the server's stored resolution — the shape every current server writes.
 // ⚠ `recipientAgentIds` DEFAULTS TO `[]`, NOT ABSENT: `[]` is the server ANSWERING "this body
@@ -82,7 +82,7 @@ export const verdictMsg = (verdict, over = {}) => peerMsg({
 // key is not in this machine's own live set, so a fixture without it would drive a route that
 // files nothing.
 export const agent = (id, ownPostIds = []) => ({
-  agentId: id, key: `c1:${TASK}:${id}`, ownPostIds: new Set(ownPostIds),
+  agentId: id, key: `c1:${THREAD}:${id}`, ownPostIds: new Set(ownPostIds),
 });
 
 export function harness(over = {}) {
@@ -94,7 +94,7 @@ export function harness(over = {}) {
     ...over,
   };
   const targeting = {
-    firstClassTaskId: (m) => m.taskId || "",
+    firstClassThreadId: (m) => m.threadId || "",
   };
   // ⚠ TWO METHODS, NOT THREE (2026-09-02, B9). `agentIdsInChannel` was the CHANNEL-wide roster
   // count the deleted tier table picked a tier from; the route asks no such question now — who a

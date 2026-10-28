@@ -56,7 +56,7 @@ function mkSession(over) {
     windowless: true,
     launchDepth: o.launchDepth,
     launchChain: o.launchChain,
-    state: { allowForTask: [], toolMode: o.toolMode || "manual", messageMode: o.messageMode || "ask" },
+    state: { allowForThread: [], toolMode: o.toolMode || "manual", messageMode: o.messageMode || "ask" },
     pendingPermissions: new Map(),
     pendingNames: new Map(),
   };
@@ -213,7 +213,7 @@ test("NO live fan-out — a containment flag is a spawn-time stamp, unlike the p
   // SUPERVISION, never CONTAINMENT. This is containment.
   const ipc = read("channel-dir-ipc.js");
   const handler = between(ipc, "'channels:setAgentChain'", "'channels:getAgentDefaults'");
-  assert.ok(!/applyPostureToLive|setModeByTask|listLiveSessions/.test(handler),
+  assert.ok(!/applyPostureToLive|setModeByThread|listLiveSessions/.test(handler),
     "flipping chaining must not reach a session that is already running");
 });
 

@@ -161,7 +161,7 @@ describe("the accent, rendered", () => {
    * ⚠ **THE PROPERTY IS AN ABSENCE, AND IT IS THE ONE THE RING ERA HID.** A ring wrapped
    * the corner — it painted ABOVE the bar's top end as well as beside it — so the wrapper
    * could be pulled anywhere and the two still met. A three-sided border's top stroke
-   * starts at the bar's INNER edge, so a `-mt-[3px]` "to keep the ring's layout" offsets
+   * starts at the bar's INNER edge, so a `-mt-0.75` "to keep the ring's layout" offsets
    * the two marks diagonally and opens a 3px notch at the corner: the exact *"3 different
    * components"* reading, reintroduced by the fix for it. The frame is the content
    * column's first child and the bar is `self-stretch` over the same box, so NO top margin
@@ -174,7 +174,7 @@ describe("the accent, rendered", () => {
     expect(wrap.className).not.toMatch(/-my-/);
     // ⚠ THE BOTTOM IS STILL PULLED — nothing has to meet there, and it keeps the 3px gap
     // to the body that the ring's own overhang produced.
-    expect(wrap.className).toContain("-mb-[3px]");
+    expect(wrap.className).toContain("-mb-0.75");
   });
 
   /**
@@ -242,7 +242,7 @@ describe("the accent, rendered", () => {
 
   it("matches the frame's stroke to the bar's width, or the join shows a step", () => {
     const { container } = renderRow();
-    expect(bar(container)!.className).toContain("w-[3px]");
+    expect(bar(container)!.className).toContain("w-0.75");
     expect(ring(container)!.className).toContain("border-[3px]");
   });
 
@@ -334,7 +334,7 @@ describe("the accent, rendered", () => {
     // without `self-stretch` it measures zero and the bar disappears entirely.
     const { container } = renderRow();
     expect(bar(container)!.className).toContain("self-stretch");
-    expect(bar(container)!.className).toContain("w-[3px]");
+    expect(bar(container)!.className).toContain("w-0.75");
     expect(container.querySelector("article")!.className).toContain("items-stretch");
   });
 
@@ -356,7 +356,7 @@ describe("the accent, rendered", () => {
     // be true at once.
     const { container } = renderRow();
     expect(container.querySelector(".border-2")).toBeNull();
-    expect(container.querySelector('[class*="rounded-[14px]"]')).toBeNull();
+    expect(container.querySelector('[class*="rounded-xl"]')).toBeNull();
   });
 
   it("keeps the BAR on a continuation and drops the frame with the pill", () => {

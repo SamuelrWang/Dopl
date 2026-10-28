@@ -221,14 +221,15 @@ export function AgentActivityRows({
             // ⚠ KEYED ON THE BLENDED SLOT, not `agentId` alone — `agents-model.ts ›
             // agentKey` is `(channel, thread, agent)`, and since multiplayer one
             // operator can run several agents whose ids collide across threads.
-            key={`${agent.channelId}:${agent.taskId}:${agent.agentId ?? agent.sessionId}`}
+            key={`${agent.channelId}:${agent.threadId}:${agent.agentId ?? agent.sessionId}`}
             role="status"
             // ⚠ **ONE ELEMENT NOW, NOT A ROW WRAPPING A DOT AND A NAME**: the pill IS
             // the row, so `role="status"` rides the thing a reader sees.
             // ⚠ `shrink` OVERRIDES THE FACE'S `shrink-0` (`cn` is tailwind-merge, later
             // wins) — three pills on the recipient line must ELIDE, and a pill that
             // refuses to shrink gets clipped by the parent's `truncate` with no `…`.
-            className={cn(AGENT_PILL_FACE, "flex min-w-0 shrink items-center")}
+            // `rounded-full` / `h-4.5`: the working chip is a full pill, unlike the badge face.
+            className={cn(AGENT_PILL_FACE, "flex h-4.5 min-w-0 shrink items-center rounded-full py-0")}
             // ⚠ **THE AGENT'S COLOUR IS THE PILL'S FILL NOW, NOT A DOT BESIDE IT**
             // (Samuel, 2026-10-10). The dot said WHICH agent in 6px of hue next to
             // text that then had to be read separately; the pill says it with the

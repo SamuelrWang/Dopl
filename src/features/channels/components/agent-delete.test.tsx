@@ -61,7 +61,7 @@ function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: "t-1",
+    threadId: "t-1",
     agentId: AGENT_ID,
     name: AGENT_ID,
     state: "working",
@@ -222,7 +222,7 @@ describe("the transcript is untouched by a deletion", () => {
       seq: 1,
       body: "Kicking this off.",
       authorUserId: ME,
-      metadata: { taskId: "t-1" },
+      metadata: { threadId: "t-1" },
     }),
     message({
       id: "m-2",
@@ -230,7 +230,7 @@ describe("the transcript is untouched by a deletion", () => {
       body: "Working on the kit now.",
       authorUserId: ME,
       authorKind: "agent",
-      metadata: { taskId: "t-1" },
+      metadata: { threadId: "t-1" },
       clientMsgId: `agent-${AGENT_ID}-1`,
     }),
   ];

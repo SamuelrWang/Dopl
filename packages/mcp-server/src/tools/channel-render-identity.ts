@@ -318,7 +318,7 @@ function agentRef(agentId: string, view: MemberView): string {
  * null), so each caller keeps its own fallback, the `@agent-<id>` handle.
  */
 export function nameHandle(name: string, view: MemberView = NO_MEMBER_VIEW): string | null {
-  const slug = name.trim().toLowerCase().replace(/\s+/g, "-");
+  const slug = nameSlug(name);
   if (/^[a-z0-9][a-z0-9-]*$/.test(slug) && !slugIsTaken(slug, view)) return `@${slug}`;
   const safe = neutralizeInline(name);
   return safe ? `@${safe}` : null;
@@ -327,9 +327,14 @@ export function nameHandle(name: string, view: MemberView = NO_MEMBER_VIEW): str
 function slugIsTaken(slug: string, view: MemberView): boolean {
   if (slug.startsWith("agent-") || slug === "desktop") return true;
   for (const member of view.names.values()) {
-    if (member.trim().toLowerCase().replace(/\s+/g, "-") === slug) return true;
+    if (nameSlug(member) === slug) return true;
   }
   return false;
+}
+
+/** The slug a display name tags as, before any charset check. */
+export function nameSlug(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, "-");
 }
 
 /**
@@ -418,7 +423,7 @@ export function addressTag(m: ChannelMessage, view: MemberView): string {
 
 /**
  * THE SLOT-KEY SEGMENT THAT NAMES A SESSION. `metadata.session_id` is the
- * desktop's slot key, `<channelId>:<taskId>:<agentId>`
+ * desktop's slot key, `<channelId>:<threadId>:<agentId>`
  * (`main/session-store.js › sessionKey`), and the AGENT id is the only segment
  * that distinguishes one session from another on the SAME thread — which is the
  * whole point of multiplayer.

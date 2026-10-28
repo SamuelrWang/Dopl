@@ -11,7 +11,7 @@ import {
  * Where this device last was on the ontology surface, per user and per workspace:
  * which ontology, which face of it (board or changelog), and which object's panel
  * was open on each ontology. Restored by `components/ontology-view.tsx` and the
- * /home host (`apps/desktop-ui/src/pages/home/ontology-panels.tsx`), so leaving
+ * /home host (`components/home-ontology-panels.tsx`), so leaving
  * the page, reloading or restarting lands where the operator was, not on
  * `ontologies[0]` with the panel shut (Samuel, 2026-10-05 / 2026-10-08).
  *

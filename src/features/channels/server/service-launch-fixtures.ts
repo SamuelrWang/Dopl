@@ -34,7 +34,7 @@ export const mocks = {
   },
   agentOwner: { agentIsAnotherMembers: vi.fn() },
   collab: { presenceForWorkspace: vi.fn() },
-  tasks: { findTaskByChannelAndId: vi.fn() },
+  threads: { findThreadByChannelAndId: vi.fn() },
   // The create's colour gate reads the taken set through a live `supabaseAdmin()`; only the reads
   // are stubbed, so the gate's policy still runs in every suite.
   sessionColors: {
@@ -59,7 +59,7 @@ export function row(over: Record<string, unknown> = {}) {
     kind: "launch",
     workspace_id: WS,
     channel_id: CHAN,
-    task_id: null,
+    thread_id: null,
     operator_user_id: ME,
     goal: "ship the parser",
     model: null,

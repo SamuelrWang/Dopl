@@ -38,7 +38,7 @@ function answerApproval(request, verdict) {
  * Apply the forced thread tag by this runtime's declared route (`axisB.inputRewrite: 'native'`).
  *
  * ⚠ THE TAG IS AN INVARIANT, NOT A REQUEST: agents omit the thread argument even when the prompt
- * names it (measured; `session-outbound-tag.js` header). The value is the session's own task id,
+ * names it (measured; `session-outbound-tag.js` header). The value is the session's own thread id,
  * from the spawn spec on THIS machine, never off the wire.
  * ⚠ `'native'`: Dopl WRITES the tool, so the stamp is applied before the call leaves this process,
  * with no platform mechanism (allow `updatedInput`, hook stdout) to smuggle it through.

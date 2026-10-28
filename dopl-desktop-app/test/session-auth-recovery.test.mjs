@@ -178,7 +178,7 @@ test("MID-SESSION: an auth-shaped failure parks and HOLDS (never `crash`)", () =
   assert.equal(s.pushIterator.closed, true, "the prompt stream is closed");
   assert.equal(s.abortController.aborted, true, "and the query torn down");
   assert.deepEqual(h.calls.dispatch.map((e) => e.type), ["auth_hold"],
-    "NO crash: no settle, no task_failed{interrupted}, no destroyed window — just the hold");
+    "NO crash: no settle, no thread_failed{interrupted}, no destroyed window — just the hold");
   assert.deepEqual([s.state.parked, s.state.authHeld, s.state.toolMode, s.state.messageMode],
     [true, true, "manual", "ask"], "parked, HELD (no peer wake can resume it), both axes disarmed like a park");
 });

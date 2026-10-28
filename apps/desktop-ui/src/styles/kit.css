@@ -17,7 +17,7 @@
 }
 .auth-btn-3d:hover:not(:disabled) {
   filter: brightness(1.1);
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
   /* The ambient pair is `--shadow-raised-hover`, shared with the transcript's agent badge; the two
      inset lines are this gradient's bevel. */
   box-shadow:
@@ -45,7 +45,7 @@
   transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
 }
 .auth-btn-3d-light:hover:not(:disabled) {
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
   filter: brightness(0.99);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
@@ -96,7 +96,7 @@
   transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
 }
 .btn-light:hover:not(:disabled) {
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 3px 7px rgba(0, 0, 0, 0.08);
@@ -122,14 +122,14 @@
 /* Official global surface components. Compose these; never re-hardcode their recipes. */
 
 /* The one raised card a full-page view renders into, on the app frame palette (`--home-panel`
-   fill, the 2px `--home-panel-line` edge the /home record pane wears). */
+   fill, the 1px `--home-panel-line` edge the /home record pane wears). */
 .page-float {
   flex: 1;
   min-width: 0;
   /* Top is a token because the account rail reads it (`--page-float-gap-top`). */
   margin: var(--page-float-gap-top) 8px 9px 8px;
   background: var(--home-panel);
-  border: 2px solid var(--home-panel-line);
+  border: 1px solid var(--home-panel-line);
   border-radius: 14px;
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.05),
@@ -152,8 +152,238 @@
   transition: transform 0.14s ease-out, box-shadow 0.14s ease-out;
 }
 .card-lift:hover {
-  transform: translateY(-3px);
+  transform: translateY(calc(-1 * var(--lift)));
   box-shadow: var(--shadow-card-lift);
+}
+
+/* THE WHITE CARD (DESIGN-LANGUAGE §1/§2): hairline, 12px, the one soft shadow. Layout and padding
+   stay with the caller. */
+.white-card {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-bento);
+}
+
+/* THE WELL inside a white card: no hairline, the outer-panel grey. */
+.card-well {
+  border-radius: 10px;
+  background: var(--home-card);
+}
+
+/* THE RAIL LAYOUT: a page body and a right rail, each scrolling on its own, once the PANE (a size
+   container, not the viewport) is 760px wide: main, the divider handle's zero-width track, then the
+   rail at `--rail-layout-w` (written by `shared/ui/use-split-resize.ts`) behind a full-height hairline.
+   Below that one column, rail last, the pane scrolls.
+   Two elements because a container query styles descendants only: `.rail-layout` is measured,
+   `.rail-layout-cols` switches. */
+.rail-layout {
+  container-type: inline-size;
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.rail-layout-cols {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  gap: 28px;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+}
+.rail-layout-main,
+.rail-layout-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  min-width: 0;
+}
+@container (min-width: 760px) {
+  .rail-layout-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 0 var(--rail-layout-w, 300px);
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+  /* No rail on this mount: the main column takes the row. */
+  .rail-layout-cols[data-rail="off"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rail-layout-main,
+  .rail-layout-aside {
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .rail-layout-main {
+    padding: 12px;
+  }
+  .rail-layout-aside {
+    padding: 12px;
+    border-left: 1px solid var(--border-default);
+  }
+}
+
+/* THE SELECTABLE WHITE CARD: worn with `.white-card` by a card that opens in a side panel (the
+   ontology's object cards and records). A firmer hairline on hover; `data-selected="true"` adds an
+   ink bar on the leading edge, so selecting moves nothing. */
+.select-card {
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.select-card:hover {
+  border-color: var(--border-strong);
+}
+.select-card[data-selected="true"] {
+  border-color: var(--border-highlight);
+  box-shadow: inset 3px 0 0 var(--surface-cta), var(--shadow-bento);
+}
+
+/* THE MARK TILE: a small raised light square holding a glyph (the thread card's kind). Size stays
+   with the caller. */
+.mark-tile {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--raised-light-line);
+  border-radius: 6px;
+  background: var(--raised-light-face);
+  box-shadow: var(--raised-light-bevel);
+  color: var(--text-primary);
+}
+
+/* THE ROUND INK SEND: a flat ink disc with one small drop; disabled fades. Size stays with the
+   caller. */
+.send-round {
+  border-radius: 9999px;
+  background: var(--surface-cta);
+  color: var(--text-on-cta);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  transition: opacity 140ms ease;
+}
+.send-round:disabled {
+  opacity: 0.35;
+}
+
+/* THE RAISE: a pressable object standing on the /home shell's white panel, lifting 2px on hover.
+   Shadow and motion only; fill, border and radius stay with the caller. `.raise` is a white row
+   (channel rows, a thread card's agent rows), `.raise-pill` the search and Profile pills,
+   `.raise-ink` an ink pill (New channel, Open thread). */
+.raise,
+.raise-pill,
+.raise-ink {
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+.raise {
+  box-shadow: var(--shadow-raise);
+}
+.raise-pill {
+  box-shadow: var(--shadow-card-lift);
+}
+.raise-ink {
+  box-shadow: var(--shadow-raise-ink);
+}
+.raise:hover,
+.raise-pill:hover {
+  transform: translateY(calc(-1 * var(--lift)));
+  box-shadow: var(--shadow-raise-hover);
+}
+.raise-ink:hover {
+  transform: translateY(calc(-1 * var(--lift)));
+  box-shadow: var(--shadow-raise-ink-hover);
+}
+/* A pill holding a field stays put while it is typed in. */
+.raise-pill:focus-within {
+  transform: none;
+  border-color: var(--focus-line);
+  box-shadow: var(--shadow-card-lift);
+}
+@media (prefers-reduced-motion: reduce) {
+  .raise:hover,
+  .raise-pill:hover,
+  .raise-ink:hover {
+    transform: none;
+  }
+}
+
+/* THE LIFT'S STILL HIT BOX. A hover transform moves the hit box with the face, so a cursor on the
+   bottom `--lift` px falls off, the hover ends, the face drops back under it and hovers again: the
+   hand/arrow cursor flicker. While hovered, a transparent band below the face fills the strip the
+   lift vacated (`+ 1px` is the bottom border, outside the padding box `top: 100%` measures). Each
+   recipe's hover transform reads the same `--lift`. */
+.auth-btn-3d,
+.auth-btn-3d-light,
+.btn-light {
+  --lift: 1px;
+}
+.raise,
+.raise-pill,
+.raise-ink {
+  --lift: 2px;
+}
+.card-lift {
+  --lift: 3px;
+}
+:where(.auth-btn-3d, .auth-btn-3d-light, .btn-light, .card-lift, .raise, .raise-pill, .raise-ink) {
+  position: relative;
+}
+:where(.auth-btn-3d, .auth-btn-3d-light, .btn-light, .card-lift, .raise, .raise-pill, .raise-ink):hover:not(:disabled)::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: calc(var(--lift) + 1px);
+}
+
+/* THE STATUS PILL: an optional dot and one word. `data-tone` picks the ink. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-inset);
+  font-size: var(--text-micro);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.status-pill-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-disabled);
+}
+.status-pill[data-tone="live"] .status-pill-dot {
+  background: var(--success);
+}
+.status-pill[data-tone="attention"] {
+  background: color-mix(in oklch, var(--warning) 14%, transparent);
+  color: var(--warning);
+}
+.status-pill[data-tone="attention"] .status-pill-dot {
+  background: var(--warning);
+}
+.status-pill[data-tone="done"] {
+  background: color-mix(in oklch, var(--success) 12%, transparent);
+  color: var(--success);
+}
+.status-pill[data-tone="done"] .status-pill-dot {
+  background: var(--success);
+}
+/* `bare`: the dot and the word alone, on a card that already frames them. */
+.status-pill[data-bare="true"] {
+  padding-inline: 0;
+  background: none;
+}
+/* `on-dark`: the neutral pill on an ink (`--surface-cta`) face, e.g. a selected row. */
+.status-pill[data-on-dark="true"] {
+  background: color-mix(in oklch, var(--text-on-cta) 16%, transparent);
+  color: var(--text-on-cta);
 }
 
 /* Frosted glass panel: the card a public page on white renders into (`/link/{token}`).
@@ -247,36 +477,6 @@
   background-attachment: local;
 }
 
-/* While-dragging lift — applied by a graph drag layer to the node under
-   the pointer. */
-
-/* Drag-to-connect handle on a graph node edge. Scales on hover and while a
-   connect-drag is live (`data-active`). Feature toggles visibility with
-   opacity utilities. */
-/* Inked centre dot marks the drag-FROM side vs the hollow input socket. */
-
-/* Card floating inside a flat inset lane. Shell (radius, border WIDTH, bg,
-   layout) stays in the component; this sets border COLOR + shadow.
-   Deliberately flatter than `.bento` — on an inset lane a deep ambient shadow
-   reads as dirt in the gutter. (It was flatter than `.graph-node` too, until
-   that recipe was deleted as dead on 2026-10-12.) */
-.kanban-card {
-  border-color: var(--border-default);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  transition:
-    box-shadow 0.12s ease-out,
-    border-color 0.12s ease-out;
-}
-.kanban-card:hover {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-}
-.kanban-card[data-selected="true"] {
-  border-color: var(--border-highlight);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.12),
-    0 2px 6px rgba(0, 0, 0, 0.08);
-}
-
 /* The one dropdown surface; only `src/shared/ui/popover-menu.tsx` composes it. Hand copy of
    `marketing.css › .lp-nav-menu-*` + `lpMenuIn`/`lpMenuOut` (page-scoped there): edit both. */
 .menu-card {
@@ -291,6 +491,16 @@
     0 20px 46px rgba(0, 0, 0, 0.16);
   transform-origin: top left;
   animation: menuCardIn 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* Width = the widest row (Samuel, 2026-10-26: popups "way wider than the maximum text width").
+     Floor: `--menu-min-width`, or the trigger's width when `Popover` sets `--menu-trigger-width`.
+     Cap: `--menu-max-width`; both bounded by the viewport minus a gutter each side. A caller's
+     `w-*` / `min-w-*` / `max-w-*` utility still wins (utilities layer over components). */
+  width: max-content;
+  min-width: min(
+    max(var(--menu-min-width), var(--menu-trigger-width, 0px)),
+    calc(100vw - 2 * var(--menu-viewport-gutter))
+  );
+  max-width: min(var(--menu-max-width), calc(100vw - 2 * var(--menu-viewport-gutter)));
 }
 .menu-card[data-origin="right"] { transform-origin: top right; }
 /* Exit must stay pointer-events: none — backdrop is already gone, so a card
@@ -309,14 +519,33 @@
 /* The one menu-option hover face: flat `--menu-item-hover-bg`, no elevation. Every option reaches
    it through `.menu-row` or the same token as a utility; never restate the gray. `:focus-visible`
    is the same face (the gray is the focus indicator). No transform on either state. */
+.menu-row + .menu-row {
+  margin-top: 2px;
+}
+/* ONE highlight for the hovered, focused and selected row; the selected row adds the check. */
 .menu-row:hover,
-.menu-row:focus-visible {
+.menu-row:focus-visible,
+.menu-row-selected {
   outline: none;
   background: var(--menu-item-hover-bg);
 }
 /* The PRESS is the same gray, one step down the ramp — flat, no inset bevel. */
 .menu-row:active {
   background: var(--surface-raised-3);
+}
+
+
+/* A `MenuItem` label: one line, truncated at the card's cap. `Popover wrap` opts a menu into
+   wrapping instead. Descriptions are not labels and always wrap. */
+.menu-row-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-card[data-wrap="true"] .menu-row-label {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Inset from the card's padding so it stops short of the rounded corners. */
@@ -458,7 +687,7 @@
 .channel-info-slide[data-open="true"] {
   /* `--info-w` is written on the surface root by `use-info-resize.ts`, which owns the limits.
      The 380px fallback is shared with `agent-panel.tsx` and `info-panel.tsx` (same right edge;
-     pinned by `app-shell/frame-palette.test.ts`). */
+     pinned by `app-shell/info-column.test.ts`). */
   width: var(--info-w, 380px);
 }
 /* No transition while dragging (`use-info-resize.ts › INFO_RESIZING_ATTR` on the surface root). */
@@ -515,20 +744,6 @@
 [data-frame-skin] .border-border-default,
 [data-frame-skin] .border-border-subtle {
   border-color: var(--home-panel-line);
-}
-
-/* Structural dividers match the pane's 2px outer border; internal rules keep the hairline. `th`
-   is excluded: a markdown table header carries the same classes. */
-[data-frame-skin] .border-l.border-border-default {
-  border-left-width: 2px;
-}
-/* The same 2px, told to the resize pill (`info-resize-handle.tsx › DIVIDER_WIDTH_VAR`) so it
-   centres on the line; declared adjacent so the two cannot drift. */
-[data-frame-skin] {
-  --channel-divider-w: 2px;
-}
-[data-frame-skin] .border-b.border-border-default:not(th) {
-  border-bottom-width: 2px;
 }
 
 /* The sender pills wear the raised-light face here (the kit's `--raised-light-*` parts). Resting

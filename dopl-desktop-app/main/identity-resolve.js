@@ -168,7 +168,8 @@ async function resolveAgentIdentity(identityId, workspaceId) {
     diag('identity-resolve: unusable payload', String(identityId).slice(0, 8));
     return { ok: false, reason: 'no-identity' };
   }
-  return { ok: true, identity };
+  // The id rides with the snapshot so a session can name the row it ran as, not only its name.
+  return { ok: true, identity: { ...identity, id: identityId } };
 }
 
 // The New agent popup's per-launch overrides, re-validated here — main is the only real validator:

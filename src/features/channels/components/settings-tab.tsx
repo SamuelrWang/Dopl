@@ -1,55 +1,20 @@
 "use client";
 
 /**
- * Channels — the right panel's SETTINGS tab (Samuel, 2026-08-19).
+ * Channels — the right panel's SETTINGS tab in channel view: "Agent Settings" (the viewer's own
+ * agent rows and Responder) and "Channel" (invite, visibility, delete, leave), each one white card
+ * (`settings-agent-rows.tsx › SettingsSection`). Every setting is inline; the destructive rows only
+ * report intent, and `channel-manage.tsx` owns every confirm dialog.
  *
- * ⚠ THIS TAB IS WHERE THE PANE HEADER'S ACTION GROUP WENT. `message-pane.tsx`
- * used to carry six controls on the right of the breadcrumb — channel settings,
- * the working folder, invite, the kebab, an inert sparkle and the info toggle.
- * The ruling is that the CHANNEL header keeps only the info toggle, so the four
- * live ones moved here and the sparkle was deleted (it had no handler). **The
- * tab that used to sit in this slot was LINKS, a deliberate empty state**
- * ("No links in this channel yet."), and it dies with the rename rather than
- * being rehomed: where a channel's files and links land is still an open
- * question (wiring plan, Risk 10) and an empty tab was answering it with "here".
- *
- * ⚠ THE POPOVERS ARE GONE — SECOND RULING, SAME DAY (Samuel, live review).
- * The first pass carried `ChannelSettingsPopover` and `ChannelFolderControl`
- * AS-IS, each behind a 7×7 icon button, and left their product fate open. It is
- * settled now: **every setting is INLINE, visible without a click** — see
- * `settings-agent.tsx`, which holds the arm, the tool profile, the folder and
- * the trust roster, and which both popover files were DELETED for. Nothing
- * below is new product surface; the writes are the ones that already existed.
- * The kebab changed shape at the same cutover: `ChannelActionsMenu` was deleted
- * and its four items are the explicit rows here, because a kebab nested inside a
- * tab is a menu hiding inside a menu. **The destructive pair still routes
- * through the confirm dialogs** — these rows report intent upward exactly as the
- * menu items did, and `channel-manage.tsx` still owns every dialog.
- *
- * ⚠ NO DEAD ROWS (INVARIANTS §5 — every row on this surface functions). The
- * desktop-only controls are gated on their own bridge INSIDE `settings-agent`,
- * so a plain browser gets no labelled row with nothing in it, and a non-member
- * viewing a public channel gets the empty state rather than a heading over
- * nothing.
+ * ⚠ NO DEAD ROWS (INVARIANTS §5): desktop-only rows are gated on their own bridge inside
+ * `settings-agent.tsx`, and a reader with nothing to change gets the empty state, never a heading
+ * over nothing.
  */
 
-import {
-  Hash,
-  LogOut,
-  Settings2,
-  Trash2,
-  UserPlus,
-  type LucideIcon,
-} from "lucide-react";
+import { Hash, LogOut, Settings2, Trash2, UserPlus } from "lucide-react";
 import type { ReactNode } from "react";
 import { EmptyState } from "@/shared/ui/empty-state";
-import { cn } from "@/shared/lib/utils";
-import { PanelHeading } from "./bits";
-// ⚠ THE ROW SEPARATOR THE AGENT HALF USES, SO THIS SECTION READS AS THE SAME
-// COLUMN (Samuel, 2026-09-13 — a line between every setting on this tab). It wraps
-// `bits.tsx › MetaRowDivider`, the Info tab's own hairline, which is the surface he
-// named as the reference.
-import { SettingDivider } from "./settings-agent-rows";
+import { SettingAction, SettingsSection } from "./settings-agent-rows";
 import type { Channel } from "../types";
 
 interface ChannelsSettingsTabProps {
@@ -60,33 +25,14 @@ interface ChannelsSettingsTabProps {
    *  member may still leave, and the owner may not. */
   isChannelOwner: boolean;
   /**
-   * `settings-agent.tsx › ChannelAgentSettings`, injected as a SLOT: it needs
-   * the roster, the trust set and three write handlers, all of which live in
-   * `channel-manage.tsx`. `null` for a non-member, who has no agent settings of
-   * their own here — and its absence is what turns this tab into the empty
-   * state rather than a heading over nothing.
-   *
-   * ⚠ IT IS THE WHOLE AGENT + ALWAYS-ALLOW HALF, headings included, not a
-   * control dropped into a row of this file's making. That is the shape change
-   * the inlining ruling forced: there is no longer a single icon-button to hang
-   * off a label.
+   * `settings-agent.tsx › ChannelAgentSettings`, injected as a SLOT (its roster and write handlers
+   * live in `channel-manage.tsx`). `null` for a non-member, who has no agent settings here.
    */
   agent?: ReactNode;
   /**
-   * `settings-channel-agents.tsx › ChannelAgentsSettings`, injected as a SLOT on
-   * the `agent` slot's terms (2026-09-02, B4): it needs the room's live sessions
-   * and two write handlers, all of which live in `channel-manage.tsx`.
-   *
-   * ⚠ **`null` FOR A NON-MEMBER SINCE 2026-09-07 (items 10 and 11) — IT WAS `null` FOR A
-   * NON-MANAGER UNTIL THEN, AND THE CHANGE IS THE RULING.** The slot used to hold a MANAGER's
-   * decisions about everybody's agents (the responder pin and the posture ceiling), floored on
-   * the server by `MANAGED_CHANNEL_FIELDS`. Both are deleted; what is left is the member's own
-   * rule for their own untagged messages, written to their own membership row. The
-   * NO-DEAD-ROWS reading is unchanged — the slot still only decides whether a reader is shown
-   * a control they can use — but the audience it computes is now every MEMBER.
-   *
-   * ⚠ IT COUNTS TOWARD `hasContent` BELOW, so a manager whose lifecycle rows are
-   * all suppressed still gets the panel rather than the empty state.
+   * `settings-channel-agents.tsx › ChannelAgentsSettings` (Responder), on the `agent` slot's terms.
+   * Gated on MEMBERSHIP, not manage: it writes the viewer's own membership row. It counts toward
+   * the content check below, so a member whose lifecycle rows are all suppressed still gets it.
    */
   channelAgents?: ReactNode;
   /**
@@ -152,7 +98,7 @@ export function ChannelsSettingsTab({
   const canDelete =
     memberManagement && (canManage || (channel.isMember && channel.isDirect));
 
-  const hasActions = canInvite || canToggleVisibility || canManage || canDelete || canLeave;
+  const hasActions = canInvite || canToggleVisibility || canDelete || canLeave;
 
   if (!agent && !channelAgents && !hasActions) {
     // ⚠ TWO AUDIENCES REACH THIS EMPTY STATE and only one of them can join: a
@@ -174,103 +120,41 @@ export function ChannelsSettingsTab({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto pb-6">
-      {agent}
-
-      {/* ⚠ ABOVE THE LIFECYCLE ROWS AND BELOW THE VIEWER'S OWN AGENT SETTINGS. The column used
-          to read outward — my agent here, then this room's rule for everyone's agents, then the
-          room itself — and the middle step is gone (2026-09-07): this slot now holds another
-          of the VIEWER'S own settings, so the two personal groups sit together and the room
-          follows. Position unchanged, reason different. */}
-      {channelAgents}
+    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3.5 pb-6 pt-3.5">
+      {/* The viewer's own agent rows, then their own Responder rule, in one card; the room's
+          lifecycle rows follow. */}
+      {(agent || channelAgents) && (
+        <SettingsSection title="Agent Settings">
+          {agent}
+          {channelAgents}
+        </SettingsSection>
+      )}
 
       {hasActions && (
-        <>
-          <PanelHeading title="Channel" />
-          <div className="flex flex-col gap-px px-2">
-            {canInvite && (
-              <ActionRow icon={UserPlus} label="Add members" onSelect={onInvite} />
-            )}
-            {canToggleVisibility && (
-              <ActionRow
-                icon={Hash}
-                label={`Make ${channel.visibility === "public" ? "private" : "public"}`}
-                onSelect={onToggleVisibility}
-              />
-            )}
-            {/* ⚠ **THE ARCHIVE / UNARCHIVE ROW STOOD HERE AND IS DELETED
-                (Samuel's ruling R-21, 2026-09-17): *"a user can delete a channel;
-                no point in archives."* It was the whole feature's only control.
-                The act a user has instead is DELETE, one row down. */}
-            {canDelete && (
-              <ActionRow
-                icon={Trash2}
-                label={`Delete ${channel.isDirect ? "conversation" : "channel"}`}
-                destructive
-                onSelect={onRequestDelete}
-              />
-            )}
-            {canLeave && (
-              <ActionRow icon={LogOut} label="Leave channel" onSelect={onRequestLeave} />
-            )}
-          </div>
-        </>
+        <SettingsSection title="Channel">
+          {canInvite && (
+            <SettingAction icon={UserPlus} label="Add members" onSelect={onInvite} />
+          )}
+          {canToggleVisibility && (
+            <SettingAction
+              icon={Hash}
+              label={`Make ${channel.visibility === "public" ? "private" : "public"}`}
+              onSelect={onToggleVisibility}
+            />
+          )}
+          {canDelete && (
+            <SettingAction
+              icon={Trash2}
+              label={`Delete ${channel.isDirect ? "conversation" : "channel"}`}
+              destructive
+              onSelect={onRequestDelete}
+            />
+          )}
+          {canLeave && (
+            <SettingAction icon={LogOut} label="Leave channel" onSelect={onRequestLeave} />
+          )}
+        </SettingsSection>
       )}
     </div>
-  );
-}
-
-/**
- * One action row — the `MetaRow` geometry as a button, so this section and the
- * Info tab beside it read as one column.
- *
- * ⚠ THESE KEEP THEIR GLYPHS while the settings above shed theirs, and the split
- * is the rule, not an oversight: an ACTION row is a verb the reader is scanning
- * for (add / delete / leave), where a glyph is the fastest way in. A
- * SETTING row is a noun with a value beside it, and an icon per row there was
- * exactly the visual noise the inlining ruling removed.
- *
- * `destructive` is INK ONLY: the row opens a confirm dialog, it never performs
- * the write.
- */
-function ActionRow({
-  icon: Icon,
-  label,
-  destructive,
-  onSelect,
-}: {
-  icon: LucideIcon;
-  label: string;
-  destructive?: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <>
-      {/* ⚠ SAME RECIPE AS A SETTING ROW'S (2026-09-13): the leading hairline, with
-          `:first-child` keeping it off the top of the section. These rows are
-          CONDITIONAL — invite, visibility, delete and leave each have their
-          own gate — so whichever one renders first is a render-time fact and no flag
-          here could be right on every viewer. */}
-      <SettingDivider />
-      <button
-        type="button"
-        data-settings-row
-        onClick={onSelect}
-        className={cn(
-          "flex h-10 w-full items-center gap-2 rounded-[8px] px-2 text-left text-small transition-colors",
-          destructive
-            ? "text-danger hover:bg-danger/10"
-            // ⚠ `--menu-item-hover-bg` is THE hover gray for anything clickable
-            // (Samuel, 2026-09-10, and 2026-09-13 over this tab). It is
-            // `var(--surface-raised-1)` BY REFERENCE, so this is the same pixels this
-            // row always drew under a single name — the destructive branch keeps its
-            // own danger tint, which is INK, not the neutral hover.
-            : "text-text-secondary hover:bg-menu-item-hover-bg hover:text-text-primary"
-        )}
-      >
-        <Icon size={14} className="shrink-0" />
-        <span className="truncate">{label}</span>
-      </button>
-    </>
   );
 }

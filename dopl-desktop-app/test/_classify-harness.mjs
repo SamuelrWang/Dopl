@@ -67,7 +67,7 @@ assert.ok(LEGACY.includes("function knownLegacyReply"), "LEGACY-THREADS sentinel
 // classify and has to be evaluated alongside it. It is self-contained by design — its
 // CHAT_INTENT const sits inside the function body — so the plain brace-matcher gets all of it.
 // `mentionsMe` (2026-08-18, wiring plan Phase 7) is the SECOND such free variable, written to
-// the same rule and for the same reason: the dispatcher gates the task-reply notice on the
+// the same rule and for the same reason: the dispatcher gates the thread-reply notice on the
 // answer classify uses for its 'fyi' verdict, so it lives outside the body and its
 // MENTIONS_KEY const lives inside itself.
 const build = () =>
@@ -206,7 +206,7 @@ const MEMBER_COUNTS = [2, 3, undefined, 0];
 const IS_MEMBERS = [true, false, "undefined"];
 const AUTHORS = ["me", "other"];
 const AUTHOR_KINDS = ["user", "agent", "system"];
-const KINDS = ["message", "task_started"];
+const KINDS = ["message", "thread_started"];
 // The mention dimension, added 2026-08-18 with the notification gate. FOUR
 // values, not two: "other" is what proves the read is an identity match rather
 // than a presence check, and "malformed" is what proves a wire value the server

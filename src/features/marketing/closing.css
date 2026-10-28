@@ -1,0 +1,422 @@
+/* ── Closing run: pricing summary, FAQ, final CTA, footer ────────────────
+   Markup: components/pricing-summary.tsx, faq-section.tsx, final-cta.tsx,
+   site-footer.tsx. Page-scoped like sdk.css (each component imports it).
+   Reads `.lp`'s --ink / --muted / --line / --grotesk / --gutter /
+   --lp-reveal-ease. Eyebrow + heading values are Control's, verbatim, so the
+   closing sections read in the same voice as the ones above them. */
+
+/* Anchor targets clear the top edge a little when jumped to. */
+.lp-psum-inner,
+.lp-faq-inner,
+.lp-anchor {
+  scroll-margin-top: 24px;
+}
+.lp-anchor {
+  display: block;
+  width: 0;
+  height: 0;
+}
+
+/* ── Pricing summary ── */
+.lp-psum {
+  width: 100%;
+  margin-top: 140px;
+}
+.lp-psum-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+/* Pricing is centered: label and heading over the centered card row. */
+.lp-psum-eyebrow,
+.lp-psum-heading {
+  text-align: center;
+}
+/* Higher specificity than the shared `.lp-psum-heading, .lp-faq-heading` margin below. */
+.lp-psum-inner .lp-psum-heading {
+  margin-inline: auto;
+}
+.lp-psum-eyebrow,
+.lp-faq-eyebrow {
+  margin: 0 0 18px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.lp-psum-heading,
+.lp-faq-heading {
+  margin: 0 0 44px;
+  max-width: 11em;
+  font-family: var(--grotesk);
+  font-weight: 400;
+  font-size: clamp(23px, 2.5vw, 37px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: #0a0a0a;
+}
+.lp-psum-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+  align-items: start;
+}
+/* The /pricing stacking margin; side by side here. */
+/* One group (Personal: Free / Pro / Max) across the full width, three cards. */
+.lp-psum-groups--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.lp-psum-groups--single .lp-plans {
+  /* Capped card width so the three cards don't stretch across the page. */
+  grid-template-columns: repeat(3, minmax(0, 340px));
+  justify-content: center;
+}
+.lp-psum-groups .lp-plan-group + .lp-plan-group {
+  margin-top: 0;
+}
+.lp-psum-groups .lp-plan-group-title {
+  font-size: 18px;
+}
+.lp-psum-groups .lp-plans {
+  gap: 16px;
+}
+.lp-psum-groups .lp-plan {
+  padding: 22px;
+}
+.lp-psum-groups .lp-plan-name {
+  font-size: 26px;
+}
+.lp-psum-groups .lp-plan-features li {
+  font-size: 13.5px;
+}
+
+/* ── FAQ ── */
+.lp-faq {
+  width: 100%;
+  margin-top: 140px;
+}
+.lp-faq-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: clamp(40px, 6vw, 96px);
+  align-items: start;
+}
+.lp-faq-copy {
+  padding-top: 12px;
+}
+.lp-faq-list {
+  border-top: 1px solid var(--line);
+}
+.lp-faq-item {
+  border-bottom: 1px solid var(--line);
+}
+.lp-faq-q {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 0;
+  font-size: 16.5px;
+  color: #161616;
+}
+.lp-faq-q::-webkit-details-marker {
+  display: none;
+}
+.lp-faq-q:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.lp-faq-icon {
+  flex: none;
+  color: var(--muted);
+  transition: transform 220ms var(--lp-reveal-ease), color 160ms ease;
+}
+.lp-faq-item[open] .lp-faq-icon {
+  transform: rotate(45deg);
+  color: var(--ink);
+}
+.lp-faq-a {
+  padding: 0 48px 24px 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: #3a3a3a;
+}
+.lp-faq-a p {
+  margin: 0;
+}
+.lp-faq-link {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--ink);
+  font-weight: 500;
+  text-underline-offset: 3px;
+}
+
+/* ── Final CTA ── */
+.lp-final {
+  width: 100%;
+  margin-top: 140px;
+}
+.lp-final-panel {
+  max-width: 1280px;
+  margin: 0 auto;
+  background: #f5f5f4;
+  border-radius: 4px;
+  padding: clamp(72px, 9vw, 128px) clamp(24px, 5vw, 88px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.lp-final-heading {
+  margin: 0;
+  font-family: var(--grotesk);
+  font-weight: 400;
+  font-size: clamp(32px, 4.2vw, 60px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: #0a0a0a;
+  /* One sentence, two lines at one size; the break is a <br> (final-cta.tsx). */
+  max-width: 18em;
+  text-wrap: balance;
+}
+/* The desktop break between the two lines; narrow screens wrap naturally. */
+@media (max-width: 640px) {
+  .lp-final-br {
+    display: none;
+  }
+}
+
+/* Final CTA multiplier tick. Every value shares one grid cell, so the slot is
+ * always the widest value's width (tabular figures) and nothing reflows.
+ * Base = resting frame: only the last value ("×10") shows. `data-play` comes
+ * from useVisualPlay; armed shows the first value, in runs the tick once:
+ * each value slides up and out as the next slides up from below, then holds. */
+.lp-mult {
+  --lp-mult-start: 650ms; /* after the 500ms section reveal */
+  --lp-mult-step: 520ms;
+  --lp-mult-dur: 300ms;
+  --lp-mult-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  display: inline-grid;
+  justify-items: start;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+.lp-mult-val {
+  grid-area: 1 / 1;
+  opacity: 0;
+}
+.lp-mult-val[data-pos="last"] {
+  opacity: 1;
+}
+[data-play="armed"] .lp-mult-val {
+  opacity: 0;
+  animation: none;
+}
+[data-play="armed"] .lp-mult-val[data-pos="first"] {
+  opacity: 1;
+}
+/* Enter at slot k, exit at slot k+1. Exit fills FORWARDS only, so before it
+ * starts the enter animation owns the frame. */
+[data-play="in"] .lp-mult-val {
+  opacity: 1;
+  animation:
+    lp-mult-enter var(--lp-mult-dur) var(--lp-mult-ease)
+      calc(var(--lp-mult-start) + (var(--k) - 1) * var(--lp-mult-step)) both,
+    lp-mult-exit var(--lp-mult-dur) var(--lp-mult-ease)
+      calc(var(--lp-mult-start) + var(--k) * var(--lp-mult-step)) forwards;
+}
+[data-play="in"] .lp-mult-val[data-pos="first"] {
+  animation: lp-mult-exit var(--lp-mult-dur) var(--lp-mult-ease) var(--lp-mult-start) forwards;
+}
+[data-play="in"] .lp-mult-val[data-pos="last"] {
+  animation: lp-mult-enter var(--lp-mult-dur) var(--lp-mult-ease)
+    calc(var(--lp-mult-start) + (var(--k) - 1) * var(--lp-mult-step)) both;
+}
+@keyframes lp-mult-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.32em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lp-mult-exit {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-0.32em);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-mult-val,
+  [data-play] .lp-mult-val {
+    animation: none;
+    opacity: 0;
+  }
+  .lp-mult-val[data-pos="last"],
+  [data-play] .lp-mult-val[data-pos="last"] {
+    opacity: 1;
+  }
+}
+.lp-final-ctas {
+  margin-top: 40px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+.lp-final-btn {
+  height: 44px;
+  padding: 0 20px;
+  gap: 8px;
+  font-size: 15px;
+}
+
+/* ── Footer ── */
+.lp-foot {
+  padding: 72px var(--gutter) 40px;
+  border-top: 1px solid var(--line);
+}
+.lp-foot-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+  gap: clamp(40px, 6vw, 96px);
+}
+.lp-foot-tagline {
+  margin: 16px 0 0;
+  max-width: 18em;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.lp-foot-cols {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 32px;
+}
+.lp-foot-title {
+  margin: 0 0 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.lp-foot-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lp-foot-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+.lp-foot-link:hover {
+  color: var(--ink);
+}
+.lp-foot-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--ink);
+}
+.lp-foot-bottom {
+  max-width: 1280px;
+  margin: 64px auto 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.lp-foot-copy {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ── Scroll reveal (WHAT; scroll-reveal.tsx owns WHEN) ──
+   Same transition recipe as marketing.css's "Scroll reveal" block: no
+   attribute (no JS, reduced motion) leaves everything shown. */
+[data-reveal] .lp-psum-eyebrow,
+[data-reveal] .lp-psum-heading,
+[data-reveal] .lp-psum-groups,
+[data-reveal] .lp-faq-eyebrow,
+[data-reveal] .lp-faq-heading,
+[data-reveal] .lp-faq-list,
+[data-reveal] .lp-final-heading,
+[data-reveal] .lp-final-ctas {
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 500ms var(--lp-reveal-ease),
+    transform 500ms var(--lp-reveal-ease);
+}
+[data-reveal="in"] .lp-psum-eyebrow,
+[data-reveal="in"] .lp-psum-heading,
+[data-reveal="in"] .lp-psum-groups,
+[data-reveal="in"] .lp-faq-eyebrow,
+[data-reveal="in"] .lp-faq-heading,
+[data-reveal="in"] .lp-faq-list,
+[data-reveal="in"] .lp-final-heading,
+[data-reveal="in"] .lp-final-ctas {
+  opacity: 1;
+  transform: none;
+}
+[data-reveal="in"] .lp-psum-heading,
+[data-reveal="in"] .lp-faq-heading {
+  transition-delay: 90ms;
+}
+[data-reveal="in"] .lp-psum-groups,
+[data-reveal="in"] .lp-faq-list,
+[data-reveal="in"] .lp-final-ctas {
+  transition-delay: 180ms;
+}
+
+@media (max-width: 1100px) {
+  .lp-psum-groups {
+    grid-template-columns: 1fr;
+    gap: 44px;
+  }
+}
+
+@media (max-width: 900px) {
+  .lp-psum-groups--single .lp-plans {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lp-psum,
+  .lp-faq,
+  .lp-final {
+    margin-top: 90px;
+  }
+  .lp-faq-inner,
+  .lp-foot-inner {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .lp-faq-heading {
+    margin-bottom: 0;
+  }
+  .lp-faq-a {
+    padding-right: 0;
+  }
+  .lp-foot-cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

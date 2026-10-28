@@ -19,7 +19,7 @@ import {
  * **F-343 — /home TELLS A MEMBER FROM A GUEST** (Samuel, 2026-09-17: proceed).
  *
  * The account surface carried no caller role: `GET /api/channels?scope=account` did not
- * send one and `knowledge-panels.tsx` hardcoded `role: "owner"` under the comment
+ * send one and `home-knowledge-panels.tsx` hardcoded `role: "owner"` under the comment
  * *"a home container is the caller's own"* — **true of the container the caller
  * CREATED and false of every one they JOINED**, where a bound claim seats them at
  * the link's `granted_role` (default `guest`, ceiling `member`). So every
@@ -232,7 +232,7 @@ describe("the Agents face's shared create (F-343 consequence 1b)", () => {
     await openIdentities();
     await screen.findByRole("region", { name: "Shared in this channel" });
 
-    expect(sharedCreate("Agent Identity")).toBeNull();
+    expect(sharedCreate("Create new")).toBeNull();
   });
 
   it("is THERE for a member", async () => {
@@ -241,7 +241,7 @@ describe("the Agents face's shared create (F-343 consequence 1b)", () => {
     await openIdentities();
     await screen.findByRole("region", { name: "Shared in this channel" });
 
-    expect(sharedCreate("Agent Identity")).toBeTruthy();
+    expect(sharedCreate("Create new")).toBeTruthy();
   });
 
   it("FAILS CLOSED on a stale cached payload", async () => {
@@ -250,6 +250,6 @@ describe("the Agents face's shared create (F-343 consequence 1b)", () => {
     await openIdentities();
     await screen.findByRole("region", { name: "Shared in this channel" });
 
-    expect(sharedCreate("Agent Identity")).toBeNull();
+    expect(sharedCreate("Create new")).toBeNull();
   });
 });

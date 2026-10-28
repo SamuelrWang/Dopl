@@ -52,11 +52,11 @@ test("AUTH HOLD: an arriving message neither wakes nor claims a held session (th
 });
 
 test("the hold is gone: no accept / decline arm, no pending flag, no standing grant", () => {
-  for (const word of ["inbound_accept", "inbound_decline", "inbound_released", "hasPendingInbound", "inboundForTask", "awaiting_inbound"]) {
+  for (const word of ["inbound_accept", "inbound_decline", "inbound_released", "hasPendingInbound", "inboundForThread", "awaiting_inbound"]) {
     assert.ok(!REDUCER_SRC.includes(word), `${word} is not in the reducer`);
   }
   const st = initialSessionState({});
-  assert.equal("inboundForTask" in st, false);
+  assert.equal("inboundForThread" in st, false);
   assert.equal("hasPendingInbound" in st, false);
   // An old caller's accept is an unknown event: a no-op, never a feed.
   const s = running();
@@ -104,11 +104,11 @@ test("FIX #17: re-parking is idempotent (the guard reads `parked`, not `phase`)"
 test("no posture is ever persisted: the durable record carries neither axis nor the tool grants", () => {
   const io = require(join(HERE, "..", "main", "session-io.js"));
   const rec = io.baseRecord({
-    key: "c1:t1", sessionId: "s1", channelId: "c1", taskId: "t1", workspaceId: "w1",
+    key: "c1:t1", sessionId: "s1", channelId: "c1", threadId: "t1", workspaceId: "w1",
     side: "responder", profile: "full", mode: "interactive", startedAt: 1,
     state: { ...running(), toolMode: "bypass", messageMode: "auto_both", turns: 2, costUsd: 0.1 },
   });
   assert.equal(rec.toolMode, undefined, "AXIS A is memory-only, never persisted");
   assert.equal(rec.messageMode, undefined, "and so is AXIS B");
-  assert.equal(rec.allowForTask, undefined, "so is the tool grant set");
+  assert.equal(rec.allowForThread, undefined, "so is the tool grant set");
 });

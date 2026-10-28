@@ -64,7 +64,7 @@ export function LaunchPanel({ request, onLaunch, onDecline, busy }: Props) {
   const preview = request.proposedReply ?? "";
 
   return (
-    <div className="rounded-[10px] border border-warning/25 bg-warning/10 px-3.5 py-2.5">
+    <div className="rounded-lg border border-warning/25 bg-warning/10 px-3.5 py-2.5">
       <div className="mb-1.5 flex items-center gap-2">
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-default bg-bg-inset text-text-secondary">
           <Sparkles size={12} />
@@ -108,7 +108,7 @@ export function LaunchPanel({ request, onLaunch, onDecline, busy }: Props) {
         </TextOnlyLinks>
       )}
       {preview && (
-        <div className="concave-field mb-2 max-h-[200px] overflow-y-auto rounded-[8px] px-2.5 py-2">
+        <div className="concave-field mb-2 max-h-50 overflow-y-auto rounded-md px-2.5 py-2">
           <TextOnlyLinks>
             <StreamProse
               text={preview}
@@ -124,7 +124,7 @@ export function LaunchPanel({ request, onLaunch, onDecline, busy }: Props) {
           disabled={busy}
           onClick={onLaunch}
           className={cn(
-            "btn-light flex h-8 items-center gap-1.5 rounded-[8px] px-3 text-small font-medium text-text-primary disabled:opacity-60"
+            "btn-light flex h-8 items-center gap-1.5 rounded-md px-3 text-small font-medium text-text-primary disabled:opacity-60"
           )}
         >
           <Check size={14} />
@@ -134,7 +134,7 @@ export function LaunchPanel({ request, onLaunch, onDecline, busy }: Props) {
           type="button"
           disabled={busy}
           onClick={onDecline}
-          className="flex h-8 items-center gap-1.5 rounded-[8px] px-3 text-small font-medium text-text-secondary transition-colors hover:bg-surface-raised-2 hover:text-text-primary disabled:opacity-60"
+          className="flex h-8 items-center gap-1.5 rounded-md px-3 text-small font-medium text-text-secondary transition-colors hover:bg-surface-raised-2 hover:text-text-primary disabled:opacity-60"
         >
           <X size={14} />
           Cancel

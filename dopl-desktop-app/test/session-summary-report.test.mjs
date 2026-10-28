@@ -23,12 +23,12 @@ const mocked = (fn) => (t) => { t.mock.timers.enable({ apis: ["setTimeout"] }); 
 
 test("REPORT: an entry carries the session KEY and the WORKSPACE a row cannot do without", () => {
   const m = load();
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session()]]) });
   const [entry] = m.reportList();
   // The upsert key is the STABLE (channel, thread, AGENT) key, never `sessionId` — a park, a lazy
   // resume and a crash each mint a fresh sessionId. The AGENT segment joined 2026-08-21: without
   // it two of the operator's agents on one thread would upsert onto ONE row.
-  assert.equal(entry.key, "chan-1:task-1:a1b2c3d4");
+  assert.equal(entry.key, "chan-1:thread-1:a1b2c3d4");
   assert.equal(entry.workspaceId, "ws-1");
   // …and everything the pill shows is still there, unchanged.
   assert.equal(entry.sessionId, "sess-1");
@@ -44,7 +44,7 @@ test("REPORT: an entry carries the session KEY and the WORKSPACE a row cannot do
 
 test("REPORT: `list()` narrows the report-only `key` back off — `workspaceId` rides the wire", () => {
   const m = load();
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session()]]) });
   // The five measurement fields (Phase 5, 2026-08-18) and `detail` / `toolLabel` (2026-08-20) are
   // NOT report-only — they are LOCAL-only, which is a different claim and is asserted where it
   // bites, in `session-state-push.test.mjs`'s row shape. The claim here is narrower and unchanged:
@@ -53,7 +53,7 @@ test("REPORT: `list()` narrows the report-only `key` back off — `workspaceId` 
     // Most fields below are LOCAL-only: `session-state-push.js › reportRow` picks the server
     // columns BY NAME, so they never reach `channel_sessions`. The exceptions are noted inline.
     // `agentId` joined 2026-08-21 and IS on the wire: session ops address ONE agent among several,
-    // and (channelId, taskId) can no longer say which.
+    // and (channelId, threadId) can no longer say which.
     "agentId", "channelId", "channelName",
     // `color` (2026-09-13, Samuel's agent-colours ruling) DOES reach the server: peer-visible by
     // design, since a colour is drawn on every member's transcript.
@@ -80,10 +80,11 @@ test("REPORT: `list()` narrows the report-only `key` back off — `workspaceId` 
     "heldGates",
     // `identityName` (2026-08-22, `templateName` until the 2026-09-22 rename) is named in
     // `reportRow` on purpose — Phase 4 added the column.
-    "identityName",
+    // `identityId` (2026-10-26) is local only: the Identities page joins sessions to rows by it.
+    "identityId", "identityName",
     "lastActivityAt", "lastDeniedTool", "lastWakeAt", "lastWakeSeq", "listening", "messageMode",
     "model",
-    "name", "permission", "runtimeId", "sessionId", "stale", "startedAt", "state", "taskId",
+    "name", "permission", "profileLabel", "runtimeId", "sessionId", "stale", "startedAt", "state", "threadId",
     "threadTitle", "tokensDelta", "tokensSpent", "toolLabel", "toolMode",
     "turns",
     // `workspaceId` joined the WIRE on 2026-09-14 (the pop-out rail routes by it).
@@ -98,8 +99,8 @@ test("REPORT: it is ONE pass — the wire rows are the report rows, minus two fi
   const m = load();
   m.bind({
     sessions: new Map([
-      ["chan-1:task-1", session()],
-      ["chan-2:task-9", session({ channelId: "chan-2", taskId: "task-9", sessionId: "s2", workspaceId: "ws-2" })],
+      ["chan-1:thread-1", session()],
+      ["chan-2:thread-9", session({ channelId: "chan-2", threadId: "thread-9", sessionId: "s2", workspaceId: "ws-2" })],
     ]),
   });
   assert.deepEqual(m.list(), m.reportList().map(m.wireSummary));
@@ -107,11 +108,11 @@ test("REPORT: it is ONE pass — the wire rows are the report rows, minus two fi
 
 test("REPORT: a thread-less responder reports a real key and a NULL thread", () => {
   const m = load();
-  const s = session({ taskId: "", context: {} });
+  const s = session({ threadId: "", context: {} });
   m.bind({ sessions: new Map([[s.key, s]]) });
   const [entry] = m.reportList();
   assert.equal(entry.key, "chan-1::a1b2c3d4");
-  assert.equal(entry.taskId, "", "the wire keeps '' — the writer is what turns it into NULL");
+  assert.equal(entry.threadId, "", "the wire keeps '' — the writer is what turns it into NULL");
   assert.equal(entry.workspaceId, "ws-1");
 });
 
@@ -123,7 +124,7 @@ test("REPORT: an ENDED retained entry carries the workspace frozen at settle tim
   m.bind({ sessions: new Map(), endedRecords: () => [endedRecord({ workspaceId: "ws-7" })] });
   const [entry] = m.reportList();
   assert.equal(entry.state, "ended");
-  assert.equal(entry.key, "chan-1:task-1:a1b2c3d4");
+  assert.equal(entry.key, "chan-1:thread-1:a1b2c3d4");
   assert.equal(entry.workspaceId, "ws-7");
   assert.equal(entry.endedAt, 1700000600000, "the 7-day clock rides the row");
   assert.equal(entry.listening, false, "nothing terminal is listening");
@@ -131,7 +132,7 @@ test("REPORT: an ENDED retained entry carries the workspace frozen at settle tim
 
 test("REPORT: a session with no workspace reports '' rather than undefined", () => {
   const m = load();
-  m.bind({ sessions: new Map([["chan-1:task-1", session({ workspaceId: undefined })]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session({ workspaceId: undefined })]]) });
   assert.equal(m.reportList()[0].workspaceId, "");
 });
 
@@ -141,11 +142,11 @@ test("CHANGE: a subscriber gets the report entries when the projection first mov
   const m = load();
   const seen = [];
   m.subscribe((entries) => seen.push(entries));
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session()]]) });
   m.start({ getWindows: () => [m.spaWindow] });
   settle(t, m);
   assert.equal(seen.length, 1);
-  assert.equal(seen[0][0].key, "chan-1:task-1:a1b2c3d4");
+  assert.equal(seen[0][0].key, "chan-1:thread-1:a1b2c3d4");
   assert.equal(seen[0][0].workspaceId, "ws-1");
 }));
 
@@ -175,7 +176,7 @@ test("CHANGE: a REBUILT renderer repaints but is NOT a change — the two gates 
   const m = load();
   const seen = [];
   m.subscribe((entries) => seen.push(entries));
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session()]]) });
   m.start({ getWindows: () => [m.spaWindow] });
   settle(t, m);
   assert.equal(m.sent.length, 1);
@@ -192,7 +193,7 @@ test("CHANGE: an event that reached NO window still counts — delivery is not t
   const m = load();
   const seen = [];
   m.subscribe((entries) => seen.push(entries));
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session()]]) });
   m.start({ getWindows: () => [] }); // headless: the SPA window is not built
   settle(t, m);
   assert.equal(m.sent.length, 0);
@@ -227,7 +228,7 @@ test("CHANGE: a THROWING subscriber cannot break the engine's dispatch", mocked(
   const after = [];
   m.subscribe(() => { throw new Error("writer exploded"); });
   m.subscribe((entries) => after.push(entries)); // registered after the thrower
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session()]]) });
   m.start({ getWindows: () => [m.spaWindow] });
   settle(t, m);
   // `touch()` is called from the engine's dispatch, so an exception here would unwind into the

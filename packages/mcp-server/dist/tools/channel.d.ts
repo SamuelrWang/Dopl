@@ -7,23 +7,17 @@
  * replies. Every message has a monotonic `seq` cursor, so a listener can ask
  * for "everything after seq N" (`op="read"`, `since=`).
  *
- * ⚠ **SIX OPS** — `send` · `read` · `status` · `manage` · `rooms` · `artifact`.
- * Five of them since 2026-09-02 (v2 wave B slice B8, Samuel's ruling B9), down
- * from twenty-three: the other twenty-two names parsed for one release and
- * answered ONE line naming their replacement, and slice B16 closed that window,
- * so the enum is exactly as wide at runtime as in the published schema and a
- * retired name is refused by `channel-schema.ts › unknownOpRefusal`. ⚠ `artifact`
- * joined on 2026-09-06 (design #1220 §5, accepted #1222) — the collapse was
- * about twenty-three names for the work of five, not a promise never to grow;
- * this one folds EXISTING messages into a card and belongs to no other op.
+ * ⚠ **THE OPS** are `channel-vocab.ts › CHANNEL_OPS`. Twenty-three names collapsed to five on
+ * 2026-09-02 (v2 wave B slice B8, Samuel's ruling B9) and slice B16 closed the redirect window, so
+ * a retired name is refused by `channel-schema.ts › unknownOpRefusal`. `artifact` (2026-09-06)
+ * folds existing messages into a card and `task` (2026-10-26) keeps channel tasks; neither writes
+ * a message, so neither is a `send` kind.
  *
  * Thin registrar: owns the single tool schema + op routing, delegating to
  *   - `channel-shared.ts`        — ref resolution + the ONE neutralizer every
  *                                  peer-authored string must pass through
- *   - `channel-ops-write.ts`     — the send lane (+ `channel-post-linkage.ts`
- *                                  and `channel-facts.ts` for its result line)
- *   - `channel-ops-threads.ts`   — thread="new"
- *   - `channel-ops-escalate.ts`  — kind="decision"
+ *   - `channel-send-route.ts`    — op="send" to its lane (`channel-ops-write.ts`,
+ *                                  `channel-ops-threads.ts`, `channel-ops-escalate.ts`)
  *   - `channel-ops-read.ts` / `channel-ops-account.ts` / `channel-ops-hold*.ts`
  *                                — the page, the account-wide page, the hold
  *   - `channel-ops-status.ts`    — sessions + the direction mailbox
@@ -31,15 +25,12 @@
  *   - `channel-dispatch-rooms.ts`  — op="rooms"
  *   - `channel-ops-artifact.ts`    — op="artifact" (dispatch AND render, for
  *                                    the reason in its own header)
+ *   - `channel-ops-task.ts`        — op="task" (dispatch AND render)
  *   - `channel-render.ts`        — read renderers + untrusted-content headers
  *
  * ⚠ A channel reaches PEOPLE. `to` names ONE party — a member, or one of the
  * caller's OWN agents — and the server resolves it; with one the message is a
  * REQUEST, without one it is chat and reaches nobody.
- *
- * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`. Ops and params
- * say `thread`; `channel_tasks`, `metadata.taskId`, `task_*` kinds and the
- * `/tasks` routes keep the storage name.
  *
  * ⚠ No `dopl_channel_admin` twin — no destructive ops over MCP (archive/delete
  * are human decisions in the web UI).

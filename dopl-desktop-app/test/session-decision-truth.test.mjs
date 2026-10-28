@@ -173,10 +173,10 @@ test("F1: the SAME decision after a PARK reports FALSE — nothing live was left
   assert.equal(ok, false, "a Send that raced the park must NOT be reported as taken");
   assert.equal(settled.length, 1, "and it certainly does not resolve the promise twice");
   // FIX F7's other half, from the side that survives: an undefined grant name never reaches
-  // allowForTask. The IPC guard that refused an untracked requestId upstream is deleted
+  // allowForThread. The IPC guard that refused an untracked requestId upstream is deleted
   // (see the ⚠ block below) — this is the reducer-level backstop it sat in front of, and it
   // was always the one that mattered, because there is no live resolver either way.
-  assert.deepEqual(s.state.allowForTask.filter((n) => n === undefined), []);
+  assert.deepEqual(s.state.allowForThread.filter((n) => n === undefined), []);
 });
 
 test("F1: resolvePerm is the single truth-teller (unknown / already-taken ids report false)", () => {
@@ -261,7 +261,7 @@ test("F4: main sends the AUTHORIZED bytes, and `to` is the peer NAME (never an i
   // on a separately streamed copy" still has both a producer and a reader.
   const s = {
     profile: "full", channelId: "ch1", counterpartyName: "David",
-    state: { allowForTask: [], autoApprove: false },
+    state: { allowForThread: [], autoApprove: false },
     pendingPermissions: new Map(), pendingNames: new Map(),
   };
   const events = [];

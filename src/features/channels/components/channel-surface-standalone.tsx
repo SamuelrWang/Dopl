@@ -48,6 +48,7 @@ export function StandaloneChannelSurface({
   role = "member",
   initialThreadId = null,
   initialSeq = null,
+  initialTaskId = null,
   onDeleted,
   slots,
   capabilities,
@@ -79,6 +80,8 @@ export function StandaloneChannelSurface({
    * row may have one.
    */
   initialSeq?: number | null;
+  /** A task to open on the Tasks tab at mount (`use-channels-selection.ts › initialTaskId`). */
+  initialTaskId?: string | null;
   /**
    * The Settings tab deleted this channel. ⚠ THE HOST HAS TO ACT ON IT: the
    * channel is a PROP here, so nothing below can stop rendering a row the server
@@ -103,6 +106,7 @@ export function StandaloneChannelSurface({
   const sel = useChannelsSelection({
     initialChannelId: channel.id,
     initialThreadId,
+    initialTaskId,
   });
   const data = useChannelSurfaceData({
     workspaceId,

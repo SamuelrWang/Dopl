@@ -28,7 +28,7 @@ export type AgentDirectionRow = {
   id: string;
   workspace_id: string;
   channel_id: string;
-  task_id: string | null;
+  thread_id: string | null;
   operator_user_id: string;
   /** ⚠ NOT NULL, unlike the launch mailbox's — a direction with no addressee
    *  would be a broadcast into somebody's private lane. */
@@ -64,7 +64,7 @@ export type AgentDirectionRow = {
 type AgentDirectionInsert = {
   workspace_id: string;
   channel_id: string;
-  task_id: string | null;
+  thread_id: string | null;
   /** ⚠ CALLER-SUPPLIED, and it is an ADDRESS rather than an authorization: it
    *  names WHICH of the operator's own agents hears this, inside a machine the
    *  `operator_user_id` stamp has already fixed. A wrong id reaches nothing —

@@ -74,12 +74,12 @@ describe("day groups", () => {
 
   it("says so when there is no history, rather than rendering an empty frame", () => {
     mount([]);
-    expect(screen.getByText("No changes yet.")).toBeTruthy();
+    expect(screen.getByText("No changes yet")).toBeTruthy();
   });
 
   // Samuel, 2026-10-01: WHO is the writer's face, not a bot / person glyph.
   it("an AGENT row wears its OPERATOR's face, a bot badge and its session name", () => {
-    mount([
+    const { container } = mount([
       rev({
         id: "a",
         actor: {
@@ -91,7 +91,7 @@ describe("day groups", () => {
         },
       }),
     ]);
-    expect(screen.getByRole("img", { name: "Samuel" }).getAttribute("src")).toBe(
+    expect(container.querySelector("[data-identity-face] img")?.getAttribute("src")).toBe(
       "https://img.test/sam.png"
     );
     expect(screen.getByLabelText("agent")).toBeTruthy();
@@ -100,7 +100,7 @@ describe("day groups", () => {
   });
 
   it("a human row wears their face, NO agent badge and NO session name", () => {
-    mount([
+    const { container } = mount([
       rev({
         id: "a",
         actor: {
@@ -112,7 +112,7 @@ describe("day groups", () => {
         },
       }),
     ]);
-    expect(screen.getByRole("img", { name: "Samuel" })).toBeTruthy();
+    expect(container.querySelector("[data-identity-face] img")).toBeTruthy();
     expect(screen.queryByLabelText("agent")).toBeNull();
   });
 
@@ -127,9 +127,9 @@ describe("day groups", () => {
     expect(screen.getByText("Riley")).toBeTruthy();
   });
 
-  it("names the op and the path — `who · what · when`", () => {
+  it("names the op and the path under the `who · time` line", () => {
     mount([rev({ id: "a", op: "section_edit", payload: { body: "b", path: "api.md" } })]);
-    expect(screen.getByText(/Edited a section · api\.md/)).toBeTruthy();
+    expect(screen.getByText("Edited a section").textContent).toBe("Edited a section · api.md");
   });
 });
 

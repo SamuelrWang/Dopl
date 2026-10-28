@@ -3,8 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 /**
- * The opened base's layout rules — the four Samuel's live review returned on
- * 2026-08-28.
+ * The opened base's layout rules.
  *
  * A source read on purpose: jsdom has no layout, so these defects render
  * identically to their fixes and a behavioural assertion would be green in both
@@ -62,21 +61,25 @@ describe("🔒 the panel FILLS its host, floated or embedded", () => {
   });
 });
 
-describe("🔒 the file rail's rows (Samuel, 2026-09-29)", () => {
-  it("hover and selected are ONE rule, filled with the lighter background gray (--home-panel) by name", () => {
-    const css = readFileSync(MODULE, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-    // one selector list, so the two states cannot drift apart.
-    expect(css).toMatch(/\.treeRow:hover,\s*\.treeRowActive \{/);
-    expect(rule(".treeRowActive")).toContain("background: var(--kv-row-fill)");
-    // the lighter background gray (2026-09-29: `--seg-fill` was too dark).
-    expect(rule(".shell")).toContain("--kv-row-fill: var(--home-panel)");
+describe("🔒 the file rail's rows", () => {
+  it("hover and selected are two steps of one gray, the selected row also medium", () => {
+    expect(rule(".treeRow:hover")).toContain("background: var(--surface-raised-1)");
+    const selected = rule(".treeRowActive,\n.treeRowActive:hover");
+    expect(selected).toContain("background: var(--surface-raised-2)");
+    expect(selected).toContain("font-weight: 500");
   });
 
   it("insets the fill from both rail edges, with rounded corners", () => {
     const row = rule(".treeRow");
     expect(row).toContain("margin: 0 8px");
-    expect(row).toContain("border-radius: 6px");
+    expect(row).toContain("border-radius: 8px");
     expect(row).not.toContain("width: 100%");
+  });
+
+  it("gives the child count way to the row actions on hover and focus", () => {
+    expect(rule(".treeRow:hover .treeCount,\n.treeRow:focus-within .treeCount")).toContain(
+      "display: none"
+    );
   });
 
   it("has no collapse machinery left, and takes its width from the drag bar", () => {
@@ -86,27 +89,10 @@ describe("🔒 the file rail's rows (Samuel, 2026-09-29)", () => {
   });
 });
 
-describe("🔒 the tree's create row wraps, so its pills do not", () => {
+describe("🔒 the tree's create row wraps, so its links do not", () => {
   it("wraps the ROW", () => {
-    // two labelled 26px pills against a 232px rail is a near-exact fit, which
-    // is a promise about font metrics nobody can keep.
+    // two labelled links against a 232px rail is a near-exact fit, which is a
+    // promise about font metrics nobody can keep.
     expect(rule(".addRow")).toContain("flex-wrap: wrap");
-  });
-});
-
-describe("🔒 the description field stays inside its section", () => {
-  /**
-   * Samuel, 2026-08-28: the textarea overflowed the card, its resize handle on
-   * the border — it could be dragged wider than the section containing it.
-   */
-  it("cannot be dragged out of its card", () => {
-    expect(rule(".fieldBlock")).toContain("resize: none");
-  });
-
-  it("is contained by width as well as by the resize rule", () => {
-    // a textarea carries an intrinsic `cols` width, so `w-full` alone does not
-    // contain it: the parent must shrink AND the field must be capped.
-    expect(rule(".fieldBlock")).toContain("max-width: 100%");
-    expect(rule(".fieldGroup")).toContain("min-width: 0");
   });
 });

@@ -22,13 +22,13 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
   // pill and never reaches the server — `session-state-push.js › reportRow` picks its columns BY
   // NAME, which is the property every field below relies on.
   const m = load();
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session()]]) });
   assert.deepEqual(m.list(), [
     {
       sessionId: "sess-1",
       channelId: "chan-1",
       workspaceId: "ws-1", // on the wire since 2026-09-14 — the pop-out rail routes by it
-      taskId: "task-1",
+      threadId: "thread-1",
       agentId: "a1b2c3d4",
       name: "a1b2c3d4",
       // `displayName` (2026-08-25, Samuel's rename ruling) rides BESIDE `agentId`/`name` and
@@ -58,6 +58,8 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       // The EFFECTIVE permission (2026-09-25), read off the same state: no tool word fails closed to
       // the default runtime's Ask, stated in its own words.
       permission: { runtime: "Claude Code", level: "ask", label: "Ask each time", setting: "" },
+      // The spawn-time tool profile, in `tool-profiles.js › profileLabel`'s words (2026-10-22).
+      profileLabel: "Dopl-only",
       messageMode: "ask",
       // `model` (2026-08-22, Samuel's model-selection ruling), and the fixture shows the
       // PRECEDENCE: the SDK's own reported id (`s.liveModel`) beats the operator's pick, because
@@ -70,6 +72,8 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       // above it DOES reach the server, onto `channel_sessions.identity_name`, which is
       // operator-only by construction on that side (`collab-dto.ts › mapOwnSessionStateRow`).
       identityName: null,
+      // `identityId` (2026-10-26): the same capture's row id, LOCAL only (`reportRow` names no such column).
+      identityId: null,
       // `color` (2026-09-13, docs/specs/agent-colors.md) is THE ASK, not the assignment:
       // uniqueness is per channel across EVERY member and no machine can evaluate that, so the
       // server may substitute. It DOES reach the server (`channel_sessions.color`), peer-visible
@@ -214,7 +218,7 @@ test("SHAPE: counterparty-influenced text is bounded and single-line", () => {
   const m = load();
   m.bind({
     sessions: new Map([
-      ["chan-1:task-1", session({ context: { channelName: "a\nb\tc", taskTitle: "x".repeat(200) } })],
+      ["chan-1:thread-1", session({ context: { channelName: "a\nb\tc", threadTitle: "x".repeat(200) } })],
     ]),
   });
   const row = m.list()[0];
@@ -225,17 +229,17 @@ test("SHAPE: counterparty-influenced text is bounded and single-line", () => {
 
 test("SHAPE: a thread-less responder session is a real row, not a dropped one", () => {
   const m = load();
-  const s = session({ taskId: "", context: {} });
+  const s = session({ threadId: "", context: {} });
   m.bind({ sessions: new Map([[s.key, s]]) });
   const row = m.list()[0];
-  assert.equal(row.taskId, "");
+  assert.equal(row.threadId, "");
   assert.equal(row.threadTitle, null);
   assert.equal(row.channelName, null);
 });
 
 test("SHAPE: a settled registry entry is never listed", () => {
   const m = load();
-  m.bind({ sessions: new Map([["chan-1:task-1", session({ settled: true })]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session({ settled: true })]]) });
   assert.deepEqual(m.list(), []);
 });
 

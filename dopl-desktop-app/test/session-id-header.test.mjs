@@ -2,10 +2,10 @@
 //
 // THE DEFECT THIS FILE EXISTS FOR (docs/traces/AGENT-BADGE-TRACE.md). Samuel: *"occasionally I'll see a
 // message that says agent ended … the badge says just Agent … I notice it popping up randomly."*
-// Those rows are `task_progress` posts this process writes about a session — the calm ended
+// Those rows are `thread_progress` posts this process writes about a session — the calm ended
 // note, the windowless denial counter — and they arrived carrying NO identity at all:
 //
-//   • the `client_msg_id` is `task_progress-<channelUUID>-<seq>`, which the anchored stamp
+//   • the `client_msg_id` is `thread_progress-<channelUUID>-<seq>`, which the anchored stamp
 //     pattern (`src/features/channels/lib/agent-post-stamp.ts`) deliberately refuses, and
 //   • `listener-io.js` set no session header, while a SPAWNED session gets one for free from a
 //     seam main does not use (`runtime/claude/launch-spec.js` → `runtime/claude/mcp.js › withSessionStamp`).
@@ -63,7 +63,7 @@ test("the desktop's shape rule is the server's, character for character", () => 
 });
 
 test("a real slot key passes, in every shape this machine mints", () => {
-  // `session-store.js › sessionKey` — `<channelId>:<taskId>:<agentId>`, and the MIDDLE segment
+  // `session-store.js › sessionKey` — `<channelId>:<threadId>:<agentId>`, and the MIDDLE segment
   // is legitimately empty for a session with no first-class thread.
   for (const ok of [
     "bb0f57db-bb46-4ce6-af96-83eb8e2dbf28:3f2504e0-4f89-41d3-9a0c-0305e82c3301:deynelz3",
@@ -152,7 +152,7 @@ test("the two posts ABOUT a session carry the slot key", () => {
   );
   assert.match(
     M("trigger-outcomes.js"),
-    /postTaskEvent\(entry, m, 'task_progress', taskId, meta, body, \{ sessionId \}\)/
+    /postThreadEvent\(entry, m, 'thread_progress', threadId, meta, body, \{ sessionId \}\)/
   );
 });
 

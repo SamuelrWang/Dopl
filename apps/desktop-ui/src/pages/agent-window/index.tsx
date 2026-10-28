@@ -70,7 +70,7 @@ export default function AgentWindowPage() {
     workspaceSegment: string;
   }>();
   const [search] = useSearchParams();
-  const taskId = search.get("thread");
+  const threadId = search.get("thread");
   // ⚠ WHICH INSTANCE (2026-08-22). `(channel, thread)` names a GROUP of this
   // operator's agents since multiplayer, so the pair alone lands on whichever the
   // feed lists first. Read here NOW, ahead of main emitting it, so the window
@@ -105,7 +105,7 @@ export default function AgentWindowPage() {
         workspaceId={access.workspaceId}
         currentUserId={access.currentUserId}
         segment={workspaceSegment ?? ""}
-        route={{ channelId, taskId: taskId ?? "", agentId: agentId ?? "" }}
+        route={{ channelId, threadId: threadId ?? "", agentId: agentId ?? "" }}
       />
     </Frame>
   );
@@ -118,15 +118,15 @@ export default function AgentWindowPage() {
  * CommonJS. ⚠ The two-part degradation is part of the rule: an absent agent id must produce the
  * SAME key on both sides or a tab main pushed would never match the one this page seeded.
  */
-export function agentTabKey(tab: {
+function agentTabKey(tab: {
   channelId: string;
-  taskId: string;
+  threadId: string;
   agentId?: string | null;
 }): string {
   const agent = String(tab.agentId || "");
   return agent
-    ? `${tab.channelId}|${tab.taskId}|${agent}`
-    : `${tab.channelId}|${tab.taskId}`;
+    ? `${tab.channelId}|${tab.threadId}|${agent}`
+    : `${tab.channelId}|${tab.threadId}`;
 }
 
 /**
@@ -150,7 +150,7 @@ function AgentWindowTabs({
   workspaceId: string;
   currentUserId: string;
   segment: string;
-  route: { channelId: string; taskId: string; agentId: string };
+  route: { channelId: string; threadId: string; agentId: string };
 }) {
   const seed = useMemo<AgentWindowTab>(
     () => ({ key: agentTabKey(route), segment, ...route }),
@@ -211,7 +211,7 @@ function AgentWindowTabs({
       (sessions ?? []).find(
         (s) =>
           s.channelId === active.channelId &&
-          s.taskId === active.taskId &&
+          s.threadId === active.threadId &&
           (!active.agentId || s.agentId === active.agentId),
       ) ?? null,
     [sessions, active],
@@ -223,7 +223,7 @@ function AgentWindowTabs({
     const match = (sessions ?? []).find(
       (s) =>
         s.channelId === tab.channelId &&
-        s.taskId === tab.taskId &&
+        s.threadId === tab.threadId &&
         (!tab.agentId || s.agentId === tab.agentId),
     );
     return { key: tab.key, name: match ? agentDisplayName(match) : "Agent" };
@@ -264,7 +264,7 @@ function AgentWindowTabs({
         keyFor={(session) =>
           agentTabKey({
             channelId: session.channelId ?? "",
-            taskId: session.taskId ?? "",
+            threadId: session.threadId ?? "",
             agentId: session.agentId,
           })
         }
@@ -280,7 +280,7 @@ function AgentWindowTabs({
           void openAgentWindow(
             {
               channelId: session.channelId ?? "",
-              taskId: session.taskId ?? "",
+              threadId: session.threadId ?? "",
               agentId: session.agentId ?? undefined,
             },
             segmentFor(session.workspaceId ?? null),
@@ -293,7 +293,7 @@ function AgentWindowTabs({
           key={active.key}
           workspaceId={workspaceId}
           channelId={active.channelId}
-          taskId={active.taskId}
+          threadId={active.threadId}
           agentId={active.agentId || null}
           currentUserId={currentUserId}
         />
@@ -308,7 +308,7 @@ function AgentWindowTabs({
         workspaceId={workspaceId}
         currentUserId={currentUserId}
         channelId={active.channelId}
-        taskId={active.taskId}
+        threadId={active.threadId}
         /* ⚠ **THE POPUP'S COLOUR ROW READS THIS AND NOTHING ELSE IN THIS WINDOW** (2026-09-13):
            the whole own feed, narrowed to the active tab's channel inside the component. This
            window reads no channel projection, so the operator's own live agents are the taken set

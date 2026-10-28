@@ -12,8 +12,7 @@
    fix the drift. Until both import ONE file at build time, any edit to
    globals.css's token layers MUST be mirrored here, same change. Kit recipes
    live in the sibling `kit.css`.
-   NOT copied on purpose: landing/login-only rules (.design-grid, login orbs,
-   logo-scroll). */
+   NOT copied on purpose: the landing and login rules outside the token layers. */
 
 @theme inline {
   --color-bg-base: var(--bg-base);
@@ -34,8 +33,6 @@
   --color-text-disabled: var(--text-disabled);
 
   --color-accent-primary: var(--accent-primary);
-  --color-accent-glow: var(--accent-glow);
-  --color-accent-soft: var(--accent-soft);
 
   --color-success: var(--success);
   --color-caution: var(--caution);
@@ -79,9 +76,6 @@
   --color-link: var(--link);
   --color-accent-on: var(--accent-on);
 
-  /* Ontology/agent "active" green (Agent: on pills, attachment banner) */
-  --color-agent-on: var(--agent-on);
-
   /* Inverted affordance (menu rows flipping solid on hover/active) +
      active-state indicator border */
   --color-surface-invert: var(--surface-invert);
@@ -103,38 +97,16 @@
 
   /* ── Shadcn aliases (backward compat) ─────────────────────────── */
   --color-background: var(--bg-base);
-  --color-foreground: var(--text-primary);
   --color-card: var(--bg-elevated);
-  --color-card-foreground: var(--text-primary);
   --color-popover: var(--bg-overlay);
-  --color-popover-foreground: var(--text-primary);
   --color-primary: var(--accent-primary);
-  --color-primary-foreground: var(--accent-on);
   --color-secondary: var(--bg-inset);
-  --color-secondary-foreground: var(--text-primary);
   --color-muted: var(--bg-inset);
-  --color-muted-foreground: var(--text-muted);
   --color-accent: var(--bg-inset);
-  --color-accent-foreground: var(--text-primary);
   --color-destructive: var(--danger);
   --color-border: var(--border-default);
   --color-input: var(--border-default);
   --color-ring: var(--accent-primary);
-
-  --color-sidebar: var(--bg-elevated);
-  --color-sidebar-foreground: var(--text-primary);
-  --color-sidebar-primary: var(--accent-primary);
-  --color-sidebar-primary-foreground: var(--accent-on);
-  --color-sidebar-accent: var(--bg-inset);
-  --color-sidebar-accent-foreground: var(--text-primary);
-  --color-sidebar-border: var(--border-subtle);
-  --color-sidebar-ring: var(--accent-primary);
-
-  --color-chart-1: var(--accent-primary);
-  --color-chart-2: var(--text-secondary);
-  --color-chart-3: var(--text-muted);
-  --color-chart-4: var(--success);
-  --color-chart-5: var(--warning);
 
   /* ⚠ Every font var MUST end in a real system family. An undefined var with
      no fallback makes the whole declaration invalid at computed-value time:
@@ -166,6 +138,13 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   --radius-pill: 9999px;
+  /* Off-ramp radii that repeat across the kit (docs/specs/design-system/AUDIT.md):
+     mark 4px (inline code, mention chips, ticks), tile 7px (28px icon tiles and buttons),
+     field 9px (concave fields, 40px dialog buttons), card 12px (the identity look's cards). */
+  --radius-mark: 4px;
+  --radius-tile: 7px;
+  --radius-field: 9px;
+  --radius-card: 12px;
   /* THE SMALL ACTION HEIGHT — one number, so it cannot drift (2026-09-08, Samuel):
      Open / Launch / Discard share it; New agent / New channel stay `h-9` (36px). */
   --action-h-sm: 30px;
@@ -182,6 +161,7 @@
        body    default body, row titles, inputs
        lead    prose/document body, emphasized text
        title   pane headers, card titles
+       heading card headlines (thread name, decision question)
        display page/document titles
        stat    large dashboard figures — pair with font-mono */
   --text-micro: 10.5px;
@@ -198,6 +178,8 @@
   --text-lead--line-height: 1.55;
   --text-title: 14px;
   --text-title--line-height: 1.4;
+  --text-heading: 15px;
+  --text-heading--line-height: 1.35;
   --text-display: 18px;
   --text-display--line-height: 1.375;
   --text-stat: 26px;
@@ -226,14 +208,8 @@
   --text-muted: #98a2ad;
   --text-disabled: #c4cad1;
 
-  /* Accent — neutral UI ink. accent-glow/soft are legacy cyan effect tints.
-     ⚠ NEITHER HAS A READER (measured 2026-10-12, repo-wide): the glow and
-     gradient tokens they were cut for were deleted as dead the same day, and
-     the only thing keeping them is globals.css's unused `--color-accent-*`
-     `@theme` aliases, whose utilities nothing uses either. */
+  /* Accent — neutral UI ink. */
   --accent-primary: #3e3a3b;
-  --accent-glow: oklch(0.68 0.22 250);
-  --accent-soft: oklch(0.45 0.12 245);
 
   --success: oklch(0.55 0.15 155);
   --caution: oklch(0.72 0.15 95);
@@ -256,7 +232,7 @@
      would have no consumer; a soft fill, if one is ever wanted, is `color-mix` at
      the call site and never a second 16 values to keep in step.
      ⚠ THE KEY SET IS MIRRORED IN THREE MORE PLACES and all four are pinned together:
-     `src/features/channels/lib/agent-colors.ts › AGENT_COLOR_KEYS`, the
+     `src/shared/lib/agent-colors.ts › AGENT_COLOR_KEYS`, the
      `channel_sessions.color` CHECK (`20261005120000_agent_session_colors.sql`) and
      `@dopl/contracts › AgentColorKey`. Adding a 17th means all four. */
   /* Richer + darker since 2026-09-13 evening (Samuel: "make the colors maybe a
@@ -294,8 +270,12 @@
      card it stands on (see the `--color-chart-bar` note in the theme block). */
   --chart-bar: #e8e8e8;
   --surface-selected: oklch(0 0 0 / 8%);
-  /* THE menu-option hover face — see `--color-menu-item-hover-bg` above. */
+  /* THE menu-option highlight — see `--color-menu-item-hover-bg` above. */
   --menu-item-hover-bg: var(--surface-raised-1);
+  /* THE dropdown width rule — see globals.css beside `--menu-item-hover-bg`. */
+  --menu-min-width: 128px;
+  --menu-max-width: 320px;
+  --menu-viewport-gutter: 8px;
   --modal-surface: #fefefe;
   --scrim: oklch(0 0 0 / 40%);
 
@@ -312,9 +292,6 @@
   --surface-cta: #1c2127;
   --text-on-cta: #ffffff;
   --border-active: #3e3a3b;
-  --hairline-shine: rgba(255, 255, 255, 0.06);
-
-  --agent-on: oklch(0.52 0.14 162);
 
   /* THE APP FRAME PALETTE (Samuel's wireframe 2026-08-24; SCOPE WIDENED by his
      live-review ruling 2026-08-30). Four values: the dark FRAME behind rail +
@@ -325,7 +302,7 @@
      workspace pages adopt /home's frame model and palette — the two surfaces
      must match."* They are consumed by /home AND by the workspace shell —
      `src/shared/layout/app-shell/app-shell.module.css` (root/surface/sidebar),
-     `apps/desktop-ui/src/components/app-shell/account-rail.module.css` (the
+     `src/shared/layout/app-shell/account-rail.module.css` (the
      rail) and the kit's `.page-float` (every full-page card in the app). Do NOT
      re-add a page-scoping claim to these names.
 
@@ -389,6 +366,10 @@
     inset 0 -1px 0 rgba(0, 0, 0, 0.06),
     0 2px 3px rgba(0, 0, 0, 0.08);
   --raised-light-shadow: var(--raised-light-bevel), 0 6px 14px rgba(0, 0, 0, 0.06);
+  /* A small raised face standing proud of what it overlaps (the identity face's runtime badge,
+     onboarding's app tiles). */
+  --raised-light-drop: var(--raised-light-bevel), 0 4px 7px rgba(0, 0, 0, 0.1),
+    0 10px 20px rgba(0, 0, 0, 0.08);
   /* ATTENTION, in two parts: the hairline darkens and a soft halo replaces the
      ambient drop. THE app-wide "this one is live" signal — `.concave-field` on
      focus, the search pill while open, and a selected row wear the same one, so
@@ -415,23 +396,10 @@
   --ink: var(--text-primary);
   --ink-soft: var(--text-secondary);
   --line: #d6dde5;
-  --black: var(--surface-cta);
-
-  /* Panel shine + selection — consumed by canvas-panel INLINE styles. */
-  --shine-top-gradient: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.3) 30%,
-    rgba(255, 255, 255, 0.4) 50%,
-    rgba(255, 255, 255, 0.3) 70%,
-    transparent 100%
-  );
-  --ring-selected: 0 0 0 2px rgba(255, 255, 255, 0.5);
-  /* ⚠ No inset top-edge highlight here on purpose — it reads as a second,
-     inner border on the panels. */
-  --shadow-panel: 0 4px 16px rgba(0, 0, 0, 0.3);
 
   --radius: 0.625rem;
+  /* The identity look's marked stroke: a task tick, a subtask check, an author's message-card edge. */
+  --stroke-mark: 1.5px;
 
   /* ── Legacy named palette, down to its one live member ─────────── */
   /* `--forest` is the BODY INK (`body { color: var(--forest) }` below), which
@@ -442,6 +410,25 @@
   /* IS the frame colour, read from it, so the body behind the shell matches —
      else a dark flash on route transitions. Was a hand-copied `#2c3640`, one
      hex off the frame, until 2026-08-30. */
+  /* THE DOCUMENT READING SCALE — a knowledge entry or skill body reads above the UI ramp, like the
+     legal pages. Font-size only (`text-(length:--doc-text)`): the prose plugin owns line height. */
+  --doc-text: 16px;
+  --doc-h1: 24px;
+  --doc-h2: 19px;
+  --doc-h4: 15px;
+  --doc-table: 13px;
+  --doc-code: 12.5px;
+
+  /* THE STACKING LAYERS, lowest first. A new overlay picks one of these, never a fresh number. */
+  --layer-raised: 2;
+  --layer-float: 5;
+  --layer-menu-scrim: 999;
+  --layer-menu: 1000;
+  --layer-top: 9999;
+
+  /* A raised well's or chip's one-pixel drop (RAISED_WELL, CHIP). */
+  --shadow-hairline: 0 1px 2px rgba(0, 0, 0, 0.04);
+
   --body-bg: var(--home-frame);
 
   --shadow-elevated: 0 8px 24px -8px oklch(0 0 0 / 60%),
@@ -474,6 +461,11 @@
   --shadow-raised-hover: 0 4px 7px rgba(0, 0, 0, 0.24), 0 10px 24px rgba(0, 0, 0, 0.24);
   /** THE CARD HOVER LIFT'S SHADOW — mirrored from `src/app/globals.css`, same change. */
   --shadow-card-lift: 0 2px 4px rgba(0, 0, 0, 0.07), 0 12px 28px rgba(0, 0, 0, 0.1);
+  /** The kit's `.raise*` steps — mirrored from `src/app/globals.css`, same change. */
+  --shadow-raise: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-raise-hover: 0 3px 6px rgba(0, 0, 0, 0.08), 0 10px 22px rgba(0, 0, 0, 0.12);
+  --shadow-raise-ink: 0 2px 4px rgba(0, 0, 0, 0.18), 0 8px 20px rgba(0, 0, 0, 0.16);
+  --shadow-raise-ink-hover: 0 4px 8px rgba(0, 0, 0, 0.2), 0 12px 26px rgba(0, 0, 0, 0.2);
 }
 
 html {
@@ -597,15 +589,9 @@ html {
      38px tile + centered in 54px keeps 8px side gutters. */
   --shell-rail-w: 54px;
   --shell-sidebar-w: 232px;
-  /* Settings-modal rail surface (the app sidebar stands on `--home-panel` now). */
   --shell-surface: #ececec;
-  /* Resting `.nav-chip` fill. ⚠ Lightened #e2e2e2 → #e8e8e8 on 2026-08-30
-     (Samuel: *"the grayed resting backgrounds one step lighter"*). It is read in
-     exactly one place — `.nav-chip:not(.nav-chip-active)` — and both mounts of
-     that chip wanted the same shift: the app sidebar's nav rows, which now stand
-     on `--home-panel` (#f1f3f5, lighter than the #ececec the old value was tuned
-     against), and the settings modal's section list, on `--home-panel` too since
-     2026-09-11 (Samuel: the sidebar takes the channel switcher's gray). */
+  /* Resting `.nav-chip` fill, read only by `.nav-chip:not(.nav-chip-active)`: the app sidebar's
+     nav rows on `--home-panel`. */
   --shell-chip: #e8e8e8;
   /* Must match --shell-gap-bottom — equal top/bottom panel margins. */
   --shell-gap-top: 6px;

@@ -108,17 +108,6 @@
   font-size: var(--text-body);
 }
 
-/* THE 36px VARIANT — for an underline field that shares a row with a 36px
- * action (`TAB_ACTION`'s `h-9`). The text stays centred; the hairline drops to
- * the row's bottom so it sits flush with the button (Samuel, 2026-09-10: "add
- * more padding between the word description and the underline, pushing the
- * underline down so that it sits flush with the bottom of the + button"). */
-.inputAction {
-  height: 36px;
-  padding-top: 7px;
-  padding-bottom: 7px;
-}
-
 /* THE QUIET FACE — **NO RULE AT REST; THE BLACK ONE ONLY WHILE THE FIELD IS
  * FOCUSED** (Samuel, 2026-09-14, over the object panel's section rows: *"for the
  * individual fields. I want to remove the gray underline, and have it so that
@@ -182,4 +171,9 @@
   padding: 2px 2px 3px;
   line-height: 1.45;
   resize: none;
+}
+
+/* A secondary-ink line: a description beside a title, a key beside its value. */
+.inputSecondary {
+  color: var(--text-secondary);
 }

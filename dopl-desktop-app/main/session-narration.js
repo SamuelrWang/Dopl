@@ -225,7 +225,7 @@ function entryFor(event, now) {
   //
   // ⚠ **THE BODY IS PROSE, BOUNDED AT `POST_CAP` RATHER THAN `PROSE_CAP`** — both halves deliberate.
   // PROSE because this is a MESSAGE and its structure is its content (`narration-text.js`'s
-  // CAPTION-vs-PROSE rule: `line` would flatten a peer's numbered task list into one paragraph and
+  // CAPTION-vs-PROSE rule: `line` would flatten a peer's numbered thread list into one paragraph and
   // delete the meaning of everything that arrived). `POST_CAP` because the **channel transcript is
   // the record**, exactly as the `outbound_post` arm argues for its own echo: the full message is on
   // the server and in the message pane, so this frame only has to be worth reading in place. At
@@ -271,7 +271,7 @@ function entryFor(event, now) {
       const agentName = line(event && event.authorAgentName, SENDER_CAP);
       if (agentName) entry.senderAgentName = agentName;
       // ITS IDENTITY COLOUR, as the server's KEY. ⚠ NOT VALIDATED HERE, DELIBERATELY: the palette
-      // belongs to the renderer's token layer and `channels/lib/agent-colors.ts › agentColorOrNull`
+      // belongs to the renderer's token layer and `src/shared/lib/agent-colors.ts › agentColorOrNull`
       // is the ONE membership test — a seventeenth key from a newer server must read as "no colour"
       // at that one boundary rather than at two that can disagree. Bounded like every caption so a
       // long value cannot ride the ring, and gated on the kind like the name above.

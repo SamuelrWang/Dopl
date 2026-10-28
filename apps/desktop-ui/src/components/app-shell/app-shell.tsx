@@ -11,8 +11,7 @@ import { WorkspaceSwitcherCore } from "@/shared/layout/app-shell/workspace-switc
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
 import styles from "@/shared/layout/app-shell/app-shell.module.css";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
-import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/create-workspace-dialog-core";
-import { workspaceSegment as canonicalSegment } from "@/features/workspaces/url";
+import { RequestWorkspaceAccessDialog } from "@/features/workspaces/components/request-workspace-access-dialog";
 import { isStandardWorkspace } from "@/features/workspaces/types";
 import type { ChannelListPayload } from "@/features/channels/types";
 import { channelsPath } from "@/features/channels/client/query-keys";
@@ -111,7 +110,7 @@ export function AppShellLayout() {
    * because the effect above already owns it: any two of these firing in one
    * tick would race two `replace`s over one history entry.
    *
-   * ⚠ POSITIVE KIND CHECK (INVARIANTS §4A, F-295), as `pages/home/home-rows.ts`
+   * ⚠ POSITIVE KIND CHECK (INVARIANTS §4A, F-295), as `home/components/channels/home-rows.ts`
    * already spells it: `=== "link"`, so a kind added to the union later is
    * EXCLUDED rather than bounced out of the shell (2026-09-17).
    */
@@ -192,7 +191,6 @@ export function AppShellLayout() {
               workspaces={workspaces}
               activeWorkspacePublicId={parseSegment(routed)?.publicId ?? null}
               onNavigate={(path) => navigate(path)}
-              onCreateWorkspace={() => setCreateWsOpen(true)}
             />
           ) : undefined
         }
@@ -234,7 +232,6 @@ export function AppShellLayout() {
           workspaces={workspaces}
           activeWorkspacePublicId={workspace.publicId}
           onNavigate={(path) => navigate(path)}
-          onCreateWorkspace={() => setCreateWsOpen(true)}
         />
         <div className={styles.surface}>
           {/* ⚠ ONE PANEL, AND THE SIDEBAR IS A REGION OF IT (Samuel, 2026-08-30:
@@ -296,14 +293,9 @@ export function AppShellLayout() {
         </div>
       </div>
 
-      <CreateWorkspaceDialogCore
-        open={createWsOpen}
-        onOpenChange={setCreateWsOpen}
-        onCreated={(created) => {
-          void workspacesQuery.refetch();
-          navigate(`/${canonicalSegment(created)}`);
-        }}
-      />
+      {/* 🔒 GATED (Samuel, 2026-10-15): the switcher's "Create workspace" opens the
+          same invite-only popup as the rail's create tile (`shared/layout/app-shell/account-rail-core.tsx`). */}
+      <RequestWorkspaceAccessDialog open={createWsOpen} onOpenChange={setCreateWsOpen} />
 
       <SettingsModal
         open={settingsOpen}

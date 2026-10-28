@@ -11,6 +11,7 @@ import { getAppOrigin } from "@/shared/lib/app-origin";
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import { SearchField } from "@/shared/ui/search-field";
 import { cn } from "@/shared/lib/utils";
+import { DEFAULT_TEAM_COLOR } from "../constants";
 import { ApiError, apiRequest } from "@/shared/api/api-client";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
@@ -301,7 +302,7 @@ export function InviteDialog({
                 </button>
 
                 {roleOpen && (
-                  <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-md overflow-hidden bg-bg-inset border border-border-strong shadow-[0_8px_32px_rgba(0,0,0,0.5)] py-1">
+                  <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-md overflow-hidden bg-bg-inset border border-border-strong shadow-(--shadow-elevated) py-1">
                     {ROLES.map((r) => (
                       <button
                         key={r.value}
@@ -343,7 +344,7 @@ export function InviteDialog({
                         >
                           <span
                             className="h-1.5 w-1.5 rounded-full shrink-0"
-                            style={{ backgroundColor: t.color ?? "#8b5cf6" }}
+                            style={{ backgroundColor: t.color ?? DEFAULT_TEAM_COLOR }}
                           />
                           <span className="flex-1 text-small text-text-primary truncate">
                             {t.name}

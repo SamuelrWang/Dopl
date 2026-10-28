@@ -153,7 +153,7 @@ export function TeamDetailPane({
                     key={`${g.resourceType}:${g.resourceId}`}
                     className="flex items-center gap-2.5 border-b border-border-subtle px-1 py-2 last:border-b-0"
                   >
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-bg-elevated text-text-secondary">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-bg-elevated text-text-secondary">
                       <Icon size={13} aria-hidden />
                     </span>
                     <span className="min-w-0 flex-1">
@@ -209,7 +209,7 @@ function AddMemberMenu({
         <Plus size={11} aria-hidden />
         Add
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} align="right" className="w-56">
+      <Popover open={open} onClose={() => setOpen(false)} align="right">
         {members.map((m) => (
           <MenuItem
             key={m.userId}

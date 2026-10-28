@@ -11,7 +11,7 @@ import { ChannelRecordSkeleton } from "./channel-record-skeleton";
 import {
   PersonRosterActions,
   PersonRosterRowAction,
-} from "./person-roster-actions";
+} from "@/features/home/components/channels/person-roster-actions";
 
 /**
  * A home channel's RECORD — the whole channels surface, pinned to the one
@@ -32,6 +32,7 @@ export function RelationshipRecord({
   currentUserId,
   initialThreadId = null,
   initialSeq = null,
+  initialTaskId = null,
   onDeleted,
 }: {
   homeChannel: Channel;
@@ -54,6 +55,8 @@ export function RelationshipRecord({
    * history" notice rather than scrolling nowhere in silence.
    */
   initialSeq?: number | null;
+  /** A task to open on the Tasks tab — how a Needs you task row lands. INITIAL, like the two above. */
+  initialTaskId?: string | null;
   /** The container's channel was deleted from Settings — drop the selection. */
   onDeleted: () => void;
 }) {
@@ -109,6 +112,7 @@ export function RelationshipRecord({
       role={homeChannel.myWorkspaceRole ?? EMPTY_WORKSPACE_ROLE}
       initialThreadId={initialThreadId}
       initialSeq={initialSeq}
+      initialTaskId={initialTaskId}
       onDeleted={onDeleted}
       // 🔒 /home RENDERS THE SHARED Info BODY AND ADDS ONE REGION TO IT (wave
       // 1A, 2026-09-17). It used to inject a whole tab through the
@@ -149,7 +153,7 @@ export function RelationshipRecord({
       // 2026-09-17). This surface stopped passing it on 2026-08-27 (F-340) and
       // the guest lane on 2026-09-04 (F-666), which left the tab with no host —
       // so it is deleted rather than parked. The /home Knowledge FACE
-      // (`knowledge-panels.tsx`, the header's own segmented control) is the full
+      // (`home-knowledge-panels.tsx`, the header's own segmented control) is the full
       // surface over the same bases and is untouched.
       // 🔒 `peerNamedHeader: false` — THE PANE'S HEADER IS THE CHANNEL'S NAME
       // (Samuel, 2026-09-01). The list row and the Info tab were fixed at
@@ -170,10 +174,12 @@ export function RelationshipRecord({
       // between the two channel record surfaces (Samuel, 2026-09-15; the
       // capability's docblock carries the ruling). A capability rather than a
       // fork precisely so it stays the only one.
+      // `tasks: true` — the Tasks tab and the composer's quick view.
       capabilities={{
         memberManagement: false,
         peerNamedHeader: false,
         artifacts: true,
+        tasks: true,
         mentionsLayout: "category",
       }}
     />

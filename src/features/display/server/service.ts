@@ -322,7 +322,7 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
       display: { blocks: a.blocks, layout: a.layout },
       // A choice posts as a decision; anything else wakes nobody.
       ...(a.decision ? {} : { intent: "chat" as const }),
-      ...(input.thread && { metadata: { taskId: input.thread } }),
+      ...(input.thread && { metadata: { threadId: input.thread } }),
       ...(input.client_msg_id && { clientMsgId: input.client_msg_id }),
     },
     { display: stamp }

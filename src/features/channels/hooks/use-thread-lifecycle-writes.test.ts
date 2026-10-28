@@ -12,7 +12,7 @@
  *     that is gone, or an empty thread in the list;
  *   - a FAILED delete restores both verbatim and the selection is NOT cleared:
  *     `onDeleted` fires in `onSuccess`, never in `optimistic`;
- *   - set-mode INVALIDATES NOTHING. `channel_tasks.updated_at` is not an activity
+ *   - set-mode INVALIDATES NOTHING. `channel_threads.updated_at` is not an activity
  *     clock (INVARIANTS §5, C-1), so a mode change moves no ordering and naming
  *     the thread list would re-download it on every click;
  *   - ⚠ NOTHING WRITES A THREAD STATUS. Threads have no finished state, and the
@@ -81,7 +81,7 @@ function thread(over: Partial<ChannelThread> = {}): ChannelThread {
   };
 }
 
-function message(id: string, taskId: string | null): ChannelMessage {
+function message(id: string, threadId: string | null): ChannelMessage {
   return {
     id,
     seq: Number(id.replace(/\D/g, "")) || 1,
@@ -90,7 +90,7 @@ function message(id: string, taskId: string | null): ChannelMessage {
     authorKind: "user",
     kind: "message",
     body: "hello",
-    metadata: taskId ? { taskId } : {},
+    metadata: threadId ? { threadId } : {},
     clientMsgId: null,
     createdAt: "2026-08-21T00:00:00.000Z",
     authorName: "Sam",
@@ -154,7 +154,7 @@ function harness(): Harness {
 
 function seed(h: Harness) {
   h.client.setQueryData<ThreadsCache>(THREADS_ENTRY, {
-    tasks: [thread(), thread({ id: OTHER_THREAD, title: "Other" })],
+    threads: [thread(), thread({ id: OTHER_THREAD, title: "Other" })],
   });
   h.client.setQueryData<MessagesCache>(MESSAGES_ENTRY, {
     messages: [
@@ -187,7 +187,7 @@ describe("deleteThreadConfig", () => {
     seed(h);
     const { inFlight, settle, calls } = run(h, deleteThreadConfig(h.deps), draft);
     await flush();
-    expect(calls[0].path).toBe(`/api/channels/${CHANNEL}/tasks/${THREAD}`);
+    expect(calls[0].path).toBe(`/api/channels/${CHANNEL}/threads/${THREAD}`);
     expect(calls[0].opts).toMatchObject({ method: "DELETE" });
     // ⚠ NOT a `{op:…}` PATCH. A body here would be closing wearing a new verb.
     expect((calls[0].opts as { body?: unknown }).body).toBeUndefined();
@@ -202,7 +202,7 @@ describe("deleteThreadConfig", () => {
     await flush();
 
     expect(
-      h.client.getQueryData<ThreadsCache>(THREADS_ENTRY)?.tasks.map((t) => t.id)
+      h.client.getQueryData<ThreadsCache>(THREADS_ENTRY)?.threads.map((t) => t.id)
     ).toEqual([OTHER_THREAD]);
     expect(
       h.client
@@ -234,7 +234,7 @@ describe("deleteThreadConfig", () => {
     await inFlight;
 
     expect(
-      h.client.getQueryData<ThreadsCache>(THREADS_ENTRY)?.tasks.map((t) => t.id)
+      h.client.getQueryData<ThreadsCache>(THREADS_ENTRY)?.threads.map((t) => t.id)
     ).toEqual([THREAD, OTHER_THREAD]);
     expect(
       h.client
@@ -319,7 +319,7 @@ describe("setThreadModeConfig", () => {
       modeDraft
     );
     await flush();
-    expect(calls[0].path).toBe(`/api/channels/${CHANNEL}/tasks/${THREAD}`);
+    expect(calls[0].path).toBe(`/api/channels/${CHANNEL}/threads/${THREAD}`);
     expect(calls[0].opts).toMatchObject({
       method: "PATCH",
       body: { op: "set_mode", mode: "autonomous" },
@@ -327,9 +327,9 @@ describe("setThreadModeConfig", () => {
     expect(
       h.client
         .getQueryData<ThreadsCache>(THREADS_ENTRY)
-        ?.tasks.find((t) => t.id === THREAD)?.mode
+        ?.threads.find((t) => t.id === THREAD)?.mode
     ).toBe("autonomous");
-    settle({ task: thread({ mode: "autonomous" }) });
+    settle({ thread: thread({ mode: "autonomous" }) });
     await inFlight;
   });
 
@@ -343,7 +343,7 @@ describe("setThreadModeConfig", () => {
     expect(
       h.client
         .getQueryData<ThreadsCache>(THREADS_ENTRY)
-        ?.tasks.find((t) => t.id === THREAD)?.mode
+        ?.threads.find((t) => t.id === THREAD)?.mode
     ).toBe("interactive");
   });
 
@@ -354,7 +354,7 @@ describe("setThreadModeConfig", () => {
     seed(h);
     const { inFlight, settle } = run(h, setThreadModeConfig(h.deps), modeDraft);
     await flush();
-    settle({ task: thread({ mode: "autonomous" }) });
+    settle({ thread: thread({ mode: "autonomous" }) });
     await inFlight;
     expect(
       h.client.getQueryCache().find({ queryKey: THREADS_ENTRY })?.state
@@ -367,14 +367,14 @@ describe("setThreadModeConfig", () => {
   it("does not invent a row the list does not have", async () => {
     const h = harness();
     h.client.setQueryData<ThreadsCache>(THREADS_ENTRY, {
-      tasks: [thread({ id: OTHER_THREAD })],
+      threads: [thread({ id: OTHER_THREAD })],
     });
     const { inFlight, settle } = run(h, setThreadModeConfig(h.deps), modeDraft);
     await flush();
     expect(
-      h.client.getQueryData<ThreadsCache>(THREADS_ENTRY)?.tasks.map((t) => t.id)
+      h.client.getQueryData<ThreadsCache>(THREADS_ENTRY)?.threads.map((t) => t.id)
     ).toEqual([OTHER_THREAD]);
-    settle({ task: thread({ mode: "autonomous" }) });
+    settle({ thread: thread({ mode: "autonomous" }) });
     await inFlight;
   });
 });

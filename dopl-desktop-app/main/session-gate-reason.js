@@ -63,7 +63,7 @@ const GATE_REASONS = [
   // allow / preapproved (carried for the diag line, so "never landed" and "landed but not
   // covered" are distinguishable in the field without a source read)
   'profile-preapproved', //      shadowed via allowedTools; never actually reaches canUseTool
-  'granted-for-session', //      the operator's scoped allowForTask key covers this exact shape
+  'granted-for-session', //      the operator's scoped allowForThread key covers this exact shape
   'auto-outbound', //            AXIS B auto_outbound / auto_both on an own-channel post
   'auto-inbound-read', //        M3: AXIS B auto_inbound / auto_both on an own-channel READ
   'auto-outbound-marker', //     M4: the same outbound half on an own-channel milestone (its
@@ -97,6 +97,9 @@ const GATE_REASONS = [
   //                             argument, and WHICH action ran is already on the same diag line
   //                             (`session-gate-bridge.js › channelOpLabel` prints
   //                             `op=artifact.dissolve`).
+  'auto-outbound-task', //       the same outbound half on an own-channel `op="task"` write
+  //                             (any of its eight actions). One code, as for the fold: one
+  //                             admission argument, and `channelOpLabel` names the action.
   'auto-outbound-thread-open', //2026-08-24 (Samuel's ruling): the same outbound half on an
   //                             own-channel `create_thread`. Its own code, for the reason the
   //                             marker has one: "the agent opened an exchange with a member" is not
@@ -115,7 +118,7 @@ const GATE_REASONS = [
 function makeGateReason(deps) {
   const d = deps || {};
   const grantedFor = function (a) {
-    const held = a.allowForTask || [];
+    const held = a.allowForThread || [];
     return held.indexOf(d.grantKeyFor(a.toolName, a.input, a.channelId, a.runtime)) !== -1;
   };
   // WHY did a CHANNEL call stop? The order MIRRORS grantDecision's own channel branch, which is
@@ -252,6 +255,7 @@ function makeGateReason(deps) {
       // `listener.log`. Its predicate is disjoint from all three above (they match `op="send"`
       // only), so the order among the four buys nothing.
       if (d.isOwnChannelArtifact && d.isOwnChannelArtifact(a.input, a.channelId)) return 'auto-outbound-artifact';
+      if (d.isOwnChannelTask && d.isOwnChannelTask(a.input, a.channelId)) return 'auto-outbound-task';
       return 'auto-outbound';
     }
     if (decision !== 'gate') return null; // an unknown verdict explains nothing, honestly

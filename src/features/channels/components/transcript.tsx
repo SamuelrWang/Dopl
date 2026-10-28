@@ -15,6 +15,8 @@ import { DevicePill } from "./device-pill";
 import { DisplayCard } from "./display-card";
 import { decisionCardPaint } from "./escalation-card-face";
 import { ThreadCardMessage } from "./thread-card-row";
+import type { AgentFeeds } from "./agent-face";
+import { threadCardAgents } from "./thread-card-agents";
 import { MessageMarkdown, TextOnlyLinks, bodyContextOf } from "./message-markdown";
 import { MessageCiteChips } from "./message-cite-chips";
 import { MessageMarkdownInline } from "./message-markdown-inline";
@@ -27,6 +29,7 @@ export function Transcript({
   rows,
   index,
   flashId,
+  agentFeeds,
   canLaunchAgent = false,
   launchBusy = false,
   onLaunchAgent,
@@ -40,6 +43,8 @@ export function Transcript({
   index: AuthorIndex;
   /** Briefly set right after a Tags-inbox click lands on a row. */
   flashId: string | null;
+  /** Who is working each card's thread; absent draws no agents compartment on the cards. */
+  agentFeeds?: AgentFeeds;
   /** The direct-launch bridge op exists; false renders no button, not a disabled one. */
   canLaunchAgent?: boolean;
   /** A launch is in flight — the double-submit guard, not a capability. */
@@ -127,10 +132,16 @@ export function Transcript({
               // ⚠ HANDED DOWN, NOT BUILT PER CARD — see `previewCtx` above.
               previewCtx={previewCtx}
               flash={row.id === flashId}
+              agents={
+                agentFeeds
+                  ? threadCardAgents(agentFeeds, row.threads[0].channelId, row.openThreadId, index)
+                  : null
+              }
               canLaunchAgent={canLaunchAgent}
               launchBusy={launchBusy}
               onLaunch={() => onLaunchAgent?.(row.openThreadId)}
               onOpen={() => onOpenThread(row.openThreadId)}
+              onOpenAgent={onOpenAgent}
             />
           );
         }

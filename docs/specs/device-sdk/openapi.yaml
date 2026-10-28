@@ -1,0 +1,779 @@
+openapi: 3.1.0
+info:
+  title: Dopl Device SDK API
+  version: "2026-10-27"
+  summary: The /v1 surface of the Dopl Device SDK (frozen contracts v1).
+  description: |
+    Field-for-field mirror of `packages/contracts/src/device-sdk/*` (zod). The TypeScript contracts
+    are the source of truth; a change to either is a change to both, and only by Samuel ruling plus
+    a changelog line in `docs/specs/device-sdk/SPEC-v1.md`.
+
+    Every action is async and idempotent. Every error uses the one `ErrorResponse` shape (C10).
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://api.usedopl.com/v1
+    description: Planned host (not live yet; see PLAN-trackA A1).
+security:
+  - secretKey: []
+tags:
+  - name: connect
+    description: C2 Connect flow and connections.
+  - name: context
+    description: C5 device context.
+  - name: actions
+    description: C4 intent-level deliver and device-level actions.
+  - name: devices
+    description: C3 devices and capability descriptors.
+
+paths:
+  /connect_sessions:
+    post:
+      tags: [connect]
+      operationId: createConnectSession
+      summary: Create a Connect session
+      description: Callable with a secret key or a publishable (`pk_`) key; the only route a publishable key may call. Key scope `connect`.
+      security:
+        - secretKey: []
+        - publishableKey: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectSessionCreateRequest" }
+      responses:
+        "201":
+          description: Session created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectSessionCreateResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /connections/exchange:
+    post:
+      tags: [connect]
+      operationId: exchangePublicToken
+      summary: Exchange the widget's public token for a connection
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectionExchangeRequest" }
+      responses:
+        "200":
+          description: The durable connection and its device.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectionExchangeResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /users/{external_user_id}/connections:
+    get:
+      tags: [connect]
+      operationId: listConnections
+      summary: List an end user's connections
+      parameters:
+        - $ref: "#/components/parameters/ExternalUserId"
+      responses:
+        "200":
+          description: The user's connections.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectionListResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /connections/{id}:
+    delete:
+      tags: [connect]
+      operationId: revokeConnection
+      summary: Revoke a connection
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: The revoked connection.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Connection" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /users/{external_user_id}/context:
+    get:
+      tags: [context]
+      operationId: getContext
+      summary: The user's device context
+      parameters:
+        - $ref: "#/components/parameters/ExternalUserId"
+      responses:
+        "200":
+          description: Active device, posture, available devices and the matched profile.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeviceContext" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /users/{external_user_id}/deliver:
+    post:
+      tags: [actions]
+      operationId: deliver
+      summary: Deliver by intent; Dopl routes to a device (C5)
+      parameters:
+        - $ref: "#/components/parameters/ExternalUserId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeliverRequest" }
+      responses:
+        "202":
+          description: Accepted and routed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeliverResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /devices/{device_id}/actions/{capability}:
+    post:
+      tags: [actions]
+      operationId: createDeviceAction
+      summary: Run one capability on one device
+      description: T4 capabilities return `needs_confirmation` first (C7). `ask.*` actions hold for up to 200s.
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+        - name: capability
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/CapabilityId" }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeviceActionRequest" }
+      responses:
+        "202":
+          description: Accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeviceActionResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+
+  /actions/{id}:
+    get:
+      tags: [actions]
+      operationId: getAction
+      summary: Poll an action
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: The action.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Action" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /devices/{id}:
+    get:
+      tags: [devices]
+      operationId: getDevice
+      summary: A device and its capability descriptors
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: The device.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Device" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    secretKey:
+      type: http
+      scheme: bearer
+      description: "`sk_test_…` or `sk_live_…` (C1). Server-to-server only."
+    publishableKey:
+      type: http
+      scheme: bearer
+      description: "`pk_…` (C1). May only call POST /connect_sessions."
+
+  parameters:
+    ExternalUserId:
+      name: external_user_id
+      in: path
+      required: true
+      description: The developer's own id for the end user (no Dopl account, D1).
+      schema: { type: string, minLength: 1, maxLength: 255 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Optional on every POST. Where the body also carries `idempotency_key`, both must match; reusing a key with a different body is `idempotency_conflict`.
+      schema: { type: string, minLength: 1, maxLength: 255 }
+
+  responses:
+    Error:
+      description: The one error shape (C10).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  schemas:
+    # ── C3 ──────────────────────────────────────────────────────────────
+    DeviceKind:
+      type: string
+      enum: [glasses, phone, desktop, watch, home_hub, home_device, vehicle, robot]
+    RiskTier:
+      type: string
+      enum: [T0, T1, T2, T3, T4]
+    CapabilityId:
+      type: string
+      enum:
+        - state.read
+        - telemetry.read
+        - presence.read
+        - present.notify
+        - present.display
+        - present.speak
+        - present.haptic
+        - ask.choice
+        - ask.confirm
+        - ask.text
+        - capture.photo
+        - capture.audio
+        - capture.video_stream
+        - capture.screen
+        - input.utterance
+        - input.tap
+        - input.gesture
+        - input.button
+        - act.set
+        - act.media
+        - act.navigate
+        - act.lock
+        - act.motion.move
+        - act.motion.gripper
+        - act.motion.vehicle
+    CapabilityScope:
+      description: A capability id, or a whole family as `<family>.*`.
+      oneOf:
+        - $ref: "#/components/schemas/CapabilityId"
+        - type: string
+          enum: [state.*, present.*, ask.*, capture.*, input.*, act.*, act.motion.*]
+    LatencyClass:
+      type: string
+      enum: [realtime, interactive, deferred]
+    CapabilityDescriptor:
+      type: object
+      required: [capability, limits, latency_class, risk_tier, since_adapter]
+      properties:
+        capability: { $ref: "#/components/schemas/CapabilityId" }
+        limits:
+          type: object
+          additionalProperties:
+            type: [number, string, boolean]
+        latency_class: { $ref: "#/components/schemas/LatencyClass" }
+        risk_tier: { $ref: "#/components/schemas/RiskTier" }
+        since_adapter:
+          type: string
+          pattern: "^[a-z0-9_]+@[0-9][0-9A-Za-z.+-]*$"
+          examples: ["even_g2@0.3"]
+    Device:
+      type: object
+      required: [id, kind, vendor, model, firmware, adapter_id, adapter_version, capabilities, online, last_seen_at]
+      properties:
+        id: { type: string, minLength: 1 }
+        kind: { $ref: "#/components/schemas/DeviceKind" }
+        vendor: { type: string }
+        model: { type: string }
+        firmware: { type: [string, "null"] }
+        adapter_id: { type: string, minLength: 1 }
+        adapter_version: { type: string, minLength: 1 }
+        capabilities:
+          type: array
+          items: { $ref: "#/components/schemas/CapabilityDescriptor" }
+        online: { type: boolean }
+        last_seen_at: { type: [string, "null"], format: date-time }
+
+    # ── C2 ──────────────────────────────────────────────────────────────
+    ConnectBranding:
+      type: object
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 80 }
+        logo_url: { type: string, format: uri }
+        accent_color: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+    ConnectSessionCreateRequest:
+      type: object
+      required: [external_user_id, requested_scopes]
+      properties:
+        external_user_id: { type: string, minLength: 1, maxLength: 255 }
+        allowed_kinds:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/DeviceKind" }
+        requested_scopes:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/CapabilityScope" }
+        redirect_uri: { type: string, format: uri }
+        branding: { $ref: "#/components/schemas/ConnectBranding" }
+    ConnectSessionCreateResponse:
+      type: object
+      required: [connect_token, url, expires_at]
+      properties:
+        connect_token: { type: string, minLength: 1 }
+        url: { type: string, format: uri }
+        expires_at: { type: string, format: date-time }
+    ConnectionExchangeRequest:
+      type: object
+      required: [public_token]
+      properties:
+        public_token: { type: string, minLength: 1 }
+    ConnectionExchangeResponse:
+      type: object
+      required: [connection_id, device]
+      properties:
+        connection_id: { type: string, minLength: 1 }
+        device: { $ref: "#/components/schemas/Device" }
+    Grant:
+      type: object
+      required: [scope, granted_at, expires_at]
+      properties:
+        scope: { $ref: "#/components/schemas/CapabilityScope" }
+        granted_at: { type: string, format: date-time }
+        expires_at: { type: [string, "null"], format: date-time }
+    ConnectionStatus:
+      type: string
+      enum: [active, needs_reauth, revoked]
+    Connection:
+      type: object
+      required: [id, external_user_id, status, device, grants, created_at, revoked_at]
+      properties:
+        id: { type: string, minLength: 1 }
+        external_user_id: { type: string, minLength: 1, maxLength: 255 }
+        status: { $ref: "#/components/schemas/ConnectionStatus" }
+        device: { $ref: "#/components/schemas/Device" }
+        grants:
+          type: array
+          items: { $ref: "#/components/schemas/Grant" }
+        created_at: { type: string, format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
+    ConnectionListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Connection" }
+
+    # ── C6 (block vocabulary v2 + image) ────────────────────────────────
+    BlockId:
+      type: string
+      pattern: "^[A-Za-z0-9_-]{1,32}$"
+    ChoiceOption:
+      type: object
+      required: [label]
+      properties:
+        label: { type: string, maxLength: 80 }
+        description: { type: string, maxLength: 200 }
+        recommended: { type: boolean, const: true }
+        why: { type: string, maxLength: 200 }
+    HeadingBlock:
+      type: object
+      required: [id, type, text]
+      properties:
+        id: { $ref: "#/components/schemas/BlockId" }
+        type: { type: string, const: heading }
+        text: { type: string, maxLength: 120 }
+    TextBlock:
+      type: object
+      required: [id, type, content]
+      properties:
+        id: { $ref: "#/components/schemas/BlockId" }
+        type: { type: string, const: text }
+        content: { type: string, maxLength: 2000 }
+        tone: { type: string, enum: [muted, strong] }
+        lines: { type: integer, minimum: 1, maximum: 40 }
+        brightness: { type: integer, enum: [0, 1, 2, 3, 4] }
+        border: { type: boolean }
+    FieldsBlock:
+      type: object
+      required: [id, type, rows]
+      properties:
+        id: { $ref: "#/components/schemas/BlockId" }
+        type: { type: string, const: fields }
+        rows:
+          type: array
+          maxItems: 12
+          items:
+            type: object
+            required: [label, value]
+            properties:
+              label: { type: string, maxLength: 40 }
+              value: { type: string, maxLength: 200 }
+    ListBlock:
+      type: object
+      required: [id, type, items]
+      properties:
+        id: { $ref: "#/components/schemas/BlockId" }
+        type: { type: string, const: list }
+        items:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 200 }
+        style: { type: string, const: number }
+    ChoiceBlock:
+      type: object
+      required: [id, type, options]
+      properties:
+        id: { $ref: "#/components/schemas/BlockId" }
+        type: { type: string, const: choice }
+        options:
+          type: array
+          minItems: 2
+          maxItems: 12
+          items: { $ref: "#/components/schemas/ChoiceOption" }
+    ProgressBlock:
+      type: object
+      required: [id, type, value]
+      properties:
+        id: { $ref: "#/components/schemas/BlockId" }
+        type: { type: string, const: progress }
+        value: { type: number, minimum: 0, maximum: 1 }
+        label: { type: string, maxLength: 120 }
+    TableBlock:
+      type: object
+      required: [id, type, columns, rows]
+      properties:
+        id: { $ref: "#/components/schemas/BlockId" }
+        type: { type: string, const: table }
+        columns:
+          type: array
+          minItems: 2
+          maxItems: 4
+          items: { type: string, maxLength: 40 }
+        rows:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            type: array
+            items: { type: string, maxLength: 60 }
+    DividerBlock:
+      type: object
+      required: [id, type]
+      properties:
+        id: { $ref: "#/components/schemas/BlockId" }
+        type: { type: string, const: divider }
+    SpacerBlock:
+      type: object
+      required: [id, type]
+      properties:
+        id: { $ref: "#/components/schemas/BlockId" }
+        type: { type: string, const: spacer }
+        lines: { type: integer, minimum: 1, maximum: 4 }
+    ImageBlock:
+      type: object
+      required: [id, type, url, alt]
+      properties:
+        id: { $ref: "#/components/schemas/BlockId" }
+        type: { type: string, const: image }
+        url: { type: string, format: uri, pattern: "^https://", maxLength: 2048 }
+        alt: { type: string, minLength: 1, maxLength: 200 }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+    DisplayBlock:
+      oneOf:
+        - $ref: "#/components/schemas/HeadingBlock"
+        - $ref: "#/components/schemas/TextBlock"
+        - $ref: "#/components/schemas/FieldsBlock"
+        - $ref: "#/components/schemas/ListBlock"
+        - $ref: "#/components/schemas/ChoiceBlock"
+        - $ref: "#/components/schemas/ProgressBlock"
+        - $ref: "#/components/schemas/TableBlock"
+        - $ref: "#/components/schemas/DividerBlock"
+        - $ref: "#/components/schemas/SpacerBlock"
+        - $ref: "#/components/schemas/ImageBlock"
+      discriminator:
+        propertyName: type
+        mapping:
+          heading: "#/components/schemas/HeadingBlock"
+          text: "#/components/schemas/TextBlock"
+          fields: "#/components/schemas/FieldsBlock"
+          list: "#/components/schemas/ListBlock"
+          choice: "#/components/schemas/ChoiceBlock"
+          progress: "#/components/schemas/ProgressBlock"
+          table: "#/components/schemas/TableBlock"
+          divider: "#/components/schemas/DividerBlock"
+          spacer: "#/components/schemas/SpacerBlock"
+          image: "#/components/schemas/ImageBlock"
+    DisplayBlocks:
+      description: At most one `choice` block; block ids unique.
+      type: array
+      minItems: 1
+      maxItems: 24
+      items: { $ref: "#/components/schemas/DisplayBlock" }
+
+    # ── C4 ──────────────────────────────────────────────────────────────
+    DeliverIntent:
+      type: string
+      enum: [message, ask, notify, display]
+    Urgency:
+      type: string
+      enum: [low, normal, high]
+    ActionStatus:
+      type: string
+      enum: [queued, delivered, done, failed, needs_confirmation]
+    DeliverContent:
+      description: At least one of text, blocks, options.
+      type: object
+      minProperties: 1
+      properties:
+        text: { type: string, minLength: 1 }
+        blocks: { $ref: "#/components/schemas/DisplayBlocks" }
+        options:
+          type: array
+          minItems: 2
+          items: { $ref: "#/components/schemas/ChoiceOption" }
+    DeliverRequest:
+      type: object
+      required: [intent, content, urgency, idempotency_key]
+      properties:
+        intent: { $ref: "#/components/schemas/DeliverIntent" }
+        content: { $ref: "#/components/schemas/DeliverContent" }
+        urgency: { $ref: "#/components/schemas/Urgency" }
+        target:
+          description: "`auto`, a device kind, or a device id."
+          type: string
+          minLength: 1
+        profile: { type: string, minLength: 1 }
+        idempotency_key: { type: string, minLength: 1, maxLength: 255 }
+    RoutedTo:
+      type: object
+      required: [device_id, kind, reason]
+      properties:
+        device_id: { type: string, minLength: 1 }
+        kind: { $ref: "#/components/schemas/DeviceKind" }
+        reason: { type: string, minLength: 1 }
+    DeliverResponse:
+      type: object
+      required: [delivery_id, routed_to, status]
+      properties:
+        delivery_id: { type: string, minLength: 1 }
+        routed_to: { $ref: "#/components/schemas/RoutedTo" }
+        status: { $ref: "#/components/schemas/ActionStatus" }
+    DeviceActionRequest:
+      type: object
+      required: [args, idempotency_key]
+      properties:
+        args:
+          type: object
+          additionalProperties: true
+        idempotency_key: { type: string, minLength: 1, maxLength: 255 }
+    DeviceActionResponse:
+      type: object
+      required: [action_id, status]
+      properties:
+        action_id: { type: string, minLength: 1 }
+        status: { $ref: "#/components/schemas/ActionStatus" }
+    Action:
+      type: object
+      required: [action_id, device_id, capability, status, result, error, created_at, updated_at]
+      properties:
+        action_id: { type: string, minLength: 1 }
+        device_id: { type: string, minLength: 1 }
+        capability: { $ref: "#/components/schemas/CapabilityId" }
+        status: { $ref: "#/components/schemas/ActionStatus" }
+        result:
+          type: [object, "null"]
+          additionalProperties: true
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/ErrorBody"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    # ── C5 ──────────────────────────────────────────────────────────────
+    Posture:
+      type: string
+      enum: [glanceable, hands_free, seated, driving, unknown]
+    ProfileOutput:
+      type: object
+      additionalProperties: false
+      properties:
+        max_lines: { type: integer, minimum: 1 }
+        max_chars: { type: integer, minimum: 1 }
+        format: { type: string, enum: [plain, markdown, blocks] }
+        markdown: { type: boolean }
+    ProfileMatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        kind: { $ref: "#/components/schemas/DeviceKind" }
+        model: { type: string, minLength: 1 }
+        posture: { $ref: "#/components/schemas/Posture" }
+    ConfirmationMode:
+      type: string
+      enum: [none, on_device, trusted_surface, deny]
+    ProfileConfirmation:
+      description: Per-tier confirmation. T4 may not be `none` (C7).
+      type: object
+      additionalProperties: false
+      properties:
+        T0: { $ref: "#/components/schemas/ConfirmationMode" }
+        T1: { $ref: "#/components/schemas/ConfirmationMode" }
+        T2: { $ref: "#/components/schemas/ConfirmationMode" }
+        T3: { $ref: "#/components/schemas/ConfirmationMode" }
+        T4:
+          type: string
+          enum: [on_device, trusted_surface, deny]
+    ProfileOverflow:
+      description: "D3: limits are enforced, content is never rewritten. No `rewrite` option exists."
+      oneOf:
+        - type: string
+          enum: [truncate, callback]
+        - type: object
+          additionalProperties: false
+          required: [send_to]
+          properties:
+            send_to: { $ref: "#/components/schemas/DeviceKind" }
+    ContextProfile:
+      type: object
+      additionalProperties: false
+      required: [id, match, prompt_append, output, allowed_capabilities, overflow]
+      properties:
+        id: { type: string, minLength: 1 }
+        version: { type: integer, minimum: 1 }
+        match: { $ref: "#/components/schemas/ProfileMatch" }
+        prompt_append: { type: string }
+        output: { $ref: "#/components/schemas/ProfileOutput" }
+        allowed_capabilities:
+          type: array
+          items: { $ref: "#/components/schemas/CapabilityScope" }
+        display_template: { type: string, minLength: 1 }
+        confirmation: { $ref: "#/components/schemas/ProfileConfirmation" }
+        overflow: { $ref: "#/components/schemas/ProfileOverflow" }
+    ContextProfileRef:
+      type: object
+      required: [id, prompt_append, output]
+      properties:
+        id: { type: string, minLength: 1 }
+        prompt_append: { type: string }
+        output: { $ref: "#/components/schemas/ProfileOutput" }
+    ActiveDevice:
+      type: object
+      required: [id, kind, model, last_seen_s]
+      properties:
+        id: { type: string, minLength: 1 }
+        kind: { $ref: "#/components/schemas/DeviceKind" }
+        model: { type: string }
+        last_seen_s: { type: number, minimum: 0 }
+    AvailableDevice:
+      type: object
+      required: [kind, id, capabilities]
+      properties:
+        kind: { $ref: "#/components/schemas/DeviceKind" }
+        id: { type: string, minLength: 1 }
+        capabilities:
+          type: array
+          items: { $ref: "#/components/schemas/CapabilityId" }
+    DeviceContext:
+      type: object
+      required: [active_device, posture, available, profile, source_of_last_message]
+      properties:
+        active_device:
+          oneOf:
+            - $ref: "#/components/schemas/ActiveDevice"
+            - type: "null"
+        posture: { $ref: "#/components/schemas/Posture" }
+        available:
+          type: array
+          items: { $ref: "#/components/schemas/AvailableDevice" }
+        profile:
+          oneOf:
+            - $ref: "#/components/schemas/ContextProfileRef"
+            - type: "null"
+        source_of_last_message:
+          oneOf:
+            - $ref: "#/components/schemas/DeviceKind"
+            - type: "null"
+
+    # ── C10 ─────────────────────────────────────────────────────────────
+    ErrorType:
+      type: string
+      enum: [invalid_request_error, authentication_error, permission_error, rate_limit_error, device_error, api_error]
+    ErrorCode:
+      type: string
+      enum:
+        - device_offline
+        - capability_unsupported
+        - grant_missing
+        - grant_expired
+        - confirmation_denied
+        - rate_limited
+        - vendor_error
+        - needs_reauth
+        - invalid_request
+        - unauthenticated
+        - insufficient_scope
+        - not_found
+        - idempotency_conflict
+    ErrorBody:
+      type: object
+      required: [type, code, message, retryable, doc_url]
+      properties:
+        type: { $ref: "#/components/schemas/ErrorType" }
+        code: { $ref: "#/components/schemas/ErrorCode" }
+        message: { type: string }
+        device_kind: { $ref: "#/components/schemas/DeviceKind" }
+        retryable: { type: boolean }
+        doc_url: { type: string, format: uri }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { $ref: "#/components/schemas/ErrorBody" }

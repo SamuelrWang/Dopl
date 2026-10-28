@@ -108,12 +108,12 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
   });
 
   /** ⚠ ONE SLOT PER REAL TAB, ASKED RATHER THAN COUNTED — `channelPaneTabs` is
-   *  the row's own answer for channel view with no Knowledge capability, which is
-   *  what /home mounts (F-340). A fifth tab moves the ghost with it. */
+   *  the row's own answer for channel view with the `tasks` capability, which is
+   *  what /home mounts. A tab added to the row moves the ghost with it. */
   it("ghosts the tab row slot for slot, off channelPaneTabs itself", () => {
-    const tabs = channelPaneTabs(false);
-    expect(tabs).toHaveLength(4);
-    expect(GHOST).toContain("channelPaneTabs(false)");
+    const tabs = channelPaneTabs(false, true);
+    expect(tabs.map((t) => t.key)).toEqual(["info", "threads", "agents", "tasks", "settings"]);
+    expect(GHOST).toContain("channelPaneTabs(false, true)");
 
     const { container } = render(<ChannelRecordSkeleton />);
     // The `underline` control's own row (`segmented-control.tsx`): text only,
@@ -137,12 +137,8 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
     const geometry = 'cn("relative shrink-0 px-4 pt-1", COMPOSER_BOTTOM)';
     expect(v2("composer.tsx")).toContain(geometry);
     expect(GHOST).toContain(geometry);
-    expect(v2("composer.tsx")).toContain(
-      "raised-tab flex flex-col rounded-[14px] px-[13px] py-[11px]"
-    );
-    expect(GHOST).toContain(
-      'cn(GHOST_FLAT_FACE, "flex flex-col px-[13px] py-[11px]")'
-    );
+    expect(v2("composer.tsx")).toContain("white-card flex flex-col rounded-[20px] px-3 py-2.5");
+    expect(GHOST).toContain('cn(GHOST_FLAT_FACE, "flex flex-col rounded-[20px] px-3 py-2.5")');
     expect(GHOST).toContain("COMPOSER_BOTTOM");
     expect(GHOST_CODE).not.toContain('"pb-4"');
     expect(COMPOSER_BOTTOM).toBe("pb-4");
@@ -151,7 +147,7 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
     const column = container.querySelector(
       ".flex-1.flex-col.\\[contain\\:inline-size\\]"
     );
-    const card = container.querySelector(".px-\\[13px\\].py-\\[11px\\]");
+    const card = container.querySelector(".rounded-\\[20px\\].px-3.py-2\\.5");
     expect(card).not.toBeNull();
     // LAST child of the transcript column — a composer above the transcript is
     // a different surface.
@@ -164,8 +160,8 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
   it("ghosts the Info face's four sections at the real heading and row boxes", () => {
     for (const [source, geometry] of [
       ["bits.tsx", "flex items-center gap-2 px-3.5 pb-1.5 pt-6"],
-      ["bits.tsx", "flex h-9 items-center gap-2 rounded-[8px] px-2"],
-      ["member-roster.tsx", "flex h-[46px] items-center gap-2.5 rounded-[8px] px-2"],
+      ["bits.tsx", "flex h-9 items-center gap-2 rounded-md px-2"],
+      ["member-roster.tsx", "flex h-11.5 items-center gap-2.5 rounded-md px-2"],
       ["member-roster.tsx", "flex flex-col gap-px px-2"],
       ["thread-activity.tsx", "px-3.5 pt-1"],
     ] as const) {
@@ -177,7 +173,7 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
     }
     const { container } = render(<ChannelRecordSkeleton />);
     expect(container.querySelectorAll("aside .pt-6")).toHaveLength(4);
-    expect(container.querySelectorAll("aside .h-\\[46px\\]").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll("aside .h-11\\.5").length).toBeGreaterThan(0);
   });
 
   /** ⚠ THE DIVIDER OCCUPIES NO WIDTH — a zero-width flex sibling, so the ghost's
@@ -188,8 +184,8 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
     expect(v2("info-resize-handle.tsx")).toContain("<SplitResizeHandle");
     expect(
       file("../../../../../src/shared/ui/split-resize-handle.tsx")
-    ).toContain('className="relative z-[2] w-0 shrink-0"');
-    expect(GHOST).toContain('className="relative z-[2] w-0 shrink-0"');
+    ).toContain('className="relative z-(--layer-raised) w-0 shrink-0"');
+    expect(GHOST).toContain('className="relative z-(--layer-raised) w-0 shrink-0"');
     const { container } = render(<ChannelRecordSkeleton />);
     expect(container.querySelector(".w-0.shrink-0")).not.toBeNull();
   });
@@ -225,7 +221,7 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
   it("byte-shares the row shell, the attribution pill and the body cap", () => {
     for (const [source, geometry] of [
       ["authored-row.tsx", "-mx-2 flex flex-col"],
-      ["authored-row.tsx", "rounded-[10px] px-2 py-1"],
+      ["authored-row.tsx", "rounded-lg px-2 py-1"],
       ["authored-row.tsx", "flex w-full min-w-0 flex-col gap-1.5"],
       [
         // ⚠ **`rounded-full` IS NO LONGER IN THIS LITERAL (2026-09-15).** The pill
@@ -238,14 +234,16 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
         // own conditional slot. The GEOMETRY is what is byte-shared; the face is asserted
         // just below, on the arm this ghost is actually in.
         "attribution-pill.tsx",
-        "inline-flex max-w-full items-center gap-2 py-1 pl-1 pr-3.5",
+        "inline-flex max-w-full items-center gap-2 pr-3.5",
       ],
+      // The person arm's inset (an agent's badge is 5px); the ghost is a person's pill.
+      ["attribution-pill.tsx", '"py-1 pl-1"'],
       ["transcript.tsx", "wrap-anywhere max-w-[92%]"],
       ["transcript.tsx", '"flex flex-col gap-5"'],
       ["message-pane.tsx", "px-8 py-5"],
       [
         "message-pane-header.tsx",
-        "flex h-[56px] shrink-0 items-center gap-1 border-b border-border-default px-4",
+        "flex h-14 shrink-0 items-center gap-1 border-b border-border-default px-4",
       ],
     ] as const) {
       expect(v2(source)).toContain(geometry);
@@ -255,13 +253,13 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
     // IS NOT — it keeps the geometry on `GHOST_FLAT_FACE`'s invisible border box.
     expect(v2("attribution-pill.tsx")).toContain('!framed && "bento"');
     expect(GHOST).toContain("GHOST_FLAT_FACE,");
-    // The pill's avatar slot is the size the pill asks for — `avatar.tsx › SIZE.sm`.
-    expect(file("../../../../../src/shared/ui/avatar.tsx")).toContain('sm: "w-8 h-8');
-    expect(GHOST).toContain("w-8 h-8");
+    // The pill's avatar slot is the size the pill asks for — `avatar.tsx › SIZE.px36`.
+    expect(file("../../../../../src/shared/ui/avatar.tsx")).toContain('px36: "w-9 h-9');
+    expect(GHOST).toContain("w-9 h-9");
 
     const { container } = render(<ChannelRecordSkeleton />);
     // Three to four groups, each a pill over its body lines.
-    const rows = container.querySelectorAll(".rounded-\\[10px\\]");
+    const rows = container.querySelectorAll(".rounded-lg");
     expect(rows.length).toBeGreaterThanOrEqual(3);
     expect(rows.length).toBeLessThanOrEqual(4);
     expect(container.querySelectorAll(".rounded-full.border-transparent").length).toBe(
@@ -278,9 +276,9 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
    * names what it dropped.
    */
   it("paints no raised face, while the real surface still does", () => {
-    expect(v2("composer.tsx")).toContain("raised-tab");
+    expect(v2("composer.tsx")).toContain("white-card");
     expect(v2("attribution-pill.tsx")).toContain('"bento"');
-    for (const face of ["bento", "raised-tab", "shadow", "bg-gradient", "inset", "concave"]) {
+    for (const face of ["bento", "raised-tab", "white-card", "shadow", "bg-gradient", "inset", "concave"]) {
       expect(GHOST_CODE).not.toContain(face);
     }
     // The face is the shared kit's one flat face, not a local copy.

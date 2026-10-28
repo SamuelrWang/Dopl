@@ -62,10 +62,10 @@ describe("settings modal › notifications", () => {
     fireEvent.click(gear());
 
     const dialog = await screen.findByRole("dialog", { name: "Settings" });
-    const labels = within(dialog).getAllByRole("button").map((b) => b.textContent);
+    const labels = within(dialog).getAllByRole("tab").map((tab) => tab.textContent);
     expect(labels.indexOf("Notifications")).toBe(labels.indexOf("Configuration") + 1);
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Notifications" }));
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Notifications" }));
     fireEvent.click(await screen.findByRole("switch", { name: "Mentions and replies" }));
 
     await waitFor(() =>
@@ -84,7 +84,7 @@ describe("settings modal › notifications", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "Settings" });
     // Account-backed: the row does NOT depend on a desktop capability any more.
-    fireEvent.click(within(dialog).getByRole("button", { name: "Notifications" }));
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Notifications" }));
     // Approvals carry the only button that answers them, so the row cannot be switched off.
     const approvals = await screen.findByRole("switch", { name: "Approvals" });
     expect(approvals).toBeDisabled();

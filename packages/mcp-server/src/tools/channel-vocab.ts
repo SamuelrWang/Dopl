@@ -20,15 +20,16 @@
 import { legacyOnly } from "../call-ref.js";
 
 /**
- * THE SIX OPS AN AGENT SEES, and the only six it may pick from.
+ * THE OPS AN AGENT SEES, and the only ones it may pick from.
  *
  * ⚠ THE ORDER IS THE READING ORDER a model skims: the one write it makes most, the two reads,
- * then the three dispatchers.
+ * then the dispatchers.
  *
  * ⚠ **`artifact` IS THE SIXTH, ADDED 2026-09-06 (design #1220 §5, accepted at #1222), AND IT IS
  * AN OP RATHER THAN A `send` KIND** — it writes no message. It folds messages that ALREADY EXIST
  * into one card, which is a different verb on a different row, and hanging it off the send lane
  * would have put a non-delivery on the one op whose whole contract is that it delivers.
+ * `task` is the same case: it writes task rows, not messages.
  */
 export const CHANNEL_OPS = [
   "send",
@@ -37,6 +38,7 @@ export const CHANNEL_OPS = [
   "manage",
   "rooms",
   "artifact",
+  "task",
 ] as const;
 
 /**
@@ -46,7 +48,7 @@ export const CHANNEL_OPS = [
  *
  * ⚠ **WITHOUT IT, RETIREMENT IS A `-32602 invalid enum value`** — the opaque failure B8's one-
  * release redirect window existed to prevent, arriving one release later. ⚠ **ONE LINE, AND IT
- * NAMES THE WHOLE VOCABULARY** — six words since `artifact` landed (A4, 2026-09-06), derived from
+ * NAMES THE WHOLE VOCABULARY**, derived from
  * {@link CHANNEL_OPS} and never counted here; anything longer is `rooms(action="help")`'s
  * doctrine.
  *
@@ -59,7 +61,7 @@ export function unknownOpRefusal(op: unknown): string {
   const shown = raw.replace(/\s+/g, " ").slice(0, 40);
   // ⚠ Same sentence shape as the two `action` refusals in `channel.ts` — one
   // vocabulary, listed and then joined with "or", derived from the enum so a
-  // sixth op cannot arrive without appearing here.
+  // new op cannot arrive without appearing here.
   const quoted = CHANNEL_OPS.map((o) => `"${o}"`);
   const offered = `${quoted.slice(0, -1).join(", ")} or ${quoted[quoted.length - 1]}`;
   // Legacy-only: a granular call names its tool, so it never sends an op.
@@ -69,7 +71,7 @@ export function unknownOpRefusal(op: unknown): string {
 /**
  * THE SUB-VERBS, per dispatching op.
  *
- * ⚠ **THE THREE VOCABULARIES ARE DISJOINT BY CONSTRUCTION**, and a test asserts it: one flat
+ * ⚠ **THE VOCABULARIES ARE DISJOINT BY CONSTRUCTION**, and a test asserts it: one flat
  * `action` enum is what a client introspects, so an overlapping word would make the same string
  * mean two things one op apart. Disjointness is also what lets `gating.ts › WRITE_OPS` name a
  * single write action (`rooms.open`) without the pair ever being ambiguous.
@@ -92,6 +94,7 @@ export const CHANNEL_ACTIONS = {
     "invite",
     "members",
     "threads",
+    "tasks",
     "thread_mode",
     "update",
     "help",
@@ -101,6 +104,17 @@ export const CHANNEL_ACTIONS = {
   // exactly where it was. That is what keeps a fold reversible, and it is why
   // this op sits inside the tool's published "no delete op" policy.
   artifact: ["create", "add", "remove", "dissolve"],
+  // `create_task` / `update_task` keep the lists disjoint; the granular tool's selector says `create` / `update`.
+  task: [
+    "create_task",
+    "update_task",
+    "set_status",
+    "assign",
+    "unassign",
+    "add_subtask",
+    "update_subtask",
+    "add_note",
+  ],
 } as const;
 
 /** Every action name, as the published enum. ⚠ Derived, never restated. */
@@ -108,18 +122,20 @@ export const CHANNEL_ACTION_NAMES = [
   ...CHANNEL_ACTIONS.manage,
   ...CHANNEL_ACTIONS.rooms,
   ...CHANNEL_ACTIONS.artifact,
+  ...CHANNEL_ACTIONS.task,
 ] as [string, ...string[]];
 
 export type ManageAction = (typeof CHANNEL_ACTIONS.manage)[number];
 export type RoomsAction = (typeof CHANNEL_ACTIONS.rooms)[number];
 export type ArtifactAction = (typeof CHANNEL_ACTIONS.artifact)[number];
+export type TaskAction = (typeof CHANNEL_ACTIONS.task)[number];
 
 /** The ops that take an `action`, in the reading order above. */
 type DispatchOp = keyof typeof CHANNEL_ACTIONS;
 
 /**
- * THE ONE REFUSAL FOR A WORD THAT BELONGS TO ANOTHER OP — written once here, used by all three
- * dispatch arms in `channel.ts`.
+ * THE ONE REFUSAL FOR A WORD THAT BELONGS TO ANOTHER OP — written once here, used by every
+ * dispatch arm in `channel.ts`.
  *
  * ⚠ **IT WAS TWO HAND-WRITTEN SENTENCES UNTIL 2026-09-06, AND THE THIRD VOCABULARY IS WHY IT IS
  * DERIVED NOW.** Each arm said "that word belongs to" and then NAMED the other op, which is a
@@ -130,7 +146,7 @@ type DispatchOp = keyof typeof CHANNEL_ACTIONS;
  *
  * ⚠ The offered list is the op's OWN vocabulary, joined with "or" — the same shape as {@link
  * unknownOpRefusal}, and the one thing a caller cannot read off a flat `action` enum that
- * publishes all three lists as one.
+ * publishes every list as one.
  */
 export function unknownActionRefusal(op: DispatchOp, action: string): string {
   const shown = action.replace(/\s+/g, " ").slice(0, 40);
@@ -141,7 +157,7 @@ export function unknownActionRefusal(op: DispatchOp, action: string): string {
   );
   // ⚠ THE OWNER CLAUSE IS OMITTED RATHER THAN GUESSED when no vocabulary has
   // the word. Unreachable through the published schema — `action` is an enum
-  // over all three lists — and kept for the same reason `channel.ts` keeps its
+  // over every list — and kept for the same reason `channel.ts` keeps its
   // exhaustive default: a build where that validation did not run must refuse,
   // and must not invent an op to send the caller to.
   const quoted = CHANNEL_ACTIONS[op].map((a) => `"${a}"`);

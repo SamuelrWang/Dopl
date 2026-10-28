@@ -36,7 +36,7 @@ export function TokenSpendPanel({ segment }: { segment: string }) {
     <SectionPanel id="workspace-overview-token-spend" label="Token spend">
       <section className="bento flex flex-col gap-3 p-3.5">
         {spend.isPending || !spend.data ? (
-          <Skeleton className="h-[104px] w-full rounded-lg" />
+          <Skeleton className="h-26 w-full rounded-lg" />
         ) : (
           <TokenSpendStrip
             report={spend.data}

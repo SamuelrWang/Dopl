@@ -7,11 +7,19 @@ import {
   docHref,
   getDocSection,
   sectionHref,
+  statusOf,
   tableOfContents,
   type DocPage,
   type DocSection,
 } from "../content";
 import { NAV_ICONS } from "./docs-icons";
+import { StatusBadge } from "./status-badge";
+
+/** A sidebar row's badge: only for pages that are not live. */
+function RowBadge({ slug }: { slug: string }) {
+  const status = statusOf(slug);
+  return status && status !== "live" ? <StatusBadge status={status} /> : null;
+}
 
 function NavIcon({ id }: { id: keyof typeof NAV_ICONS }) {
   const Icon = NAV_ICONS[id];
@@ -57,6 +65,7 @@ function HomeView() {
                 <li key={l.slug}>
                   <Link href={docHref(l.slug)} className="docs-nav-child">
                     {l.label}
+                    <RowBadge slug={l.slug} />
                   </Link>
                 </li>
               ))}
@@ -97,6 +106,7 @@ function SectionView({ section, page }: { section: DocSection; page: DocPage }) 
                     aria-current={active ? "page" : undefined}
                   >
                     {l.label}
+                    <RowBadge slug={l.slug} />
                   </Link>
                   {active && anchors.length > 0 && (
                     <ul className="docs-nav-anchors">

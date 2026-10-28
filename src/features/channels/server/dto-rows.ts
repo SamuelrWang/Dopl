@@ -65,7 +65,7 @@ export type ChannelRow = {
   info_card?: unknown;
 };
 
-export type ChannelTaskRow = {
+export type ChannelThreadRow = {
   id: string;
   channel_id: string;
   workspace_id: string;
@@ -82,29 +82,29 @@ export type ChannelTaskRow = {
 };
 
 /**
- * The same task row read through `channel_tasks_activity` (migration
+ * The same thread row read through `channel_threads_activity` (migration
  * `20260818120000`), which adds the ONE derived column the base table cannot
  * hold: when the thread last saw real activity, off `channel_messages`.
  *
  * ⚠ A DISTINCT TYPE, not the base row with an optional field (INVARIANTS §9):
  * the presence of `last_activity_at` is what says this read DERIVED the clock.
- * A single-row load off `channel_tasks` did not, and must not be able to
+ * A single-row load off `channel_threads` did not, and must not be able to
  * pass itself off as having done so.
  */
-export type ChannelTaskActivityRow = ChannelTaskRow & {
+export type ChannelThreadActivityRow = ChannelThreadRow & {
   /**
    * Newest non-proposal message tagged for the thread, falling back to the
-   * thread's own `created_at`. NEVER `channel_tasks.updated_at` — see
-   * `repository-tasks.ts › updateTask`.
+   * thread's own `created_at`. NEVER `channel_threads.updated_at` — see
+   * `repository-threads.ts › updateThread`.
    */
   last_activity_at: string;
 };
 
-/** The columns `listTasksByChannel` reads off `channel_tasks_activity`. ⚠ Not
+/** The columns `listThreadsByChannel` reads off `channel_threads_activity`. ⚠ Not
  *  `*`: the view carries `client_msg_id`, which is an idempotency key and no
  *  reader's business (INVARIANTS §9). Must stay in step with
- *  {@link ChannelTaskActivityRow}. */
-export const CHANNEL_TASK_ACTIVITY_COLS =
+ *  {@link ChannelThreadActivityRow}. */
+export const CHANNEL_THREAD_ACTIVITY_COLS =
   "id,channel_id,workspace_id,title,status,outcome,mode,created_by,target_user_id,created_at,updated_at,closed_at,outcome_summary,last_activity_at";
 
 export type ChannelMemberRow = {
@@ -153,7 +153,7 @@ export type ChannelMessageRow = {
   metadata: unknown;
   client_msg_id: string | null;
   created_at: string;
-  // ── THE TWO NUMBERS (held migration `20261122120000`) ───────────────────
+  // ── THE TWO NUMBERS (held migration `20261124120000`) ───────────────────
   // ⚠ **OPTIONAL BECAUSE THE COLUMNS DO NOT EXIST YET, AND THAT IS THE POINT.**
   // The migration that adds them is HELD (`supabase/migrations-held/`), so until
   // Samuel applies it these are absent from every row, `CHANNEL_MESSAGE_COLS`

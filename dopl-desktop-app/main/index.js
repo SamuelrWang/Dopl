@@ -336,9 +336,9 @@ if (!gotLock) {
     // ⚠ ARMED AFTER `listener.start`, AND THE ORDER IS LOAD-BEARING IN ONE DIRECTION. It binds
     // a second `postgres_changes` listener onto the listener's OWN per-workspace WebSocket
     // (`main/realtime.js › setDirectives`), so realtime has to exist first; and it resolves a
-    // directive's channel context through `listener.watchedChannel`, which answers null until
-    // the first reconcile — a directive arriving before then is REFUSED (`no-bridge`) rather
-    // than launched blind, which is the right failure.
+    // directive's channel context through `listener.channelForLaunch`: the watched DTO, else the
+    // server's row fetched by id (a directive that beat the first reconcile). Neither answering
+    // is REFUSED (`no-bridge`) rather than launched blind.
     //
     // ⚠ IT IS OFF UNLESS THE OPERATOR TURNED IT ON, PER MACHINE, and `start` reads that toggle
     // before it binds anything: a default install adds no binding, names the table nowhere, and
@@ -351,6 +351,7 @@ if (!gotLock) {
         getUserId: () => (authTokens.getAuthState() || {}).userId || null,
         launch: (spec) => require('./session-engine').launchRequesterSession(spec),
         watchedChannel: (channelId) => listener.watchedChannel(channelId),
+        channelForLaunch: (channelId) => listener.channelForLaunch(channelId),
         workspaces: () => require('./realtime').desiredWorkspaceIds(),
       });
     } catch (err) { diag('launchDirectives.start error', err && err.message); }
@@ -364,7 +365,7 @@ if (!gotLock) {
         // ⚠ THE SAME OP THE OPERATOR'S OWN COMPOSER USES (ruling R1) — one resolution, one
         // `steer`, one private-turn open. What the `directed` argument changes inside it is
         // the FRAMING (fenced data, never operator authority) and the reply capture.
-        direct: (spec) => require('./session-reopen').messageByTask(spec),
+        direct: (spec) => require('./session-reopen').messageByThread(spec),
         workspaces: () => require('./realtime').desiredWorkspaceIds(),
       });
     } catch (err) { diag('agentDirections.start error', err && err.message); }

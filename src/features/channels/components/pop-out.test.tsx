@@ -175,7 +175,7 @@ describe("the header slot", () => {
     // `.raised-tab` on the pressed state.
     expect(info.className).not.toMatch(/rounded-|bg-|raised-tab/);
     // …and the pop-out beside it still does.
-    expect(popOut.className).toMatch(/rounded-\[7px\]/);
+    expect(popOut.className).toMatch(/rounded-tile/);
   });
 
   it("leaves NOTHING else on the right of the header", () => {
@@ -190,10 +190,10 @@ describe("the header slot", () => {
       "Channel settings",
       "Add members",
       // ⚠ RENAMED 2026-09-06 (settings overhaul, item 4): "Agent folder" →
-      // "Working Folder". This list is about the message pane NOT growing the
+      // "Working folder". This list is about the message pane NOT growing the
       // Settings tab's controls, so what it needs is the CURRENT name — the old
       // string would pass for the wrong reason forever.
-      "Working Folder",
+      "Working folder",
     ]) {
       expect(screen.queryByRole("button", { name: gone })).toBeNull();
     }

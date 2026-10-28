@@ -12,7 +12,7 @@
  * strip are absolutely positioned out of that zero-width track, straddling the
  * divider. It carries the ref (`attach`), and its parent is the row.
  *
- * ⚠ **`z-[2]` IS BETWEEN TWO EXISTING LAYERS** on the channels surface (info
+ * ⚠ **`z-(--layer-raised)` IS BETWEEN TWO EXISTING LAYERS** on the channels surface (info
  * column `z-index: 1`, agent overlay `z-20`) — above a column's own border, below
  * an overlay that covers the column it would resize.
  */
@@ -27,10 +27,9 @@ import type { SplitResize } from "./use-split-resize";
  * 2026-09-13: *"I want it to be perfectly on the vertical line."*).
  *
  * The divider is a `border-l border-border-default` drawn INSIDE the column to the
- * handle's right, so its centre is half a border right of the wrapper's x. It is
- * 1px on the plain kit and 2px under `data-frame-skin`, which widens every
- * `.border-l.border-border-default` AND declares this variable in the adjacent rule
- * (`src/app/globals.css` + the desktop `kit.css` copy) — so the two cannot drift.
+ * handle's right, so its centre is half a border right of the wrapper's x. The
+ * kit's divider is 1px, the fallback; a host that widens its divider declares this
+ * variable beside the width.
  */
 export const DIVIDER_WIDTH_VAR = "--channel-divider-w";
 
@@ -60,7 +59,7 @@ export function SplitResizeHandle({
   const arrows = showArrows || dragging;
 
   return (
-    <div ref={attach} className="relative z-[2] w-0 shrink-0">
+    <div ref={attach} className="relative z-(--layer-raised) w-0 shrink-0">
       <div
         role="separator"
         aria-orientation="vertical"

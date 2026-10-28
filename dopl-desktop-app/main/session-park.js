@@ -61,12 +61,14 @@ function contextFromRecord(rec) {
   const r = rec || {};
   return {
     channelName: r.channelName || null,
-    taskTitle: r.taskTitle || null,
+    threadTitle: r.threadTitle || null,
     authorName: r.counterpartyName || null,
     channelId: r.channelId || null,
     workspaceId: r.workspaceId || null,
     // `templateName`: a record parked before the template→identity rename (P3-10).
-    identity: (r.identityName || r.templateName) ? { name: r.identityName || r.templateName } : null,
+    identity: (r.identityName || r.templateName)
+      ? { name: r.identityName || r.templateName, ...(r.identityId ? { id: r.identityId } : {}) }
+      : null,
   };
 }
 
@@ -164,7 +166,7 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
   // back: `offerResume` holds this object, and a second click must find the same slot.
   const agentId = isAgentId(rec.agentId) ? rec.agentId : newAgentId();
   rec.agentId = agentId;
-  const slot = { channelId: rec.channelId, taskId: rec.taskId, agentId: agentId };
+  const slot = { channelId: rec.channelId, threadId: rec.threadId, agentId: agentId };
   // The record's own three-part slot, then the concurrency ceiling (a resume costs a child like a launch).
   if (deps.hasLiveSession(slot)) return false;
   if (atCap()) {
@@ -191,7 +193,7 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
   }
   const s = await deps.startSession({
     key: store.slotKey(slot),
-    channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId,
+    channelId: rec.channelId, threadId: rec.threadId, workspaceId: rec.workspaceId,
     // The same instance id, else it comes back as a stranger (slot, pill, @-address).
     agentId: agentId, bind: rec.bind === 'room' ? 'room' : 'pair',
     // Fail restrictive: an unknown stored profile resumes `read_only`, never the stored string.

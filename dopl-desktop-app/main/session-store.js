@@ -12,23 +12,35 @@ const SDK_IDS_KEY = 'sessionIds';
 
 // ─── BEGIN SESSION-STORE-PURE (pure; unit-tested via source extraction) ──────
 
-// Wire/storage `task` == domain `thread`. A session is (channel, thread, AGENT INSTANCE):
-// `<channelId>:<taskId>:<agentId>`, the middle segment empty for a channel-level agent. It crosses to the server
+// A session is (channel, thread, AGENT INSTANCE):
+// `<channelId>:<threadId>:<agentId>`, the middle segment empty for a channel-level agent. It crosses to the server
 // as `channel_sessions.session_key` (`schema-sessions.ts › SESSION_KEY_RE`): change one, change both.
-function sessionKey(channelId, taskId, agentId) {
-  return String(channelId || '') + ':' + String(taskId || '') + ':' + String(agentId || '');
+function sessionKey(channelId, threadId, agentId) {
+  return String(channelId || '') + ':' + String(threadId || '') + ':' + String(agentId || '');
 }
 
 // The slot a call's own argument object names; the three parts compose.
 function slotKey(a) {
   const x = a || {};
-  return sessionKey(String(x.channelId || ''), String(x.taskId || ''), String(x.agentId || ''));
+  return sessionKey(String(x.channelId || ''), String(x.threadId || ''), String(x.agentId || ''));
 }
 
 // The prefix every agent on one thread shares. The trailing colon is load-bearing (it stops a neighbouring
 // thread whose id extends this one from matching); keys are compared, never split.
-function threadKeyPrefix(channelId, taskId) {
-  return String(channelId || '') + ':' + String(taskId || '') + ':';
+function threadKeyPrefix(channelId, threadId) {
+  return String(channelId || '') + ':' + String(threadId || '') + ':';
+}
+
+// A record's thread. One written before the thread rename has no `threadId`, but its key still names the thread
+// it ran on: the key minus its known channel and agent ends (so a thread id is never split on a colon).
+function recordThreadId(key, rec) {
+  const r = rec || {};
+  if (typeof r.threadId === 'string' && r.threadId) return r.threadId;
+  const k = String(key || '');
+  const head = String(r.channelId || '') + ':';
+  const tail = ':' + String(r.agentId || '');
+  if (!r.channelId || k.length < head.length + tail.length || !k.startsWith(head) || !k.endsWith(tail)) return '';
+  return k.slice(head.length, k.length - tail.length);
 }
 
 function isTerminalPhase(phase) {
@@ -59,7 +71,7 @@ function durableSessionRecord(rec) {
     key: r.key,
     sessionId: r.sessionId,
     channelId: r.channelId,
-    taskId: r.taskId || '',
+    threadId: r.threadId || '',
     workspaceId: r.workspaceId,
     side: r.side,
     profile: r.profile,
@@ -75,7 +87,7 @@ function durableSessionRecord(rec) {
     startedAt: r.startedAt,
     // When it was last PARKED (stamped by both park writes; a pure passthrough here). Null is OLD at boot.
     parkedAt: Number(r.parkedAt) > 0 ? Number(r.parkedAt) : null,
-    // The task's other party, so a resumed session stays bound to it (FIX L1).
+    // The thread's other party, so a resumed session stays bound to it (FIX L1).
     counterpartyId: r.counterpartyId || null,
     direct: r.direct === true,
     // A strict enum falling back to the NARROWER binding.
@@ -85,10 +97,11 @@ function durableSessionRecord(rec) {
     // Header identity as bounded plain strings (a hand-edited store cannot push a blob to a renderer).
     counterpartyName: durableName(r.counterpartyName),
     channelName: durableName(r.channelName),
-    taskTitle: durableName(r.taskTitle),
+    threadTitle: durableName(r.threadTitle),
     // The identity NAME only (F-288), at the column's 120: without it a crash resume erased
     // `channel_sessions.identity_name`. The body is never persisted (no reader after spawn).
     identityName: durableName(r.identityName, 120),
+    identityId: durableName(r.identityId, 36),
     // Display only; a whitelist drops the retired cost/cap fields of an older record on read.
     turns: Number(r.turns) || 0,
     // The post counter feeds client_msg_ids (idempotency), so it is coerced harder: finite, >= 0, integral.
@@ -153,8 +166,14 @@ function prunableKeys(all, opts) {
 
 // ─── END SESSION-STORE-PURE ──────────────────────────────────────────────────
 
+// Every reader gets a record's thread back, including a pre-rename record's (`recordThreadId`).
 function loadRecords() {
-  return store.get(RECORDS_KEY) || {};
+  const all = store.get(RECORDS_KEY) || {};
+  for (const key of Object.keys(all)) {
+    const rec = all[key];
+    if (rec && typeof rec === 'object') rec.threadId = recordThreadId(key, rec);
+  }
+  return all;
 }
 
 // The park stamp is written at BOTH writes that can leave a record parked (here and `setRecordPhase`), so a
@@ -201,7 +220,7 @@ function pruneRecords(opts) {
 }
 
 // The resume map is kept apart from the record so a conversation survives a settled record; cleared only
-// when the task itself is done.
+// when the thread itself is done.
 function getSdkSessionId(key) {
   const map = store.get(SDK_IDS_KEY) || {};
   return map[key] || null;

@@ -81,7 +81,7 @@ test("gate step 1.6: Full runs it, below Full asks, an off turn denies ahead of 
   assert.notEqual(asked.reason, "unclassified-tool");
   assert.equal(gate({ operatorTools: "on", toolName: "Agent", toolMode: "manual" }).decision, "gate");
   const grant = grantKeyFor(CHROME, {}, "c1");
-  const off = gate({ operatorTools: "off", allowForTask: [grant] });
+  const off = gate({ operatorTools: "off", allowForThread: [grant] });
   assert.deepEqual(off, { decision: "deny", reason: "operator-tools-off" });
   assert.match(denyMessageFor(off.reason), /operator's own tools are off for this turn/);
   // Dopl's own surface and the classified built-ins are untouched by an off turn.

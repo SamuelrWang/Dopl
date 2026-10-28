@@ -21,9 +21,9 @@
  * ⚠ WHAT IS COMPARED: `--*` CUSTOM PROPERTY DECLARATIONS ONLY — name and value,
  * including multiplicity (a token redeclared in a second block must be
  * redeclared in both). Not selectors, not rules, not `@media` structure. The
- * two files are NOT the same file: `tokens.css` deliberately omits the
- * landing/login-only rules (`.design-grid`, the login orbs, `logo-scroll`) and
- * has no reason to carry them, so a whole-file diff would be noise. The token
+ * two files are NOT the same file: `tokens.css` deliberately omits the landing
+ * and login rules outside the token layers and has no reason to carry them, so
+ * a whole-file diff would be noise. The token
  * layer is the part both trees claim is one palette.
  *
  * ⚠ WHAT THE CLASS HALF COMPARES: **SELECTOR NAMES INSIDE `@layer components`,

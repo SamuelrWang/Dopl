@@ -122,7 +122,7 @@ function grantArgs(s, toolName, input) {
     toolName: toolName,
     input: input, workspaceId: s.workspaceId, audience: s.audience || null,
     channelId: s.channelId, launchDepth: s.launchDepth, launchChain: s.launchChain === true,
-    allowForTask: st.allowForTask || [],
+    allowForThread: st.allowForThread || [],
     // The windowless Axis-A floor is applied here, at the one read covering every spawn shape, and never
     // written back to state (the agent view must not show a posture nobody chose).
     toolMode: s && s.windowless === true
@@ -152,7 +152,7 @@ function baseRecord(s) {
     key: s.key,
     sessionId: s.sessionId,
     channelId: s.channelId,
-    taskId: s.taskId,
+    threadId: s.threadId,
     workspaceId: s.workspaceId,
     side: s.side,
     profile: s.profile, operatorTools: s.operatorTools || '',
@@ -163,7 +163,9 @@ function baseRecord(s) {
     startedAt: s.startedAt,
     counterpartyId: s.counterpartyId || null, direct: s.direct === true, bind: s.bind === 'room' ? 'room' : 'pair', agentId: s.agentId || null,
     counterpartyName: s.counterpartyName || null, channelName: (s.context && s.context.channelName) || null,
-    taskTitle: (s.context && s.context.taskTitle) || null, identityName: (s.context && s.context.identity && s.context.identity.name) || null,
+    threadTitle: (s.context && s.context.threadTitle) || null, identityName: (s.context && s.context.identity && s.context.identity.name) || null,
+    identityId: (s.context && s.context.identity && s.context.identity.id) || null,
+    identityId: (s.context && s.context.identity && s.context.identity.id) || null,
     turns: s.state.turns,
     ownPostSeq: s.ownPostSeq,
     model: s.model || null,

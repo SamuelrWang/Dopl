@@ -1,5 +1,5 @@
 import "server-only";
-import { agentColorOrNull } from "../lib/agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 import { pickAgentColor, rankFreeAgentColors } from "../lib/agent-color-pick";
 import { AgentColorTakenError } from "./errors";
 import {

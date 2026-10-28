@@ -47,7 +47,7 @@ vi.mock("./composer", () => ({
 vi.mock("../hooks/use-channel-messages", () => ({
   useChannelMessages: () => ({
     messages: [
-      message({ id: "m-1", seq: 1, authorUserId: PEER, body: "in the thread", metadata: { taskId: "t-1" } }),
+      message({ id: "m-1", seq: 1, authorUserId: PEER, body: "in the thread", metadata: { threadId: "t-1" } }),
     ],
     loading: false,
     refetch: () => {},
@@ -97,7 +97,7 @@ function ownAgent(over: Record<string, unknown> = {}) {
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: THREAD.id,
+    threadId: THREAD.id,
     agentId: "a1b2c3d4",
     name: "a1b2c3d4",
     displayName: "Picker Fix",
@@ -165,7 +165,7 @@ describe("the pop-out's working strip", () => {
   it("is SCOPED TO THIS THREAD — an agent working on another one is not reported here", () => {
     // A pop-out is ONE exchange by construction, so a channel-wide strip here would report
     // an agent working somewhere this reader cannot see.
-    ownSessions.mockReturnValue([ownAgent({ taskId: OTHER_THREAD_ID })]);
+    ownSessions.mockReturnValue([ownAgent({ threadId: OTHER_THREAD_ID })]);
     openWindow();
     expect(workingPill()).toBeNull();
   });

@@ -13,7 +13,7 @@
 //     that exists to change a posture. It does, two ways: the requested pair is CLAMPED to the
 //     operator's own durable channel posture (`channel-prefs.js › getLaunchPosture`), and the
 //     kind is behind the machine-wide consent toggle, unlike its two non-launch siblings.
-//  2. **IT IMPLEMENTS NOTHING.** The apply is `session-engine.js › setModeByTask` — the same op
+//  2. **IT IMPLEMENTS NOTHING.** The apply is `session-engine.js › setModeByThread` — the same op
 //     `sessions:setMode` and `channel-dir-ipc.js › applyPostureToLive` call, where the windowless
 //     message floor and the reducer's fail-closed coercion already live. A second writer to those
 //     two fields is how two readers come to disagree about one posture.
@@ -27,13 +27,13 @@ import {
 /** A live-registry row, as `session-engine.js › listLiveSessions` projects one. */
 const liveRow = (agentId, over = {}) => ({
   sessionId: "s1", key: `${CH}::${agentId}`, channelId: CH, workspaceId: WS,
-  taskId: "", agentId, channelName: "General", taskTitle: null, status: "running", hidden: false,
+  threadId: "", agentId, channelName: "General", threadTitle: null, status: "running", hidden: false,
   ...over,
 });
 
 /** A pending set_agent_mode directive, as the server would write it. */
 const modeRow = (over = {}) => row({
-  kind: "set_agent_mode", task_id: null, goal: null, model: null,
+  kind: "set_agent_mode", thread_id: null, goal: null, model: null,
   target_agent_id: "a1b2c3d4", ...over,
 });
 
@@ -96,7 +96,7 @@ test("CONSENT: it is BEHIND the toggle, where `end` and `rename` are not", async
   assert.deepEqual(off.modes, [], "and nothing was applied");
   // …and the free half is unchanged in the same harness, which is what makes this a comparison.
   const end = boot({ enabled: false, live: live(), control: { ok: true } });
-  await end.api.handle(row({ kind: "end", task_id: null, goal: null, model: null,
+  await end.api.handle(row({ kind: "end", thread_id: null, goal: null, model: null,
     target_agent_id: "a1b2c3d4" }), WS);
   assert.equal(decidePosts(end).length, 1, "an END still answers with the toggle off");
 });
@@ -107,13 +107,13 @@ test("CONSENT: the gate is the DATA list, not a condition a fifth kind could sli
 
 // ── 3. THE APPLY ─────────────────────────────────────────────────────────────────────────
 
-test("APPLY: both axes reach `setModeByTask`, addressed by the RESOLVED registry row", async () => {
+test("APPLY: both axes reach `setModeByThread`, addressed by the RESOLVED registry row", async () => {
   const h = boot({ live: live() });
   await h.api.handle(modeRow({ target_tool_mode: "auto", target_message_mode: "auto_both" }), WS);
   // `pinned: true` — the orchestrator's per-agent pick (C2): a narrower ask sticks.
   assert.deepEqual(h.modes, [
-    { axis: "tools", mode: "auto", pinned: true, channelId: CH, taskId: "", agentId: "a1b2c3d4" },
-    { axis: "messages", mode: "auto_both", pinned: true, channelId: CH, taskId: "", agentId: "a1b2c3d4" },
+    { axis: "tools", mode: "auto", pinned: true, channelId: CH, threadId: "", agentId: "a1b2c3d4" },
+    { axis: "messages", mode: "auto_both", pinned: true, channelId: CH, threadId: "", agentId: "a1b2c3d4" },
   ]);
   // ⚠ THE ECHO RIDES THE `done` SINCE 2026-09-02 — see the CLAMP case below for why.
   assert.deepEqual(decided(h), [{
@@ -142,7 +142,7 @@ test("APPLY: it is PER AGENT — a sibling on the same thread is not touched", a
 });
 
 // ── 4. THE CLAMP — "nothing an orchestrator writes can widen it" ─────────────────────────
-// The clamp is the ENGINE's (`setModeByTask` with `pinned: true`, C2): the lane hands the ask on
+// The clamp is the ENGINE's (`setModeByThread` with `pinned: true`, C2): the lane hands the ask on
 // pinned and reports the engine's answer. The harness emulates that reply with the real rules.
 
 test("CLAMP: a request WIDER than the channel posture is REPORTED at the ceiling", async () => {

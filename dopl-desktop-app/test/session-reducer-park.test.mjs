@@ -66,18 +66,18 @@ test("M2: abandon_timeout ENDS a parked session — terminal, so no peer can eve
   // This line used to read "It posts NO lifecycle: an unwatched machine must not write to the
   // shared thread on a timer." That argument is about who is at the KEYBOARD, and the cost
   // falls on somebody else entirely: the abandonment is the COMMON path (request →
-  // task_started → 15min idle → silent park → 12h → silent end), so the requester on the OTHER
+  // thread_started → 15min idle → silent park → 12h → silent end), so the requester on the OTHER
   // machine was left watching a card pulse "Working…" indefinitely, for the ending that
   // happens most often. Nobody being present to decide it is the reason the peer cannot find
   // out any other way, not a reason to stay quiet.
   //
-  // What it writes is a STATUS NOTE, not an outcome: `task_progress` + the reserved
+  // What it writes is a STATUS NOTE, not an outcome: `thread_progress` + the reserved
   // `session_ended` marker, which `group-thread.ts` treats as an ENTRY and never as an
   // `endEvent`, so it can reach `calmEndStatus` and nothing else. The shared thread's outcome
   // is untouched and the exchange stays open and resumable.
   const lc = r.effects.find((e) => e.type === "lifecycle");
   assert.ok(lc, "the person still waiting is told the session went inactive");
-  assert.equal(lc.kind, "task_progress", "NEVER a terminal kind — this is not the thread failing");
+  assert.equal(lc.kind, "thread_progress", "NEVER a terminal kind — this is not the thread failing");
   assert.deepEqual(lc.extra, { session_ended: true });
   assert.equal(lc.body, INACTIVE_NOTE);
   assert.ok(!/—/.test(lc.body) && !/error|fail/i.test(lc.body), "a status note, not a fault");
@@ -140,20 +140,20 @@ test("FIX F6: a woken session still counts a NEW post normally", () => {
 
 // ── M2 (2026-08-05): THE PARK NO LONGER DISARMS ANYTHING ────────────────────────────
 // THE REQUIREMENT CHANGE, and it INVERTS this test. It used to assert FIX #3 (both axes) +
-// MEDIUM-3/C9 (inboundForTask) + FIX F1 (allowForTask) reset on park. Samuel's contract is that a
-// posture he set holds for the session, the for-task grants included; fifteen quiet minutes is
+// MEDIUM-3/C9 (inboundForThread) + FIX F1 (allowForThread) reset on park. Samuel's contract is that a
+// posture he set holds for the session, the for-thread grants included; fifteen quiet minutes is
 // not evidence he left (he may be reading, in another window, or — before M1 — waiting on the
 // peer). The AWAY threat those three fixes named is answered by the abandonment END above, which
 // is strictly stronger than the downgrade was (an ended session cannot be woken at all), and by
 // the PROFILE hard-deny, which no posture and no grant has ever been able to widen.
 
 test("M2: parking keeps BOTH axes AND every standing grant", () => {
-  const s = { ...running(), toolMode: "bypass", messageMode: "auto_both", allowForTask: ["Bash#ls#abc"] };
+  const s = { ...running(), toolMode: "bypass", messageMode: "auto_both", allowForThread: ["Bash#ls#abc"] };
   const r = sessionReducer(s, { type: "idle_timeout" });
   assert.equal(r.state.parked, true);
   assert.equal(r.state.toolMode, "bypass", "AXIS A is the operator's for the session");
   assert.equal(r.state.messageMode, "auto_both", "and so is AXIS B");
-  assert.deepEqual(r.state.allowForTask, ["Bash#ls#abc"], "and the scoped for-task grants");
+  assert.deepEqual(r.state.allowForThread, ["Bash#ls#abc"], "and the scoped for-thread grants");
 });
 
 test("M2: a woken session behaves as the operator set it — the whole point of the change", () => {
@@ -167,10 +167,10 @@ test("M2: a woken session behaves as the operator set it — the whole point of 
 test("M2: the AUTH HOLD still disarms — it is the one park that does", () => {
   // H1's reasoning is untouched: a hold is a session with no CREDENTIAL, which relaunches through
   // startQuery on sign-in rather than resuming in place, so its arm belongs to the run that ended.
-  const s = { ...running(), toolMode: "bypass", messageMode: "auto_both", allowForTask: ["Bash#ls#abc"] };
+  const s = { ...running(), toolMode: "bypass", messageMode: "auto_both", allowForThread: ["Bash#ls#abc"] };
   const r = sessionReducer(s, { type: "auth_hold" });
   assert.deepEqual({ t: r.state.toolMode, m: r.state.messageMode }, { t: "manual", m: "ask" });
-  assert.deepEqual(r.state.allowForTask, []);
+  assert.deepEqual(r.state.allowForThread, []);
   // A held session arms NO abandonment bound: the window carries the Sign in button.
   assert.ok(r.effects.some((e) => e.type === "clearIdle"), "the hold CLEARS the timer, it does not re-arm");
   assert.ok(!r.effects.some((e) => e.type === "scheduleIdle"));

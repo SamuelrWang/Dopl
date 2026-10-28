@@ -16,6 +16,8 @@ import { glassesChannelGateway } from "./core/voice/channel-gateway";
 import { UTTERANCE_RPM, createVoiceHandlers } from "./core/voice/handlers";
 import { sttProviderFromEnv } from "./core/voice/stt";
 import { createHeyEvenHandlers } from "./platforms/even-g2/hey-even";
+import { connectPairingPort } from "@/features/device-sdk/server/connect/pairing-port";
+import { sdkGlassesPort } from "@/features/device-sdk/server/glasses/sdk-glasses-port";
 
 /**
  * The production wiring: real stores, the channels-service gateways and the
@@ -45,15 +47,20 @@ const voiceDeps = {
   chargeUtterance: utteranceCharger,
 };
 
-export const deviceHandlers = createDeviceHandlers(base);
+// `connect`: a pairing claimed through a Device SDK Connect session (A4) collects its token here too;
+// `sdk`: that token then authenticates the inbox / answer / dismiss / unpair routes on the SDK device's own queue (A8).
+export const deviceHandlers = createDeviceHandlers({ ...base, connect: connectPairingPort, sdk: sdkGlassesPort });
 
-export const voiceHandlers = createVoiceHandlers(voiceDeps);
+// `sdk` on voice and menu (A8b): a Device SDK G2 gets fixed, data-free answers there instead of a 401,
+// which the plugin treats as a revoked pairing. Hey Even authenticates with its own key and stays prosumer-only.
+export const voiceHandlers = createVoiceHandlers({ ...voiceDeps, sdk: sdkGlassesPort });
 
 export const heyEvenHandlers = createHeyEvenHandlers({ ...voiceDeps, debug: process.env.GLASSES_DEBUG === "1" });
 
 export const menuHandlers = createMenuHandlers({
   ...base,
   menu: menuGateway,
+  sdk: sdkGlassesPort,
   allowRead: limiter("glasses-menu", MENU_READ_RPM, "GET /api/glasses/device/(menu)"),
   allowLaunch: limiter("glasses-launch", LAUNCH_RPM, "POST /api/glasses/device/launch"),
 });

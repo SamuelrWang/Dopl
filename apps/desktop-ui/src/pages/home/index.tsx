@@ -1,29 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { cn } from "@/shared/lib/utils";
-import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/create-workspace-dialog-core";
 import { isStandardWorkspace } from "@/features/workspaces/types";
-import { workspaceSegment } from "@/features/workspaces/url";
 import { Crossfade } from "@/shared/ui/crossfade";
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
 import { useAccountChannels } from "@/features/channels/hooks/use-channels";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
-import home from "./home.module.css";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError, isUnauthorized } from "#/components/page-states";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
 import { bootQueryKey, fetchBoot } from "#/pages/boot/use-boot-state";
 import { AccountRail } from "#/components/app-shell";
-import { HomeHeader } from "./home-header";
+import { HomeFrame } from "@/features/home/components/shell/home-frame";
+import { HomeHeader } from "@/features/home/components/shell/home-header";
+import type { HomeViewer } from "@/features/home/components/shell/home-settings-control";
 import { RelationshipList } from "./relationship-list";
-import { NewChannelDialog } from "./new-channel-dialog";
+import { NewChannelDialog } from "@/features/home/components/channels/new-channel-dialog";
 import { HomePageSkeleton } from "./home-skeleton";
 import { HomePane, paneToken } from "./home-panes";
 import { useActivityJump } from "./use-activity-jump";
 import { useHomeUnreadClear } from "./use-home-unread-clear";
-
-import { channelRowId, homeRows } from "./home-rows";
+import { channelRowId, homeRows } from "@/features/home/components/channels/home-rows";
 import type { SearchItem } from "@/features/search/contracts";
 import { HOME_DEFAULT_TAB, type HomeTab } from "./home-tabs";
 import { homeMemory, homeScope } from "./home-memory";
@@ -36,7 +33,6 @@ import { homeMemory, homeScope } from "./home-memory";
  */
 export default function HomePage() {
   const navigate = useNavigate();
-  const [createWsOpen, setCreateWsOpen] = useState(false);
   const [newChannelOpen, setNewChannelOpen] = useState(false);
   // `undefined` = not chosen since /home mounted, so this device's memory
   // (`./home-memory.ts`) decides; read through `selectedId` / `tab` below.
@@ -48,6 +44,14 @@ export default function HomePage() {
     onSelect: setSelectedId,
     onRaise: () => setTab("channels"),
   });
+
+  /** A left-pane pick or an Overview channel row: drops any held thread and always raises the
+   *  channel face, even on the selected row. */
+  const openRow = (id: string) => {
+    setSelectedId(id);
+    jump.clear();
+    setTab("channels");
+  };
 
   /**
    * Opens what a search row names: on /home a selection plus a face, never a route (containers
@@ -76,6 +80,12 @@ export default function HomePage() {
     queryKey: bootQueryKey(null),
     queryFn: ({ signal }) => fetchBoot(null, signal),
   });
+  // Gated with the page reads so the Profile pill paints with its photo and name; a failed read
+  // falls back to "Profile" at once (no retries holding the skeleton) rather than failing the page.
+  const profile = useApiQuery<ProfileBody, HomeViewer>("/api/user/profile", {
+    select: selectViewer,
+    retry: false,
+  });
 
   // Read once per signed-in user, never per render: a write after the restore
   // must not feed back into it. Boot is the skeleton until it answers, so the
@@ -103,7 +113,10 @@ export default function HomePage() {
 
   const error = channelsQuery.error ?? workspacesQuery.error ?? identity.error;
   const pending =
-    channelsQuery.isPending || workspacesQuery.isPending || identity.isPending;
+    channelsQuery.isPending ||
+    workspacesQuery.isPending ||
+    identity.isPending ||
+    profile.isPending;
 
   // Write back where the operator is. Waits for the rows: on an empty loading
   // list every remembered row would read as gone. A row that IS gone (deleted,
@@ -115,7 +128,7 @@ export default function HomePage() {
     homeMemory.write(homeScope(userId), { tab, rowId: rowToStore });
   }, [ready, userId, tab, rowToStore]);
 
-  if (pending) return <HomePageSkeleton />;
+  if (pending) return <HomePageSkeleton face={tab} />;
   if (isUnauthorized(error)) return <SignedOutScreen />;
   if (error || !identity.data) {
     return (
@@ -133,81 +146,57 @@ export default function HomePage() {
   }
 
   return (
-    // The frame ink is the shell's own. `!ml-0` on `<main>` puts the panel flush against the rail,
-    // so the visible dark column is exactly the 54px rail and its tiles read centred.
     <div className={shell.root}>
-      <div className={shell.body}>
-        <AccountRail
-          workspaces={workspacesQuery.data ?? []}
-          activeWorkspacePublicId={null}
-          onNavigate={(path) => navigate(path)}
-          onCreateWorkspace={() => setCreateWsOpen(true)}
-        />
-        <div className={shell.surface}>
-          {/* The base panel carries header + list; the record pane sits on it. The bg utility
-              outranks `.page-float`'s fill (utility layer > kit layer). */}
-          <main
-            className={cn(
-              // `!` beats `.page-float`'s own non-important margin.
-              "page-float !ml-0 flex flex-1 flex-col overflow-hidden bg-home-panel",
-              home.page
-            )}
-          >
-            <HomeHeader
+      {/* One layout for every face: only what is inside the pane swaps. */}
+      <HomeFrame
+        face={tab}
+        rail={
+          <AccountRail
+            workspaces={workspacesQuery.data ?? []}
+            activeWorkspacePublicId={null}
+            onNavigate={(path) => navigate(path)}
+          />
+        }
+        header={
+          <HomeHeader
+            identity={identity.data}
+            viewer={profile.data ?? null}
+            onWorkspaceChanged={() => void workspacesQuery.refetch()}
+            tab={tab}
+            onTabChange={setTab}
+            query={query}
+            onQueryChange={setQuery}
+            onSearchNavigate={openSearchHit}
+            onNewChannel={() => setNewChannelOpen(true)}
+            onNavigate={(path) => navigate(path)}
+          />
+        }
+        list={
+          <RelationshipList
+            rows={rows}
+            selectedId={selected?.id ?? null}
+            onSelect={openRow}
+          />
+        }
+      >
+        {/* The TOKEN crosses the fade; the pane renders whatever `shown` names. */}
+        <Crossfade token={paneToken(tab, selected?.id ?? null)} className="flex min-w-0 flex-1">
+          {(shown) => (
+            <HomePane
+              shown={shown}
+              rows={rows}
               identity={identity.data}
-              onWorkspaceChanged={() => void workspacesQuery.refetch()}
-              tab={tab}
-              onTabChange={setTab}
-              query={query}
-              onQueryChange={setQuery}
-              onSearchNavigate={openSearchHit}
-              onNewChannel={() => setNewChannelOpen(true)}
+              viewer={profile.data ?? null}
+              jump={jump}
+              onChannelDeleted={() => {
+                setSelectedId(null);
+                void channelsQuery.refetch();
+              }}
+              onOpenRow={openRow}
             />
-            {/* One layout for every face: only what is inside the pane swaps. `data-frame-skin`
-                carries the pane's line colour and weight into the channel surface. */}
-            <div className="flex min-h-0 flex-1">
-              <RelationshipList
-                rows={rows}
-                selectedId={selected?.id ?? null}
-                // A pick drops any held thread and always raises the channel face, even on the
-                // selected row.
-                onSelect={(id) => {
-                  setSelectedId(id);
-                  jump.clear();
-                  setTab("channels");
-                }}
-              />
-              <div
-                className={cn(
-                  // Not `.bento`: the pane is a column of the surface, bounded by its 2px line; a
-                  // drop shadow here had no gap to fall into.
-                  "mb-3 mr-3 flex min-w-0 flex-1 overflow-hidden rounded-[14px] border-2 border-home-panel-line bg-home-card"
-                )}
-                data-frame-skin
-              >
-                {/* The TOKEN crosses the fade; the pane renders whatever `shown` names. */}
-                <Crossfade
-                  token={paneToken(tab, selected?.id ?? null)}
-                  className="flex min-w-0 flex-1"
-                >
-                  {(shown) => (
-                    <HomePane
-                      shown={shown}
-                      rows={rows}
-                      identity={identity.data}
-                      jump={jump}
-                      onChannelDeleted={() => {
-                        setSelectedId(null);
-                        void channelsQuery.refetch();
-                      }}
-                    />
-                  )}
-                </Crossfade>
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
+          )}
+        </Crossfade>
+      </HomeFrame>
 
       {/* Selecting the new row is optimistic about order, not existence: until the refetch
           lands, `selected` falls back to the first row. */}
@@ -219,20 +208,19 @@ export default function HomePage() {
           setTab("channels");
         }}
       />
-
-      <CreateWorkspaceDialogCore
-        open={createWsOpen}
-        onOpenChange={setCreateWsOpen}
-        onCreated={(created) => {
-          void workspacesQuery.refetch();
-          navigate(`/${workspaceSegment(created)}`);
-        }}
-      />
-
     </div>
   );
 }
 
+interface ProfileBody {
+  display_name?: string | null;
+  avatar_url?: string | null;
+}
+
+const selectViewer = (body: ProfileBody): HomeViewer => ({
+  displayName: body.display_name ?? null,
+  avatarUrl: body.avatar_url ?? null,
+});
 
 /** `GET /api/workspaces` also returns `kind='link'` containers; they never appear in the rail. */
 const selectStandardWorkspaces = (body: { workspaces?: WorkspaceLike[] }) =>

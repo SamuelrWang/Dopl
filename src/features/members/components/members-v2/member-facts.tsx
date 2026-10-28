@@ -138,7 +138,7 @@ function AddToTeamChip({
         <Plus size={11} aria-hidden />
         Team
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} className="w-52">
+      <Popover open={open} onClose={() => setOpen(false)}>
         {teams.map((t) => (
           <MenuItem
             key={t.id}

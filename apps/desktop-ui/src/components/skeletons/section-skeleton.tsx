@@ -5,7 +5,7 @@ import { OverviewSkeleton } from "#/pages/overview/overview-skeleton";
 import { ChannelsSkeleton } from "#/pages/channels/channels-skeleton";
 import { IdentitiesPageSkeleton } from "#/pages/identities/identities-skeleton";
 import { MembersPageSkeleton } from "#/pages/members/members-skeleton";
-import { KnowledgeHomeSkeleton } from "./knowledge-skeletons";
+import { KnowledgeHomeSkeleton } from "@/features/knowledge/components/knowledge-skeletons";
 
 /**
  * The skeleton of the section the route is heading for. Skills, Chats and Ontology have no shape

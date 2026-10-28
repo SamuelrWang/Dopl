@@ -10,6 +10,7 @@ const { displayNameFor, descriptionForAgent } = require('./agent-names');
 const { diag } = require('./diag');
 const { pickOf } = require('./runtime/selection-vocabulary');
 const { describePermission } = require('./runtime');
+const { profileLabel } = require('./tool-profiles');
 const { displayText, IDENTITY_NAME_MAX } = require('./session-summary-text'); const { heldGatesFor } = require('./session-held-gates');
 
 // ─── BEGIN SESSION-SUMMARY-PURE (injectable; unit-tested via source extraction) ──────
@@ -32,7 +33,7 @@ function liveSummary(s, name) {
   return {
     sessionId: String((s && s.sessionId) || ''),
     channelId: String((s && s.channelId) || ''), workspaceId: (s && s.workspaceId) || null,
-    taskId: String((s && s.taskId) || ''),
+    threadId: String((s && s.threadId) || ''),
     // The local address beside `name` (the server's column); they hold the same string, nothing may rely on it.
     agentId: name,
     name: name,
@@ -48,16 +49,20 @@ function liveSummary(s, name) {
     toolMode: (s && s.state && (s.state.toolMode || (s.state.toolModes && s.state.toolModes[0]))) || null,
     // What really runs (live tool mode + spawn-time containment), never the channel's level; local only.
     permission: describePermission(s && s.runtimeId, s && s.state && s.state.toolMode, s && s.state && s.state.native),
+    // The spawn-time tool profile's label (Read-only / Dopl-only / Shared-channel / Full-access); null when the
+    // session carries none. Local only (`reportRow` is an allowlist).
+    profileLabel: s && s.profile ? profileLabel(s.profile) : null,
     messageMode: (s && s.state && s.state.messageMode) || 'ask',
     // The runtime's reported model first, then the pick; null is real (a spawn-idle agent started nothing).
     model: (s && s.liveModel) || modelPick(s),
     channelName: displayText(ctx.channelName),
-    threadTitle: displayText(ctx.taskTitle),
+    threadTitle: displayText(ctx.threadTitle),
     // A spawn-time capture, so it can ride the STATE half of the server digest.
     identityName: displayText(ctx.identity && ctx.identity.name, IDENTITY_NAME_MAX),
+    identityId: displayText(ctx.identity && ctx.identity.id, 36),
     // The colour this session ASKED for; `null` is "none reported" and cannot erase one server-side.
     color: (s && s.color) || null,
-    // The spawn stamp; local only (`reportRow` is an allowlist and names neither this nor `heldGates`).
+    // The spawn stamp; `reportRow` sends it as the peer-visible `runtime`.
     runtimeId: (s && s.runtimeId) || '',
     endReason: null,
     // The calls this session is blocked on, enough to decide them inline; local only, answered by
@@ -73,7 +78,7 @@ function endedSummary(e, name) {
   return {
     sessionId: String((e && e.sessionId) || ''),
     channelId: String((e && e.channelId) || ''), workspaceId: (e && e.workspaceId) || null,
-    taskId: String((e && e.taskId) || ''),
+    threadId: String((e && e.threadId) || ''),
     agentId: name,
     name: name,
     // Read LIVE, unlike the metrics: renaming while reading back a finished run is normal.
@@ -90,12 +95,14 @@ function endedSummary(e, name) {
     diag: (e && typeof e.diag === 'string' && e.diag) || null,
     toolMode: null,
     permission: null,
+    profileLabel: null,
     messageMode: null,
     // A model is a control's value; a control over an ended agent is a control over nothing.
     model: null,
     channelName: displayText(e && e.channelName),
     threadTitle: displayText(e && e.threadTitle),
     identityName: displayText(e && e.identityName, IDENTITY_NAME_MAX),
+    identityId: displayText(e && e.identityId, 36),
     contextUsed: metricOrNull(e && e.contextUsed),
     contextWindow: metricOrNull(e && e.contextWindow),
     tokensSpent: metricOrNull(e && e.tokensSpent),

@@ -218,7 +218,7 @@ test("the framing tells the agent which lane is real, and obeys the house scanne
   // §H-13 house voice, and prompt-framing.test.mjs scans every line naming dopl_channel.
   for (const line of LANE_EXCLUSIVITY) {
     assert.ok(!line.includes("—"), `em dash in ${JSON.stringify(line)}`);
-    assert.ok(!/\btask\s*=/.test(line), `teaches task= in ${JSON.stringify(line)}`);
+    assert.ok(!/\btask\s*=/.test(line), `teaches task= where a reply takes thread= in ${JSON.stringify(line)}`);
   }
   // FIXED TEXT: it lives in the text module and interpolates nothing, so it can never carry a
   // forged fence token — the property that makes that file's whole contents safe.

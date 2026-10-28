@@ -3,13 +3,9 @@
 /**
  * 🔒 THE METER NEVER PRINTS A DENOMINATOR IT WAS NOT GIVEN (2026-08-28).
  *
- * ⚠ THE BUG THIS PINS WAS A COLLISION BETWEEN TWO WAVES, AND EACH WAS RIGHT ALONE. The 2026-08-27
- * ruling made the agent surfaces render the BAR unconditionally, at 0, so a spawn-idle agent got a
- * box instead of nothing — `channels/components/agent-stats.tsx › AgentStats` and
- * (the one declaration all three hosts import since P17) therefore calls this with `used ?? 0` and
- * `limit ?? 0`, on the stated grounds that *"`UsageMeter` handles the missing denominator itself"*.
- * It handled it for the ARITHMETIC (`limit > 0 ? … : 0`, an empty track rather than a division) and
- * not for the READOUT, which printed `{fmt(limit)}` regardless.
+ * A caller with no denominator passes `limit={0}`. The meter handled that for the ARITHMETIC
+ * (`limit > 0 ? … : 0`, an empty track rather than a division) and not for the READOUT, which
+ * printed `{fmt(limit)}` regardless.
  *
  * So the reachable case — `contextUsed` reported, `contextWindow` absent, which
  * `channels/components/agent-metrics.ts › metric` names outright (*"a model this build has no window for
@@ -65,9 +61,8 @@ describe("a missing denominator", () => {
     expect((track?.firstElementChild as HTMLElement).style.width).toBe("42%");
   });
 
-  it("covers the spawn-idle case both surfaces actually pass: 0 used, 0 limit", () => {
-    // ⚠ `used ?? 0` AND `limit ?? 0` — the literal call `AgentStats` makes before an agent's first
-    // turn reports anything. It must be a bar and a bare number, not `0k / 0k`.
+  it("covers the spawn-idle case: 0 used, 0 limit", () => {
+    // Nothing reported yet: a bar and a bare number, not `0k / 0k`.
     const { container } = render(
       <UsageMeter label="Context tokens" used={0} limit={0} tone="ramp" formatValue={tokens} />
     );

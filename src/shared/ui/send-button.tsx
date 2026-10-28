@@ -1,108 +1,46 @@
 "use client";
 
 /**
- * SendButton — THE composer send affordance. One button, two states: send at
- * rest, pause while the agent is mid-turn. Glyphs are inline SVG — no external
- * asset, nothing built from a string.
- *
- * ⚠ Raised/hover/active/disabled recipe is `.auth-btn-3d` from globals.css,
- * never re-derived here; glyph colour is the `text-on-cta` token.
- * ⚠ THE CSS TWIN IS GONE (2026-08-20). The desktop session window shipped one
- * because it was a plain-`<script>` sandbox that could not import React; that
- * whole tree was deleted with the window, so **this is the only face** and there
- * is nothing left to keep it in sync with.
+ * SendButton — THE composer send affordance. The glyph is inline SVG — no external asset,
+ * nothing built from a string. The face is the kit's `.send-round` (globals.css / kit.css),
+ * never re-derived here.
  */
 
-import { cn } from "@/shared/lib/utils";
-
-export type SendButtonMode = "send" | "pause";
-
-/** Accessible names — mirrors the session window's SEND_LABEL map. */
-const SEND_LABEL: Record<SendButtonMode, string> = {
-  send: "Send",
-  pause: "Pause the agent",
-};
-
-export function sendButtonLabel(mode: SendButtonMode): string {
-  return SEND_LABEL[mode] ?? SEND_LABEL.send;
-}
+const SEND_LABEL = "Send";
 
 export function SendButton({
-  mode = "send",
   disabled,
   onClick,
-  label,
+  label = SEND_LABEL,
   title,
-  className,
 }: {
-  mode?: SendButtonMode;
   disabled?: boolean;
   onClick: () => void;
-  /** Accessible-name override; defaults to the mode's label. */
+  /** Accessible-name override. */
   label?: string;
-  /**
-   * Hover text. ⚠ ADDED 2026-08-27 FOR ONE PROPERTY: a DISABLED send must say WHY (INVARIANTS §8,
-   * rule 4 — a control that swallows the click is a surface claiming to have sent something it did
-   * not). The channels composer carried that reason on its own `<button title>` before adopting
-   * this face, and dropping it here would have retired the rule by refactor.
-   */
+  /** Hover text: a DISABLED send must say WHY (INVARIANTS §8, rule 4 — a control that swallows
+   *  the click is a surface claiming to have sent something it did not). */
   title?: string;
-  /** Layout-only extras. Never restyle the face here. */
-  className?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-label={label ?? sendButtonLabel(mode)}
-      title={title ?? label ?? sendButtonLabel(mode)}
-      className={cn(
-        "auth-btn-3d flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px] p-0 text-text-on-cta",
-        className
-      )}
+      aria-label={label}
+      title={title ?? label}
+      className="send-round flex h-7.5 w-7.5 shrink-0 items-center justify-center p-0"
     >
-      {mode === "pause" ? <PauseGlyph /> : <SendGlyph />}
+      <svg viewBox="0 0 16 16" width={16} height={16} aria-hidden focusable="false" className="block">
+        <path
+          d="M8 13V3.6M8 3.2 3.9 7.3M8 3.2l4.1 4.1"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.7}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
     </button>
-  );
-}
-
-/** ⚠ Path-identical to the session window's inline send glyph. */
-function SendGlyph() {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      width={16}
-      height={16}
-      aria-hidden
-      focusable="false"
-      className="block"
-    >
-      <path
-        d="M8 13V3.6M8 3.2 3.9 7.3M8 3.2l4.1 4.1"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.7}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/** ⚠ Geometry-identical to the session window's pause glyph. */
-function PauseGlyph() {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      width={16}
-      height={16}
-      aria-hidden
-      focusable="false"
-      className="block"
-    >
-      <rect x={4.4} y={3.6} width={2.6} height={8.8} rx={1.1} fill="currentColor" />
-      <rect x={9} y={3.6} width={2.6} height={8.8} rx={1.1} fill="currentColor" />
-    </svg>
   );
 }

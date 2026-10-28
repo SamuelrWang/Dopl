@@ -69,7 +69,7 @@ vi.mock("../hooks/use-channel-launch-posture", () => ({
   }),
 }));
 
-import { AGENT_COLOR_KEYS, agentColorVar } from "../lib/agent-colors";
+import { AGENT_COLOR_KEYS, agentColorVar } from "@/shared/lib/agent-colors";
 import { AgentColorCircles, agentColorsTaken } from "./agent-color-circles";
 import { LaunchAgentDialog } from "./launch-agent-dialog";
 import { useAgentLaunch } from "./use-agent-launch";

@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/playground-reaper",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/device-sdk-events-prune",
+      "schedule": "15 9 * * *"
     }
   ]
 }

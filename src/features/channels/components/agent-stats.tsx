@@ -1,46 +1,64 @@
 "use client";
 
 /**
- * Channels — THE AGENT'S NUMBERS, one component for every surface that shows them.
+ * Channels — THE AGENT'S NUMBERS, one component for every surface that shows them (the agent view,
+ * the agent window, the Agents tab card, the landing demo): the context readout over a thin meter
+ * in the agent's colour, and the muted meta line, in the card well.
  *
- * ⚠ **IT IS ITS OWN FILE SINCE 2026-09-17 (P17).** It was declared in `agent-panel.tsx` and
- * TRANSCRIBED a second time in `agent-window.tsx` (`AgentWindowStats`), and the two copies had
- * already drifted twice — each carrying its own stale paragraph about a meter arm that had been
- * retired. The panel stood at the §1 cap, so the collapse is a SPLIT rather than a prop added in
- * place: three hosts (the panel, the window, the landing page's hero demo) now import one
- * declaration.
+ * ⚠ Absences render AS absences: no denominator, no stamp, no clause. Never a zero standing in for
+ * "not measured" — a reported `contextUsed` with no `contextWindow` prints the number alone, never
+ * `84k / 0k`, and the bar sits empty at zero.
  */
 
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
-import { UsageMeter } from "@/shared/ui/usage-meter";
+import { ThinMeter } from "@/shared/ui/usage-meter";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import { formatTokens } from "@/shared/lib/format-tokens";
+import { agentColorVar } from "@/shared/lib/agent-colors";
+import type { AgentColorKey } from "../types";
 import { metric } from "./agent-metrics";
 
-/**
- * The compact restatement of the card's numbers — **ONE implementation for ALL THREE HOSTS**
- * (P17, collapsed 2026-09-17): this panel, the agent WINDOW, and the marketing demo. The window
- * carried a second copy, `AgentWindowStats`, whose docblock had already drifted apart from this
- * one twice.
- *
- * ⚠ Absences render AS absences: no denominator, no stamp, no clause. Never a zero standing in
- * for "not measured". The DENOMINATOR half is `shared/ui/usage-meter.tsx`'s — a reported
- * `contextUsed` with no `contextWindow` prints the number alone, never `84k / 0k`.
- */
+/** "Context tokens" with its readout over the meter, which warns as the window fills. */
+export function ContextMeter({
+  agent,
+  color = null,
+  className,
+}: {
+  agent: DesktopSessionSummary;
+  /** The agent's colour key, resolved by the host; `null` draws the meter in ink. */
+  color?: AgentColorKey | null;
+  className?: string;
+}) {
+  const used = metric(agent.contextUsed) ?? 0;
+  const window = metric(agent.contextWindow) ?? 0;
+  return (
+    <div className={className}>
+      <p className="mb-1.5 flex items-center justify-between gap-2 text-label text-text-muted">
+        Context tokens
+        <span className="whitespace-nowrap text-caption font-medium tabular-nums text-text-primary">
+          {window > 0 ? `${formatTokens(used)} / ${formatTokens(window)}` : formatTokens(used)}
+        </span>
+      </p>
+      <ThinMeter
+        used={used}
+        limit={window}
+        color={color ? agentColorVar(color) : null}
+        warnNearFull
+      />
+    </div>
+  );
+}
+
 export function AgentStats({
   agent,
-  meterClassName,
+  color = null,
   showStarted = true,
 }: {
   agent: DesktopSessionSummary;
-  /** 🔒 `""` IN THE WINDOW (Samuel, 2026-09-15): the meter's own `mt-3` default stacked on
-   *  `agent-posture.tsx`'s margin and made the 20px gap he asked closed. Omitted keeps `mt-3`. */
-  meterClassName?: string;
+  color?: AgentColorKey | null;
   /** ⚠ OFF IN THE WINDOW, which is 510px wide — a third clause wraps the line there. */
   showStarted?: boolean;
 }) {
-  const used = metric(agent.contextUsed);
-  const window = metric(agent.contextWindow);
   const spent = metric(agent.tokensSpent);
   const startedAt = metric(agent.startedAt);
   const lastAt = metric(agent.lastActivityAt);
@@ -54,21 +72,10 @@ export function AgentStats({
   ].filter(Boolean);
 
   return (
-    <div className="flex flex-col gap-1.5">
-      {/* ⚠ THE BAR AT ZERO, ALWAYS — there is no "not measured" line any more (Samuel,
-          2026-08-27). A spawn-idle agent has reported no `contextWindow`, and a fresh agent's
-          usage is a MEASURED zero. `UsageMeter` owns the no-denominator case itself (empty track,
-          never a division), which is why this is one unconditional call. */}
-      <UsageMeter
-        className={meterClassName}
-        label="Context tokens"
-        used={used ?? 0}
-        limit={window ?? 0}
-        tone="ramp"
-        formatValue={formatTokens}
-      />
+    <div className="card-well px-2.75 pt-2.25 pb-2.5">
+      <ContextMeter agent={agent} color={color} />
       {line.length > 0 && (
-        <p className="text-caption text-text-muted">{line.join(" · ")}</p>
+        <p className="mt-2 text-label text-text-muted">{line.join(" · ")}</p>
       )}
     </div>
   );

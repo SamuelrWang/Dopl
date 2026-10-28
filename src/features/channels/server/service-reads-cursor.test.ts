@@ -23,7 +23,7 @@ import { randomBytes } from "node:crypto";
 vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-collab");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 vi.mock("./repository-artifacts");
 vi.mock("@/features/workspaces/server/repository");
 

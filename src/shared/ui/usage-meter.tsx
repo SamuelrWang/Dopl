@@ -53,6 +53,14 @@ export interface UsageMeterProps {
   readout?: string;
 }
 
+/** Zero/negative limit: an empty bar rather than dividing by it. */
+function percentOf(used: number, limit: number): number {
+  return limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+}
+
+/** The ramp's warning band: where `ThinMeter warnNearFull` stops drawing its own colour. */
+const NEAR_FULL_PCT = 75;
+
 /**
  * `tone="ramp"` fill, by percent full. Four bands, not interpolation: the
  * thresholds are the takeaway, and an interpolated hue names no point.
@@ -61,7 +69,7 @@ export interface UsageMeterProps {
  */
 function usageBandClass(pct: number): string {
   if (pct < 50) return "bg-success";
-  if (pct < 75) return "bg-caution";
+  if (pct < NEAR_FULL_PCT) return "bg-caution";
   if (pct < 90) return "bg-warning";
   return "bg-danger";
 }
@@ -78,21 +86,11 @@ export function UsageMeter({
   readout,
 }: UsageMeterProps) {
   const fmt = formatValue ?? ((value: number) => value.toLocaleString());
-  // Zero/negative limit: empty track rather than dividing by it.
-  const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  const pct = percentOf(used, limit);
   /**
-   * IS THERE A DENOMINATOR TO SHOW.
-   *
-   * ⚠ THE ARITHMETIC GUARD ABOVE WAS NOT THE WHOLE OF "OWNING THE MISSING DENOMINATOR", AND THE
-   * READOUT IS WHERE IT LEAKED (2026-08-28). Two agent surfaces call this unconditionally —
-   * `channels/components/agent-stats.tsx › AgentStats` passes `used ?? 0` and
-   * `limit ?? 0` — on the stated grounds that *"`UsageMeter` handles the missing denominator
-   * itself"*. It handled it for the BAR. The number beside the label printed `{fmt(limit)}`
-   * regardless, so an agent whose context USED is known but whose WINDOW is not rendered
-   * **"84k / 0k"** over an empty track: a fabricated denominator, and an empty bar that reads as
-   * headroom. `channels/components/agent-metrics.ts › metric` exists to stop exactly this and names the
-   * case — *"a model this build has no window for has no denominator … NONE of them means zero —
-   * a context meter reading 0% of a window that is nearly full is a lie the operator acts on."*
+   * IS THERE A DENOMINATOR TO SHOW. A `limit` of 0 is "not measured": printing it would render
+   * **"84k / 0k"** over an empty track, a fabricated denominator and an empty bar that reads as
+   * headroom.
    *
    * ⚠ IT DROPS THE DENOMINATOR, NOT THE METER. The bar still renders unconditionally at 0, which
    * is the standing rule for these surfaces; what stops is the assertion nobody can support.
@@ -135,5 +133,42 @@ export function UsageMeter({
         <p className="mt-1.5 text-micro text-text-secondary">{overNote}</p>
       )}
     </div>
+  );
+}
+
+/**
+ * The identity look's 3px meter (DESIGN-LANGUAGE §4): the bar alone, so the caller places the
+ * readout, which carries the value (the bar is decorative).
+ */
+export function ThinMeter({
+  used,
+  limit,
+  color,
+  warnNearFull = false,
+  className,
+}: {
+  used: number;
+  limit: number;
+  /** A CSS colour for the fill (an agent's `agentColorVar`); ink without one. */
+  color?: string | null;
+  /** From the ramp's warning band up, the fill takes its status colour over `color`. */
+  warnNearFull?: boolean;
+  className?: string;
+}) {
+  const pct = percentOf(used, limit);
+  const warn = warnNearFull && pct >= NEAR_FULL_PCT;
+  return (
+    <span
+      aria-hidden="true"
+      className={cn("relative block h-0.75 overflow-hidden rounded-full bg-surface-raised-4", className)}
+    >
+      <span
+        className={cn(
+          "absolute inset-y-0 left-0 rounded-full transition-[width] duration-200",
+          warn ? usageBandClass(pct) : "bg-text-primary"
+        )}
+        style={{ width: `${pct}%`, background: warn ? undefined : (color ?? undefined) }}
+      />
+    </span>
   );
 }

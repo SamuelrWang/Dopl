@@ -25,9 +25,8 @@ import { useChatDetail } from "../client/hooks";
 import { HeaderCard } from "./header-card";
 import { MessageList } from "./message-list";
 import { ShareControl } from "./share-control";
-
-const ICON_BTN =
-  "flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
+import { CHROME_ICON_BUTTON } from "@/shared/ui/chrome-icon-button";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 interface Props {
   chat: Chat | null;
@@ -95,7 +94,7 @@ export function DetailPane({
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex h-[52px] shrink-0 items-center gap-1.5 border-b border-border-default px-3.5">
+      <div className="flex h-13 shrink-0 items-center gap-1.5 border-b border-border-default px-3.5">
         <span className="shrink-0 text-small font-medium text-text-secondary">
           {!isMine ? "Shared" : (folder?.name ?? UNFILED_LABEL)}
         </span>
@@ -125,7 +124,7 @@ export function DetailPane({
             onClick={() => void onTogglePin(chat.id)}
             {...pendingRow(
               pinPending,
-              cn(ICON_BTN, chat.pinned && "text-text-primary")
+              cn(CHROME_ICON_BUTTON, chat.pinned && "text-text-primary")
             )}
             aria-label={chat.pinned ? "Unpin" : "Pin"}
           >
@@ -136,7 +135,7 @@ export function DetailPane({
           type="button"
           onClick={copyMarkdown}
           disabled={!detail}
-          className={cn(ICON_BTN, !detail && "opacity-40")}
+          className={cn(CHROME_ICON_BUTTON, !detail && "opacity-40")}
           aria-label="Copy as Markdown"
         >
           <Copy size={15} />
@@ -146,7 +145,7 @@ export function DetailPane({
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className={ICON_BTN}
+              className={CHROME_ICON_BUTTON}
               aria-label="More"
             >
               <MoreHorizontal size={16} />
@@ -169,11 +168,11 @@ export function DetailPane({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-14 pb-16 pt-8">
-        <div className="mx-auto max-w-[760px]">
+        <div className="mx-auto max-w-190">
           <HeaderCard chat={chat} currentUserId={currentUserId} />
 
           <div className="mb-3 mt-7 flex items-baseline gap-2">
-            <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <span className={LABEL_TEXT}>
               Conversation
             </span>
             <span className="text-caption text-text-muted">

@@ -95,8 +95,8 @@ describe("every new row is stamped", () => {
   it("🔒 leaves every OTHER metadata key alone", async () => {
     // The stamp is an addition, not a rewrite: the fold above this one has
     // already decided what the row's metadata is.
-    const sent = await metadataSentFor({ taskId: "t-1", summary: "s" });
-    expect(sent.taskId).toBe("t-1");
+    const sent = await metadataSentFor({ threadId: "t-1", summary: "s" });
+    expect(sent.threadId).toBe("t-1");
     expect(sent.summary).toBe("s");
     expect(sent[CITE_MODE_METADATA_KEY]).toBe(CITE_MODE_CURRENT);
   });

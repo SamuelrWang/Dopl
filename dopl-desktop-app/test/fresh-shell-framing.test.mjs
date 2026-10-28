@@ -1,7 +1,7 @@
 // FIX F2 — the FRESH-SHELL FIRST TURN carries the v1.9 framing (main/session-io.withSeed
 // + main/session-engine.startSession).
 //
-// THE BUG: v2.5 D3 made reopenByTask always open a window, even with nothing to resume.
+// THE BUG: v2.5 D3 made reopenByThread always open a window, even with nothing to resume.
 // startSession set `firstTurn = ''` for a parkedShell and skipped startQuery, so when the
 // operator typed, session-park resumed with NO options.resume — a BRAND-NEW sdk session —
 // and buildSdkOptions sets no system prompt of any kind. Every piece of framing lives in
@@ -42,9 +42,9 @@ const WS = "bbbbbbbb-2222-4ccc-8ddd-eeeeeeeeeeee";
 
 function freshShell(over = {}) {
   return {
-    side: "responder", nonce: NONCE, channelId: CH, taskId: "t1",
+    side: "responder", nonce: NONCE, channelId: CH, threadId: "t1",
     context: {
-      channelName: "Ops", taskTitle: "Ship the invoice import", authorName: "David",
+      channelName: "Ops", threadTitle: "Ship the invoice import", authorName: "David",
       channelId: CH, workspaceId: WS,
     },
     resumeSdkId: null, sdkSessionId: null,

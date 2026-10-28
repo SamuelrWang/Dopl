@@ -222,7 +222,7 @@ test("every op REFUSES when no registry accessor was supplied (an unbound surfac
     // now. Present only so the module loads — every call below is on an UNBOUND surface, so the
     // success path it backs is exactly what must never be reached.
     if (id === "./channel-dirs") return { liveChannelDirLabel: () => "x", resolvedDirLabel: () => "y", promptAndSetChannelDir: async () => {}, clearChannelDir: () => {} };
-    if (id === "./session-engine") return { reopenByTask: () => ({ ok: true }) };
+    if (id === "./session-engine") return { reopenByThread: () => ({ ok: true }) };
     // 2026-09-18 — DEFAULT AGENT SETTINGS. Present only so the module loads: every call below is
     // on an UNBOUND surface, so the success path these back is exactly what must never be reached.
     if (id === "./agent-defaults") return { getAgentDefaults: () => PRESET, setAgentDefaults: () => ({ ok: true }), seedChannel: () => ({ ok: true, seeded: true }) };
@@ -310,7 +310,7 @@ test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out a
     assert.deepEqual(ipc.writes, [{ channelId: CH, preset: PRESET }], `${which}: the legitimate write lands`);
     await ipc.handlers["channels:chooseFolder"](sender, CH);
     assert.equal(ipc.dialogs.length, 1, `${which}: the operator's own picker still opens`);
-    assert.deepEqual(await ipc.handlers["sessions:reopen"](sender, { channelId: CH, taskId: "t1" }), { ok: true }, which);
+    assert.deepEqual(await ipc.handlers["sessions:reopen"](sender, { channelId: CH, threadId: "t1" }), { ok: true }, which);
     assert.deepEqual(await ipc.handlers["threads:openWindow"](sender, POPOUT_PAYLOAD), { ok: true }, which);
     assert.deepEqual(ipc.popouts, [POPOUT_PAYLOAD], `${which}: the pop-out target crosses whole`);
   }

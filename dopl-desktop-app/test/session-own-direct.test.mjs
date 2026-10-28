@@ -134,7 +134,7 @@ function mkSession(over) {
     profile: "full",
     channelId: CH,
     windowless: true,
-    state: { allowForTask: [], toolMode: o.toolMode || "manual", messageMode: o.messageMode || "ask" },
+    state: { allowForThread: [], toolMode: o.toolMode || "manual", messageMode: o.messageMode || "ask" },
     pendingPermissions: new Map(),
     pendingNames: new Map(),
   };

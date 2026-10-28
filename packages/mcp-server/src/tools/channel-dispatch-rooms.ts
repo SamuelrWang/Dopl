@@ -7,7 +7,7 @@
  * conversation in it. `read` answers "what was said", `status` "what is
  * running", and this answers "what is this place, and who is in it".
  *
- * ⚠ **FOUR OF THE EIGHT WRITE, AND THE GATE IS PER ACTION** (`gating.ts ›
+ * ⚠ **FOUR ACTIONS WRITE, AND THE GATE IS PER ACTION** (`gating.ts ›
  * WRITE_OPS` names `rooms.open`, `rooms.invite`, `rooms.thread_mode` and
  * `rooms.update`). Classifying the whole op as a write would refuse a
  * `dopl.read` token the four calls it exists to make — listing its channels
@@ -29,6 +29,7 @@ import { opList, opListThreads, opMembers } from "./channel-ops-read";
 import { opInvite, opOpen } from "./channel-ops-open";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
 import { opSetThreadMode } from "./channel-ops-threads";
+import { opReadTasks } from "./channel-ops-task-read";
 import { opUpdate } from "./channel-ops-update";
 import type { z } from "zod";
 import type { ZodObject } from "zod";
@@ -124,6 +125,12 @@ export async function dispatchRoomsAction(
       const miss = missingParams('rooms action="threads"', args, ["channel"]);
       if (miss) return miss;
       return opListThreads(client, args.channel as string, selfUserId);
+    }
+
+    case "tasks": {
+      const bad = strictParams('rooms action="tasks"', args, ["channel"], ["task"]);
+      if (bad) return bad;
+      return opReadTasks(client, args.channel as string, args.task);
     }
 
     case "thread_mode": {

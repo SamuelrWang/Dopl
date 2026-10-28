@@ -35,7 +35,7 @@ const CHANNEL = "mcp__dopl__dopl_channel";
 
 const decide = (over) => profiles.grantDecision({
   runtime: "codex", profile: "full", toolMode: "untrusted", messageMode: "ask",
-  channelId: "chan-1", allowForTask: [], ...over,
+  channelId: "chan-1", allowForThread: [], ...over,
 });
 
 // ── AXIS A, IN CODEX'S OWN WORDS ─────────────────────────────────────────────────────────────
@@ -174,7 +174,7 @@ test("the universal hard deny is Dopl's own, unchanged, and openable by nothing"
   assert.deepEqual(D.axisB.hardDeny, hard);
   for (const name of hard) {
     for (const profile of ["read_only", "dopl_only", "full"]) {
-      assert.equal(decide({ profile, toolName: name, toolMode: "never", allowForTask: [name] }), "deny",
+      assert.equal(decide({ profile, toolName: name, toolMode: "never", allowForThread: [name] }), "deny",
         `${profile}/${name}: hard deny was opened`);
     }
   }
@@ -188,13 +188,13 @@ test("a Dopl allow answers `accept`, and NOTHING ever answers `acceptForSession`
   // click on TWO ledgers, and the second one's scope is §5 item C4 — unread. One click, one
   // ledger, one scope: the one the operator was shown.
   assert.deepEqual(serverRequests.decisionReply("allow"), { decision: "accept" });
-  for (const verdict of ["deny", "allow-task", "", null, undefined, 42, {}]) {
+  for (const verdict of ["deny", "allow-thread", "", null, undefined, 42, {}]) {
     const answer = serverRequests.decisionReply(verdict);
     assert.equal(answer.decision, "decline", JSON.stringify(verdict));
   }
   // …and a standing Dopl grant still answers `accept`, never the native session word.
   const key = profiles.grantKeyFor(CHANNEL, { op: "send", body: "hi" }, "chan-1");
-  assert.equal(decide({ toolName: CHANNEL, input: { op: "send", body: "hi" }, allowForTask: [key] }), "allow");
+  assert.equal(decide({ toolName: CHANNEL, input: { op: "send", body: "hi" }, allowForThread: [key] }), "allow");
   assert.deepEqual(serverRequests.decisionReply("allow"), { decision: "accept" });
   // The source itself: every mention of the word is an argument in a comment, never a value.
   const src = readFileSync(join(CODEX, "approval.js"), "utf8");

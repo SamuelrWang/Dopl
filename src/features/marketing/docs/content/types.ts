@@ -15,16 +15,16 @@ export type DocIcon =
   | "connect"
   | "route"
   | "glasses"
+  | "headphones"
   | "phone"
-  | "notch"
   | "desktop"
   | "speaker"
-  | "watch"
   | "car"
   | "robot"
   | "quickstart"
   | "api"
-  | "security";
+  | "security"
+  | "code";
 
 export type HttpMethod = "GET" | "POST" | "DELETE";
 
@@ -48,13 +48,47 @@ export interface ListItem {
   blocks?: DocBlock[];
 }
 
-/** One row of an endpoint table: the monospace path links to its page. */
-export interface EndpointRow {
-  method: HttpMethod;
-  path: string;
-  /** Page slug under `/docs/`. */
-  href: string;
-  description: string;
+/**
+ * Whether what a page (or one model's support for one capability) describes works today. A page
+ * or badge is `live` only when everything it tells a reader to do works in production now, and a
+ * `live` model badge must be backed by the adapter's `describe()` AND its wired dispatcher
+ * (`content.test.ts`). `beta` works with known limits; `coming_soon` is planned and must be
+ * phrased as planned.
+ */
+export type DocStatus = "live" | "beta" | "coming_soon";
+
+export const DOC_STATUS_LABEL: Record<DocStatus, string> = {
+  live: "Live",
+  beta: "Beta",
+  coming_soon: "Coming soon",
+};
+
+/** One model's support for one capability, with the badge and an optional one-line note. */
+export interface ModelSupport {
+  model: string;
+  status: DocStatus;
+  note?: Rich;
+}
+
+/**
+ * One capability, in the one card every device category uses (`pages-categories.ts ›
+ * capabilityCard`): what it does and when, limits, permission and tier, code, an example
+ * response, and which models support it.
+ */
+export interface CapabilityCard {
+  /** A C3 capability id (`@dopl/contracts/device-sdk › CAPABILITY_IDS`). */
+  capability: string;
+  title: string;
+  /** What it does and when to use it. */
+  what: Rich;
+  limits: Rich[];
+  /** The C3 default tier, and what the consent screen and policy do with it. */
+  tier: string;
+  permission: Rich;
+  /** TypeScript (`@dopl/sdk`) and cURL. */
+  code: CodeTab[];
+  response: CodeTab[];
+  support: ModelSupport[];
 }
 
 export type DocBlock =
@@ -76,7 +110,7 @@ export type DocBlock =
   | { type: "steps"; items: { title: string; blocks: DocBlock[] }[] }
   /** A copyable instruction in a white window ("Copy this instruction into your agent"). */
   | { type: "prompt"; text: Rich }
-  /** The Claude / Codex / Cursor / SDK connect window (`../components/docs-interactive.tsx`). */
+  /** The Claude / Codex / Cursor connect window (`../components/docs-interactive.tsx`). */
   | { type: "connect" }
   | { type: "code"; tabs: CodeTab[] }
   | { type: "hero"; label: string; lines: string[] }
@@ -87,11 +121,14 @@ export type DocBlock =
       type: "changelog";
       entries: { date: string; title: string; description: Rich }[];
     }
-  /** A labelled endpoint table ("Intents", "Devices"): path link left, description right. */
-  | { type: "endpoints"; label: string; rows: EndpointRow[] };
+  /** A chain of hairline boxes joined by arrows (the Overview's "how it works" diagram). */
+  | { type: "flow"; label: string; items: { title: string; detail: string }[] }
+  /** A model × capability grid of status badges (a device category's "Models" table). */
+  | { type: "support"; models: string[]; rows: { capability: string; cells: (DocStatus | null)[] }[] }
+  | ({ type: "capability" } & CapabilityCard);
 
 /** A sidebar section. A page belongs to exactly one; inside it the sidebar shows that section. */
-export type DocSectionId = "quickstart" | "api" | "security" | "pricing" | "changelog" | "use-cases" | "devices";
+export type DocSectionId = "quickstart" | "devices" | "core" | "api" | "sdks" | "security" | "pricing" | "changelog";
 
 /** The request/response code on an API Reference page, beside the fields. */
 export interface ApiAside {
@@ -101,13 +138,15 @@ export interface ApiAside {
 }
 
 export interface DocPage {
-  /** Path under `/docs/`, e.g. `use-cases/show`. */
+  /** Path under `/docs/`, e.g. `devices/display-glasses`. */
   slug: string;
   section: DocSectionId;
   /** The page's group, shown beside its title in search results. */
   group: string;
   title: string;
   description: string;
+  /** Rendered as a badge beside the H1 and on the page's sidebar row when it is not live. */
+  status: DocStatus;
   blocks: DocBlock[];
   aside?: ApiAside;
 }

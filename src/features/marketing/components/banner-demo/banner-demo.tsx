@@ -19,11 +19,30 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { CANVAS_H, CANVAS_W, at, reached } from "./demo-steps";
+import { CANVAS_H, CANVAS_W, at, reached, type StepId } from "./demo-steps";
 import { CHANNEL_NAME, OPEN_THREAD } from "./demo-data";
+import { FLAKES_TASK_TITLE } from "./demo-tasks";
 import { DemoScene } from "./demo-scene";
 import { DemoCursorGlyph } from "../demo-cursor";
 import { useDemoTimeline } from "./use-demo-timeline";
+import { typedMessageAt } from "./demo-transcript";
+import { typedDmAt } from "./demo-narration";
+import { useTypedWords } from "./typed-reveal";
+import {
+  CHAT_REVEAL_KEYFRAMES,
+  CHAT_ROW_ANIMATION,
+} from "@/shared/ui/chat-reveal";
+
+/**
+ * Rows that arrive whole (agents, system lines) fade and slide in, onboarding
+ * step 3's row motion (`@/shared/ui/chat-reveal`). Plays on MOUNT, so a row
+ * appears smoothly however the step got there; scrolling back unmounts it.
+ * Human lines get it too (as in onboarding), then type word by word on top.
+ */
+const ROW_REVEAL_CSS = `${CHAT_REVEAL_KEYFRAMES}
+@media (prefers-reduced-motion: no-preference) {
+  .lp-demo-record [data-message-id] { animation: ${CHAT_ROW_ANIMATION}; }
+}`;
 
 type Cursor = { x: number; y: number; shown: boolean; instant: boolean };
 
@@ -39,8 +58,79 @@ function findButton(
   return null;
 }
 
+/**
+ * The real controls the cursor presses: it glides to one on `glide` and presses it on `press`.
+ * Each is found by its own visible label, never a demo-only hook, so the product's handlers
+ * run and the scene reacts the way the app does.
+ */
+const PRESSES: ReadonlyArray<{
+  glide: StepId;
+  press: StepId;
+  find: (pane: HTMLElement | null) => HTMLElement | null;
+}> = [
+  // The thread card's own button (`channels/components/thread-card-row.tsx`).
+  {
+    glide: "cursor-to-thread",
+    press: "click-thread",
+    find: (pane) => findButton(pane, (l) => l === "Open thread"),
+  },
+  // The count badge concatenates into textContent ("Agents3").
+  {
+    glide: "cursor-to-tab",
+    press: "click-tab",
+    find: (pane) => findButton(pane, (l) => l.startsWith("Agents")),
+  },
+  // The Agents-tab card's own Open (`channels/components/agents-tab-cards.tsx`).
+  {
+    glide: "cursor-to-agent",
+    press: "click-agent",
+    find: (pane) => findButton(pane, (l) => l === "Open"),
+  },
+  // The breadcrumb's channel crumb, a button in thread view only (`message-pane-header.tsx`).
+  // Its label IS the channel name.
+  {
+    glide: "cursor-to-crumb",
+    press: "click-crumb",
+    find: (pane) => findButton(pane, (l) => l === CHANNEL_NAME),
+  },
+  // The composer's "N tasks" pill (`channels/components/tasks-quick-view.tsx`).
+  {
+    glide: "cursor-to-tasks",
+    press: "click-tasks",
+    find: (pane) => findButton(pane, (l) => /\d+ tasks?$/.test(l)),
+  },
+  // The task's row in the pill's pop-up.
+  {
+    glide: "cursor-to-task",
+    press: "click-task",
+    find: (pane) => findButton(pane, (l) => l.startsWith(FLAKES_TASK_TITLE)),
+  },
+  // The task detail's crumb back to the list (`channels/components/task-detail.tsx`).
+  {
+    glide: "cursor-to-task-crumb",
+    press: "click-task-crumb",
+    find: (pane) =>
+      pane?.querySelector<HTMLElement>('button[aria-label="Back to tasks"]') ?? null,
+  },
+];
+
+/**
+ * Beats where the cursor leaves the stage so the reader watches what its press opened.
+ * `click-crumb` is not one: the cursor stays on stage through step 8, because the channel it
+ * just came back to is the thing to watch and a pointer vanishing mid-scene reads as the end.
+ */
+const EXITS: readonly StepId[] = [
+  "thread-open",
+  "tab-open",
+  "agent-open",
+  "task-open",
+  "task-resolved",
+];
+
 export function BannerDemo() {
   const { step, run, rootRef } = useDemoTimeline();
+  const typedText = typedMessageAt(step)?.body ?? typedDmAt(step)?.text ?? null;
+  const typedWords = useTypedWords(step, typedText);
   const canvasRef = useRef<HTMLDivElement>(null);
   /** The record pane, and the cursor's search root — NOT the canvas. The /home
    *  header also carries a button labelled "Agents" (the surface selector), and
@@ -61,7 +151,9 @@ export function BannerDemo() {
    * boolean is what makes the loop reset free: at `step = 0` both reads are false.
    */
   const [agentClicked, setAgentClicked] = useState(false);
-  const agentOpen = agentClicked && reached(step, "click-agent");
+  // Opening a task closes the agent view, as `use-channels-selection.ts › openTask` does.
+  const agentOpen =
+    agentClicked && reached(step, "click-agent") && !reached(step, "click-task");
   const [threadClicked, setThreadClicked] = useState(false);
   const threadOpen =
     threadClicked && reached(step, "click-thread") && !reached(step, "click-crumb");
@@ -105,24 +197,8 @@ export function BannerDemo() {
     const canvas = canvasRef.current;
     // Searched in the pane, measured against the canvas — see `paneRef`.
     const pane = paneRef.current;
-    const target = (): HTMLElement | null => {
-      // ⚠ EVERY ARM PRESSES A REAL CONTROL, found by its own visible label. Nothing here
-      // is a demo-only hook, which is why the product's handlers run and the scene
-      // reacts the way the app does.
-      if (at(step, "cursor-to-thread") || at(step, "click-thread"))
-        // The thread card's own button (`thread-card-row.tsx`).
-        return findButton(pane, (l) => l === "Open thread");
-      if (at(step, "cursor-to-tab") || at(step, "click-tab"))
-        // The count badge concatenates into textContent ("Agents3").
-        return findButton(pane, (l) => l.startsWith("Agents"));
-      if (at(step, "cursor-to-agent") || at(step, "click-agent"))
-        return findButton(pane, (l) => l === "Open");
-      if (at(step, "cursor-to-crumb") || at(step, "click-crumb"))
-        // The breadcrumb's channel crumb, which is a button in thread view only
-        // (`message-pane-header.tsx`). Its label IS the channel name.
-        return findButton(pane, (l) => l === CHANNEL_NAME);
-      return null;
-    };
+    const glide = PRESSES.find((p) => at(step, p.glide));
+    const press = PRESSES.find((p) => at(step, p.press));
     const locate = (el: HTMLElement) => {
       if (!canvas) return null;
       const cr = canvas.getBoundingClientRect();
@@ -139,13 +215,8 @@ export function BannerDemo() {
     // step's DOM committed anyway.
     let raf = 0;
     const t = window.setTimeout(() => {
-      if (
-        at(step, "cursor-to-thread") ||
-        at(step, "cursor-to-tab") ||
-        at(step, "cursor-to-agent") ||
-        at(step, "cursor-to-crumb")
-      ) {
-        const el = target();
+      if (glide) {
+        const el = glide.find(pane);
         const to = el && locate(el);
         if (!to) return;
         // Fresh entry spawns offscreen, then glides (CSS transition); a cursor
@@ -163,31 +234,18 @@ export function BannerDemo() {
         return;
       }
 
-      if (
-        at(step, "click-thread") ||
-        at(step, "click-tab") ||
-        at(step, "click-agent") ||
-        at(step, "click-crumb")
-      ) {
+      if (press) {
         const { x, y } = cursorPos.current;
         setRipple((r) => ({ x, y, n: r.n + 1 }));
-        const el = target();
-        // The REAL control's own handler runs — this is the product reacting,
+        // The REAL control's own handler runs: this is the product reacting,
         // not the demo repainting.
-        el?.click();
+        press.find(pane)?.click();
         if (at(step, "click-thread")) setThreadClicked(true);
         if (at(step, "click-agent")) setAgentClicked(true);
         return;
       }
 
-      // ⚠ `click-crumb` is NOT in this list: the cursor stays on stage through step 8,
-      // because the channel it just came back to is the thing the reader should be
-      // watching and a pointer vanishing mid-scene reads as the demo ending.
-      if (
-        at(step, "thread-open") ||
-        at(step, "tab-open") ||
-        at(step, "agent-open")
-      ) {
+      if (EXITS.some((id) => at(step, id))) {
         setCursor((c) => (c.shown ? { ...c, shown: false } : c));
       }
     }, 0);
@@ -201,6 +259,7 @@ export function BannerDemo() {
 
   return (
     <div className="lp-demo" ref={rootRef} aria-hidden="true">
+      <style>{ROW_REVEAL_CSS}</style>
       <div
         className={`lp-demo-canvas${resetting ? " is-resetting" : ""}`}
         ref={canvasRef}
@@ -218,6 +277,7 @@ export function BannerDemo() {
           thread={threadOpen ? OPEN_THREAD : null}
           onOpenThread={() => setThreadClicked(true)}
           onExitThread={() => setThreadClicked(false)}
+          typedWords={typedWords}
         />
 
         <div

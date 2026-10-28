@@ -3,7 +3,7 @@
  * recording every call, so these assert the filters and ordering that actually
  * reach PostgREST.
  *
- * Thread scope (`metadata->>taskId`) is a FILTER — it composes with cursor /
+ * Thread scope (`metadata->>threadId`) is a FILTER — it composes with cursor /
  * limit / author-exclusion and never replaces them. ⚠ It must survive BOTH
  * cursor modes; the cursored and cursorless reads are separate query builders.
  *
@@ -25,12 +25,12 @@ import type { ChannelMessageRow } from "./dto";
 
 const CHANNEL = "chan-1";
 const THREAD_UUID = "660e8400-e29b-41d4-a716-446655440111";
-/** A pre-`channel_tasks` thread id — still a real `metadata.taskId` value. */
-const LEGACY_THREAD_ID = `task-${CHANNEL}-42`;
+/** A pre-`channel_threads` thread id — still a real `metadata.threadId` value. */
+const LEGACY_THREAD_ID = `thread-${CHANNEL}-42`;
 
 type Call = { op: string; args: unknown[] };
 
-function messageRow(seq: number, taskId?: string): ChannelMessageRow {
+function messageRow(seq: number, threadId?: string): ChannelMessageRow {
   return {
     id: `msg-${seq}`,
     seq,
@@ -40,7 +40,7 @@ function messageRow(seq: number, taskId?: string): ChannelMessageRow {
     author_kind: "user",
     kind: "message",
     body: `m${seq}`,
-    metadata: taskId ? { taskId } : {},
+    metadata: threadId ? { threadId } : {},
     client_msg_id: null,
     created_at: "2026-07-31T00:00:00Z",
   };
@@ -137,39 +137,39 @@ describe("listMessages — the BACKWARD `before` cursor", () => {
       threadId: THREAD_UUID,
     });
 
-    expect(eqFilters(calls)["metadata->>taskId"]).toBe(THREAD_UUID);
+    expect(eqFilters(calls)["metadata->>threadId"]).toBe(THREAD_UUID);
     expect(calls.find((c) => c.op === "lt")?.args).toEqual(["seq", 5]);
   });
 });
 
 describe("listMessages — thread scope", () => {
-  it("filters on metadata->>taskId when a thread id is passed", async () => {
+  it("filters on metadata->>threadId when a thread id is passed", async () => {
     const calls = makeAdmin([messageRow(3, THREAD_UUID)]);
 
     const rows = await listMessages(CHANNEL, { limit: 50, threadId: THREAD_UUID });
 
-    // ⚠ `metadata->>taskId` compares as TEXT, which is how the value is stored.
+    // ⚠ `metadata->>threadId` compares as TEXT, which is how the value is stored.
     expect(eqFilters(calls)).toEqual({
       channel_id: CHANNEL,
-      "metadata->>taskId": THREAD_UUID,
+      "metadata->>threadId": THREAD_UUID,
     });
     expect(rows.map((r) => r.seq)).toEqual([3]);
   });
 
-  it("accepts a LEGACY task-<channelId>-<seq> id verbatim (no uuid coercion)", async () => {
+  it("accepts a LEGACY thread-<channelId>-<seq> id verbatim (no uuid coercion)", async () => {
     // ⚠ Legacy ids must pass through untouched rather than 400.
     const calls = makeAdmin([messageRow(7, LEGACY_THREAD_ID)]);
 
     await listMessages(CHANNEL, { limit: 50, threadId: LEGACY_THREAD_ID });
 
-    expect(eqFilters(calls)["metadata->>taskId"]).toBe(LEGACY_THREAD_ID);
+    expect(eqFilters(calls)["metadata->>threadId"]).toBe(LEGACY_THREAD_ID);
   });
 
   it("returns [] for a thread id no message carries (a filter, not a lookup)", async () => {
     makeAdmin([]);
 
     await expect(
-      listMessages(CHANNEL, { limit: 50, threadId: "task-nothing-matches-0" })
+      listMessages(CHANNEL, { limit: 50, threadId: "thread-nothing-matches-0" })
     ).resolves.toEqual([]);
   });
 
@@ -182,7 +182,7 @@ describe("listMessages — thread scope", () => {
     expect(eqFilters(calls)).toEqual({ channel_id: CHANNEL });
     // ⚠ **THE PROJECTION IS EXCLUDED FROM THE SCAN (2026-10-10, option H).** It
     // names `metadata` as a COLUMN now that the read is explicit rather than
-    // `*`; what this case is about is a FILTER on `metadata->>taskId`.
+    // `*`; what this case is about is a FILTER on `metadata->>threadId`.
     expect(
       calls
         .filter((c) => c.op !== "from" && c.op !== "select")
@@ -224,7 +224,7 @@ describe("listMessages — thread scope", () => {
   it("survives BOTH cursor modes (the two reads share one filter chain)", async () => {
     const cursorless = makeAdmin([messageRow(9, THREAD_UUID), messageRow(8, THREAD_UUID)]);
     const flipped = await listMessages(CHANNEL, { limit: 2, threadId: THREAD_UUID });
-    expect(eqFilters(cursorless)["metadata->>taskId"]).toBe(THREAD_UUID);
+    expect(eqFilters(cursorless)["metadata->>threadId"]).toBe(THREAD_UUID);
     expect(cursorless.find((c) => c.op === "order")?.args[1]).toEqual({
       ascending: false,
     });
@@ -236,7 +236,7 @@ describe("listMessages — thread scope", () => {
       limit: 2,
       threadId: THREAD_UUID,
     });
-    expect(eqFilters(cursored)["metadata->>taskId"]).toBe(THREAD_UUID);
+    expect(eqFilters(cursored)["metadata->>threadId"]).toBe(THREAD_UUID);
     expect(cursored.find((c) => c.op === "gt")?.args).toEqual(["seq", 7]);
     expect(cursored.find((c) => c.op === "order")?.args[1]).toEqual({
       ascending: true,
@@ -259,7 +259,7 @@ describe("listMessages — thread scope", () => {
     expect(calls.find((c) => c.op === "or")?.args).toEqual([
       "author_user_id.is.null,author_user_id.neq.user-9",
     ]);
-    expect(eqFilters(calls)["metadata->>taskId"]).toBe(THREAD_UUID);
+    expect(eqFilters(calls)["metadata->>threadId"]).toBe(THREAD_UUID);
   });
 });
 
@@ -313,7 +313,7 @@ describe("author exclusion — NULL-safe, and identical in the read and the prob
 /**
  * ⚠ A `latestThreadActivitySeq — the anchor a re-proposal is keyed on` block
  * ended here (wiring plan Phase 4, 2026-08-18). The repository function went
- * with `proposeTaskClose`; ⚠ **this file's import of it was the only thing
+ * with `proposeThreadClose`; ⚠ **this file's import of it was the only thing
  * keeping `npx knip` quiet about the orphan**, which is why the deletion had to
  * be found by grep rather than by the gate.
  *

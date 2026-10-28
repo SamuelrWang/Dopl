@@ -169,9 +169,12 @@ export function Profile({ src, d }: { src?: string; d: number }) {
         inset: 0,
         borderRadius: "50%",
         background: "var(--raised-light-face)",
-        border: "1px solid var(--raised-light-line)",
+        // Hairline and white border scale with the circle (login: 48px inner
+        // circle → 1px + 3.84px); no px floor, so small avatars keep the same
+        // share of photo instead of a thick fixed frame (paired-avatar.tsx).
+        border: `${Math.min(1, d / 48)}px solid var(--raised-light-line)`,
         boxShadow: CIRCLE_SHADOW,
-        padding: Math.max(2, d * 0.08),
+        padding: d * 0.08,
       }}
     >
       {src ? (

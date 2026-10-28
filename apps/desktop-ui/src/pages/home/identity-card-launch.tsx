@@ -1,6 +1,4 @@
 import { useCallback, useState } from "react";
-import { Loader2 } from "lucide-react";
-import { OPEN_SCALE_ICON, OpenScaleButton } from "@/shared/ui/open-scale-button";
 import { toast } from "@/shared/ui/toast";
 import {
   canLaunchAgents,
@@ -16,55 +14,16 @@ import {
 } from "@/features/channels/components/use-agent-launch";
 import { useChannelLaunchPosture } from "@/features/channels/hooks/use-channel-launch-posture";
 import type { AgentIdentity } from "@/features/agent-identities/client/types";
+import type { CardLaunch } from "@/features/agent-identities/components/identity-card-actions";
 import type { Channel } from "@/features/channels/types";
-import { channelTitle } from "./home-rows";
+import { channelTitle } from "@/features/home/components/channels/home-rows";
 
 /**
  * The personal card's one-click Launch: the identity as-is into the selected channel, no form.
  * The payload is `use-launch-controls.ts › buildLaunchPayload` with only the identity id, so it is
- * byte-for-byte the composer's one-click launch.
+ * byte-for-byte the composer's one-click launch. The card's controls are
+ * `agent-identities/components/identity-card-actions.tsx › PersonalCardFooter`.
  */
-
-/** The card control. A `<button>` inside the card's face, never over it
- *  (`identity-section.tsx › IdentityCard`). */
-export function LaunchIntoChannelButton({
-  onClick,
-  busy,
-  disabled,
-}: {
-  onClick: () => void;
-  /** The launch in flight is on THIS row. */
-  busy: boolean;
-  disabled: boolean;
-}) {
-  return (
-    <OpenScaleButton
-      onClick={onClick}
-      disabled={disabled || busy}
-      className="gap-1.5 disabled:opacity-60"
-    >
-      {busy && (
-        <Loader2
-          size={OPEN_SCALE_ICON}
-          aria-hidden="true"
-          className="animate-spin"
-        />
-      )}
-      Launch
-    </OpenScaleButton>
-  );
-}
-
-/** Which row is launching, and the one line a refusal gets. */
-export interface CardLaunch {
-  /** The bridge op exists on this build; the caller renders no button otherwise. */
-  canLaunch: boolean;
-  /** The identity id with a launch in flight, or `null`. */
-  busyId: string | null;
-  /** The last refusal, on the row that earned it (a refusal is not a push). */
-  error: { identityId: string; message: string } | null;
-  launch: (identity: AgentIdentity) => void;
-}
 
 export function useCardLaunch(channel: Channel | null): CardLaunch {
   const posture = useChannelLaunchPosture(channel?.id ?? "");

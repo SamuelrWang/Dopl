@@ -47,7 +47,7 @@ function base(): FakeTables {
       },
     ],
     channel_messages: [],
-    channel_tasks: [],
+    channel_threads: [],
     channel_artifacts: [],
     knowledge_bases: [],
     knowledge_entries: [],
@@ -99,7 +99,7 @@ describe("the minimum query length", () => {
 
   it("searches at exactly the minimum length", async () => {
     const tables = base();
-    tables.channel_tasks = [
+    tables.channel_threads = [
       {
         id: "thr-1",
         title: "zephyr",
@@ -120,7 +120,7 @@ describe("the minimum query length", () => {
 describe("caps", () => {
   it("carries 8 items and a TRUE total below the ceiling", async () => {
     const tables = base();
-    tables.channel_tasks = threads(12);
+    tables.channel_threads = threads(12);
     mount(tables);
 
     const out = await runSearch(CTX, { q: "zephyr", scope: "account" });
@@ -133,7 +133,7 @@ describe("caps", () => {
 
   it("reports the ceiling — never more — when there are more", async () => {
     const tables = base();
-    tables.channel_tasks = threads(120);
+    tables.channel_threads = threads(120);
     mount(tables);
 
     const out = await runSearch(CTX, { q: "zephyr", scope: "account" });
@@ -147,7 +147,7 @@ describe("caps", () => {
 describe("the group list", () => {
   it("omits every group with no items", async () => {
     const tables = base();
-    tables.channel_tasks = threads(1);
+    tables.channel_threads = threads(1);
     mount(tables);
 
     const out = await runSearch(CTX, { q: "zephyr", scope: "account" });
@@ -170,7 +170,7 @@ describe("the group list", () => {
         created_at: "2026-09-01T00:00:00Z",
       },
     ];
-    tables.channel_tasks = threads(1);
+    tables.channel_threads = threads(1);
     tables.channel_artifacts = [
       {
         id: "a1",
@@ -261,14 +261,14 @@ describe("the item", () => {
     );
   });
 
-  it("does not search the task_* narration kinds", async () => {
+  it("does not search the thread_* narration kinds", async () => {
     const tables = base();
     tables.channel_messages = [
       {
         id: "m1",
         seq: 1,
         body: "zephyr",
-        kind: "task_progress",
+        kind: "thread_progress",
         channel_id: CH,
         workspace_id: WS,
         created_at: "2026-09-01T00:00:00Z",

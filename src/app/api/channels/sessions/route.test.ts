@@ -57,12 +57,12 @@ import {
 } from "@/features/channels/server/service";
 
 const CHAN = "550e8400-e29b-41d4-a716-446655440000";
-const TASK = "44444444-e29b-41d4-a716-446655440000";
+const THREAD = "44444444-e29b-41d4-a716-446655440000";
 
 const entry = (over: Record<string, unknown> = {}) => ({
-  sessionKey: `${CHAN}:${TASK}`,
+  sessionKey: `${CHAN}:${THREAD}`,
   channelId: CHAN,
-  threadId: TASK,
+  threadId: THREAD,
   name: "flint",
   state: "working",
   channelName: "General",

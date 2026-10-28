@@ -12,7 +12,7 @@ vi.mock("./repository-launch", () => fx.mocks.launchRepo);
 vi.mock("./repository-agent-owner", () => fx.mocks.agentOwner);
 vi.mock("./repository-directions");
 vi.mock("./repository-collab", () => fx.mocks.collab);
-vi.mock("./repository-tasks", () => fx.mocks.tasks);
+vi.mock("./repository-threads", () => fx.mocks.threads);
 vi.mock("./repository-session-colors", () => fx.mocks.sessionColors);
 vi.mock("./service-shared", (importOriginal) => fx.serviceSharedMock(importOriginal));
 vi.mock("@/features/agent-identities/server/service", () => fx.mocks.identities);
@@ -20,7 +20,7 @@ vi.mock("@/features/agent-identities/server/service", () => fx.mocks.identities)
 import * as launchRepo from "./repository-launch";
 import * as directionRepo from "./repository-directions";
 import * as collab from "./repository-collab";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import { resolveIdentityRef } from "@/features/agent-identities/server/service";
 import { loadVisibleChannel } from "./service-shared";
 import { createLaunchDirective } from "./service-launch";
@@ -47,7 +47,7 @@ function directionRow(over: Record<string, unknown> = {}) {
     id: DIR,
     workspace_id: WS,
     channel_id: CHAN,
-    task_id: null,
+    thread_id: null,
     operator_user_id: ME,
     agent_id: AGENT,
     sender_agent_id: null,
@@ -141,14 +141,14 @@ describe("launch_agent — the probe sits ABOVE the gates a retry must not be re
   });
 
   it("a thread id is not re-validated either — the stored row already names one", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null as never);
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(null as never);
     vi.mocked(launchRepo.findLaunchDirectiveByClientMsgId).mockResolvedValue(launchRow());
     const result = await createLaunchDirective(ctx, {
       channel: "general",
       threadId: "44444444-4444-4444-4444-444444444444",
       clientMsgId: KEY,
     });
-    expect(repoTasks.findTaskByChannelAndId).not.toHaveBeenCalled();
+    expect(repoThreads.findThreadByChannelAndId).not.toHaveBeenCalled();
     expect(result).toMatchObject({ existing: true });
   });
 });

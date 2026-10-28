@@ -67,7 +67,7 @@ const MESSAGES: ChannelMessage[] = [
     id: "m-7",
     seq: 7,
     body: "opened a thread",
-    metadata: { session_id: `${CHANNEL_ID}::${SCOUT}`, taskId: THREAD.id },
+    metadata: { session_id: `${CHANNEL_ID}::${SCOUT}`, threadId: THREAD.id },
   }),
 ];
 

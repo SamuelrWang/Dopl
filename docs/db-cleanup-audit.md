@@ -102,7 +102,7 @@ Ranked by confidence, then by how much dead surface it removes.
 |---|---|---|---|---|---|---|---|
 | 1 | `glasses_devices` | table | No code (docs/glasses-mcp.md: "no longer read"). 1 row; `last_seen` stopped 2026-09-26 when device links replaced it. | **certain** | none | policy `glasses_devices_owner_select` only; no FK/view/fn | **Released 2026-09-29** — `20261114120000` |
 | 2 | `increment_ingestion_count(uuid)` + `profiles.ingestion_count` | function + column | RPC: no code, no SQL caller. Column: 0 rows ≠ 0, only writer is that function. | **certain** | none | none | **Released 2026-09-29** — `20261114130000` |
-| 3 | `channel_task_participants` + trigger `…_workspace_guard` + fn `channel_task_child_workspace_guard()` | table + trigger + fn | Breakout rooms retired in the channels rollback. Last insert 2026-08-01, 8 rows. Only code was an explicit delete in `channels/server/repository-tasks.ts` — **removed on this branch** (the FK already cascades). Guard fn used by this trigger only. | likely | an older deployed server still issues the delete → release only after this branch's code ships | FK → `channel_tasks` (cascade); policy `…_member_select` | **Released 2026-09-29** — `20261114130000` |
+| 3 | `channel_task_participants` + trigger `…_workspace_guard` + fn `channel_task_child_workspace_guard()` | table + trigger + fn | Breakout rooms retired in the channels rollback. Last insert 2026-08-01, 8 rows. Only code was an explicit delete in `channels/server/repository-threads.ts` — **removed on this branch** (the FK already cascades). Guard fn used by this trigger only. | likely | an older deployed server still issues the delete → release only after this branch's code ships | FK → `channel_tasks` (cascade); policy `…_member_select` | **Released 2026-09-29** — `20261114130000` |
 | 4 | `user_preferences` | table | No code (one comment in `api/user/delete`). 3 rows, keys `onboarding`/`theme`, last write 2026-06-09. | likely | none | 4 owner policies | **Released 2026-09-29** — `20261114130000` |
 | 5 | `chat_replace_messages(uuid,uuid,jsonb)` | function | No code, no SQL caller. | likely | none | none | **Released 2026-09-29** — `20261114130000` |
 | 6 | `workspace_credit_usage` + `consume_workspace_credits(...)` | table + function | F-667. Retired from writes by `credit_wallets` (applied as `20260907213504`, matched by name). Last write 2026-09-07. No code (comments only). 6 rows of pre-wallet spend. | likely | the rows are history only; a rollback past 1.33 would need them | policy `workspace_credit_usage_member_select`; fn is the table's only writer | **Archive first**, then DROP — `…140000` |
@@ -200,7 +200,7 @@ or an `.rpc()` call. All 42 triggers sit on live tables except
 - **Buckets**: `workspace-icons` (live), `community-thumbnails` (needs Samuel), `chat-attachments`
   (drop, #12).
 - **Enums / matviews**: none. **Sequence**: `channel_messages_seq_seq` (live). **View**:
-  `channel_tasks_activity` (live).
+  `channel_threads_activity` (live).
 - **Tables with 0 rows but live code** (keep): `knowledge_base_stars`, `ontology_channel_shares`,
   `workspace_activity_events`, `oauth_authorization_codes`, `workspace_join_requests`.
 
@@ -218,8 +218,8 @@ or an `.rpc()` call. All 42 triggers sit on live tables except
 - `supabase/migrations-held/20261110140000_drop_pooled_credit_counter.sql`
 - `supabase/migrations-held/20261110150000_drop_profile_legacy_billing_columns.sql`
 - `supabase/migrations/20261110160000_profiles_update_column_grants.sql` (security) — released from the hold, applied to prod 2026-09-28
-- Code: the `deleteTaskParticipants` statement removed from `channels/server/repository-tasks.ts`,
-  with its call in `channels/server/service-tasks-delete.ts › deleteTask` and its test expectations. The FK's `ON DELETE CASCADE`
+- Code: the `deleteThreadParticipants` statement removed from `channels/server/repository-threads.ts`,
+  with its call in `channels/server/service-threads-delete.ts › deleteThread` and its test expectations. The FK's `ON DELETE CASCADE`
   already did that delete, so behaviour is unchanged while the table still exists.
 - `src/shared/supabase/types.ts` is **left alone**: it is generated from the deployed database
   (see its header) and must be re-generated when a held file is released, not hand-edited ahead of it.

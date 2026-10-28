@@ -1,234 +1,140 @@
 import { cn } from "@/shared/lib/utils";
+import { ChannelRecordGhost } from "@/features/channels/components/channel-record-skeleton";
+import { OverviewGhost } from "@/features/home/components/overview/overview-skeleton";
 import {
   GHOST_FLAT_FACE,
   Skeleton,
   SkeletonBar,
   SkeletonLine,
 } from "@/shared/ui/skeleton";
-import { PANEL_ROWS, PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
-import { NAKED_ICON } from "@/shared/ui/naked-icon-button";
-import { PAGE_ACTION_ICON } from "@/shared/ui/page-action-button";
+import { WELL_FACES } from "@/features/channels/components/collapse-wells";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import {
-  IdentityCardsGhost,
+  CreateGhost,
+  HEADING_W,
+  PanelsGhost,
   SectionPanelGhost,
-} from "#/components/skeletons/section-panel-ghost";
+} from "@/shared/ui/section-panel-ghost";
+import { KbCardsGhost } from "@/features/knowledge/components/knowledge-skeletons";
+import { IdentityCardsGhost } from "#/components/skeletons/section-panel-ghost";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
 import { AccountRailSkeleton } from "#/components/skeletons/shell-skeleton";
-import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series";
+import { IDENTITY_GRID_RAIL } from "@/features/agent-identities/components/identity-section";
 import { HOME_CHANNEL_WELLS, type HomeChannelWellId } from "./channel-wells";
-import { HOME_TABS } from "./home-tabs";
-import home from "./home.module.css";
+import { HomeFrame, HomeHeaderRow, HomeListColumn } from "@/features/home/components/shell/home-frame";
+import { HOME_DEFAULT_TAB, HOME_TABS, type HomeTab } from "./home-tabs";
 
 /**
  * /home's loading shapes: the page frame, and one per record-pane face. Geometry is the page's own
- * classes by reference (`--home-list-w`, `home.kbCards`, `IDENTITY_GRID`, `PLOT_HEIGHT_CLASS`),
- * never re-typed. No text and nothing pressable; the label is `SkeletonSurface`'s `sr-only` line.
+ * by reference (`HomeFrame`, `--home-list-w`, `KbCardsGhost`, `IDENTITY_GRID`, the Overview's own
+ * module), never re-typed. No text and nothing pressable; the label is `SkeletonSurface`'s `sr-only` line.
  */
 
-/** The whole /home frame while the page reads are in flight: rail, header, list, record pane. */
-export function HomePageSkeleton({ label = "Opening home" }: { label?: string }) {
-  return (
-    // `!ml-0`: the panel butts flush against the rail, as on the page (`index.tsx`).
-    <SkeletonSurface label={label} className={shell.root}>
-      <div className={shell.body}>
-        <AccountRailSkeleton />
-        <div className={shell.surface}>
-          <main
-            className={cn(
-              "page-float !ml-0 flex flex-1 flex-col overflow-hidden bg-home-panel",
-              home.page
-            )}
-          >
-            <HomeHeaderGhost />
-
-            <div className="flex min-h-0 flex-1">
-              <HomeListGhost />
-              <div
-                className={cn(
-                  // The record pane's own frame, verbatim from `index.tsx` — a ROW, not a column.
-                  "mb-3 mr-3 flex min-w-0 flex-1 overflow-hidden rounded-[14px] border-2 border-home-panel-line bg-home-card"
-                )}
-                data-frame-skin
-              >
-                <OverviewFaceGhost />
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
-    </SkeletonSurface>
-  );
-}
-
-/** /home → Knowledge while the base list is in flight: two flat sections over the card grid. No
- *  caption under either heading — the real panels print label + control only (2026-09-09). */
-export function HomeKnowledgePanelsSkeleton({
-  label = "Loading knowledge",
+/**
+ * The whole /home frame while the page reads are in flight: rail, header, list, and the record
+ * pane on the face the page will open on (the remembered one once boot names the user).
+ */
+export function HomePageSkeleton({
+  label = "Opening home",
+  face = HOME_DEFAULT_TAB,
 }: {
   label?: string;
+  face?: HomeTab;
 }) {
   return (
-    <SkeletonSurface
-      label={label}
-      className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3"
-    >
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Knowledge base" />}>
-        <KbCardsGhost />
-      </SectionPanelGhost>
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Knowledge base" />}>
-        <KbCardsGhost />
-      </SectionPanelGhost>
+    <SkeletonSurface label={label} className={shell.root}>
+      <HomeFrame
+        face={face}
+        rail={<AccountRailSkeleton />}
+        header={<HomeHeaderGhost />}
+        list={<HomeListGhost />}
+      >
+        <FaceGhost face={face} />
+      </HomeFrame>
     </SkeletonSurface>
   );
 }
 
-/** /home → Identities while the container list is in flight: the same two sections over the
- *  identities' own four-column grid (not the Knowledge grid). */
+/** One face's record pane, inside a surface that already announces the load. The ontology face
+ *  paints its own loading shape once mounted, so it ghosts an empty pane. */
+function FaceGhost({ face }: { face: HomeTab }) {
+  if (face === "overview") return <OverviewGhost />;
+  if (face === "channels") return <ChannelRecordGhost />;
+  if (face === "ontology") return null;
+  if (face === "identities") return <IdentitiesGhost />;
+  return (
+    <div className={PANELS}>
+      <PanelsGhost label="Knowledge base" cards={<KbCardsGhost />} />
+    </div>
+  );
+}
+
+const PANELS = "flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3";
+
 export function HomeIdentityPanelsSkeleton({
   label = "Loading identities",
 }: {
   label?: string;
 }) {
   return (
-    <SkeletonSurface
-      label={label}
-      className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3"
-    >
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Agent Identity" />}>
-        <IdentityCardsGhost count={4} />
-      </SectionPanelGhost>
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Agent Identity" />}>
-        <IdentityCardsGhost count={4} />
-      </SectionPanelGhost>
+    <SkeletonSurface label={label} className="flex min-w-0 flex-1">
+      <IdentitiesGhost />
     </SkeletonSurface>
   );
 }
 
-/** Every /home section heading ghost is one width. */
-const HEADING_W = 148;
-
-/**
- * A section header's create-button ghost: `panel-buttons.tsx › CreateButton` is `PAGE_ACTION_BTN`
- * (`h-9 rounded-full px-[15px]`) holding a 13px plus, a `gap-1.5`, then its label — so the width is
- * sized from the label the real button prints, and two sections with one label ghost one width.
- */
-function CreateGhost({ label }: { label: string }) {
+/** `identities-home.tsx`'s frame by its own kit classes: the head lines and two flat sections in
+ *  the 3/4 column, the Activity rail in the 1/4. */
+function IdentitiesGhost() {
+  const create = <CreateGhost label="Agent Identity" />;
   return (
-    <SkeletonBar
-      h={36}
-      w={`calc(${label.length}ch + ${15 * 2 + PAGE_ACTION_ICON + 6}px)`}
-      className="rounded-full"
+    <div className="rail-layout">
+      <div className="rail-layout-cols">
+        <div className="rail-layout-main">
+          <div className="flex flex-col gap-3">
+            <SkeletonLine w={220} h={10} />
+            <SkeletonBar h={36} w={260} className="rounded-full" />
+          </div>
+          <SectionPanelGhost flat headingWidth={HEADING_W} action={create}>
+            <IdentityCardsGhost count={3} grid={IDENTITY_GRID_RAIL} />
+          </SectionPanelGhost>
+          <SectionPanelGhost flat headingWidth={HEADING_W} action={create}>
+            <IdentityCardsGhost count={3} grid={IDENTITY_GRID_RAIL} />
+          </SectionPanelGhost>
+        </div>
+        <div className="rail-layout-aside">
+          <SectionPanelGhost flat headingWidth={72}>
+            <Skeleton className="h-15.5 rounded-xl" />
+          </SectionPanelGhost>
+        </div>
+      </div>
+    </div>
+  );
+}
+/** `home-header.tsx`'s cells: the New channel pill, one label bar per `HOME_TABS` entry sized
+ *  from its label, then the 260px search pill and Profile. */
+function HomeHeaderGhost() {
+  return (
+    <HomeHeaderRow
+      lead={<Skeleton className="h-9 w-31 rounded-full" />}
+      tabs={
+        <div className="flex h-9 items-center gap-5.5">
+          {HOME_TABS.map(({ key, label }) => (
+            <SkeletonLine key={key} w={`calc(${label.length}ch)`} h={12} />
+          ))}
+        </div>
+      }
+      trail={
+        <>
+          <Skeleton className="h-9 w-65 rounded-full" />
+          <Skeleton className="h-9 w-22 rounded-full" />
+        </>
+      }
     />
   );
 }
 
-function KbCardsGhost() {
-  return (
-    <div className={home.kbCards}>
-      {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className={home.kbCell}>
-          <Skeleton className="h-full w-full rounded-[14px]" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/**
- * `home-header.tsx`'s three boxes: the list-width cell (a cell, not a `pl-`), one inert pill per
- * `HOME_TABS` entry sized from its label, then search + Profile.
- */
-function HomeHeaderGhost() {
-  return (
-    <div className="flex items-center justify-between gap-3 py-3 pr-3">
-      <div className="flex min-w-0 items-center">
-        <div className="flex w-[var(--home-list-w)] min-w-0 shrink-0 items-center px-3">
-          {/* The "New channel" pill: hug-width and left-aligned, as the real `PAGE_ACTION_BTN`. */}
-          <Skeleton className="h-9 w-[112px] rounded-full" />
-        </div>
-        <div className="flex items-center gap-1.5">
-          {HOME_TABS.map(({ key, label }) => (
-            <SkeletonBar
-              key={key}
-              h={36}
-              w={`calc(${label.length}ch + 24px)`}
-              className="rounded-full"
-            />
-          ))}
-        </div>
-      </div>
-      <div className="flex items-center gap-2.5">
-        {/* 260px = `kit.css › .search-expand[data-open="true"]`: /home renders the search open. */}
-        <Skeleton className="h-9 w-[260px] rounded-full" />
-        <Skeleton className="h-9 w-[72px] rounded-full" />
-      </div>
-    </div>
-  );
-}
-
-/**
- * The record pane on the face the page opens on (`HOME_DEFAULT_TAB`, Overview): Usage (the
- * credit card, then the histogram card with its control row) and the channel rails. Token spend is not ghosted — it folds away when no row exists. The Usage cards
- * wear `GHOST_FLAT_FACE`, not the page's `.bento` (skeletons are flat).
- */
-function OverviewFaceGhost() {
-  return (
-    <div className="min-w-0 flex-1 overflow-y-auto p-3">
-      <div className="flex flex-col gap-3">
-        {/* USAGE — one well holding the capacity bar, then the plot. */}
-        <SectionPanelGhost headingWidth={HEADING_W}>
-          <div className="flex flex-col gap-3">
-            {/* "Credit spend": the card's own `h3` (`mb-2`), then the bar at `CreditsBar`'s 54px. */}
-            <div className={cn(GHOST_FLAT_FACE, "p-3.5")}>
-              <div className="mb-2 flex h-5 items-center">
-                <SkeletonLine w={92} h={12} />
-              </div>
-              <Skeleton className="h-[54px] w-full rounded-lg" />
-            </div>
-            {/* The histogram: `overview-sections.tsx › UsageChart`'s control row (scope menu left;
-                month stepper and total right), then the plot at `mt-3`. */}
-            <div className={cn(GHOST_FLAT_FACE, "flex flex-col p-3.5")}>
-              <div className="flex items-center justify-between gap-3">
-                <SkeletonLine w={108} h={12} />
-                <div className="flex min-w-0 shrink-0 items-center gap-2">
-                  <div className="flex items-center gap-0.5">
-                    <span className="flex items-center justify-center p-2">
-                      <SkeletonBar h={MONTH_ARROW} w={MONTH_ARROW} className="rounded-[4px]" />
-                    </span>
-                    <SkeletonLine w={84} h={12} />
-                    <span className="flex items-center justify-center p-2">
-                      <SkeletonBar h={MONTH_ARROW} w={MONTH_ARROW} className="rounded-[4px]" />
-                    </span>
-                  </div>
-                  <SkeletonLine w={36} h={9} />
-                </div>
-              </div>
-              <Skeleton
-                className={cn(PLOT_HEIGHT_CLASS, "mt-3 w-full rounded-[10px]")}
-              />
-            </div>
-          </div>
-        </SectionPanelGhost>
-
-        {/* ALL CHANNELS — two rows of two rails. */}
-        <SectionPanelGhost headingWidth={HEADING_W}>
-          <div className="grid grid-cols-2 gap-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-40 rounded-[14px]" />
-            ))}
-          </div>
-        </SectionPanelGhost>
-      </div>
-    </div>
-  );
-}
-
-/** `overview-usage-filter.tsx › MONTH_ARROW_ICON` (file-private there): the stepper's 16px glyph in
- *  `NAKED_ICON_BUTTON`'s `p-2` box. */
-const MONTH_ARROW = 16;
-
-/* ── The channel column: the gray wells and the rows inside them ── */
+/* ── The channel column: the well headings and the rows under them ── */
 
 /** Rows each OPEN well stands in for — per well, because a list is mostly Recent. */
 const WELL_ROWS: Record<HomeChannelWellId, number> = {
@@ -237,47 +143,35 @@ const WELL_ROWS: Record<HomeChannelWellId, number> = {
   earlier: 3,
 };
 
-/**
- * The column's wells, read from `HOME_CHANNEL_WELLS` (set, order and `defaultOpen`), never
- * re-typed. The well's gray is geometry, not elevation; the column and scroller classes are
- * `relationship-list.tsx`'s and `collapse-wells.tsx › WellsColumn`'s own.
- */
+/** The column's wells, read from `HOME_CHANNEL_WELLS` (set, order and `defaultOpen`). */
 function HomeListGhost() {
   return (
-    <div className="flex w-[var(--home-list-w)] shrink-0 flex-col">
-      <div className="flex flex-1 flex-col gap-2 overflow-hidden px-3 pb-3 pt-1">
-        <div className="flex flex-col gap-2">
-          {HOME_CHANNEL_WELLS.map((well) => (
-            <WellGhost
-              key={well.id}
-              label={well.label}
-              // A closed well ghosts its header only, as the loaded column opens it.
-              rows={well.defaultOpen ? WELL_ROWS[well.id] : 0}
-            />
-          ))}
-        </div>
+    <HomeListColumn>
+      <div className="flex flex-col gap-2">
+        {HOME_CHANNEL_WELLS.map((well) => (
+          <WellGhost
+            key={well.id}
+            label={well.label}
+            // A closed well ghosts its heading only, as the loaded column opens it.
+            rows={well.defaultOpen ? WELL_ROWS[well.id] : 0}
+          />
+        ))}
       </div>
-    </div>
+    </HomeListColumn>
   );
 }
 
-/**
- * One well: a heading bar with its chevron, then the rows. A `<section>` with no button in it.
- * The header box restates `collapse-wells.tsx › WELL_HEADER` minus the pointer (that constant is
- * file-private); its 30px is what the chevron's `p-2` box makes. The heading bar is sized from
- * the label, so each well resolves into its own heading width.
- */
+/** One well: the heading bar and its caret, then the rows, on `WellsColumn`'s heading geometry. */
 function WellGhost({ label, rows }: { label: string; rows: number }) {
+  const face = WELL_FACES.heading;
   return (
-    <section aria-hidden className={PANEL_WELL_ON_PANEL}>
-      <div className="flex min-h-[30px] w-full min-w-0 items-center justify-between gap-2 pl-1">
-        <SkeletonLine w={`calc(${label.length}ch)`} h={12} />
-        <span className="flex shrink-0 items-center justify-center p-2">
-          <SkeletonBar h={NAKED_ICON} w={NAKED_ICON} className="rounded-[4px]" />
-        </span>
+    <section aria-hidden className={face.box}>
+      <div className="flex w-full min-w-0 items-center justify-between gap-2 px-1 pt-1.5">
+        <SkeletonLine w={`calc(${label.length}ch)`} h={10} />
+        <SkeletonBar h={face.chevron} w={face.chevron} className="rounded-mark" />
       </div>
       {rows > 0 && (
-        <div className={PANEL_ROWS}>
+        <div className={face.rows}>
           {Array.from({ length: rows }).map((_, i) => (
             <HomeRowGhost key={i} />
           ))}
@@ -287,30 +181,23 @@ function WellGhost({ label, rows }: { label: string; rows: number }) {
   );
 }
 
-/**
- * One channel row, on the pane's flat white — never the loaded row's raised `HOME_CARD_FACE`
- * (skeletons are flat). Two `h-5` lines (title + time, then the peer stack) inside the row's own
- * `py-2.5`. No ghost for unread marks: only some rows carry one.
- */
+/** One channel row, flat (skeletons carry no elevation): the row's two 18px lines in its padding. */
 function HomeRowGhost() {
   return (
     <div
       aria-hidden
       className={cn(
         GHOST_FLAT_FACE,
-        "bg-home-card",
-        "flex w-full items-start gap-2.5 px-2.5 py-2.5"
+        "flex w-full flex-col gap-1 rounded-xl bg-home-card px-2.75 py-2.25"
       )}
     >
-      <div className="min-w-0 flex-1">
-        <div className="flex h-5 items-center justify-between gap-2">
-          <SkeletonLine w="58%" h={11} />
-          <SkeletonLine w={30} h={8} />
-        </div>
-        <div className="mt-0.5 flex h-5 items-center gap-1.5">
-          <Skeleton className="h-5 w-5 rounded-full" />
-          <Skeleton className="h-5 w-5 rounded-full" />
-        </div>
+      <div className="flex h-4.5 items-center justify-between gap-2">
+        <SkeletonLine w="58%" h={11} />
+        <SkeletonLine w={30} h={8} />
+      </div>
+      <div className="flex h-4.5 items-center gap-1">
+        <Skeleton className="h-5 w-5 rounded-full" />
+        <Skeleton className="h-5 w-5 rounded-full" />
       </div>
     </div>
   );

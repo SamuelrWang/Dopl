@@ -1,12 +1,16 @@
-import { CONNECT_TABS } from "./connect";
+import { CONNECT_ROWS, CURSOR_INSTALL_URL } from "./connect";
 import { DOC_SECTIONS } from "./nav";
-import { API_PAGES, CHANGELOG_PAGES } from "./pages-api";
-import { DEVICE_PAGES } from "./pages-devices";
+import { API_PAGES } from "./pages-api";
+import { CATEGORY_PAGES } from "./pages-categories";
+import { CONCEPT_PAGES } from "./pages-concepts";
+import { GUIDE_PAGES } from "./pages-guides";
 import { OVERVIEW_PAGES } from "./pages-overview";
-import { USE_CASE_PAGES } from "./pages-use-cases";
-import type { DocBlock, DocPage, DocSection } from "./types";
+import { ROUTING_PAGES } from "./pages-routing";
+import { CHANGELOG_PAGES, SDK_PAGES } from "./pages-sdks";
+import { DOC_STATUS_LABEL } from "./types";
+import type { CapabilityCard, DocBlock, DocPage, DocSection, DocStatus } from "./types";
 
-export { CONNECT_TABS, DOC_SECTIONS };
+export { CONNECT_ROWS, CURSOR_INSTALL_URL, DOC_SECTIONS, DOC_STATUS_LABEL };
 export { DOCS_HOME_COPY, HOME_CARDS, HOME_LISTS } from "./home";
 export type * from "./types";
 
@@ -15,9 +19,12 @@ export const DOCS_HOME = "home";
 
 export const DOC_PAGES: DocPage[] = [
   ...OVERVIEW_PAGES,
-  ...USE_CASE_PAGES,
-  ...DEVICE_PAGES,
+  ...CATEGORY_PAGES,
+  ...CONCEPT_PAGES,
+  ...ROUTING_PAGES,
+  ...GUIDE_PAGES,
   ...API_PAGES,
+  ...SDK_PAGES,
   ...CHANGELOG_PAGES,
 ];
 
@@ -25,6 +32,11 @@ const BY_SLUG = new Map(DOC_PAGES.map((p) => [p.slug, p]));
 
 export function getDocPage(slug: string): DocPage | undefined {
   return BY_SLUG.get(slug);
+}
+
+/** The status of the page a nav slug points at. */
+export function statusOf(slug: string): DocStatus | undefined {
+  return BY_SLUG.get(slug.split("#")[0])?.status;
 }
 
 export function docHref(slug: string): string {
@@ -48,10 +60,16 @@ export function slugify(text: string): string {
     .replace(/^-|-$/g, "");
 }
 
-/** The page's anchors, listed under it in the sidebar: headings, field groups, changelog entries. */
+/** A capability card's anchor: its title and capability, so a receive and a send card never collide. */
+export function capabilityAnchor(card: Pick<CapabilityCard, "title" | "capability">): string {
+  return slugify(`${card.title} ${card.capability}`);
+}
+
+/** The page's anchors, listed under it in the sidebar: headings, capability cards, field groups, changelog entries. */
 export function tableOfContents(page: DocPage): { id: string; text: string }[] {
   return page.blocks.flatMap((b) => {
     if (b.type === "h2" || b.type === "h3") return [{ id: slugify(b.text), text: b.text }];
+    if (b.type === "capability") return [{ id: capabilityAnchor(b), text: b.title }];
     if (b.type === "params") return [{ id: slugify(b.title), text: b.title }];
     if (b.type === "changelog") return b.entries.map((e) => ({ id: slugify(e.date), text: e.title }));
     return [];
@@ -61,6 +79,20 @@ export function tableOfContents(page: DocPage): { id: string; text: string }[] {
 /** Strip the inline marks to plain text, keeping link URLs. */
 function plain(text: string): string {
   return text.replace(/\*\*(.+?)\*\*/g, "$1");
+}
+
+const label = (s: DocStatus | null) => (s ? DOC_STATUS_LABEL[s] : "Not supported");
+
+function capabilityText(c: CapabilityCard): string[] {
+  return [
+    `### ${c.title} (\`${c.capability}\`)`,
+    plain(c.what),
+    `**Limits**\n${c.limits.map((l) => `- ${plain(l)}`).join("\n")}`,
+    `**Permission**: ${c.tier}. ${plain(c.permission)}`,
+    ...c.code.map((t) => `\`\`\`${t.label}\n${t.code}\n\`\`\``),
+    ...c.response.map((t) => `Response ${t.label}:\n\`\`\`json\n${t.code}\n\`\`\``),
+    `**Supported on**\n${c.support.map((m) => `- ${m.model}: ${label(m.status)}${m.note ? `. ${plain(m.note)}` : ""}`).join("\n")}`,
+  ];
 }
 
 function blockText(b: DocBlock): string[] {
@@ -86,7 +118,10 @@ function blockText(b: DocBlock): string[] {
     case "prompt":
       return [`> ${plain(b.text)}`];
     case "connect":
-      return CONNECT_TABS.map((t) => `**${t.label}**: \`${t.command}\``);
+      return [
+        ...CONNECT_ROWS.map((r) => `**${r.comment}**: \`${r.copy}\``),
+        `**Cursor one-click install**: ${CURSOR_INSTALL_URL}`,
+      ];
     case "code":
       return b.tabs.map((t) => `\`\`\`${t.label}\n${t.code}\n\`\`\``);
     case "hero":
@@ -97,22 +132,31 @@ function blockText(b: DocBlock): string[] {
       return [`## ${b.title}`, ...b.params.map((p) => `- \`${p.name}\` (${p.type}): ${plain(p.description)}`)];
     case "table":
       return [
-        `| ${b.columns.join(" | ")} |`,
-        `| ${b.columns.map(() => "---").join(" | ")} |`,
-        ...b.rows.map((r) => `| ${r.map(plain).join(" | ")} |`),
+        [
+          `| ${b.columns.join(" | ")} |`,
+          `| ${b.columns.map(() => "---").join(" | ")} |`,
+          ...b.rows.map((r) => `| ${r.map(plain).join(" | ")} |`),
+        ].join("\n"),
       ];
-    case "changelog":
-      return b.entries.map((e) => `## ${e.date} — ${e.title}\n${plain(e.description)}`);
-    case "endpoints":
+    case "support":
       return [
-        `**${b.label}**`,
-        ...b.rows.map((r) => `- [\`${r.method} ${r.path}\`](${docHref(r.href)}): ${r.description}`),
+        [
+          `| Capability | ${b.models.join(" | ")} |`,
+          `| --- | ${b.models.map(() => "---").join(" | ")} |`,
+          ...b.rows.map((r) => `| \`${r.capability}\` | ${r.cells.map(label).join(" | ")} |`),
+        ].join("\n"),
       ];
+    case "capability":
+      return capabilityText(b);
+    case "changelog":
+      return b.entries.map((e) => `## ${e.date}: ${e.title}\n${plain(e.description)}`);
+    case "flow":
+      return [b.items.map((it, i) => `${i + 1}. **${it.title}**: ${it.detail}`).join("\n")];
   }
 }
 
 /** The page as Markdown — what the copy button beside the H1 puts on the clipboard. */
 export function pageToMarkdown(page: DocPage): string {
-  const head = [`# ${page.title}`, page.description].filter(Boolean);
+  const head = [`# ${page.title}`, `Status: ${DOC_STATUS_LABEL[page.status]}`, page.description].filter(Boolean);
   return [...head, ...page.blocks.flatMap(blockText)].join("\n\n");
 }

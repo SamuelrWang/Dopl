@@ -40,7 +40,7 @@ import { channel, member, message, thread, CHANNEL_ID, ME, PEER, WS } from "./te
 const LAUNCHED: DesktopSessionSummary = {
   sessionId: "s-1",
   channelId: CHANNEL_ID,
-  taskId: "t-1",
+  threadId: "t-1",
   agentId: "ab12cd34",
   name: "flint",
   displayName: "Scout",

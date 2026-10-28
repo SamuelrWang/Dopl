@@ -43,10 +43,10 @@ const MAIN = join(dirname(fileURLToPath(import.meta.url)), "..", "main");
 // The eight main-process modules the rollback deleted (ENGINEERING §18, "THE DESKTOP LOST EIGHT
 // MODULES AND TWO CLASSIFY RULES"), plus the two-word forms a comment reaches for.
 //
-// ⚠ A NINTH JOINED THEM ON 2026-08-18 (wiring plan Phase 4): `session-close-task`, the module
-// that PATCHed `{op:"close"}` at `channel_tasks` when the operator closed a thread from the
+// ⚠ A NINTH JOINED THEM ON 2026-08-18 (wiring plan Phase 4): `session-close-thread`, the module
+// that PATCHed `{op:"close"}` at `channel_threads` when the operator closed a thread from the
 // session window. Threads do not close, the route arm is gone, and the whole lane behind it —
-// the renderer panel, the `session:close-task` IPC handler, the reducer's `close_task` branch —
+// the renderer panel, the `session:close-thread` IPC handler, the reducer's `close_thread` branch —
 // went in the same change. It earns its place here for the tier-2 reason above all: the engine
 // still `require`d it, and a `module.exports` read at load time is not a dead branch.
 //
@@ -79,7 +79,7 @@ const REMOVED = [
   "session-team",
   "session-greeting",
   "realtime-agents",
-  "session-close-task",
+  "session-close-thread",
   "session-window",
   "session-shell",
   "session-ipc",

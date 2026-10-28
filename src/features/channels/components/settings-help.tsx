@@ -18,7 +18,7 @@ interface SettingHelpCopy {
   options?: ReadonlyArray<{ label: string; text: string }>;
 }
 
-/** How far the panel opens left of the eye: the popover's `min-w-[240px]` less the trigger. */
+/** How far the panel opens left of the eye: the popover's `min-w-60` less the trigger. */
 const PANEL_PULL_LEFT = 220;
 
 /** The eye button (named for its setting) and its `role="note"` panel — nothing in it is selectable. */
@@ -47,7 +47,7 @@ export function SettingHelp({ name, copy }: { name: string; copy: SettingHelpCop
         aria-haspopup="dialog"
         aria-expanded={anchor !== null}
         className={cn(
-          "shrink-0 rounded-[6px] p-0.5 text-text-muted transition-colors",
+          "shrink-0 rounded-sm p-0.5 text-text-muted transition-colors",
           "hover:bg-surface-raised-1 hover:text-text-secondary"
         )}
       >
@@ -57,7 +57,7 @@ export function SettingHelp({ name, copy }: { name: string; copy: SettingHelpCop
         open={anchor !== null}
         at={anchor ?? undefined}
         onClose={() => setAnchor(null)}
-        className="min-w-[240px] max-w-[300px]"
+        className="max-w-75"
       >
         <div role="note" className="flex flex-col gap-1.5 px-3 py-2.5">
           <p className="text-caption font-semibold text-text-primary">{name}</p>
@@ -119,7 +119,7 @@ export const SETTINGS_HELP: Readonly<Record<string, SettingHelpCopy>> = {
     body:
       "Whether agents you launch here may use your own tools: your MCP servers, connected apps, browser, skills and sub-agents. Only on turns you start; another member's message never reaches them. Permissions still apply.",
   },
-  "Working Folder": {
+  "Working folder": {
     body:
       "Where this channel's agents run on your Mac. It is context, not a sandbox — it does not change what an agent may do. Click the folder name to change it.",
   },

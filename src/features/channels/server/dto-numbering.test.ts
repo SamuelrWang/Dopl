@@ -1,7 +1,7 @@
 /**
  * `channelSeq` / `threadSeq` as they cross `mapMessageRow` — the contract half of
  * the per-channel numbering wave (design: Dopl KB `codebase-cleanup` ›
- * "Per-Channel Numbering Design"; schema: held migration `20261122120000`).
+ * "Per-Channel Numbering Design"; schema: held migration `20261124120000`).
  *
  * ⚠ **THE OLD SHAPE IS THE POINT OF THIS SUITE.** The migration is HELD, so the
  * columns do not exist in production and a row arrives today with no such keys

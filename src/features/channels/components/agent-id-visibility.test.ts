@@ -68,13 +68,8 @@ describe("no surface renders a raw agent id", () => {
   });
 
   it("no surface puts the id where text goes", () => {
-    // ⚠ THE HELPER BAN ABOVE IS NOT THE WHOLE RULE, and `bits.tsx`'s old `AgentChip` (deleted as
-    // dead code 2026-10-02) is why. It never
-    // called `agentDisplayId` — it took an `agentId` prop of its own and printed it verbatim in a
-    // mono span, left over from the 2026-08-22 multiplayer chip that `attribution-pill.tsx` has
-    // since replaced. The prop had NO caller (`mentions-list.tsx` mounts it bare), so the sweep
-    // stayed green over a component that renders eight machine characters the moment anyone
-    // passes them.
+    // ⚠ THE HELPER BAN ABOVE IS NOT THE WHOLE RULE: a component can take an `agentId` prop of its
+    // own and print it verbatim without ever calling `agentDisplayId`.
     //
     // ⚠ IT BANS RENDERING THE ID, NEVER HOLDING IT. Almost every surface here takes an `agentId`
     // legitimately — it is the third coordinate of every session op (`agent-composer.tsx` sends
@@ -83,7 +78,7 @@ describe("no surface renders a raw agent id", () => {
     // `agent-composer.tsx`, which renders no id at all. The two shapes below are TEXT positions.
     for (const file of SURFACES) {
       const box = codeOf(file);
-      // A JSX text child — literally what the chip did: `<span …>{agentId}</span>`.
+      // A JSX text child: `<span …>{agentId}</span>`.
       expect(box, `${file} renders the raw id as text`).not.toMatch(/>\s*\{\s*agentId\b/);
       // ⚠ **NO EXEMPTION SINCE 2026-09-15.** `attribution-pill.tsx` was excused here while its
       // `` `#${agentId}` `` was ruled a name; Samuel withdrew that ruling, and the pill now asks
@@ -120,7 +115,7 @@ describe("no surface renders a raw agent id", () => {
     for (const [file, what] of [
       ["agent-window.tsx", "the pop-out's title, header and composer placeholder"],
       ["agent-panel.tsx", "the slide-out's header and composer placeholder"],
-      ["thread-info-tab.tsx", "the thread Info tab's agent rows"],
+      ["thread-card-agents.ts", "the thread card's and the thread Info tab's agent rows"],
     ] as const) {
       expect(codeOf(file), `${what} stopped resolving the display name`).toContain(
         "agentDisplayName("

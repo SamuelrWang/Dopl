@@ -1,0 +1,377 @@
+/* ── Devices — black band under the hero demo ──────────────────────────
+   Markup: components/devices-section.tsx; copy: components/devices-content.ts;
+   scroll maths + modes: components/use-devices-scrub.ts. This file only reacts
+   to `data-mode` and the inline styles that hook writes.
+   ⚠ Page-scoped like marketing.css (imported by the section itself). Its own
+   file so it never collides with edits to marketing.css; it reads that file's
+   `.lp` tokens (`--ink`, `--muted`, `--grotesk`, `--gutter`) by inheritance and
+   declares its on-dark tokens here.
+
+   Shape: full-bleed black band whose four corners round off where it meets the
+   white page, flattening into a straight edge across the middle.
+   Type ramp copied from Control (`.lp-ctl-*`). */
+
+.lp-dev {
+  --lp-dev-bg: var(--ink);
+  --lp-dev-fg: #ffffff;
+  --lp-dev-line: rgba(255, 255, 255, 0.14);
+  --lp-dev-slot: #1c1c1c;
+  --lp-dev-radius: clamp(28px, 4vw, 64px);
+  --lp-dev-pad: clamp(96px, 11vw, 160px);
+
+  /* Full bleed out of `.lp-hero`'s side gutter. */
+  align-self: stretch;
+  margin: 120px calc(var(--gutter) * -1) 0;
+  /* Fills the viewport so no white shows above/below while it is in view. */
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  /* Symmetric, so the content sits on the band's vertical centre. */
+  padding: var(--lp-dev-pad) 0;
+  background: var(--lp-dev-bg);
+  color: var(--lp-dev-fg);
+  border-radius: var(--lp-dev-radius);
+  /* ⚠ `clip`, not `hidden`: `hidden` makes the band a scroll container and the
+     sticky stage inside it would stop pinning. `hidden` stays as the fallback
+     for browsers without `clip` (they lose the pin, not the layout). */
+  overflow: hidden;
+  overflow: clip;
+}
+
+/* ── List layout: static (SSR, no JS, small screens) + reduced ─────── */
+
+.lp-dev-list {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(72px, 9vw, 128px);
+  padding: 0 var(--gutter);
+}
+
+.lp-dev-item {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: clamp(40px, 6vw, 96px);
+  align-items: center;
+}
+
+/* ── Copy column ───────────────────────────────────────────────────
+   ⚠ ALL WHITE (Samuel, 2026-10-23): no grey text on the band. Hierarchy is
+   size + weight only: eyebrow 13/500, heading 400 grotesk, lede 17, feature
+   lines 15. Few elements: eyebrow, heading, one-sentence lede, ≤3 lines. */
+
+.lp-dev-copy {
+  max-width: 440px;
+  color: var(--lp-dev-fg);
+}
+.lp-dev-eyebrow {
+  margin: 0 0 20px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--lp-dev-fg);
+}
+.lp-dev-heading {
+  margin: 0 0 18px;
+  max-width: 12em;
+  font-family: var(--grotesk);
+  font-weight: 400;
+  font-size: clamp(26px, 2.8vw, 40px);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  color: var(--lp-dev-fg);
+}
+.lp-dev-lede {
+  margin: 0;
+  max-width: 26em;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--lp-dev-fg);
+}
+
+.lp-dev-features {
+  margin: 40px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.lp-dev-feature {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.lp-dev-feature-mark {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  border: 1px solid var(--lp-dev-line);
+  color: var(--lp-dev-fg);
+}
+.lp-dev-feature-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--lp-dev-fg);
+}
+
+/* ── Media / deck card ─────────────────────────────────────────────── */
+
+/* Positioned so `.lp-dev-overlay` can carry a Dopl interface over the photo
+   later. Aspect = the glasses asset (1169 × 1345 ≈ 400 × 460). */
+.lp-dev-media {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  justify-self: end;
+  aspect-ratio: 400 / 460;
+  /* Matches the hero banner picture (`.lp-banner`, marketing.css). */
+  border-radius: 24px;
+  overflow: hidden;
+  background: var(--lp-dev-slot);
+  /* Size container for the glasses HUD (`cqw`, glasses-hud.css). ⚠ On the
+     card, not the overlay: containment isolates, and the HUD + grain must
+     blend with the photo underneath. */
+  container-type: inline-size;
+}
+/* Dims a card by how far back in the deck it sits (`--lp-dev-shade`, scrub only). */
+.lp-dev-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--lp-dev-bg);
+  opacity: var(--lp-dev-shade, 0);
+  pointer-events: none;
+}
+.lp-dev-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.lp-dev-placeholder {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--lp-dev-line);
+  border-radius: inherit;
+}
+.lp-dev-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ── Scrub: the pinned deck ────────────────────────────────────────────
+   ⚠ Only `data-mode="scrub"` gets the track and the pin, or the page ends up
+   taller than its content. Track = one viewport of pin + 2.4 viewports of
+   scrub range (SWAPS in use-devices-scrub.ts are fractions of that range). */
+
+.lp-dev[data-mode="scrub"] {
+  display: block;
+  height: 340vh;
+  min-height: 0;
+  padding: 0;
+}
+.lp-dev[data-mode="scrub"] .lp-dev-stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--gutter);
+}
+.lp-dev[data-mode="scrub"] .lp-dev-list {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: clamp(40px, 6vw, 96px);
+  align-items: center;
+}
+/* Every copy shares the left cell, every card the right one. */
+.lp-dev[data-mode="scrub"] .lp-dev-item {
+  display: contents;
+}
+.lp-dev[data-mode="scrub"] .lp-dev-copy {
+  grid-area: 1 / 1;
+  will-change: opacity, transform;
+}
+.lp-dev[data-mode="scrub"] .lp-dev-media {
+  grid-area: 1 / 2;
+  /* Centred, not end-aligned: the cards behind fan out to the right. */
+  justify-self: center;
+  /* Fits the whole card (plus the fan) inside the pinned viewport. */
+  width: min(100%, 520px, calc((100vh - 160px) * 400 / 460));
+  transform-origin: 50% 100%;
+  will-change: transform, opacity;
+}
+/* Pre-rAF stand-in: only the first device's copy shows. The engine takes over
+   with inline styles on its first frame. */
+.lp-dev[data-mode="scrub"] .lp-dev-item:not(:first-child) .lp-dev-copy {
+  opacity: 0;
+  visibility: hidden;
+}
+
+@media (max-width: 900px) {
+  .lp-dev {
+    margin-top: 90px;
+    --lp-dev-pad: 72px;
+  }
+  .lp-dev-item {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+  .lp-dev-media {
+    justify-self: stretch;
+    max-width: none;
+  }
+}
+
+/* ── Device connect pill ───────────────────────────────────────────────
+   Markup: components/device-connect.tsx. Opens each live card's sequence
+   (glasses, robots): the device links, then the functions it hands to agents
+   tick in as chips. On the landing's `LiquidGlass` (no fill of its own: the
+   photo shows through, refracted). Glasses: bottom-left, clear of the lens
+   box and its Dopl mark. Robots: top-left, clear of the chat (lower-left).
+   Sizes in `cqw` of the card (`.lp-dev-media` is the size container). */
+
+.lp-dev-connect {
+  --lp-dev-connect-on: #3ccf6e;
+  --lp-dev-connect-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+
+  position: absolute;
+  left: 5%;
+  max-width: 72%;
+  color: var(--lp-dev-fg);
+  font-size: 2.3cqw;
+  line-height: 1.25;
+  text-shadow: var(--lp-dev-connect-shadow);
+  pointer-events: none;
+}
+.lp-dev-connect[data-place="top"] {
+  top: 4.5%;
+}
+.lp-dev-connect[data-place="bottom"] {
+  bottom: 5%;
+}
+/* The rim edge's own drop (glass-edge.ts › rimDropShadow) is sized for a
+   hero-scale pane; a small pill casts a tight one. Same override as
+   marketing.css › .lp-mp-notify-glass: the component exposes no prop for it,
+   so this targets its outset shadow LAYER (the rim band beside it is inset). */
+.lp-dev-connect-glass > [aria-hidden][style*="box-shadow"]:not([style*="inset"]) {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 4px 12px rgba(0, 0, 0, 0.22) !important;
+}
+.lp-dev-connect-pad {
+  display: flex;
+  flex-direction: column;
+  gap: 1cqw;
+  padding: 1.3cqw 1.7cqw;
+}
+.lp-dev-connect-head {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 1cqw;
+  white-space: nowrap;
+}
+.lp-dev-connect-dot {
+  flex: none;
+  width: 1.1cqw;
+  height: 1.1cqw;
+  border-radius: 999px;
+  background: var(--muted);
+  animation: lp-dev-connect-wait 900ms ease-in-out infinite alternate;
+}
+.lp-dev-connect[data-linked] .lp-dev-connect-dot {
+  background: var(--lp-dev-connect-on);
+  animation: none;
+}
+.lp-dev-connect-device {
+  font-weight: 600;
+}
+/* Both state words in one cell; only the live one shows. */
+.lp-dev-connect-state {
+  display: inline-grid;
+  color: var(--lp-dev-fg);
+  opacity: 0.75;
+}
+.lp-dev-connect-state > span {
+  grid-area: 1 / 1;
+  visibility: hidden;
+}
+.lp-dev-connect-state > span[data-on] {
+  visibility: visible;
+}
+.lp-dev-connect-takeover {
+  margin: 0;
+  font-size: 2.1cqw;
+  opacity: 0.85;
+  visibility: hidden;
+}
+.lp-dev-connect-takeover[data-on] {
+  visibility: visible;
+  animation: lp-dev-connect-in 240ms ease-out both;
+}
+.lp-dev-connect-fns {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8cqw;
+}
+/* Every chip holds its place from the start; a revealed one pops in. */
+.lp-dev-connect-fn {
+  padding: 0.35cqw 1.2cqw;
+  border-radius: 999px;
+  border: 1px solid var(--lp-dev-line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 2cqw;
+  visibility: hidden;
+}
+.lp-dev-connect-fn[data-on] {
+  visibility: visible;
+  animation: lp-dev-connect-in 240ms ease-out both;
+}
+
+@keyframes lp-dev-connect-wait {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes lp-dev-connect-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-dev-connect-dot,
+  .lp-dev-connect-takeover[data-on],
+  .lp-dev-connect-fn[data-on] {
+    animation: none;
+  }
+}

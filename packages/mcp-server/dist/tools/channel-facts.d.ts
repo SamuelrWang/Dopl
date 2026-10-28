@@ -6,7 +6,7 @@
 import type { LaunchDirective } from "@dopl/client";
 /** Budget for one write result, held per op by `write-result-budget.test.ts` (the renderer bounds values, not lines). */
 export declare const WRITE_RESULT_MAX_CHARS = 300;
-/** Longest rendered value; ≥45 so a legacy `task-<uuid>-<seq>` id is never clipped (its seq is the distinguishing half). */
+/** Longest rendered value; ≥45 so a legacy `thread-<uuid>-<seq>` id is never clipped (its seq is the distinguishing half). */
 export declare const FACT_VALUE_MAX = 48;
 /** A value nobody reported, or that does not apply to this call. Never zero. */
 export declare const NOT_APPLICABLE = "-";

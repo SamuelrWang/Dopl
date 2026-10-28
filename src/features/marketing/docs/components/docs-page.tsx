@@ -9,6 +9,7 @@ import { DocsFrame } from "./docs-header";
 import { CodeGroup, CopyPageButton } from "./docs-interactive";
 import { DocsSidebarNav } from "./docs-sidebar";
 import { SocialLinks } from "./social-links";
+import { StatusBadge } from "./status-badge";
 
 const SITE = "https://www.usedopl.com";
 
@@ -52,7 +53,9 @@ export function DocsPage({ page }: { page: DocPage }) {
     <DocsShell page={page}>
       <main className="docs-wrap docs-content">
         <header className="docs-head">
-          <h1>{page.title}</h1>
+          <h1>
+            {page.title} <StatusBadge status={page.status} />
+          </h1>
           <CopyPageButton markdown={pageToMarkdown(page)} url={`${SITE}${docHref(page.slug)}`} />
         </header>
         {page.description && <p className="docs-subtitle">{page.description}</p>}

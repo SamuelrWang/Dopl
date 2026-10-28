@@ -162,13 +162,13 @@ describe("ChannelMessageCreateSchema", () => {
     expect(ChannelMessageCreateSchema.safeParse({ body: "a".repeat(16001) }).success).toBe(false);
   });
 
-  it("kind: accepts message + the task_* activity kinds", () => {
+  it("kind: accepts message + the thread_* activity kinds", () => {
     for (const kind of [
       "message",
-      "task_started",
-      "task_progress",
-      "task_finished",
-      "task_failed",
+      "thread_started",
+      "thread_progress",
+      "thread_finished",
+      "thread_failed",
     ]) {
       expect(ChannelMessageCreateSchema.safeParse({ body: "x", kind }).success).toBe(true);
     }

@@ -32,7 +32,7 @@
 
 const consent = require('./consent');
 const targeting = require('./targeting');
-const channelPost = require('./channel-post'); // postTaskEvent: the in-thread record
+const channelPost = require('./channel-post'); // postThreadEvent: the in-thread record
 // 2026-08-31: which DENIAL COPY a refused gate deserves is stamped HERE now, not by the engine —
 // this file alone knows whether a prompt was shown, timed out, or had no surface at all.
 const sessionPermissions = require('./session-permissions');
@@ -113,7 +113,7 @@ function claimGate(s, payload, decide) {
 // and the machine refused on their behalf without asking. The notification IS a surface.
 //
 // ⚠ ALLOW-ONCE ONLY. The banner's button resolves THIS call; it mints no standing grant (the
-// decide lane carries no tool name for `allow-task` to key on, and a banner is too small a
+// decide lane carries no tool name for `allow-thread` to key on, and a banner is too small a
 // surface to grant a session-wide power from). Repeat calls re-prompt; the systemic fix for
 // that friction is the default-permissions work, not a wider grant here.
 // ⚠ DISMISS DECIDES NOTHING (notify-action.js's rule) — only the TTL or a click resolves.
@@ -175,17 +175,17 @@ function noteDenied(s, tool) {
 // on the payload — `session-gate-bridge.js` sets `gateReason` from the verdict — so the line
 // prints THE REASON when there is one and falls back to the mode only when there is not.
 //
-// ⚠ IT IS `task_progress`, NOT A `message`. A lifecycle kind reaches no session at all
+// ⚠ IT IS `thread_progress`, NOT A `message`. A lifecycle kind reaches no session at all
 // (`session-dispatch.js › feedLiveSession`'s kind filter), so this cannot start a turn, cannot
 // feed back into the session that produced it, and cannot cost the peer a consent decision. A
 // `message` here would be an agent-shaped post that this machine, not the agent, wrote.
 //
 // ⚠ THE `clientMsgId` IS PER SESSION, NOT PER MESSAGE, so the server's own uniqueness is a SECOND
-// guarantee of the same bound rather than a different one. `postTaskEvent`'s default keys on
+// guarantee of the same bound rather than a different one. `postThreadEvent`'s default keys on
 // (kind, channel, seq) and two denials under one inbound seq would share it by luck; this says
 // what is actually meant.
 //
-// ⚠ BEST-EFFORT AND NEVER IN THE WAY OF THE DENY. `postTaskEvent` never throws and the deny is
+// ⚠ BEST-EFFORT AND NEVER IN THE WAY OF THE DENY. `postThreadEvent` never throws and the deny is
 // already dispatched by the time this runs; a channel that cannot be posted into costs the
 // visibility, never the decision.
 function announceDenial(s, tool, gateReason) {
@@ -193,11 +193,11 @@ function announceDenial(s, tool, gateReason) {
     if (!s || !s.channelId) return;
     const why = gateReason || `tool mode ${(s.state && s.state.toolMode) || 'manual'}`;
     const entry = { channel: { id: s.channelId }, workspaceId: s.workspaceId };
-    Promise.resolve(channelPost.postTaskEvent(
+    Promise.resolve(channelPost.postThreadEvent(
       entry,
       { seq: s.lastInboundSeq },
-      'task_progress',
-      s.taskId || undefined,
+      'thread_progress',
+      s.threadId || undefined,
       undefined,
       `denied ${tool} (${why}); further denials counted`,
       // ⚠ TWO IDS, TWO JOBS, DELIBERATELY NOT COLLAPSED (2026-09-15, docs/traces/AGENT-BADGE-TRACE.md). The
@@ -227,7 +227,7 @@ function openThread(s, channelName) {
         // openChannelForEntry no-ops without the SEGMENT — it rides the context.
         workspaceSegment: (s.context && s.context.workspaceSegment) || null,
       },
-      { threadId: s.taskId }
+      { threadId: s.threadId }
     );
   } catch (_) { /* navigation is best-effort */ }
 }
@@ -374,7 +374,7 @@ async function bridgeOutbound(s, payload, decide) {
   }
   const rowId = created.rowId;
   s.watchedOutboundRows.add(rowId);
-  diag('windowless outbound gated', 'row', String(rowId).slice(0, 8), 'thread', String(s.taskId).slice(0, 8));
+  diag('windowless outbound gated', 'row', String(rowId).slice(0, 8), 'thread', String(s.threadId).slice(0, 8));
   consent.notifyOutbound({
     channelName,
     proposedReply: body,

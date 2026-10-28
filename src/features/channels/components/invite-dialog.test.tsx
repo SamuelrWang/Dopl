@@ -38,8 +38,8 @@ describe("GroupChannelRoutingNote — one rule, at every size", () => {
   it("states the thread rule a DM never exposes", () => {
     const html = markup();
 
-    // Reads are channel-transparent (`listChannelTasks` is unfiltered); writes
-    // are pair-only (403 TASK_FORBIDDEN in `service-writes-metadata.ts`).
+    // Reads are channel-transparent (`listChannelThreads` is unfiltered); writes
+    // are pair-only (403 THREAD_FORBIDDEN in `service-writes-metadata.ts`).
     expect(html).toContain("everyone in the channel can read one");
     expect(html).toContain("only its two participants can post into it");
   });

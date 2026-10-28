@@ -4,7 +4,7 @@
 // WHAT THE STRIP WAS. One line in the requester window's chrome saying what happened to the
 // request the operator TYPED: Sent -> Accepted / Declined / Replied. It existed because those
 // outcomes are invisible to the running agent — the peer's Accept and Decline arrive as
-// `task_started` / `task_failed` MILESTONES and every listener route gates on
+// `thread_started` / `thread_failed` MILESTONES and every listener route gates on
 // `kind === 'message'`, so nothing feeds them to the session. Only the strip could say them.
 //
 // ⚠ IT IS DELETED — 2026-08-20, F-228, and this file lost eleven tests with it.

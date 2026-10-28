@@ -66,10 +66,10 @@ import {
 
 /**
  * THE SESSION THAT ENDED — `metadata.session_ended`, and it rides a
- * `task_progress`, not a terminal kind.
+ * `thread_progress`, not a terminal kind.
  *
  * ⚠ SO THE KIND TAG ALONE CANNOT SHOW IT (2026-08-22). The desktop posts a
- * session's death as `kind='task_progress'` with this flag
+ * session's death as `kind='thread_progress'` with this flag
  * (`main/session-effects.js`; `service-writes-metadata-markers.ts` reserves the
  * key), deliberately NON-TERMINAL, because one member's window closing is not
  * the thread failing. But that means "a step landed" and "the agent working this
@@ -131,7 +131,7 @@ function clipBody(m: ChannelMessage, ref: string, clip: boolean): string {
 }
 
 /**
- * One rendered message line. `task_*` events already carry a human-readable
+ * One rendered message line. `thread_*` events already carry a human-readable
  * render in `body`, so no per-kind special-casing — just tag non-chat kinds.
  *
  * Carries THREAD LINKAGE: without it a reader cannot tell a continuation from a
@@ -146,7 +146,7 @@ function clipBody(m: ChannelMessage, ref: string, clip: boolean): string {
  * external / older-build case, not a claim one session wrote everything.
  *
  * ⚠ A SESSION END REPLACES THE KIND TAG rather than sitting beside it. The kind
- * is `task_progress` and printing both says "a step landed · the session died"
+ * is `thread_progress` and printing both says "a step landed · the session died"
  * in one clause; the marker is the whole meaning of the row, so it takes the
  * slot. ⚠ SHOUTED, and it is the only tag here that is: every other clause is a
  * label, this one is the reason a waiting agent should stop waiting.
@@ -333,7 +333,7 @@ export function formatChannelLine(c: Channel): string {
  * Legacy `closed` rows exist and are rendered exactly like every other thread —
  * they are still readable, still postable, still in the list.
  *
- * ⚠ `title` is creator- or target-typed and `listChannelTasks` is
+ * ⚠ `title` is creator- or target-typed and `listChannelThreads` is
  * channel-transparent — ANY channel member receives it; neutralized, and
  * empty-after-neutralize renders `(untitled)`.
  *

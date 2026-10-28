@@ -2,11 +2,23 @@
 
 import { Check } from "lucide-react";
 import type { WorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
-import { formatMoney, PRO_PRICE, TEAM_SEAT_PRICE } from "@/features/billing/prices";
-import type { PlanDef } from "@/features/billing/plans";
+import {
+  formatMoney,
+  launchOfferFor,
+  PERSONAL_PLAN_PRICES,
+  TEAM_SEAT_PRICE,
+} from "@/features/billing/prices";
+import {
+  isPersonalPaidPlan,
+  PERSONAL_PLAN_NAMES,
+  personalPlanRank,
+  type PersonalPaidPlan,
+  type PlanDef,
+} from "@/features/billing/plans";
 import type { CheckoutPlan } from "@/features/billing/url";
+import { formatDate } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
-import { SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 
 /**
  * ⚠ THE PLAN UNION IS `features/billing/url.ts › CheckoutPlan`, RE-EXPORTED,
@@ -17,8 +29,16 @@ import { SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
  */
 export type { CheckoutPlan };
 
-/** Entitlements + whether the caller may act + the three actions (two owned by
- *  the app binding — see `./plans-billing-core`). */
+/** A queued Pro ⇄ Max switch, as the pane shows it (2026-10-22;
+ *  `features/billing/components/use-personal-plan-change.ts`). */
+export interface PlanChangeView {
+  scheduledPlan: PersonalPaidPlan | null;
+  effectiveAt: string | null;
+  pending: boolean;
+}
+
+/** Entitlements + whether the caller may act + the actions (two owned by the
+ *  app binding — see `./plans-billing-core`). */
 export interface PlanActions {
   ent: WorkspaceEntitlements;
   canManage: boolean;
@@ -27,6 +47,10 @@ export interface PlanActions {
   onUpgrade: (plan: CheckoutPlan) => void;
   onManage: () => void;
   onSwitchToTeam: () => void;
+  /** Switch a LIVE personal subscription to the other personal tier in place —
+   *  never a checkout (2026-10-22). */
+  planChange: PlanChangeView;
+  onChangePlan: (plan: PersonalPaidPlan) => void;
 }
 
 /**
@@ -40,35 +64,21 @@ export function isLegacySolo(ent: WorkspaceEntitlements): boolean {
 }
 
 /**
- * ⚠ THE FREE ARM IS `!ent.isPaid`, NEVER `!ent.isTeam` — and with the Solo card
- * gone that is an easy simplification to reach for. Each card list holds two
- * cards, so a live LEGACY Pro (`solo`) row matches neither, and `!ent.isTeam`
- * would badge STARTER as the current plan of a workspace being charged every
- * month. Deliberately, a CANCELLED row does land on the free card: `isPaid` is
- * false there and free is what the container is actually entitled to.
+ * ⚠ THE FREE ARM IS `!ent.isPaid`, NEVER `!ent.isTeam`: a live LEGACY Pro
+ * (`solo`) row matches no card, and `!ent.isTeam` would badge STARTER as the
+ * current plan of a workspace being charged every month. A CANCELLED row does
+ * land on the free card: `isPaid` is false there and free is what the container
+ * is actually entitled to.
  *
- * ⚠ **KIND-AWARE SINCE 2026-09-08, AND THE THREE ARMS ARE DISJOINT BY LIST, NOT
- * BY BRANCH ORDER.** `plansForKind` never mixes the groups (`plans.ts`), so the
- * `pro` arm is only ever asked about a home space and the `team` arm
- * only about a standard one — this function does not need the kind, only the
- * card in front of it. Both lists carry an `id: "free"` card, which is why the
- * free arm is the FALL-THROUGH rather than a third `plan.id ===` test.
- *
- * ⚠ **EVERY ARM ASKS `isPaid`, AND THE PAID ONES ASK IT EXPLICITLY (2026-09-08
- * review).** `isTeam` / `isPro` are the plan COLUMN — `data.plan === "team"` —
- * and the free arm is `!isPaid`, so a row whose plan says `team` while its
- * status does not say active/past_due would badge TWO cards "Current plan": its
- * old paid one and Starter. The server sends the entitlement VERDICT today
- * (`server/entitlements.ts › getWorkspaceEntitlements` writes `paid ?? "free"`),
- * which is why nobody has seen it — but this file reads a CLIENT hook whose
- * `isTeam` is a raw string test over a payload that is IndexedDB-persisted for
- * 24h (INVARIANTS §8), so "the column and the verdict agree" is a property of a
- * different module and of no cached row in particular. The three arms now
- * partition on `isPaid` and cannot both fire. Pinned in both directions by
- * `plans-billing.test.tsx`.
+ * ⚠ **THE ARMS ARE DISJOINT BY LIST, NOT BY BRANCH ORDER.** `plansForKind` never
+ * mixes the groups (`plans.ts`), so a personal arm is only ever asked about a
+ * home space and the `team` arm only about a standard one. Every paid arm asks
+ * `isPaid` explicitly, so a row whose plan column says paid while its status
+ * does not cannot badge two cards (the client hook reads a payload persisted
+ * for 24h, INVARIANTS §8). Pinned in both directions by `plans-billing.test.tsx`.
  */
 function isCurrentPlan(plan: PlanDef, ent: WorkspaceEntitlements): boolean {
-  if (plan.id === "pro") return ent.isPro && ent.isPaid;
+  if (isPersonalPaidPlan(plan.id)) return ent.personalPlan === plan.id && ent.isPaid;
   if (plan.id === "team") return ent.isTeam && ent.isPaid;
   return !ent.isPaid;
 }
@@ -76,25 +86,48 @@ function isCurrentPlan(plan: PlanDef, ent: WorkspaceEntitlements): boolean {
 /** A plan card's actions: the portal ("Manage billing") is the summary card's alone. */
 type CardActions = Omit<PlanActions, "portalLoading" | "onManage">;
 
+/**
+ * The card's price line, with the LAUNCH strike when one is live
+ * (`prices.ts › launchOfferFor` — bounded by its end date, Samuel's call). The
+ * "was" price renders first and struck, the real price after it, so the reader
+ * sees what they will be charged as the bigger figure.
+ */
+function PriceLine({ plan }: { plan: PlanDef }) {
+  const offer = launchOfferFor(plan.id);
+  return (
+    <div className="mt-1 text-title font-semibold text-text-primary">
+      {offer && (
+        <s className="mr-1.5 text-caption font-normal text-text-muted">
+          <span className="sr-only">Regular price </span>
+          {formatMoney(offer.wasPrice)}
+        </s>
+      )}
+      {plan.priceMonthly}
+      {plan.priceNote && (
+        <span className="ml-1 text-caption font-normal text-text-muted">
+          {plan.priceNote}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** One plan column: name, price, features, state-appropriate CTA. Split out of
  *  `plans-billing-core` to keep both files under the 500-line cap. */
-export function PlanColumn({
-  plan,
-  ent,
-  canManage,
-  switching,
-  onUpgrade,
-  onSwitchToTeam,
-}: CardActions & { plan: PlanDef }) {
+export function PlanColumn({ plan, ...actions }: CardActions & { plan: PlanDef }) {
+  const { ent } = actions;
   const isCurrent = isCurrentPlan(plan, ent);
-  // The card being SOLD, whichever group this is — `team` on a standard
-  // workspace, `pro` on a home space. Never both in one list.
-  const highlight = plan.id === "team" || plan.id === "pro";
+  // Every PAID card is the one being sold in its group — `team` on a standard
+  // workspace, `pro` and `max` on a home space.
+  const highlight = plan.id !== "free";
+  // ⚠ "50% off" REPLACES "Popular" on Pro and Max (Samuel, 2026-10-22) and
+  // only while the launch offer is live; Team keeps "Popular".
+  const offer = launchOfferFor(plan.id);
 
   return (
     <div
       className={cn(
-        "bento flex flex-col p-3.5",
+        "white-card flex flex-col p-3.5",
         highlight && "border-border-highlight",
         isCurrent && "border-2 border-text-primary"
       )}
@@ -103,6 +136,10 @@ export function PlanColumn({
         {isCurrent ? (
           <span className="rounded-full border border-text-primary px-2 py-0.5 text-micro font-semibold text-text-primary">
             Current plan
+          </span>
+        ) : offer ? (
+          <span className="rounded-full bg-surface-cta px-2 py-0.5 text-micro font-semibold text-text-on-cta">
+            {offer.percentOff}% off
           </span>
         ) : highlight ? (
           <span className="rounded-full bg-surface-cta px-2 py-0.5 text-micro font-semibold text-text-on-cta">
@@ -113,14 +150,7 @@ export function PlanColumn({
       <div className="mt-2 text-display font-semibold tracking-tight text-text-primary">
         {plan.name}
       </div>
-      <div className="mt-1 text-title font-semibold text-text-primary">
-        {plan.priceMonthly}
-        {plan.priceNote && (
-          <span className="ml-1 text-caption font-normal text-text-muted">
-            {plan.priceNote}
-          </span>
-        )}
-      </div>
+      <PriceLine plan={plan} />
 
       <ul className="mt-4 flex flex-col gap-2.5 border-t border-border-subtle pt-4">
         {plan.features.map((f) => (
@@ -135,58 +165,102 @@ export function PlanColumn({
       </ul>
 
       <div className="mt-auto pt-4">
-        <PlanCta
-          plan={plan}
-          isCurrent={isCurrent}
-          ent={ent}
-          canManage={canManage}
-          switching={switching}
-          onUpgrade={onUpgrade}
-          onSwitchToTeam={onSwitchToTeam}
-        />
+        <PlanCta plan={plan} isCurrent={isCurrent} {...actions} />
       </div>
     </div>
+  );
+}
+
+const PRIMARY = cn(
+  pillButton("ink", "md"),
+  "w-full justify-center disabled:cursor-default disabled:opacity-60"
+);
+const CURRENT =
+  "flex h-[var(--action-h-sm)] w-full items-center justify-center text-small font-semibold text-text-secondary";
+const MUTED =
+  "flex h-[var(--action-h-sm)] w-full items-center justify-center text-center text-small font-medium text-text-muted";
+
+/**
+ * A personal paid card's CTA (2026-10-22). Four states, in the order asked:
+ *   • no live personal plan → a fresh CHECKOUT (`onUpgrade`);
+ *   • this card is the queued downgrade → "Starts <date>", nothing to press;
+ *   • the plan is ending or past due → a note: the switch route refuses both
+ *     (resume first / fix the card first), so no button may offer it;
+ *   • otherwise → the in-place SWITCH (`onChangePlan`): "Upgrade" for the
+ *     bigger tier (charged now, prorated), "Switch … at renewal" for the smaller.
+ * ⚠ The `!canManage` note is UNREACHABLE on a home space (its only member is
+ * its owner) and is kept so the arm cannot render an empty slot.
+ */
+function PersonalCta({
+  plan,
+  ent,
+  canManage,
+  planChange,
+  onUpgrade,
+  onChangePlan,
+}: CardActions & { plan: PersonalPaidPlan }) {
+  const name = PERSONAL_PLAN_NAMES[plan];
+  const price = formatMoney(PERSONAL_PLAN_PRICES[plan]);
+  if (!canManage) return <div className={MUTED}>Ask an admin</div>;
+  const current = ent.isPaid ? ent.personalPlan : null;
+  if (!current) {
+    return (
+      <button type="button" className={PRIMARY} onClick={() => onUpgrade(plan)}>
+        Upgrade to {name} — {price}/month
+      </button>
+    );
+  }
+  if (planChange.scheduledPlan === plan && planChange.effectiveAt) {
+    return <div className={MUTED}>Starts {formatDate(planChange.effectiveAt)}</div>;
+  }
+  if (ent.cancelAtPeriodEnd) return <div className={MUTED}>Resume your plan to switch</div>;
+  if (ent.isPastDue) return <div className={MUTED}>Update your payment to switch</div>;
+  const upgrade = personalPlanRank(plan) > personalPlanRank(current);
+  return (
+    <button
+      type="button"
+      className={PRIMARY}
+      disabled={planChange.pending}
+      onClick={() => onChangePlan(plan)}
+    >
+      {planChange.pending
+        ? "Switching…"
+        : upgrade
+          ? `Upgrade to ${name} — ${price}/month`
+          : `Switch to ${name} at renewal`}
+    </button>
   );
 }
 
 function PlanCta({
   plan,
   isCurrent,
-  ent,
-  canManage,
-  switching,
-  onUpgrade,
-  onSwitchToTeam,
+  ...actions
 }: CardActions & { plan: PlanDef; isCurrent: boolean }) {
-  // The popup's small black verb (`small-action-button.ts › SMALL_PRIMARY_PILL`), full width.
-  // The current paid plan's "Manage billing" is the summary card's, once.
-  const primary = cn(SMALL_PRIMARY_PILL, "w-full justify-center disabled:cursor-default disabled:opacity-60");
-  const current =
-    "flex h-[var(--action-h-sm)] w-full items-center justify-center text-small font-semibold text-text-secondary";
-  const muted =
-    "flex h-[var(--action-h-sm)] w-full items-center justify-center text-small font-medium text-text-muted";
+  const { ent, canManage, switching, planChange, onUpgrade, onSwitchToTeam, onChangePlan } =
+    actions;
 
-  // The card's "Current plan" badge already says it; a paid plan is managed from the summary card.
-  if (isCurrent) return null;
-
-  /**
-   * ⚠ PRO HAS NO SWITCH-IN-PLACE ARM AND NEEDS NONE. `upgrade-to-team` exists
-   * to move a live legacy `solo` subscription without a second checkout; a
-   * home space has never held one (`solo` was only ever sold on a
-   * standard workspace), so Pro is always a fresh checkout.
-   * ⚠ The `!canManage` note is UNREACHABLE here — a home space's only
-   * member is its owner — and is kept so the arm cannot render an empty slot if
-   * that ever stops being true.
-   */
-  if (plan.id === "pro") {
-    return canManage ? (
-      <button type="button" className={primary} onClick={() => onUpgrade("pro")}>
-        Upgrade to Pro — {formatMoney(PRO_PRICE)}/month
-      </button>
-    ) : (
-      <div className={muted}>Ask an admin</div>
-    );
+  if (isCurrent) {
+    // The one action a CURRENT card carries: undoing a queued downgrade.
+    // Choosing the current plan is exactly that request (`server/plan-change.ts`).
+    if (isPersonalPaidPlan(plan.id) && planChange.scheduledPlan && canManage) {
+      const id = plan.id;
+      return (
+        <button
+          type="button"
+          className={PRIMARY}
+          disabled={planChange.pending}
+          onClick={() => onChangePlan(id)}
+        >
+          {planChange.pending ? "Saving…" : `Keep ${PERSONAL_PLAN_NAMES[id]}`}
+        </button>
+      );
+    }
+    // The badge already says it; a paid plan is managed from the summary card.
+    return null;
   }
+
+  if (isPersonalPaidPlan(plan.id)) return <PersonalCta {...actions} plan={plan.id} />;
 
   if (plan.id === "team") {
     if (isLegacySolo(ent)) {
@@ -194,24 +268,24 @@ function PlanCta({
       return canManage ? (
         <button
           type="button"
-          className={primary}
+          className={PRIMARY}
           disabled={switching}
           onClick={onSwitchToTeam}
         >
           {switching ? "Switching…" : "Switch to Team"}
         </button>
       ) : (
-        <div className={muted}>Ask an admin</div>
+        <div className={MUTED}>Ask an admin</div>
       );
     }
     return canManage ? (
-      <button type="button" className={primary} onClick={() => onUpgrade("team")}>
+      <button type="button" className={PRIMARY} onClick={() => onUpgrade("team")}>
         Upgrade — {formatMoney(TEAM_SEAT_PRICE)}/seat
       </button>
     ) : (
-      <div className={muted}>Ask an admin</div>
+      <div className={MUTED}>Ask an admin</div>
     );
   }
 
-  return <div className={current}>Included</div>;
+  return <div className={CURRENT}>Included</div>;
 }

@@ -18,7 +18,7 @@
  * re-open the exact gap this closes.
  *
  * ⚠ THE ONE THING A CALLER CHOOSES IS THE `face`, AND IT IS A MODE, NOT A STYLE HOOK (Samuel,
- * 2026-08-27). `"pill"` draws `.raised-tab`; `"bare"` draws no face at all. The agent composer is
+ * 2026-08-27). `"pill"` draws the white pill; `"bare"` draws no face at all. The agent composer is
  * NOTHING BUT this row, so there the pill IS the box. The channel composer already has a box —
  * its card — and a faced row inside a bordered card is a bubble in a bubble, which is the thing
  * being fixed.
@@ -26,18 +26,14 @@
  * ⚠ THE INSET RIDES WITH THE FACE, AND ONLY WITH IT (Samuel, live review 2026-08-28). It used to
  * be unconditional and that was wrong in `"bare"`: the padding exists to hold content off a BOX'S
  * EDGE, and in bare mode there is no box here — the CARD is the box and the card already pays that
- * inset once (`composer.tsx`, `px-[13px] py-[11px]`). Paying it twice pushed the field 12px right
+ * inset once (`composer.tsx`). Paying it twice pushed the field 12px right
  * of and 6px below the toolbar icons directly under it, which is what Samuel was pointing at.
  * **So {@link PILL_FACE} carries the face AND the inset together** — one box, one inset — while
  * {@link ROW_GEOMETRY} (the axis, the alignment, the gap) and the FIELD's own recipe stay
  * unconditional, which is what keeps the two surfaces one row and not two trees.
  *
- * ⚠ THE FACE IS `.raised-tab`, THE APP-WIDE RAISED IDIOM (docs/DESIGN-SYSTEM.md), which draws its
- * own 1px ring from `--raised-light-line`. That ring IS the border both surfaces now wear — in
- * main it is worn by the CARD, which mounts THIS SAME class, the whole raised material and not an
- * extracted layer of it.
- * ⚠ `.raised-tab` SUPPLIES THE FILL, so no `bg-*` utility may ride along: the utility layer
- * outranks the kit layer and a stray background flattens the gradient to nothing.
+ * ⚠ THE PILL FACE IS THE KIT'S `.white-card` ROUNDED FULL (DESIGN-LANGUAGE §4, Composer), the same
+ * material main's card wears, so the two composers read as one family across the divider.
  *
  * ⚠ THE ONE OTHER THING A CALLER MAY HAND THIS ROW IS `highlight`, AND IT IS A CONTENT MODE ON
  * `face`'s terms (2026-09-07, the composer tint). A textarea cannot hold a coloured run, so the
@@ -95,13 +91,14 @@ export const COMPOSER_BOTTOM = "pb-4";
 const ROW_GEOMETRY = "flex items-center gap-2";
 
 /**
- * THE BOX: the raised material and the inset that holds content off its edge, together.
+ * THE BOX: the white pill and the inset that holds content off its edge, together.
  *
  * ⚠ THEY ARE ONE THING AND MUST STAY ONE THING. The inset is not a style preference, it is what a
  * drawn edge costs; splitting them is how `"bare"` came to pay for an edge it does not draw. In
- * main the CARD is the box and the CARD pays it — see the header.
+ * main the CARD is the box and the CARD pays it — see the header. The card's 1px hairline is paid
+ * out of the inset (5px + 1px = the 6px it had), so the row's height does not move.
  */
-const PILL_FACE = "raised-tab rounded-[10px] p-1.5 pl-3";
+const PILL_FACE = "white-card rounded-full p-1.25 pl-2.75";
 
 /**
  * **EVERY TYPOGRAPHIC FACT THAT DECIDES WHERE A CHARACTER LANDS** — worn by the field AND by the
@@ -119,7 +116,7 @@ const PILL_FACE = "raised-tab rounded-[10px] p-1.5 pl-3";
  * ⚠ **NOTHING ABOUT COLOUR IS IN HERE.** The two layers differ in exactly that, which is the
  * whole mechanism.
  */
-const FIELD_TEXT = "py-[4px] text-lead leading-[22px] pointer-coarse:text-[16px]";
+const FIELD_TEXT = "py-1 text-lead leading-[22px] pointer-coarse:text-[16px]";
 
 /**
  * **EVERY FACT THAT DECIDES WHERE A LINE BREAKS** — worn by the field AND by the mirror, from
@@ -300,8 +297,8 @@ export function ComposerInputRow(props: ComposerInputRowProps) {
         // whole app and dragged the panelling with it. 16px at focus size is the ONLY thing
         // that turns that off; `maximum-scale`/`user-scalable=no` would do it by disabling
         // pinch-zoom for everyone, which is an accessibility regression, not a fix.
-        // ⚠ THE BOX DOES NOT MOVE: `leading-[22px]` + `py-[4px]` still sum to the row's
-        // `h-[30px]`, so 16px text lands in the same 30px object the send button is aligned
+        // ⚠ THE BOX DOES NOT MOVE: `leading-[22px]` + `py-1` still sum to the row's
+        // `h-7.5`, so 16px text lands in the same 30px object the send button is aligned
         // to. ⚠ COARSE POINTERS ONLY — a mouse never triggers the zoom, so the desktop face
         // keeps `text-lead` exactly as drawn.
         // ⚠ THE TYPOGRAPHY IS `FIELD_TEXT` AND IS NOT SPELLED HERE — the mirror wears the same
@@ -330,7 +327,7 @@ export function ComposerInputRow(props: ComposerInputRowProps) {
         // comment above has claimed a 30px row since 2026-09-04; it was 36px, and the 6px was
         // descender space under a field nobody had asked to sit on a baseline.
         className={cn(
-          "block h-[30px] w-full resize-none overflow-y-auto bg-transparent outline-none placeholder:text-text-muted",
+          "block h-7.5 w-full resize-none overflow-y-auto bg-transparent outline-none placeholder:text-text-muted",
           FIELD_WRAP,
           FIELD_TEXT,
           // ⚠ THE TEXT GOES TRANSPARENT ONLY WHERE SOMETHING IS PAINTED UNDER IT, AND THE CARET

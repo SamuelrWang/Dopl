@@ -20,13 +20,13 @@
 // ─── BEGIN SESSION-IO-POST-SURFACE (pure; unit-tested via source extraction) ───
 // MEDIUM-2 — WHO this post is really addressed to, and WHAT kind it claims to be. The card used
 // to print the session's bound counterparty for every post, so a post addressed to a DIFFERENT
-// channel member (`to:`) or forged as a lifecycle event (`kind:task_finished`) looked exactly like
+// channel member (`to:`) or forged as a lifecycle event (`kind:thread_finished`) looked exactly like
 // a plain reply. Both now ride the payload and are painted (session-labels.postDestinationText),
 // and both are folded into the grant key, so approving one reply cannot authorize either.
 const TO_CAP = 60;
 const KIND_CAP = 40;
 // FIX F9 (v2.9 review) — THE KEY AND THE CARD MUST NAME THE SAME THING. postScope keys ANY
-// non-'message' kind, but this named only the four-value enum, so `kind:'Task_Finished'` earned
+// non-'message' kind, but this named only the four-value enum, so `kind:'Thread_Finished'` earned
 // its OWN grant key while the card showed NOTHING and the operator approved what read as a plain
 // reply. Every non-empty kind is rendered now. And a NON-STRING `to`/`kind` is never rendered as a
 // value it is not (String({a:1}) is '[object Object]', String(['alice']) is 'alice'), so a

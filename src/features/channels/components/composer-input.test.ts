@@ -81,14 +81,14 @@ describe("one input row, two composers", () => {
         "<SendButton"
       );
     }
-    // ⚠ THE AGENT BAR NEVER NAMES THE FACE: its row IS the box and takes `.raised-tab` from the
-    // shared component. The CHANNEL surface names it exactly ONCE — on the CARD, which is that
-    // surface's one box (next case). A SECOND mention there is the face landing on the row as
-    // well, which is the bubble-in-a-bubble this file exists to keep out.
-    expect(codeOf(AGENT), "the agent bar re-stated the input face").not.toContain("raised-tab");
+    // ⚠ THE AGENT BAR NEVER NAMES THE FACE: its row IS the box and takes the white pill from the
+    // shared component. The CHANNEL surface's one box is its white CARD (next case); the pill
+    // face landing there as well is the bubble-in-a-bubble this file exists to keep out.
+    expect(codeOf(AGENT), "the agent bar re-stated the input face").not.toContain("white-card");
+    expect(codeOf(CHANNEL), "the channel surface grew the pill face").not.toContain("rounded-full p-1.25");
     expect(
-      codeOf(CHANNEL).match(/raised-tab/g) ?? [],
-      "the channel surface wears the face in more than one place"
+      codeOf(CHANNEL).match(/white-card/g) ?? [],
+      "the channel surface wears the card in more than one place"
     ).toHaveLength(1);
   });
 
@@ -120,7 +120,7 @@ describe("one input row, two composers", () => {
     const row = codeOf("composer-input.tsx");
     expect(row).toContain('const ROW_GEOMETRY = "flex items-center gap-2"');
     expect(row, "the inset left the face it pays for").toContain(
-      'const PILL_FACE = "raised-tab rounded-[10px] p-1.5 pl-3"'
+      'const PILL_FACE = "white-card rounded-full p-1.25 pl-2.75"'
     );
     expect(row, "the face switch grew a second class").toContain(
       'cn(ROW_GEOMETRY, face === "pill" && PILL_FACE)'
@@ -128,7 +128,7 @@ describe("one input row, two composers", () => {
     // Both call sites take the geometry from that one constant — neither states any of it.
     for (const file of [CHANNEL, AGENT]) {
       expect(codeOf(file), `${file} re-stated the row's padding`).not.toMatch(
-        /p-1\.5|rounded-\[10px\]/
+        /p-1\.5|rounded-lg/
       );
     }
   });
@@ -165,7 +165,7 @@ describe("one input row, two composers", () => {
 
   it("the bare row's field starts flush with the card's content box", () => {
     // ⚠ ONE INSET FOR THE CARD'S CONTENTS, AND THE CARD PAYS IT (Samuel, live review 2026-08-28:
-    // *the input sits further up and left*). The card's `px-[13px] py-[11px]` is that one source;
+    // *the input sits further up and left*). The card's `px-3.25 py-2.75` is that one source;
     // the toolbar row adds nothing on top of it, and now neither does the input row, so the
     // field and the icons under it start from the same edge.
     // ⚠ THE PROPERTY IS "THE SHARED ROW SHAPE CARRIES NO PADDING AT ALL", asserted over the
@@ -188,35 +188,22 @@ describe("one input row, two composers", () => {
     // send button an `ml-1` and an opacity of its own, which is how the two came to look
     // different in the first place.
     const row = codeOf("composer-input.tsx");
-    expect(row).toContain("raised-tab");
+    expect(row).toContain("white-card rounded-full");
     expect(row).toContain("<SendButton");
     expect(row, "the shared row grew an override prop").not.toMatch(/\bclassName\??:/);
   });
 
-  it("the channel composer's CARD wears the agent pill's face VERBATIM", () => {
-    // ⚠ THE WHOLE FACE, NOT A LAYER OF IT (Samuel, live review 2026-08-27). An earlier pass gave
-    // the card the raised recipe's 1px inset ring alone; beside the agent bar's dimensional
-    // material it read FLAT, because the gradient, the bevel and the drops are the dimension.
-    // **The class itself is the shared source** — the same `.raised-tab` the row wears in
-    // `"pill"` mode — so there is nothing to re-derive and nothing to keep in step.
-    // ⚠ THE MUTATIONS THIS CATCHES: back to `.bento` (a floating card, a different material);
-    // back to an extracted `shadow-[inset…]` ring; a `bg-*` utility riding along, which outranks
-    // the kit layer and flattens the gradient to a solid.
-    // ⚠ THE PADDING CARRIES THE PIXEL THE BORDER USED TO. `.bento` declared a real 1px border and
-    // this box is `border-box`; `.raised-tab` must sit on a BORDERLESS element (its ring is
-    // inset, docs/DESIGN-SYSTEM.md), so `px-3 py-2.5` became `px-[13px] py-[11px]` and the outer
-    // box — and therefore the card's HEIGHT — is unchanged. Restoring the scale values shrinks
-    // the card 2px, which is the height regression this suite has caught twice.
-    // ⚠ THE RADIUS IS RESTATED because `.raised-tab` carries none and `.bento`'s 14px left with
-    // it. The CARD'S OWN radius wins — it is the one thing about the box that did not change.
+  it("the channel composer's CARD is the kit's white card, its hairline inside the padding", () => {
+    // ⚠ `.white-card` draws a real 1px border on a border-box element, so `px-3 py-2.5` plus that
+    // pixel keeps the content 13px/11px in and the card's HEIGHT unchanged; `px-3.25
+    // py-2.75` here would grow it 2px. No `bg-*` or shadow utility rides along: the kit owns
+    // the face.
     const box = codeOf(CHANNEL);
-    expect(box).toContain('"raised-tab flex flex-col rounded-[14px] px-[13px] py-[11px]"');
+    expect(box).toContain('"white-card flex flex-col rounded-[20px] px-3 py-2.5"');
     expect(box, "the card went back to a floating bento card").not.toMatch(/\bbento\b/);
-    expect(box, "the card re-derived the edge instead of wearing the face").not.toMatch(
-      /shadow-\[inset/
-    );
-    expect(box, "a bg-* utility flattened the raised gradient").not.toMatch(/\bbg-white\b/);
-    expect(box, "the card grew a gap again").not.toMatch(/raised-tab[^"]*\bgap-\d/);
+    expect(box, "the card re-derived its edge").not.toMatch(/shadow-\[/);
+    expect(box, "a bg-* utility rode on the kit face").not.toMatch(/white-card[^"]*\bbg-/);
+    expect(box, "the card grew a gap again").not.toMatch(/white-card[^"]*\bgap-\d/);
   });
 
   it("the MIRROR's box is the FIELD's box — the field is a block, and the wrapper holds nothing else", () => {
@@ -289,6 +276,6 @@ describe("the agent pane's divider", () => {
     expect(panel).toContain("border-l border-border-default");
     expect(panel, "the divider picked its own blue again").not.toMatch(/border-link\b/);
     // The header rule it must match, still stated the same way.
-    expect(panel).toContain("border-b border-border-default");
+    expect(codeOf("agent-panel-header.tsx")).toContain("border-b border-border-default");
   });
 });

@@ -20,6 +20,8 @@ const NON_WORKSPACE_ROOTS = new Set([
   // entry `isAppShellRoute` reads "billing" as a workspace slug and dresses the
   // page as app chrome.
   "billing",
+  // `/connect/{token}` — the Device SDK hosted Connect page (A4); draws its own surface.
+  "connect",
   "design",
   "docs",
   // Post-auth download page. Draws its own full-viewport surface, but must be
@@ -114,7 +116,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <FlushGrid />
-      <main className="relative z-[2] container mx-auto px-4 py-8">
+      <main className="relative z-(--layer-raised) container mx-auto px-4 py-8">
         {children}
       </main>
     </>

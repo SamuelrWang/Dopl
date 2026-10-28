@@ -116,7 +116,7 @@ describe("takeLineBudget", () => {
 
   it("reports hasMore TRUE at the row ceiling, even with nothing trimmed", () => {
     // ⚠ AT the ceiling is indistinguishable from OVER it — the rule
-    // `listChannelTasks` already applies to `truncated`. Costs one short fetch;
+    // `listChannelThreads` already applies to `truncated`. Costs one short fetch;
     // the opposite error hides history.
     const { rows: kept, hasMore } = takeLineBudget(rows(4, 1), 4, 300);
     expect(kept).toHaveLength(4);

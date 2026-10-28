@@ -3,9 +3,7 @@
  * Resolve the addressing, make the call, map the 4xx, hand the outcome to the
  * modules that narrate it.
  *
- * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`. The `thread` op
- * param folds into `metadata.taskId` and `task_*` kinds keep their stored
- * names; only the agent-facing surface says `thread`.
+ * The `thread` op param folds into `metadata.threadId`.
  *
  * ⚠ PEER-CONTROLLED TEXT. Every string below is server NARRATION with no
  * untrusted framing, and one peer-authored value splices into it: `ch.name` —
@@ -181,7 +179,7 @@ interface PostOptions {
    * ⚠ **NOT A CALLER'S ARGUMENT ANY MORE** (C12, 2026-09-02). `kind` left the
    * published shape — three of its five values were refused, one had its own op
    * and one was the default — and the only writer left is `op="send" with kind="milestone"`,
-   * which fixes it to `task_progress` at the routing seam.
+   * which fixes it to `thread_progress` at the routing seam.
    */
   kind?: ChannelMessageInput["kind"];
   metadata?: Record<string, unknown>;
@@ -275,10 +273,10 @@ export async function opPost(
   if (isErr(ch)) return ch;
   const chName = inlineOr(ch.name, NO_NAME);
 
-  // Fold `thread` into the STORAGE key `metadata.taskId`; explicit param wins
+  // Fold `thread` into the STORAGE key `metadata.threadId`; explicit param wins
   // over any metadata copy. Route validates it resolves in this channel.
   const metadata = opts.thread
-    ? { ...(opts.metadata ?? {}), taskId: opts.thread }
+    ? { ...(opts.metadata ?? {}), threadId: opts.thread }
     : opts.metadata;
 
   let message;
@@ -370,7 +368,7 @@ export async function opPost(
       // left the channel".
       if (kind === "lifecycle_kind") {
         return err(
-          'Nothing was sent: that message carried a LIFECYCLE kind ("task_started" / "task_finished" / "task_failed"), which the runtime that starts and stops a session writes and an agent credential may not. Send the same text as an ordinary message — everything substantive you send, your FINAL ANSWER included, is one — and mark a step that LANDED with kind="milestone".',
+          'Nothing was sent: that message carried a LIFECYCLE kind ("thread_started" / "thread_finished" / "thread_failed"), which the runtime that starts and stops a session writes and an agent credential may not. Send the same text as an ordinary message — everything substantive you send, your FINAL ANSWER included, is one — and mark a step that LANDED with kind="milestone".',
         );
       }
       if (opts.thread && kind !== "not_a_member") {
@@ -378,7 +376,7 @@ export async function opPost(
         // whole write gate.
         //
         // ⚠ The thread id is NOT echoed here. It round-trips (an agent copies
-        // it from a `read` legend = `metadata.taskId`, peer-set verbatim for
+        // it from a `read` legend = `metadata.threadId`, peer-set verbatim for
         // non-UUID values), and "the id you just passed" needs no escaping.
         return err(
           `You can't post into that thread — nothing was posted. A thread is between the member who OPENED it and the member it is addressed TO, and you are neither: check it with ${callRef("channel.read", { channel: `"${ch.id}"`, thread: "<the id you just passed>" })}. Send into the channel instead, or ask one of those two to open a thread with you. Do NOT open your own thread for the same work; that is a duplicate room, not a way in.`,
@@ -423,12 +421,12 @@ export async function opPost(
     message,
     // ⚠ The caller named a thread if EITHER argument carried one. `metadata` is
     // a caller-settable passthrough whose schema description tells agents to
-    // put `taskId` in it, and it is forwarded untouched when `thread` is
+    // put `threadId` in it, and it is forwarded untouched when `thread` is
     // absent — reading `opts.thread` alone makes such a post look unthreaded
     // and produces a false `landed=dropped`.
     opts.thread ??
-      (typeof opts.metadata?.taskId === "string" && opts.metadata.taskId.trim()
-        ? opts.metadata.taskId
+      (typeof opts.metadata?.threadId === "string" && opts.metadata.threadId.trim()
+        ? opts.metadata.threadId
         : undefined),
   );
   const mentions = postMentionFacts(body, message);

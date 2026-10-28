@@ -52,11 +52,11 @@ const toolResult = (id) => ({
 /** One live responder session on the real engine, plus its runtime handle. */
 async function live(agentName) {
   const before = rt.handles.length;
-  const res = await engine.launchResponderSession(launchArgs({ taskId: "", agentName }));
+  const res = await engine.launchResponderSession(launchArgs({ threadId: "", agentName }));
   assert.ok(res && res.sessionId, `launched: ${JSON.stringify(res)}`);
   await settle();
   const h = rt.handles[before];
-  const s = registryReads.sessionOn({ channelId: CHANNEL, taskId: "", agentId: res.agentId });
+  const s = registryReads.sessionOn({ channelId: CHANNEL, threadId: "", agentId: res.agentId });
   assert.ok(h && s, "the handle and the registry entry");
   return { h, s, agentId: res.agentId };
 }
@@ -150,7 +150,7 @@ test("the park at the CAP clears the stretch, so the RESUMED session's first fra
   // Woken. Before the clear, the first frame of this new stretch would read as `WORK_CAP_MS` old and
   // arm the timer at zero — parking the session the operator just resumed, on a loop.
   assert.deepEqual(
-    engine.messageByTask({ channelId: CHANNEL, taskId: "", agentId, text: "carry on" }),
+    engine.messageByThread({ channelId: CHANNEL, threadId: "", agentId, text: "carry on" }),
     { ok: true }
   );
   await settle();

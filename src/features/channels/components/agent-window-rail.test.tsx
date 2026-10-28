@@ -39,7 +39,7 @@ function session(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
   return {
     sessionId: "s-1",
     channelId: "c1",
-    taskId: "t1",
+    threadId: "t1",
     name: "flint",
     state: "working",
     channelName: "Website",
@@ -50,7 +50,7 @@ function session(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
 
 /** The host's key rule, as `pages/agent-window/index.tsx › agentTabKey` spells it. */
 const keyFor = (s: DesktopSessionSummary) =>
-  s.agentId ? `${s.channelId}|${s.taskId}|${s.agentId}` : `${s.channelId}|${s.taskId}`;
+  s.agentId ? `${s.channelId}|${s.threadId}|${s.agentId}` : `${s.channelId}|${s.threadId}`;
 
 function mountRail(
   over: {
@@ -79,7 +79,7 @@ describe("the rail lists the operator's live agents", () => {
     mountRail({
       sessions: [
         session({ name: "flint", state: "working", detail: "tool", toolLabel: "Bash" }),
-        session({ sessionId: "s-2", taskId: "t2", name: "quill", state: "idle" }),
+        session({ sessionId: "s-2", threadId: "t2", name: "quill", state: "idle" }),
       ],
     });
     expect(screen.getByText("flint")).toBeTruthy();
@@ -94,7 +94,7 @@ describe("the rail lists the operator's live agents", () => {
 
   it("leaves ENDED agents out — a rail is a list of things to open", () => {
     mountRail({
-      sessions: [session({ name: "flint" }), session({ sessionId: "s-2", taskId: "t2", name: "gone", state: "ended" })],
+      sessions: [session({ name: "flint" }), session({ sessionId: "s-2", threadId: "t2", name: "gone", state: "ended" })],
     });
     expect(screen.getByText("flint")).toBeTruthy();
     expect(screen.queryByText("gone")).toBeNull();
@@ -207,7 +207,7 @@ describe("the selected agent is shaded, and collapsed that shading is the SQUARE
 
   it("shades the expanded row and leaves every other row alone", () => {
     const mine = session({ agentId: "abc123", displayName: "flint" });
-    const other = session({ sessionId: "s-2", taskId: "t2", agentId: "zzz999", displayName: "quill" });
+    const other = session({ sessionId: "s-2", threadId: "t2", agentId: "zzz999", displayName: "quill" });
     mountRail({ sessions: [mine, other], activeKey: keyFor(mine) });
     const rows = screen.getAllByRole("button").slice(1); // [0] is the toggle
     // ⚠ AS A CLASS TOKEN, NOT A SUBSTRING: every row carries `hover:bg-surface-raised-2`, so a
@@ -333,7 +333,7 @@ describe("the rail's colour dot, as the pop-out actually mounts it", () => {
   it("draws nothing for a key outside the bank, and nothing for no key", () => {
     mountShell([
       session({ agentId: "abc123", color: "agent-99" }),
-      session({ sessionId: "s-2", taskId: "t2", agentId: "zzz999", name: "quill" }),
+      session({ sessionId: "s-2", threadId: "t2", agentId: "zzz999", name: "quill" }),
     ]);
     expect(document.querySelectorAll("[data-agent-color]")).toHaveLength(0);
   });

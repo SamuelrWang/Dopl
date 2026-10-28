@@ -53,7 +53,7 @@ function writeClient(overrides: Record<string, unknown> = {}): DoplClient {
       seq: 858,
       kind: "message",
       authorUserId: "u-me",
-      metadata: { taskId: THREAD_ID, mentionedUserIds: [] },
+      metadata: { threadId: THREAD_ID, mentionedUserIds: [] },
     })),
     ...overrides,
   } as unknown as DoplClient;
@@ -77,7 +77,7 @@ describe(`every write result is one line and fits ${WRITE_RESULT_MAX_CHARS} char
           seq: 858,
           kind: "message",
           authorUserId: "u-me",
-          metadata: { taskId: THREAD_ID, mentionedUserIds: [] },
+          metadata: { threadId: THREAD_ID, mentionedUserIds: [] },
           recipientUserIds: ["u-peer"],
           recipientAgentIds: ["x2sz1ztt"],
         })),
@@ -159,7 +159,7 @@ describe(`every write result is one line and fits ${WRITE_RESULT_MAX_CHARS} char
   it('kind="milestone" and kind="decision" open on their OWN verb, not on `posted`', async () => {
     const milestone = textOf(
       (await opPost(writeClient(), CHANNEL_ID, "step one landed", {
-        kind: "task_progress",
+        kind: "thread_progress",
         thread: THREAD_ID,
         resultHead: "milestone",
         runtime: null,

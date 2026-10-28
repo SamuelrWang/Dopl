@@ -15,9 +15,10 @@ const response_size_1 = require("./response-size");
 const channel_schema_launch_fields_1 = require("./channel-schema-launch-fields");
 const channel_schema_rooms_fields_1 = require("./channel-schema-rooms-fields");
 const channel_schema_decision_fields_1 = require("./channel-schema-decision-fields");
+const channel_schema_task_fields_1 = require("./channel-schema-task-fields");
 const channel_hold_budget_1 = require("./channel-hold-budget");
 const channel_vocab_1 = require("./channel-vocab");
-exports.SCHEMA_MAX_CHARS = 9_180; // +25 over 9,155 (2026-10-13, F-774): runtime tool words in `channel-schema-launch-fields.ts › POSTURE_WORDS` — Muse +41 (9,104 → 9,145, absorbed by headroom) and Grok +35. A closed vocabulary the cross-tree suite requires, not prose. The test's "do not raise" stands; this raise IS ruled (Samuel 2026-10-13: raise per new runtime). Re-derive through `channel-schema-budget.test.ts`, never quote.
+exports.SCHEMA_MAX_CHARS = 10_445; // Raised only by ruling, never to fit (history: ENGINEERING.md). Re-derive through `channel-schema-budget.test.ts`, never quote.
 exports.PARAM_DESCRIPTION_MAX_CHARS = 400; // Per-`.describe()` cap.
 exports.CHANNEL_INPUT_SHAPE = {
     // Inert, not refused, on ops other than read/status: a 400 teaches agents to stop passing it.
@@ -30,7 +31,7 @@ exports.CHANNEL_INPUT_SHAPE = {
     action: zod_1.z
         .enum(channel_vocab_1.CHANNEL_ACTION_NAMES)
         .optional()
-        .describe('op="manage" (required): "launch", "end", "rename", "posture" or "direct" — all on YOUR OWN operator\'s machine. op="rooms" (required): "list", "open", "invite", "members", "threads", "thread_mode", "update" or "help". op="artifact" (required): "create", "add", "remove" or "dissolve".'),
+        .describe('Required on op="manage", "rooms", "artifact", "task". manage: "launch", "end", "rename", "posture", "direct" (YOUR OWN agents). rooms: "list", "open", "invite", "members", "threads", "tasks", "thread_mode", "update", "help". artifact: "create", "add", "remove", "dissolve". task: "create_task", "update_task", "set_status", "assign", "unassign", "add_subtask", "update_subtask", "add_note".'),
     channel: zod_1.z
         .string()
         .optional()
@@ -44,7 +45,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .optional()
         .describe(
     // Handle forms are per-op: op="manage" resolves no names (`channel-agent-target.ts` refuses them).
-    'WHO this call is about.\nop="send": who it is FOR — a member (email or user id), `@agent-<id>` or an agent handle; SEVERAL, comma-separated, mixed.\nop="manage": which ONE of YOUR OWN agents — `@agent-<id>` ONLY, no handle.\nop="rooms": the member to "invite", or open a 1:1 with.'),
+    'WHO this call is about.\nop="send": who it is FOR — a member (email or user id), `@agent-<id>` or an agent handle; SEVERAL, comma-separated, mixed.\nop="manage": which ONE of YOUR OWN agents — `@agent-<id>` ONLY, no handle.\nop="rooms": the member to "invite", or open a 1:1 with.\nop="task": assignee(s), or a subtask owner.'),
     body: zod_1.z
         .string()
         .min(1)
@@ -53,7 +54,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .describe(
     // `<=2000` is the launch cap (`schema-launch.ts › LaunchCreateSchema.goal`), unpublishable here as
     // this field serves three routes. The recipient clause is pushed on purpose; nothing validates it.
-    'op="send" (required): the message text. ⚠ Delivery is `to=`; @-tag each person you write to inline, addressee too. No routing header. op="manage" (required on "launch" and "direct"): the agent\'s opening instruction (launch: <=2000), or the private message.'),
+    'op="send" (required): the message text. ⚠ Delivery is `to=`; @-tag each person you write to inline, addressee too. No routing header. op="manage" (required on "launch" and "direct"): the agent\'s opening instruction (launch: <=2000), or the private message. op="task" "add_note": the note.'),
     // `decision` must store as a `message` row or `targeting.js › classify` drops the card; `record`
     // sends `intent:"chat"`, so a send naming nobody can be refused instead of guessed at.
     // `display` is `dopl_show`'s preset (granular): a legacy call naming it is refused by name.
@@ -66,7 +67,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .optional()
         .describe(
     // "its metadata header plus only that exchange" is pinned by `channel-law.test.ts`.
-    'A thread id. ⚠ "new" on op="send" OPENS one and returns its id, with `summary` as its title. Required on op="send" kind="milestone" and on op="rooms" action="thread_mode"; on op="read" it narrows to its metadata header plus only that exchange.'),
+    'A thread id. ⚠ "new" on op="send" OPENS one and returns its id, with `summary` as its title. Required on op="send" kind="milestone" and on op="rooms" action="thread_mode"; on op="read" it narrows to its metadata header plus only that exchange; on op="task" it links the task.'),
     summary: zod_1.z
         .string()
         .trim()
@@ -87,7 +88,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .max(20)
         .optional()
         .describe('op="send" (optional): the messages this one CITES — their numbers become links; a #N you merely type does not. Give ONE of `no` (this room) or `seq` (table-wide) per entry.'),
-    // Both routes dedupe per-author (`channel_messages` and `channel_tasks`).
+    // Both routes dedupe per-author (`channel_messages` and `channel_threads`).
     client_msg_id: zod_1.z
         .string()
         .min(1)
@@ -95,7 +96,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .optional()
         .describe(
     // PER-AUTHOR and the op names are pinned by `channel-schema-caps.test.ts`.
-    'op="send" / op="manage" / op="artifact" (optional): an idempotency key; a re-sent key hands back YOUR first call\'s result instead of acting twice. The dedupe is PER-AUTHOR on every op.'),
+    'op="send" / op="manage" / op="artifact" / op="task" (optional): an idempotency key; a re-sent key hands back YOUR first call\'s result instead of acting twice. The dedupe is PER-AUTHOR on every op.'),
     ...channel_schema_decision_fields_1.DECISION_INPUT_FIELDS,
     // No `.uuid()`: zod publishes it as a `pattern`, which `tool-style.test.ts` refuses on a
     // published property; `channel-ops-artifact.ts` refuses a malformed id by name.
@@ -139,4 +140,5 @@ exports.CHANNEL_INPUT_SHAPE = {
         .describe('Optional HOLD. op="read": long-poll for messages after `since` instead of returning a page. op="manage" (<=30000): how long to hold for your operator\'s desktop to answer.'),
     ...channel_schema_rooms_fields_1.ROOMS_INPUT_FIELDS,
     ...channel_schema_launch_fields_1.LAUNCH_INPUT_FIELDS,
+    ...channel_schema_task_fields_1.TASK_INPUT_FIELDS,
 };

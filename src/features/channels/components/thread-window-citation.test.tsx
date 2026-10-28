@@ -51,14 +51,14 @@ vi.mock("../hooks/use-channel-messages", () => ({
         seq: 11,
         authorUserId: PEER,
         body: "the original point",
-        metadata: { taskId: "t-1" },
+        metadata: { threadId: "t-1" },
       }),
       message({
         id: "m-citing",
         seq: 12,
         authorUserId: PEER,
         body: "as #11 said, and see #7 too",
-        metadata: { taskId: "t-1" },
+        metadata: { threadId: "t-1" },
         // Written under grammar B, citing the older row by seq — and a second
         // entry whose number is ONE DIGIT, which only an allowlist can pill.
         cites: [

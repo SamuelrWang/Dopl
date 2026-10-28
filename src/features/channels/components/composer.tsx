@@ -3,7 +3,7 @@
 /**
  * Channels composer card: one plain chat send (`intent:"chat"`) plus the @-mention popover. New thread and
  * New Agent open dialogs (`new-thread-dialog.tsx`, `launch-agent-dialog.tsx`); `fanOutThreads` stays here and
- * the thread dialog calls it — one `channel_tasks` row per addressee (INVARIANTS §5).
+ * the thread dialog calls it — one `channel_threads` row per addressee (INVARIANTS §5).
  */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -52,6 +52,7 @@ export function ChannelsComposer({
   newThreadSignal = 0,
   liveAgents = EMPTY_LIVE_AGENTS,
   working = null,
+  tasksQuickView = null,
   recentAgentIds = EMPTY_RECENT,
   threadOtherParty = null,
 }: {
@@ -74,6 +75,8 @@ export function ChannelsComposer({
   liveAgents?: readonly LiveAgentSession[];
   /** My agents mid-turn, drawn at the end of the recipient line. */
   working?: ReactNode;
+  /** The tasks quick view, at the recipient line's right end (`tasks-quick-view.tsx`). */
+  tasksQuickView?: ReactNode;
   /** The room's recent agent posters, newest first (RR3). */
   recentAgentIds?: readonly string[];
   /** A thread's other party (RR1); `null` in the main room. */
@@ -269,10 +272,10 @@ export function ChannelsComposer({
         threadOtherParty={threadOtherParty}
         cancelled={addressOff}
         working={working}
+        trailing={tasksQuickView}
       />
-      {/* The agent pill's face; no `bg-*` (it would flatten the kit gradient). The 1px ring lives in the
-          `13px`/`11px` padding — scale values shrink the card 2px. No row gap. */}
-      <div className="raised-tab flex flex-col rounded-[14px] px-[13px] py-[11px]">
+      {/* The white card; its 1px hairline plus this padding puts the content 13px/11px in. */}
+      <div data-composer-card="" className="white-card flex flex-col rounded-[20px] px-3 py-2.5">
         <div className="flex flex-col gap-2">
 
           <ComposerInputRow

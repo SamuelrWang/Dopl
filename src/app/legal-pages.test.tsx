@@ -209,7 +209,8 @@ describe("the white page — no frame colour under the legal routes", () => {
   it("strips mosaic-bg before first paint, and the class paints white", () => {
     const layout = readFileSync(path.join(process.cwd(), "src/app/layout.tsx"), "utf8");
     expect(layout).toContain(
-      "p==='/services-agreement'||p==='/privacy'){document.body.classList.remove('mosaic-bg');document.body.classList.add('legal-active');",
+      // /docs shares the white legal ground since the docs site merged (2026-10-22).
+      "p==='/services-agreement'||p==='/privacy'||p==='/docs'||p.indexOf('/docs/')===0){document.body.classList.remove('mosaic-bg');document.body.classList.add('legal-active');",
     );
     const css = readFileSync(
       path.join(process.cwd(), "src/features/marketing/legal/legal.css"),

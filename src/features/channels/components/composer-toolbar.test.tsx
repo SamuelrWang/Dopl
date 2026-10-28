@@ -107,11 +107,10 @@ function mountAddressed() {
 
 describe("the recipient tag sits ABOVE the card, outside it, hard left", () => {
   it("is not inside the bordered card element", () => {
-    // ⚠ THE CARD IS `.raised-tab` — the bordered box (`composer.tsx`'s own note says the 1px
-    // moved into its padding). "Outside the box" is exactly "not a descendant of that element",
-    // and asserting it this way survives the next radius/padding rewrite.
+    // ⚠ THE CARD IS `[data-composer-card]` — the bordered box. "Outside the box" is exactly "not a
+    // descendant of that element", and asserting it this way survives the next restyle.
     const container = mountAddressed();
-    const card = container.querySelector(".raised-tab");
+    const card = container.querySelector("[data-composer-card]");
     const tag = screen.getByRole("status", { name: "Recipients" });
     expect(card).not.toBeNull();
     expect(card?.contains(tag)).toBe(false);
@@ -120,7 +119,7 @@ describe("the recipient tag sits ABOVE the card, outside it, hard left", () => {
   it("comes BEFORE the card in document order — above it, not below", () => {
     // ⚠ THE OTHER HALF: a tag lifted out of the card but appended after it is still outside it.
     const container = mountAddressed();
-    const card = container.querySelector(".raised-tab") as HTMLElement;
+    const card = container.querySelector("[data-composer-card]") as HTMLElement;
     const tag = screen.getByRole("status", { name: "Recipients" });
     expect(tag.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
@@ -141,7 +140,7 @@ describe("the recipient tag sits ABOVE the card, outside it, hard left", () => {
     // ⚠ Samuel: *"nothing else in the card moves up"*. The mutation this catches is a rewrite
     // that lifts the whole first row out on the way to lifting the tag.
     const container = mountAddressed();
-    const card = container.querySelector(".raised-tab") as HTMLElement;
+    const card = container.querySelector("[data-composer-card]") as HTMLElement;
     expect(card.contains(screen.getByLabelText("Message"))).toBe(true);
     expect(card.contains(btn("Send"))).toBe(true);
     expect(card.contains(btn("Emoji"))).toBe(true);

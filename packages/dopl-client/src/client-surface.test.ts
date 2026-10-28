@@ -42,7 +42,7 @@ const BASE = "https://api.example.test";
  *        prior delta was a removal — so stated as one, not folded in.
  *   66 — less the TWO that went with thread closing (wiring plan Phase 4,
  *        2026-08-18): `closeChannelThread` and `proposeChannelThreadClose`.
- *        The `PATCH /tasks/[id]` route arms behind them are deleted too, so
+ *        The `PATCH /threads/[id]` route arms behind them are deleted too, so
  *        restoring either binding would 400 rather than fail quietly.
  *   70 — PLUS FOUR with the `AgentIdentityMethods` link (MCP surface v2 wave A,
  *        2026-08-28): `listAgentIdentities`, `getAgentIdentity`,
@@ -191,6 +191,7 @@ const PUBLIC_SURFACE = [
   "listAgentIdentitiesPayload",
   "listChannelMembers",
   "listChannelSessions",
+  "listChannelTasks",
   "listChannelThreads",
   "listChannels",
   "listChatFolders",
@@ -210,6 +211,7 @@ const PUBLIC_SURFACE = [
   "readAccountMessages",
   "readChannelArtifact",
   "readChannelMessages",
+  "readChannelTask",
   "readChannelTranscript",
   "readKbFileByPath",
   // SECTION READS (2026-09-03) — one section, or the outline alone.
@@ -229,6 +231,8 @@ const PUBLIC_SURFACE = [
   "updateOntologyObject",
   "updateSkill",
   "writeChannelArtifact",
+  // CHANNEL TASKS (2026-10-26): list, read one, and the action POST over one route.
+  "writeChannelTask",
   "writeKbFileByPath",
   "writeSkillBody",
   // HISTORY + RESTORE (2026-09-23, DMP-002) — eight names over routes the app's

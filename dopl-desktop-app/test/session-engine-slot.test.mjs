@@ -3,12 +3,12 @@
 // ⚠ THIS FILE WAS "FIX N1" AND THE LAW IT PINNED IS DELETED (2026-08-21, Samuel's multiplayer
 // ruling 2). N1 was about `launch` asking its BUSY question about the same slot its key named:
 // the key read `agentId` when there was one and collapsed to (channel, thread) when there was
-// not, while the busy checks rebuilt `{channelId, taskId}` by hand and stripped the agent — so a
+// not, while the busy checks rebuilt `{channelId, threadId}` by hand and stripped the agent — so a
 // team-shaped call could report a free slot for an agent that was already running. Two things
 // about that are now historical:
 //
 //   • THE KEY BLENDS ALL THREE PARTS (`session-store.js › slotKey`). `agentId` no longer
-//     REPLACES `taskId`; it joins it. So the class of bug N1 was about is not expressible.
+//     REPLACES `threadId`; it joins it. So the class of bug N1 was about is not expressible.
 //   • THERE IS NO BUSY REFUSAL. `launch` mints a FRESH instance id at the one spawn funnel, so
 //     the slot it is about to take cannot already be occupied, and putting a SECOND agent on a
 //     thread that already has one is the feature rather than the collision. `{skipped:'busy'}`
@@ -49,30 +49,30 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  AGENT, CH, LAUNCH_CODE, TASK, call, harness, live, sessionWindowless, slotKey,
+  AGENT, CH, LAUNCH_CODE, THREAD, call, harness, live, sessionWindowless, slotKey,
 } from "./_session-launch-funnel-harness.mjs";
 
 test("MINT: launch creates an instance id, keys on it, and hands it back", async () => {
   const h = harness();
-  const res = await h.launch(call({ channelId: CH, taskId: TASK, side: "responder" }));
+  const res = await h.launch(call({ channelId: CH, threadId: THREAD, side: "responder" }));
   assert.equal(res.agentId, "mint0000", "the ADDRESS is part of the answer");
   assert.equal(res.sessionId, "sess-1");
   assert.equal(h.calls.started[0].agentId, "mint0000", "…and it rides the spec");
-  assert.equal(h.calls.started[0].key, slotKey({ channelId: CH, taskId: TASK, agentId: "mint0000" }));
-  assert.equal(h.calls.started[0].key, `${CH}:${TASK}:mint0000`, "three parts, in that order");
+  assert.equal(h.calls.started[0].key, slotKey({ channelId: CH, threadId: THREAD, agentId: "mint0000" }));
+  assert.equal(h.calls.started[0].key, `${CH}:${THREAD}:mint0000`, "three parts, in that order");
 });
 
 // ⚠ THIS IS THE RULING, AND IT REPLACES "the same call is busy once that thread's session
 // exists". The busy refusal WAS the one-agent-per-thread law.
 test("MULTIPLAYER: a second launch on a busy thread makes a SECOND agent, never a refusal", async () => {
   const h = harness();
-  const first = await h.launch(call({ channelId: CH, taskId: TASK, side: "responder" }));
-  const second = await h.launch(call({ channelId: CH, taskId: TASK, side: "responder" }));
+  const first = await h.launch(call({ channelId: CH, threadId: THREAD, side: "responder" }));
+  const second = await h.launch(call({ channelId: CH, threadId: THREAD, side: "responder" }));
   assert.notEqual(second.agentId, first.agentId);
   assert.equal(h.sessions.size, 2, "two live sessions on ONE thread");
   assert.deepEqual(
     [...h.sessions.keys()],
-    [`${CH}:${TASK}:${first.agentId}`, `${CH}:${TASK}:${second.agentId}`],
+    [`${CH}:${THREAD}:${first.agentId}`, `${CH}:${THREAD}:${second.agentId}`],
     "distinct slots — neither overwrites the other"
   );
 });
@@ -81,22 +81,22 @@ test("AUTH-HOLD: a held agent on the thread is answered honestly, never as busy"
   // A machine with no Claude credential holds its session on the sign-in action. Answering
   // `busy` would tell the peer to resend against a machine that will never run it.
   const h = harness();
-  const key = slotKey({ channelId: CH, taskId: TASK, agentId: AGENT });
+  const key = slotKey({ channelId: CH, threadId: THREAD, agentId: AGENT });
   h.sessions.set(...live(key, { agentId: AGENT, state: { authHeld: true } }));
-  const res = await h.launch(call({ channelId: CH, taskId: TASK, side: "responder" }));
+  const res = await h.launch(call({ channelId: CH, threadId: THREAD, side: "responder" }));
   assert.deepEqual(res, { skipped: "auth-hold" }, "the caller can post the truth, not a busy lie");
   assert.deepEqual(h.calls.started, []);
 });
 
 test("AUTH-HOLD is scoped to the launch runtime, and any held agent on the thread counts (P4-22)", async () => {
   const other = harness({ rtId: "claude" });
-  other.sessions.set(...live(slotKey({ channelId: CH, taskId: TASK, agentId: AGENT }), { agentId: AGENT, runtimeId: "codex", state: { authHeld: true } }));
-  const res = await other.launch(call({ channelId: CH, taskId: TASK, side: "responder" }));
+  other.sessions.set(...live(slotKey({ channelId: CH, threadId: THREAD, agentId: AGENT }), { agentId: AGENT, runtimeId: "codex", state: { authHeld: true } }));
+  const res = await other.launch(call({ channelId: CH, threadId: THREAD, side: "responder" }));
   assert.ok(res.sessionId, "a held Codex agent does not refuse a Claude launch");
   const second = harness({ rtId: "claude" });
-  second.sessions.set(...live(slotKey({ channelId: CH, taskId: TASK, agentId: "b2c3d4e5" }), { agentId: "b2c3d4e5", runtimeId: "claude", state: {} }));
-  second.sessions.set(...live(slotKey({ channelId: CH, taskId: TASK, agentId: AGENT }), { agentId: AGENT, runtimeId: "claude", state: { authHeld: true } }));
-  assert.deepEqual(await second.launch(call({ channelId: CH, taskId: TASK })), { skipped: "auth-hold" },
+  second.sessions.set(...live(slotKey({ channelId: CH, threadId: THREAD, agentId: "b2c3d4e5" }), { agentId: "b2c3d4e5", runtimeId: "claude", state: {} }));
+  second.sessions.set(...live(slotKey({ channelId: CH, threadId: THREAD, agentId: AGENT }), { agentId: AGENT, runtimeId: "claude", state: { authHeld: true } }));
+  assert.deepEqual(await second.launch(call({ channelId: CH, threadId: THREAD })), { skipped: "auth-hold" },
     "a held SECOND agent on the thread is not missed");
   assert.deepEqual(second.calls.signIn, ["claude"], "the refusal raises the launch runtime's sign-in prompt");
 });
@@ -104,32 +104,32 @@ test("AUTH-HOLD is scoped to the launch runtime, and any held agent on the threa
 test("SIGNED OUT: refused before anything registers, and the prompt is raised unless the caller shows a sign-in", async () => {
   const h = harness({ rtId: "codex", signedOut: true });
   const refused = { skipped: "auth-hold" };
-  assert.deepEqual(await h.launch(call({ channelId: CH, taskId: TASK, showsSignIn: true })), refused);
+  assert.deepEqual(await h.launch(call({ channelId: CH, threadId: THREAD, showsSignIn: true })), refused);
   assert.deepEqual(h.calls.signIn, [], "the New Agent dialog offers its own sign-in beside the refusal");
-  assert.deepEqual(await h.launch(call({ channelId: CH, taskId: TASK, side: "responder" })), refused);
+  assert.deepEqual(await h.launch(call({ channelId: CH, threadId: THREAD, side: "responder" })), refused);
   assert.deepEqual(h.calls.started, [], "nothing registered");
   assert.deepEqual(h.calls.signIn, ["codex"]);
 });
 
 test("CHANNEL-LEVEL: a launch with no thread keys on an EMPTY middle segment", async () => {
-  // Samuel's channel-agent ruling: `taskId: ''` attaches the agent to the CHANNEL. It is the
+  // Samuel's channel-agent ruling: `threadId: ''` attaches the agent to the CHANNEL. It is the
   // same three-part key, so nothing about the slot is special-cased — and it must not collide
   // with a thread-scoped agent in the same channel.
   const h = harness();
-  const room = await h.launch(call({ channelId: CH, taskId: "", side: "responder" }));
-  const thread = await h.launch(call({ channelId: CH, taskId: TASK, side: "responder" }));
+  const room = await h.launch(call({ channelId: CH, threadId: "", side: "responder" }));
+  const thread = await h.launch(call({ channelId: CH, threadId: THREAD, side: "responder" }));
   assert.equal(h.calls.started[0].key, `${CH}::${room.agentId}`);
-  assert.equal(h.calls.started[1].key, `${CH}:${TASK}:${thread.agentId}`);
+  assert.equal(h.calls.started[1].key, `${CH}:${THREAD}:${thread.agentId}`);
   assert.equal(h.sessions.size, 2);
 });
 
 test("IDLE: the spawn-idle flag reaches startSession as `parkedShell`", async () => {
   const h = harness();
-  await h.launch(call({ channelId: CH, taskId: TASK, idle: true, operatorArmed: true }));
+  await h.launch(call({ channelId: CH, threadId: THREAD, idle: true, operatorArmed: true }));
   assert.equal(h.calls.started[0].parkedShell, true, "registered, no query");
   assert.equal(h.calls.started[0].operatorArmed, true, "…and the click IS the human decision");
   const plain = harness();
-  await plain.launch(call({ channelId: CH, taskId: TASK }));
+  await plain.launch(call({ channelId: CH, threadId: THREAD }));
   assert.equal(plain.calls.started[0].parkedShell, false, "the responder lane still spawns WITH a turn");
   assert.equal(plain.calls.started[0].operatorArmed, false);
 });
@@ -138,19 +138,19 @@ test("RACE: the post-await FIX #7 re-check still reads the slot the key names", 
   // Unreachable in practice — a freshly minted id cannot collide — but the guard is what stops
   // startSession overwriting a racing creator's registry entry, and its slot spelling has been
   // wrong before (that was N1). Driven by claiming the exact slot launch is about to take.
-  const h = harness({ duringSdk: (sessions) => sessions.set(...live(`${CH}:${TASK}:mint0000`, { agentId: "mint0000" })) });
-  const res = await h.launch(call({ channelId: CH, taskId: TASK, side: "responder" }));
+  const h = harness({ duringSdk: (sessions) => sessions.set(...live(`${CH}:${THREAD}:mint0000`, { agentId: "mint0000" })) });
+  const res = await h.launch(call({ channelId: CH, threadId: THREAD, side: "responder" }));
   assert.deepEqual(res, { skipped: "busy" });
   assert.deepEqual(h.calls.started, []);
 });
 
 test("a HANDED-IN agent id is honoured only when it is a real one", async () => {
   const good = harness();
-  const res = await good.launch(call({ channelId: CH, taskId: TASK, agentId: AGENT }));
+  const res = await good.launch(call({ channelId: CH, threadId: THREAD, agentId: AGENT }));
   assert.equal(res.agentId, AGENT, "a resume re-uses its own id, or it comes back a stranger");
   for (const bad of ["AGENT", "agent-quartz", "a1b2c3", "", null, 42]) {
     const h = harness();
-    const r = await h.launch(call({ channelId: CH, taskId: TASK, agentId: bad }));
+    const r = await h.launch(call({ channelId: CH, threadId: THREAD, agentId: bad }));
     assert.equal(r.agentId, "mint0000", `${JSON.stringify(bad)} is not an id — mint a real one`);
   }
 });
@@ -167,9 +167,9 @@ test("a NON-windowless call is refused outright, and constructs nothing", async 
   // existing wire field the renderer already PREFERS over the copy map, so the honest sentence
   // cost no new plumbing.
   const h = harness();
-  assert.deepEqual(await h.launch({ channelId: CH, taskId: TASK }),
+  assert.deepEqual(await h.launch({ channelId: CH, threadId: THREAD }),
     { skipped: "disabled", detail: "Dopl only starts windowless agents." });
-  assert.deepEqual(await h.launch({ channelId: CH, taskId: TASK, windowless: false }),
+  assert.deepEqual(await h.launch({ channelId: CH, threadId: THREAD, windowless: false }),
     { skipped: "disabled", detail: "Dopl only starts windowless agents." });
   assert.deepEqual(h.calls.started, [], "nothing is keyed, nothing is registered, no SDK is asked for");
 });
@@ -177,14 +177,14 @@ test("a NON-windowless call is refused outright, and constructs nothing", async 
 test("the CONCURRENCY CEILING refuses at MAX_CONCURRENT_SESSIONS, and reclaims nothing", async () => {
   const h = harness();
   for (let i = 0; i < sessionWindowless.MAX_CONCURRENT_SESSIONS; i++) h.sessions.set(...live(`other-${i}:t`));
-  assert.deepEqual(await h.launch(call({ channelId: CH, taskId: TASK })), { skipped: "cap" });
+  assert.deepEqual(await h.launch(call({ channelId: CH, threadId: THREAD })), { skipped: "cap" });
   assert.deepEqual(h.calls.started, []);
   assert.equal(h.sessions.size, sessionWindowless.MAX_CONCURRENT_SESSIONS,
     "⚠ NOTHING IS EVICTED TO MAKE ROOM — the LRU relief went with the window budget it served");
   // …and one settled session is enough to let the next launch through, because `liveCount`
   // counts live children rather than map entries.
   h.sessions.get("other-0:t").settled = true;
-  assert.equal((await h.launch(call({ channelId: CH, taskId: TASK }))).sessionId, "sess-1");
+  assert.equal((await h.launch(call({ channelId: CH, threadId: THREAD }))).sessionId, "sess-1");
 });
 
 test("the cap is ONE branch: no eviction, no adopt, no second budget in launch", () => {
@@ -216,7 +216,7 @@ test("the cap is ONE branch: no eviction, no adopt, no second budget in launch",
 
 test("an unavailable SDK refuses with its own reason rather than a busy lie", async () => {
   const h = harness({ sdkThrows: true });
-  assert.deepEqual(await h.launch(call({ channelId: CH, taskId: TASK })), { skipped: "no-sdk" });
+  assert.deepEqual(await h.launch(call({ channelId: CH, threadId: THREAD })), { skipped: "no-sdk" });
   assert.deepEqual(h.calls.started, []);
   assert.equal(h.calls.diag.length, 1, "and it is diagnosable");
 });
@@ -237,7 +237,7 @@ test("startSession's two rollbacks are reported, not swallowed", async () => {
   // true, that case fails and names both halves — which is the pin this line was pretending to
   // be.
   const held = harness({ startSessionReturns: { authHold: true } });
-  assert.deepEqual(await held.launch(call({ channelId: CH, taskId: TASK })), { skipped: "auth-hold" });
+  assert.deepEqual(await held.launch(call({ channelId: CH, threadId: THREAD })), { skipped: "auth-hold" });
   // ⚠ SPAWN-IDLE TOO, AND THAT IS THE HALF THAT WAS BROKEN (2026-08-22). "New Agent" is the one
   // lane an operator reaches by CLICKING, and `startSession`'s `parkedShell` early return used to
   // sit in FRONT of the credential preflight — so a signed-out machine answered `{sessionId,
@@ -245,7 +245,7 @@ test("startSession's two rollbacks are reported, not swallowed", async () => {
   // in test/spawn-idle-auth-hold.test.mjs; this is the shape the caller sees.
   const heldIdle = harness({ startSessionReturns: { authHold: true } });
   assert.deepEqual(
-    await heldIdle.launch(call({ channelId: CH, taskId: TASK, idle: true })),
+    await heldIdle.launch(call({ channelId: CH, threadId: THREAD, idle: true })),
     { skipped: "auth-hold" }
   );
   assert.equal(heldIdle.calls.started[0].parkedShell, true, "…on a real spawn-idle spec");
@@ -267,13 +267,13 @@ test("startSession's two rollbacks are reported, not swallowed", async () => {
 
 test("RUNTIME: the funnel forwards the caller's pick to the registry, unchanged", async () => {
   const h = harness();
-  await h.launch(call({ channelId: CH, taskId: TASK, runtime: "codex" }));
+  await h.launch(call({ channelId: CH, threadId: THREAD, runtime: "codex" }));
   assert.deepEqual(h.calls.acquired, ["codex"], "the id the caller chose is the id acquired");
 });
 
 test("RUNTIME: a lane that passes nothing acquires the DEFAULT — the shipped behaviour", async () => {
   const h = harness();
-  await h.launch(call({ channelId: CH, taskId: TASK }));
+  await h.launch(call({ channelId: CH, threadId: THREAD }));
   assert.deepEqual(h.calls.acquired, [undefined],
     "absent, not a literal: `resolve` is the one place 'no pick' becomes a runtime");
   assert.equal(h.calls.started.length, 1, "…and the launch still happens");
@@ -284,6 +284,6 @@ test("RUNTIME: an unusable runtime is still `no-sdk` — the wire vocabulary did
   // branch on it, and it means "this machine has no agent runtime" on EVERY runtime — renaming
   // it for a second adapter would be a vocabulary change dressed as a cleanup.
   const h = harness({ sdkThrows: true });
-  assert.deepEqual(await h.launch(call({ channelId: CH, taskId: TASK, runtime: "codex" })), { skipped: "no-sdk" });
+  assert.deepEqual(await h.launch(call({ channelId: CH, threadId: THREAD, runtime: "codex" })), { skipped: "no-sdk" });
   assert.equal(h.calls.started.length, 0, "nothing is constructed when the runtime is unusable");
 });

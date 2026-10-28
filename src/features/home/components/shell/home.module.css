@@ -1,0 +1,30 @@
+/* /home page geometry and its per-face surfaces. Every value is a token or a kit recipe
+   (docs/DESIGN-SYSTEM.md). */
+
+/* `--home-list-w` sizes the channel column AND the header cell above it, so the tab bar starts
+   on the record pane's left edge. Inherited, so it is declared on the panel both live inside. */
+.page {
+  --home-list-w: 290px;
+  background: var(--bg-overlay);
+}
+.pane {
+  background: var(--home-card);
+}
+/* The Channels face swaps the two: a white record pane on the warm panel. The Ontology face keeps
+   the white panel and whitens the pane behind the board too. */
+.page[data-face="channels"] {
+  background: var(--home-card);
+}
+.page[data-face="channels"] .pane,
+.page[data-face="ontology"] .pane {
+  background: var(--bg-overlay);
+}
+/* Identities is all white: its sections are flat and the cards' hairlines separate them. */
+.page[data-face="identities"] .pane {
+  background: var(--bg-overlay);
+}
+
+/* The Knowledge face whitens the record pane too; its cards keep their hairline and shadow. */
+.page[data-face="knowledge"] .pane {
+  background: var(--bg-overlay);
+}

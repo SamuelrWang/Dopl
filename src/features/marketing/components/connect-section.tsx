@@ -1,20 +1,16 @@
 "use client";
 
-import { useRef, useState, type ComponentType, type KeyboardEvent } from "react";
-import { LiquidGlass } from "@/shared/design/liquid-glass/liquid-glass";
-import {
-  ArrowRight,
-  Check,
-  Copy,
-  MousePointer2,
-  SquareTerminal,
-} from "lucide-react";
+import { useRef, useState } from "react";
+import { ArrowRight, Check, Copy } from "lucide-react";
+import { GET_STARTED_LABEL, GET_STARTED_URL } from "../constants";
 import { ScrollReveal } from "./scroll-reveal";
-import { useGlassScrub } from "./use-glass-scrub";
 
 /**
- * Tab IS the command: selecting one swaps the terminal line (keyed on tab id
- * so React remounts and replays the fade). Add/reorder clients via TABS.
+ * Laid out like Monitoring (Samuel 2026-10-21: no sky band, no glass): it
+ * wears control-section.tsx's `.lp-ctl-*` layout classes. Left: eyebrow,
+ * heading, one line, the logo tiles, CTAs. Right: Control's grey panel with
+ * the `dopl-mcp` code window (`.lp-connect-term`, the window sdk-section.tsx
+ * also wears) floating in it.
  */
 
 /**
@@ -25,271 +21,186 @@ import { useGlassScrub } from "./use-glass-scrub";
  */
 const MCP_URL = "https://www.usedopl.com/api/mcp";
 
+/** Codex CLI: `--url` is the flag for a Streamable-HTTP (remote) server. One
+ *  command covers Codex in the ChatGPT desktop app, CLI and IDE extension
+ *  (same ~/.codex/config.toml; verified 2026-08-17). */
+const CODEX_COMMAND = `codex mcp add dopl --url ${MCP_URL}`;
+
 /**
  * Cursor's official one-click install link: base64 of the mcp.json server
- * body. Verified current 2026-08-17 (cursor.com/docs/context/mcp/install-links;
- * the https variant is the one GitHub's own install button uses). Config is
- * `{"url": MCP_URL}` — regenerate the constant if MCP_URL ever changes:
+ * body (cursor.com/docs/context/mcp/install-links, verified 2026-08-17).
+ * Config is `{"url": MCP_URL}` — regenerate if MCP_URL ever changes:
  * `node -e 'console.log(Buffer.from(JSON.stringify({url:"<MCP_URL>"})).toString("base64"))'`
  */
 const CURSOR_INSTALL_URL = `https://cursor.com/en/install-mcp?name=dopl&config=${encodeURIComponent(
   "eyJ1cmwiOiJodHRwczovL3d3dy51c2Vkb3BsLmNvbS9hcGkvbWNwIn0=",
 )}`;
 
-type DevTab = {
-  id: string;
-  label: string;
-  icon: ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
-  command: string;
-  /** Short line under the terminal: where the command goes / what it covers. */
-  hint?: string;
-  /** Optional one-click install link rendered beside the hint. */
-  install?: { label: string; href: string };
-};
-
-/** Currentcolor so active/ghost tab states tint it with the text. */
-function ClaudeCodeGlyph({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 16 12" width="15" height="12" className={className} aria-hidden>
-      <g fill="currentColor">
-        <rect x="1" y="0" width="2" height="2" />
-        <rect x="13" y="0" width="2" height="2" />
-        <rect x="0" y="3" width="16" height="6" rx="1" />
-        <rect x="3" y="10" width="2" height="2" />
-        <rect x="11" y="10" width="2" height="2" />
-      </g>
-      <g fill="var(--lp-connect-glyph-bg, #ffffff)">
-        <rect x="4" y="5" width="2" height="2" />
-        <rect x="10" y="5" width="2" height="2" />
-      </g>
-    </svg>
-  );
-}
-
-function CodexGlyph({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 18 14" width="16" height="13" className={className} aria-hidden>
-      <path
-        d="M5.2 12.8h8a3.9 3.9 0 0 0 1.1-7.65A4.9 4.9 0 0 0 4.8 4.2a4.3 4.3 0 0 0 .4 8.6Z"
-        fill="currentColor"
-      />
-      <path
-        d="M6 6.2l2 1.9-2 1.9M9.6 10.4h2.6"
-        stroke="var(--lp-connect-glyph-bg, #ffffff)"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-    </svg>
-  );
-}
+/** `appIcon`: a full-bleed app icon, rounded like the OS does. */
+type Logo = { src: string; alt: string; appIcon?: boolean };
 
 /**
- * Per-product tabs, each showing that product's LOWEST-FRICTION path for a
- * nontechnical user (research verified 2026-08-17 against official docs):
- * Claude = the connector URL (account-synced: one add covers claude.ai,
- * Desktop AND Claude Code — preferred over the CLI command for that reason);
- * Codex = one command shared by CLI, IDE extension and the ChatGPT desktop
- * app (same ~/.codex/config.toml); Cursor = the official one-click install
- * link, mcp.json snippet as fallback.
+ * One white 3D tile per client, logo only (Samuel: no names; the name rides on
+ * aria-label/title). Files: public/img/logos/ (lobehub icons-static-svg@1.95.1,
+ * the desktop gemini asset, and grok-bot.png = the App Store icon of "Grok Bot"
+ * by X Corp., apps.apple.com/app/id6794501026 — NOT the Grok logo) and
+ * public/img/onboarding/.
+ * ⚠ Grok Bot: no official SpaceXAI doc for its MCP setup was found
+ * (2026-10-16), so the window claims no Grok Bot steps.
  */
-const TABS: readonly DevTab[] = [
+const LOGOS: readonly Logo[] = [
+  { src: "/img/onboarding/claude-logo.svg", alt: "Claude" },
+  { src: "/img/onboarding/chatgpt-logo.svg", alt: "ChatGPT" },
+  { src: "/img/logos/grok-bot.png", alt: "Grok Bot", appIcon: true },
+  { src: "/img/logos/gemini.svg", alt: "Gemini" },
+  { src: "/img/onboarding/muse-logo.svg", alt: "Muse" },
+  { src: "/img/onboarding/grok-logo.svg", alt: "Grok" },
+  { src: "/img/logos/ollama.svg", alt: "Ollama" },
+  { src: "/img/logos/cursor.svg", alt: "Cursor" },
+  { src: "/img/logos/openclaw.svg", alt: "OpenClaw" },
+];
+
+type Tok = { k?: "str"; t: string };
+
+/** Code-window rows: a `#` comment naming the client, then the value to copy. */
+const ROWS: readonly {
+  id: string;
+  label: string;
+  comment: string;
+  value: readonly Tok[];
+  copy: string;
+}[] = [
   {
     id: "claude",
-    label: "Claude",
-    icon: ClaudeCodeGlyph,
-    command: MCP_URL,
-    hint: "Paste in Settings → Connectors → Add custom connector — syncs to claude.ai, Desktop, and Claude Code.",
+    label: "Claude connector URL",
+    comment: "Claude: Settings › Connectors › Add custom connector",
+    value: [{ k: "str", t: MCP_URL }],
+    copy: MCP_URL,
   },
   {
     id: "codex",
-    label: "Codex",
-    icon: CodexGlyph,
-    // Codex CLI: `--url` is the flag for a Streamable-HTTP (remote) server.
-    command: `codex mcp add dopl --url ${MCP_URL}`,
-    hint: "One command covers the Codex CLI, IDE extension, and ChatGPT desktop app.",
+    label: "Codex command",
+    comment: "ChatGPT (Codex app, CLI, IDE)",
+    value: [{ t: "codex mcp add dopl --url " }, { k: "str", t: MCP_URL }],
+    copy: CODEX_COMMAND,
   },
   {
-    id: "cursor",
-    label: "Cursor",
-    icon: MousePointer2,
-    // The snippet is the manual fallback; the install link is the real path.
-    command: `"dopl": { "url": "${MCP_URL}" }`,
-    hint: "Or paste the snippet into ~/.cursor/mcp.json.",
-    install: { label: "Add to Cursor", href: CURSOR_INSTALL_URL },
-  },
-  {
-    id: "sdk",
-    label: "SDK",
-    icon: SquareTerminal,
-    // ⚠ Will not resolve: packages/dopl-client/package.json is `private: true`,
-    // unpublished. Publish or change this copy before the section goes live.
-    command: "npm install @dopl/client",
+    id: "any",
+    label: "MCP URL",
+    comment: "Any MCP client",
+    value: [{ k: "str", t: MCP_URL }],
+    copy: MCP_URL,
   },
 ];
 
 export function ConnectSection() {
-  const [active, setActive] = useState(0);
-  const [copied, setCopied] = useState(false);
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [copied, setCopied] = useState<string | null>(null);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Tab-independent for the same reason as the Ontology banner: the pad's
-  // natural size doesn't change with the selected tab (the terminal body is a
-  // fixed-height row), so the hook never needs to know `active`.
-  const { mode: glassMode, bannerRef, glassRef } = useGlassScrub();
-  const tab = TABS[active];
 
-  function select(next: number) {
-    setActive(next);
-    // Stale "Copied" under a command you didn't copy is a lie.
-    setCopied(false);
-  }
-
-  /** Roving tabindex: only the selected tab is tabbable, arrows move between. */
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const step =
-      event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
-    if (step === 0) return;
-
-    event.preventDefault();
-    const next = (active + step + TABS.length) % TABS.length;
-    select(next);
-    tabRefs.current[next]?.focus();
-  }
-
-  async function onCopy() {
+  async function onCopy(id: string, text: string) {
     try {
-      await navigator.clipboard.writeText(tab.command);
+      await navigator.clipboard.writeText(text);
     } catch {
       // Blocked (insecure origin, denied permission) — never claim a copy
       // that didn't happen.
       return;
     }
-    setCopied(true);
+    setCopied(id);
     if (resetTimer.current) clearTimeout(resetTimer.current);
-    resetTimer.current = setTimeout(() => setCopied(false), 600);
+    resetTimer.current = setTimeout(() => setCopied(null), 900);
   }
 
   return (
-    <ScrollReveal className="lp-connect">
-      <div className="lp-connect-inner">
-        <p className="lp-connect-eyebrow">Connect</p>
-        <h2 className="lp-connect-heading">Connect your agent via MCP, SDK, or CLI</h2>
+    <ScrollReveal className="lp-ctl lp-connect">
+      <div className="lp-ctl-inner">
+        <div className="lp-ctl-copy">
+          <p className="lp-ctl-eyebrow">Integrations</p>
+          <h2 className="lp-ctl-heading">Works with the tools you already use</h2>
+          <p className="lp-connect-lede">Add Dopl to any agent that speaks MCP.</p>
 
-        <div className="lp-connect-band" data-glass={glassMode} ref={bannerRef}>
-          {/* One glass panel for tabs + terminal, seated in a scrubbed BOX —
-              square until the band nears viewport centre, then it grows and
-              the pad's content fades in (./use-glass-scrub, same behavior
-              as the Ontology banner). `staticMap` while scrubbing, for the
-              reason hero-banner records: an animating box must not rebuild the
-              displacement map per frame. */}
-          <div className="lp-connect-glass-box" ref={glassRef}>
-            <LiquidGlass
-              radius={18}
-              staticMap={glassMode === "scrub"}
-              className="lp-connect-glass"
-              // Onboarding's edge + hover tilt (Samuel 2026-10-13). The tilt
-              // lives on the glass's own layers, so it composes with the
-              // scrub, which only ever writes this WRAPPER's box.
-              edge="rim"
-              tilt
-            >
-              <div className="lp-connect-glass-pad">
-                <div
-                  className="lp-connect-tabs"
-                  role="tablist"
-                  aria-label="Ways to connect"
-                  onKeyDown={onKeyDown}
+          <ul className="lp-connect-grid" aria-label="Supported agents">
+            {LOGOS.map((logo) => (
+              <li key={logo.alt}>
+                {/* Landing's white 3D button face (`.lp-icon-btn`). */}
+                <span
+                  role="img"
+                  aria-label={logo.alt}
+                  title={logo.alt}
+                  className="lp-icon-btn lp-connect-grid-btn"
                 >
-                  {TABS.map((item, i) => {
-                    const selected = i === active;
-                    const Icon = item.icon;
-                    return (
-                      <button
-                        key={item.id}
-                        id={`lp-connect-tab-${item.id}`}
-                        ref={(node) => {
-                          tabRefs.current[i] = node;
-                        }}
-                        type="button"
-                        role="tab"
-                        aria-selected={selected}
-                        aria-controls="lp-connect-panel"
-                        tabIndex={selected ? 0 : -1}
-                        className="lp-connect-tab"
-                        data-active={selected}
-                        onClick={() => select(i)}
-                      >
-                        <Icon className="lp-connect-tab-icon" size={15} strokeWidth={1.9} />
-                        {item.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- tiny static asset */}
+                  <img
+                    src={logo.src}
+                    alt=""
+                    className="lp-connect-grid-logo"
+                    data-app-icon={logo.appIcon || undefined}
+                  />
+                </span>
+              </li>
+            ))}
+          </ul>
 
-                <div className="lp-connect-term">
-                  <div className="lp-connect-term-bar">
-                    <span className="lp-connect-dots" aria-hidden>
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                    <button
-                      type="button"
-                      className="lp-connect-copy"
-                      data-copied={copied}
-                      onClick={onCopy}
-                    >
-                      <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
-                      {copied ? (
-                        <Check size={14} strokeWidth={2} aria-hidden />
-                      ) : (
-                        <Copy size={14} strokeWidth={1.8} aria-hidden />
-                      )}
-                    </button>
-                  </div>
-
-                  <div
-                    key={tab.id}
-                    id="lp-connect-panel"
-                    role="tabpanel"
-                    aria-labelledby={`lp-connect-tab-${tab.id}`}
-                    className="lp-connect-term-body"
-                  >
-                    <span className="lp-connect-prompt" aria-hidden>
-                      &rsaquo;
-                    </span>
-                    <code className="lp-connect-cmd">{tab.command}</code>
-                  </div>
-                </div>
-
-                {/* ⚠ Rendered for EVERY tab at a FIXED height (see `.lp-connect-hint`),
-                    empty or not — the glass-scrub hook measures the pad once and a
-                    tab-dependent height would break that measurement (same rationale
-                    as the fixed `.lp-connect-term-body`). */}
-                <div key={`${tab.id}-hint`} className="lp-connect-hint">
-                  {tab.install && (
-                    <a
-                      href={tab.install.href}
-                      className="lp-btn lp-btn--sm lp-btn--3d"
-                    >
-                      {tab.install.label}
-                      <ArrowRight size={14} strokeWidth={2} aria-hidden />
-                    </a>
-                  )}
-                  {tab.hint && <span>{tab.hint}</span>}
-                </div>
-              </div>
-            </LiquidGlass>
+          <div className="lp-ctl-cta">
+            <a href={GET_STARTED_URL} className="lp-btn lp-btn--sm lp-btn--3d">
+              {GET_STARTED_LABEL}
+              <ArrowRight size={14} strokeWidth={2} aria-hidden />
+            </a>
+            <a href="/playground" className="lp-ctl-secondary">
+              Try in playground
+            </a>
           </div>
         </div>
 
-        <div className="lp-connect-cta">
-          <a href="/playground" className="lp-btn lp-btn--sm lp-btn--3d">
-            Try in playground
-            <ArrowRight size={14} strokeWidth={2} aria-hidden />
-          </a>
+        <div className="lp-ctl-panel">
+          <div className="lp-connect-term">
+            <div className="lp-connect-term-bar">
+              <span className="lp-connect-dots" aria-hidden>
+                <i />
+                <i />
+                <i />
+              </span>
+              <span className="lp-connect-file">dopl-mcp</span>
+            </div>
+            <div className="lp-connect-code">
+              {ROWS.map((row) => {
+                const done = copied === row.id;
+                return (
+                  <div key={row.id} className="lp-connect-block">
+                    <code className="lp-connect-comment"># {row.comment}</code>
+                    <div className="lp-connect-row">
+                      <code className="lp-connect-cmd">
+                        {row.value.map((tok, i) => (
+                          <span key={i} className={tok.k ? `lp-connect-${tok.k}` : undefined}>
+                            {tok.t}
+                          </span>
+                        ))}
+                      </code>
+                      <button
+                        type="button"
+                        className="lp-connect-copy"
+                        data-copied={done}
+                        aria-label={done ? `${row.label} copied` : `Copy ${row.label}`}
+                        onClick={() => onCopy(row.id, row.copy)}
+                      >
+                        {done && <span aria-live="polite">Copied</span>}
+                        {done ? (
+                          <Check size={14} strokeWidth={2} aria-hidden />
+                        ) : (
+                          <Copy size={14} strokeWidth={1.8} aria-hidden />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              <code className="lp-connect-comment">
+                # Cursor:{" "}
+                <a href={CURSOR_INSTALL_URL} className="lp-connect-install">
+                  one-click install
+                </a>
+              </code>
+            </div>
+          </div>
         </div>
       </div>
     </ScrollReveal>

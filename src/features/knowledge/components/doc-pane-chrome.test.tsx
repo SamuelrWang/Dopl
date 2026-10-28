@@ -26,8 +26,9 @@ describe("DocBodySkeleton", () => {
     expect(html).not.toContain("bg-surface-raised-3");
   });
 
-  it("keeps the editor's geometry so the swap to real content doesn't reflow", () => {
-    expect(html).toContain("max-w-3xl");
+  it("keeps the document's geometry so the swap to real content doesn't reflow", () => {
+    // The head card, then the editor column; the measure is the host's `.editorScope`.
+    expect(html).toContain("white-card mb-6 flex flex-col gap-2.5 px-6 pt-4 pb-3");
     expect(html).toContain("px-6");
   });
 

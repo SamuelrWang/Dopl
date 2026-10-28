@@ -62,6 +62,18 @@ const CANONICAL = [
   "MembershipStatus",
   "WorkspaceKind",
   "IdentityVisibility",
+  "TaskStatus",
+  "SubtaskState",
+  "TaskActor",
+  "TaskLink",
+  "TaskActorRef",
+  "ChannelTaskSubtask",
+  "ChannelTaskNote",
+  "ChannelTask",
+  "ChannelTaskDetail",
+  "ChannelTaskPage",
+  "ChannelTaskWriteResult",
+  "ChannelTaskAction",
 ] as const;
 
 /**

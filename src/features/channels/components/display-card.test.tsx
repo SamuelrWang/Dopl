@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * THE UNIFIED DISPLAY CARD (docs/specs/unified-display.md §7.3) over a mocked TRANSPORT: every v2
- * block, the choice's two faces (decision / inline), recommended + why, answered states, the one
+ * block, the choice's option rows, recommended + why, answered states, the one
  * answer route, Save, and the degraded paths (unknown block, unreadable display, relaxed index).
  * Legacy decision parity lives in `escalation-card*.test.tsx`; v1 rows in
  * `device-aware-messages.test.tsx`.
@@ -111,7 +111,7 @@ describe("every v2 block", () => {
       ]),
     ]);
     expect(screen.getByText("Display")).toBeTruthy();
-    expect(screen.getByText("Deploy 1.38.0").className).toContain("font-semibold");
+    expect(screen.getByText("Deploy 1.38.0").className).toContain("text-heading");
     expect(screen.getByText("Loud").className).toContain("font-semibold");
     expect(screen.getByText("Quiet").className).toContain("text-text-secondary");
     expect(screen.getByText("Owner").tagName).toBe("DT");
@@ -154,7 +154,7 @@ describe("every v2 block", () => {
 });
 
 describe("a composed decision", () => {
-  it("draws the decision face: option badges, description, the recommendation LAST with its why", () => {
+  it("draws option rows: each carries its description, the recommended one its marker and why", () => {
     const { container } = draw([shown(DECISION_BLOCKS, {}, { metadata: {
       display: { spec_version: 2, display_id: "d-1", blocks: DECISION_BLOCKS },
       [ESCALATION_METADATA_KEY]: { issue: "Ship the migration now?", context: "", options: [
@@ -162,44 +162,47 @@ describe("a composed decision", () => {
         { label: "Wait for review", consequence: "Blocked until tomorrow." } ],
         recommendation: { index: 0, why: "Reversible." } },
     } })]);
-    expect(screen.getByText("Needs Your Decision")).toBeTruthy();
+    expect(screen.getByText("Needs your decision")).toBeTruthy();
     expect(container.querySelector("[data-escalation-id='m-show']")).toBeTruthy();
-    expect(screen.getByText("Live in ~10 minutes.")).toBeTruthy();
-    expect(screen.getByText("Recommended:")).toBeTruthy();
-    expect(screen.getByText("Reversible.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Option A: Ship now" })).toBeTruthy();
+    const ship = screen.getByRole("button", { name: "Ship now" });
+    expect(ship.textContent).toContain("Live in ~10 minutes.");
+    expect(ship.textContent).toContain("Recommended");
+    expect(ship.textContent).toContain("Reversible.");
+    expect(ship.getAttribute("aria-describedby")).toBeTruthy();
+    // Beside a choice the text blocks are the context, at its smaller step.
+    expect(screen.getByText("Additive and reversible.").className).toContain("text-small");
   });
 
   it("answers through the one route, then re-reads; a failure toasts and gives the buttons back", async () => {
     request.mockRejectedValueOnce(new Error("boom"));
     draw([shown(DECISION_BLOCKS)]);
-    fireEvent.click(screen.getByRole("button", { name: "Option B: Wait for review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Wait for review" }));
     await waitFor(() =>
       expect(request).toHaveBeenCalledWith(
         `/api/channels/${CHANNEL_ID}/messages/m-show/display/answer`,
         { method: "POST", body: { index: 1 } }
       )
     );
-    expect(await screen.findByRole("button", { name: "Option B: Wait for review" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Wait for review" })).toBeTruthy();
     expect(toasts).toContain("Couldn't send that answer");
   });
 
-  it("a stored answer names who chose, greys the rest, and drops the buttons", () => {
+  it("a stored answer names who chose, quiets the rest, and drops the buttons", () => {
     const { container } = draw([
       shown(DECISION_BLOCKS, {
         answer: { block_id: "ship", index: 0, choice: "Ship now", at: "x", via: "glasses", by: PEER },
       }),
     ]);
-    expect(screen.queryByRole("button", { name: /Option/ })).toBeNull();
+    expect(screen.queryAllByRole("button", { name: /Ship now|Wait for review/ })).toHaveLength(0);
     expect(screen.getByText(/Diana chose/).textContent).toBe("Diana chose Ship now");
     const [chosen, rest] = Array.from(container.querySelectorAll("[data-option-index]")) as HTMLElement[];
-    expect(chosen.className).toContain("auth-btn-3d");
-    expect(rest.className).toContain("bg-[var(--seg-fill)]");
+    expect(chosen.getAttribute("data-chosen")).toBe("true");
+    expect(rest.getAttribute("data-quiet")).toBe("true");
   });
 
   it("a SUPERSEDED display is closed: no buttons, a muted Replaced line", () => {
     const { container } = draw([shown(DECISION_BLOCKS, { superseded_by: "m-newer" })]);
-    expect(screen.queryByRole("button", { name: /Option/ })).toBeNull();
+    expect(screen.queryAllByRole("button", { name: /Ship now|Wait for review/ })).toHaveLength(0);
     expect(screen.getByText("Replaced").className).toContain("text-text-muted");
     expect(container.querySelector("[data-superseded='true']")).toBeTruthy();
   });
@@ -209,19 +212,19 @@ describe("a composed decision", () => {
       new ApiError(409, "DISPLAY_SUPERSEDED", "That display was replaced.")
     );
     draw([shown(DECISION_BLOCKS)]);
-    fireEvent.click(screen.getByRole("button", { name: "Option A: Ship now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ship now" }));
     await waitFor(() => expect(request).toHaveBeenCalled());
-    await screen.findByRole("button", { name: "Option A: Ship now" });
+    await screen.findByRole("button", { name: "Ship now" });
     expect(toasts).toEqual([]);
   });
 
-  it("a bare choice (no descriptions) is the inline face: the buttons carry the labels", () => {
+  it("a bare choice (no descriptions) is the same rows, each a label", () => {
     draw([shown([{ type: "choice", options: [{ label: "Yes" }, { label: "No" }] }])]);
     expect(screen.getByRole("button", { name: "Yes" })).toBeTruthy();
     expect(screen.queryByText("Option A")).toBeNull();
   });
 
-  it("dopl_request_decision's display keeps the old card's bar: no Save", () => {
+  it("dopl_request_decision's display offers no Save", () => {
     draw([shown(DECISION_BLOCKS, { origin: "dopl_request_decision" })]);
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
   });
@@ -236,7 +239,7 @@ describe("a composed decision", () => {
         metadata: { [ESCALATION_METADATA_KEY]: { issue: "Which?", context: "", options, recommendation: null } },
       }),
     ]);
-    expect(screen.getByRole("button", { name: "Option G: Pick 7" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Pick 7" })).toBeTruthy();
     expect(screen.queryByText("prose")).toBeNull();
   });
 });

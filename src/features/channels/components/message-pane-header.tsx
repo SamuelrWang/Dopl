@@ -1,14 +1,16 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ChevronRight, PanelRight, Pin } from "lucide-react";
+import { PanelRight, Pin } from "lucide-react";
+import { Breadcrumb } from "@/shared/ui/breadcrumb";
 import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { cn } from "@/shared/lib/utils";
 import { IconButton } from "./bits";
 
 /**
- * The center column's header in both chromes. The channel name wears `IDENTITY_NAME_TEXT` by import,
- * never re-typed (docs/DESIGN-SYSTEM.md); the thread title and the pop-out `h1` keep their own type.
+ * The center column's header in both chromes: the shared `Breadcrumb` at the title step (channel,
+ * then the open thread, the channel crumb being the way back out). A lone channel name wears
+ * `IDENTITY_NAME_TEXT` by import, never re-typed; the pop-out `h1` keeps its own type.
  */
 export function PaneHeader({
   channelName,
@@ -45,7 +47,7 @@ export function PaneHeader({
   // Pop-out window: the title only; every page control acts on something this window lacks.
   if (chrome === "window") {
     return (
-      <header className="flex h-[56px] shrink-0 items-center gap-1.5 border-b border-border-default px-4">
+      <header className="flex h-14 shrink-0 items-center gap-1.5 border-b border-border-default px-4">
         <h1 className="truncate text-body font-semibold text-text-primary">
           {threadTitle ?? channelName}
         </h1>
@@ -54,35 +56,25 @@ export function PaneHeader({
   }
 
   return (
-    <header className="flex h-[56px] shrink-0 items-center gap-1 border-b border-border-default px-4">
-      <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1">
-        {threadTitle === null ? (
-          hideChannelCrumb ? null : (
-            <span className={cn("truncate", IDENTITY_NAME_TEXT)}>
-              {channelName}
-            </span>
-          )
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={onExitThread}
-              className={cn(
-                "truncate rounded-[7px] px-1 py-0.5 transition-colors hover:bg-surface-raised-1 hover:text-text-primary",
-                IDENTITY_NAME_TEXT,
-                // Ink last: the way-out crumb rests muted, overriding `IDENTITY_NAME_TEXT`'s ink.
-                "text-text-secondary"
-              )}
-            >
-              {channelName}
-            </button>
-            <ChevronRight size={12} className="shrink-0 text-text-disabled" />
-            <span className="truncate text-body font-semibold text-text-primary">
-              {threadTitle}
-            </span>
-          </>
-        )}
-      </nav>
+    <header className="flex h-14 shrink-0 items-center gap-1 border-b border-border-default px-4">
+      <Breadcrumb
+        className="text-title"
+        items={
+          threadTitle === null
+            ? hideChannelCrumb
+              ? []
+              : [
+                  {
+                    key: "channel",
+                    label: <span className={IDENTITY_NAME_TEXT}>{channelName}</span>,
+                  },
+                ]
+            : [
+                { key: "channel", label: channelName, onSelect: onExitThread },
+                { key: "thread", label: threadTitle },
+              ]
+        }
+      />
       {/* The pin IS the channel favourite (`channel_members.favorited_at`); its label names the channel.
           `bare` drops the button face; `className` wins in `cn` for the 24px box and the `text-warning` token. */}
       <IconButton

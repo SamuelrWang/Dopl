@@ -1,0 +1,167 @@
+/* Account rail — the ACCOUNT-level strip left of the workspace chrome.
+   Home (personal, cross-org surface) pinned top; workspace tiles under it;
+   create at the end. Shell chrome like app-shell.module.css: paints the same
+   --home-frame, so rail, sidebar and shell read as ONE slab. */
+
+.rail {
+  width: var(--shell-rail-w);
+  flex: 0 0 var(--shell-rail-w);
+  /* THE FRAME (Samuel, 2026-08-30). It was `--surface-cta` (#1c2127, the panel
+     header ink) — which /home then had to override per-mount with
+     `!bg-home-frame` to get its own slab. One token now, so the rail matches
+     /home BY CONSTRUCTION and that override is deleted rather than duplicated
+     onto the workspace shell. */
+  background: var(--home-frame);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  /* 🔒 THE HOME TILE'S TOP EDGE IS THE PANEL'S TOP EDGE (Samuel, 2026-09-09:
+     the Home icon *"is like slightly higher than where the right panel starts.
+     It should be flush."*).
+
+     ⚠ THE OLD 7px WAS COPIED FROM `.sidebar`'s padding AND THE NOTE HERE SAID SO
+     — *"7px top = .sidebar's padding-top, so the Home tile's top edge lands on
+     the brand pill's top edge"* — WHICH STOPPED BEING TRUE AT THE 2026-08-30
+     RESTRUCTURE. The sidebar is a region INSIDE the panel now, so its 7px is
+     measured from the panel's inside; the rail is a SIBLING of `.surface` and
+     measures from the window. MEASURED: tile top y=7, panel top
+     y = `--shell-gap-top` (6, `.surface`'s margin) + `--page-float-gap-top` (7,
+     the float's own) = 13. Six pixels high, exactly as reported.
+
+     ⚠ THE SUM, NOT THE NUMBER 13. Both halves are tokens with other readers, so
+     a change to either moves this with it; a literal here is the drift that
+     produced the misalignment in the first place. */
+  padding: calc(var(--shell-gap-top) + var(--page-float-gap-top)) 0 20px;
+  overflow: hidden;
+}
+
+/* THE ONE INK A TILE LIGHTS UP WITH — hover AND selection, by reference
+   (Samuel, 2026-09-09). See `.tile:hover` / `.tile[aria-current="page"]`. */
+.rail {
+  --rail-tile-fill: rgba(255, 255, 255, 0.1);
+}
+
+/* One ROUNDED-SQUARE tile face for every row: Home, workspaces, create.
+   Resting face is transparent on the shell surface; hover = the nav-chip fill;
+   the ACTIVE tile composes the kit's `.raised-tab` in the TSX (same selected
+   face as the sidebar's active chip).
+
+   ⚠ 40px, NOT 38 (Samuel, 2026-08-24). The rail is 54px, so a 40px tile leaves
+   7px each side — EQUAL to the 7px gap between tiles and to the rail's own top
+   pad, which is what the eye was reading as "too much side padding". The fix
+   grows the tile; the rail's width is shell geometry and does not move.
+
+   ⚠ Rounded SQUARE, not a full circle (Samuel, 2026-08-25). Radius 13px on the
+   40px tile — the squircle end of the design system's radius scale (between the
+   nav-chip's 10 and page-float's 14). The glyph inside wears a MATCHING rounded
+   square (below), so a circular glyph never sits in a squared tile. */
+.tile {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 13px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.12s ease;
+}
+
+/* The workspace GLYPH fills the tile (Samuel, 2026-08-25: "just increase their
+   size and they'll be centered"). 36px inside the 40px tile leaves an EVEN 2px
+   ring on all four sides — grown from the old 34px so the small floating glyph
+   now reads as filling its tile. Radius 11px is a rounded square that matches
+   the tile: the corner geometry is concentric (2px inset + 11px glyph radius =
+   the tile's 13px radius), so glyph and tile corners share one curve.
+   ⚠ `> span` and not `> *`: the create tile's child is a `<svg>` (lucide
+   `Plus`, sized by its own prop) and forcing 36px on it blows the icon up. */
+.tile > span {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  font-size: var(--text-title);
+}
+/* 🔒 SELECTION AND HOVER ARE ONE DECLARATION (Samuel, 2026-09-09: *"the white
+   bordering for the selected workspace's icon … is thicker at the top than at
+   the bottom … i like the thickness of the gray border that appears when i
+   hover over the icon. Just have it be that. and instead of white, make it a
+   gray bordering"*).
+
+   ⚠ WHAT THE "BORDER" IS: the tile is 40px and its glyph is 36px, so a filled
+   tile shows an EVEN 2px ring of that fill on all four sides. Hover has always
+   drawn exactly that. THE SELECTED TILE DID NOT — it composed the kit's
+   `.raised-tab` in the TSX, whose recipe is
+   `inset 0 0 0 1px <line>, inset 0 2px 0 rgba(255,255,255,.9),
+   inset 0 -2px 0 rgba(0,0,0,.06)`: a 2px WHITE bevel across the top and a 2px
+   near-invisible dark one across the bottom. Against the dark rail that reads
+   as a white ring thicker at the top, which is precisely the report. It is not
+   an offset, a `ring-offset` or a translate — it is the bevel, and it is a
+   deliberate part of a face built for a LIGHT ground.
+
+   ⚠ SO THE SELECTED TILE NO LONGER COMPOSES `.raised-tab`, and the two states
+   read ONE custom property rather than two copies of a value — they cannot
+   drift, which is the whole ask. `aria-current="page"` is the hook because the
+   TSX already sets it for assistive tech; nothing new is added to the markup.
+   ⚠ `.raised-tab` STAYS on the sidebar's active nav chip and on every segmented
+   pill — those stand on the light panel, where that face is correct. */
+.tile:hover,
+.tile[aria-current="page"] { background: var(--rail-tile-fill); }
+.tile:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline-offset: 2px;
+}
+
+/* The Dopl mark is a full-bleed rounded-square app-icon (dark ground + starburst,
+   edge to edge), so it fills the tile exactly like a workspace image glyph:
+   36px with the matching 11px rounded-square crop, even 2px ring. Kept in
+   lockstep with `.tile > span` above so Home and the workspace tiles read as
+   one treatment. */
+.homeMark {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+
+/* ⚠ `.divider` — a 22×1 `rgba(255,255,255,.18)` rule between Home and the
+   workspace tiles — STOOD HERE AND IS DELETED (Samuel, 2026-08-30: the selected
+   rail tile *"shows a double borderline at the top"*). MEASURED cause: the rule
+   sat 7px above the first workspace tile, and on a workspace page that tile is
+   the selected one, wearing `.raised-tab`'s `inset 0 0 0 1px` hairline. Two
+   horizontal lines 7px apart, reading as one doubled border on the tile.
+
+   ⚠ THE BOUNDARY IT DREW SURVIVES AS RHYTHM, NOT AS A SECOND LINE. Home is
+   still not a sibling of the workspace tiles: `.workspaces` opens with 4px of
+   its own on top of the rail's 7px gap, so the account/container break is 11px
+   where a tile-to-tile gap is 7px. **Do not put the rule back** — the only
+   horizontal line in this rail is the selected tile's, which is the one that
+   carries state. */
+.workspaces {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.workspaces::-webkit-scrollbar { width: 0; }
+
+/* THE GATED CREATE TILE'S FACE (Samuel, 2026-10-15): a DASHED rounded square
+   around the +, in the +'s own ink and stroke (lucide `strokeWidth={1.8}` at
+   size 18 on a 24 viewBox draws a 1.35px line, so the border is 1.35px too, and
+   `currentColor` is the tile's text colour, which is what the + strokes with).
+   ⚠ It is a `span` child, so `.tile > span` above already sizes it to the glyph
+   tiles' 36px with the matching 11px radius: one geometry for every tile. The
+   rule below only adds the outline and centres the icon. */
+.tile > .createOutline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1.35px dashed currentColor;
+}

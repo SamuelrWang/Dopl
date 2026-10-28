@@ -125,12 +125,12 @@ test("M3: the read set is exactly the own-channel READ-ONLY ops, and nothing els
   // `direct_agent` IS **NOT** HERE AND MUST NOT BE — that op starts a TURN on a running process,
   // so it takes the two-axis conjunction in `session-own-direct.js`, and the case below that
   // walks `ALWAYS_GATED` is what would catch it being mistaken for a read.
-  // ⚠ FOUR KEYS SINCE THE COLLAPSE (F-578), and the mapping adds nothing: `read` absorbed
+  // ⚠ FOUR KEYS CAME OUT OF THE COLLAPSE (F-578), and the mapping adds nothing: `read` absorbed
   // `await` and `get_thread`; `status` is `read_sessions` + `read_directions`; `rooms.threads`
   // and `rooms.members` were `list_threads` and `members`. ⚠ THE `rooms` ENTRIES ARE DOTTED —
   // four of that op's actions WRITE, so a bare one would hand the INBOUND half a lane that
-  // opens channels and invites people into them.
-  assert.deepEqual(READS, ["read", "status", "rooms.threads", "rooms.members"]);
+  // opens channels and invites people into them. `rooms.tasks` (2026-10-26) reads a channel's tasks.
+  assert.deepEqual(READS, ["read", "status", "rooms.threads", "rooms.members", "rooms.tasks"]);
   for (const shape of ALWAYS_GATED.concat(MARKERS, THREAD_OPENS, ESCALATES, [{ op: "send" }])) {
     assert.equal(profiles.isOwnChannelRead(shape, CH), false, JSON.stringify(shape));
   }
@@ -159,17 +159,23 @@ test("M3: the read set is exactly the own-channel READ-ONLY ops, and nothing els
   assert.deepEqual(profiles.OWN_CHANNEL_SEND_OPS, ["send"]);
   assert.deepEqual(profiles.OWN_CHANNEL_ARTIFACT_OPS,
     ["artifact.create", "artifact.add", "artifact.remove", "artifact.dissolve"]);
+  assert.deepEqual(profiles.OWN_CHANNEL_TASK_OPS, [
+    "task.create_task", "task.update_task", "task.set_status", "task.assign", "task.unassign",
+    "task.add_subtask", "task.update_subtask", "task.add_note",
+  ]);
   assert.deepEqual(profiles.OWN_CHANNEL_OUTBOUND_OPS,
-    profiles.OWN_CHANNEL_SEND_OPS.concat(profiles.OWN_CHANNEL_ARTIFACT_OPS));
+    profiles.OWN_CHANNEL_SEND_OPS.concat(profiles.OWN_CHANNEL_ARTIFACT_OPS, profiles.OWN_CHANNEL_TASK_OPS));
   assert.ok(!READS.includes("send"), "the outbound op is not a read");
-  // ⚠ THE FOLD IS NOT A READ EITHER, and it is DOTTED for the reason `rooms` is: a bare
-  // `artifact` entry anywhere would carry every action the op grows later, unread and unargued.
-  for (const key of profiles.OWN_CHANNEL_ARTIFACT_OPS) {
-    assert.ok(!READS.includes(key), `${key} writes`);
-    assert.ok(key.startsWith("artifact."), `${key} is keyed <op>.<action>`);
+  // ⚠ THE FOLD AND THE TASK WRITES ARE NOT READS EITHER, and they are DOTTED for the reason `rooms`
+  // is: a bare entry anywhere would carry every action the op grows later, unread and unargued.
+  for (const [op, keys] of [["artifact", profiles.OWN_CHANNEL_ARTIFACT_OPS], ["task", profiles.OWN_CHANNEL_TASK_OPS]]) {
+    for (const key of keys) {
+      assert.ok(!READS.includes(key), `${key} writes`);
+      assert.ok(key.startsWith(`${op}.`), `${key} is keyed <op>.<action>`);
+    }
+    assert.ok(!profiles.OWN_CHANNEL_OUTBOUND_OPS.includes(op),
+      `the bare ${op} dispatcher is not on the lane — named actions are`);
   }
-  assert.ok(!profiles.OWN_CHANNEL_OUTBOUND_OPS.includes("artifact"),
-    "the bare dispatcher is not on the lane — four named actions are");
 });
 
 test("M3: an own-channel read is ALLOWED under auto_inbound / auto_both and GATES under ask", () => {
@@ -293,7 +299,7 @@ test("M3: a read's gate says WHICH fact stopped it, and an allow says which rule
 test("M3: a read grant is still OP-SCOPED — one read approved does not approve the others", () => {
   // FIX F2's rule is untouched by the posture change: the KEY covers the shape the operator saw.
   const readKey = profiles.grantKeyFor(DOPL_CHANNEL_TOOL, { op: "read" }, CH);
-  const held = { toolName: DOPL_CHANNEL_TOOL, allowForTask: [readKey] };
+  const held = { toolName: DOPL_CHANNEL_TOOL, allowForThread: [readKey] };
   assert.equal(decide({ ...held, input: { op: "read" } }), "allow");
   assert.equal(decide({ ...held, input: { op: "get_thread" } }), "gate", "each op earns its own key");
   assert.equal(decide({ ...held, input: { op: "post", body: "hi" } }), "gate");
@@ -302,7 +308,7 @@ test("M3: a read grant is still OP-SCOPED — one read approved does not approve
 
 // ── THE CHANNEL-LEVEL AGENT'S PULL LANE (2026-08-22, Samuel's refinement) ─────────
 //
-// A CHANNEL-LEVEL agent (`taskId: null`, key `<channelId>::<agentId>`) is FED only untagged
+// A CHANNEL-LEVEL agent (`threadId: null`, key `<channelId>::<agentId>`) is FED only untagged
 // main-room posts — thread traffic is never pushed to it, not even when a thread message
 // @-mentions its id. The supervisor use case ("monitor the threads and the agents working in
 // them") is therefore answered by READING ON DEMAND, and that only works if a THREAD-SCOPED
@@ -336,9 +342,9 @@ test("CHANNEL AGENT: a THREAD-scoped read of its own channel auto-allows under t
 
 test("CHANNEL AGENT: the thread argument changes NOTHING — the scope is the channel", () => {
   // ⚠ The pin against a future "tighten the read to the session's own thread". A channel-level
-  // session HAS no thread (`taskId` is ''), so a thread-scoped read rule would deny every one of
+  // session HAS no thread (`threadId` is ''), so a thread-scoped read rule would deny every one of
   // these and the supervisor lane would silently stop working.
-  for (const thread of [THREAD, "", null, undefined, "task-legacy-7"]) {
+  for (const thread of [THREAD, "", null, undefined, "thread-legacy-7"]) {
     assert.equal(
       decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "read", channel: CH, thread }, messageMode: "auto_inbound" }),
       "allow",

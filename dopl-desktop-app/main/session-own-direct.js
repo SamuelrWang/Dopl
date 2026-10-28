@@ -68,7 +68,7 @@
 // `user_id` is the PEER's, so the row it writes is stamped with the PEER's `operator_user_id` and
 // only the PEER's desktop can claim it — a peer cannot address this Mac at all, in any posture,
 // and there is no argument on this op that says otherwise (no schema on the path accepts an
-// operator id). The in-process twin, `session-reopen.js › messageByTask`'s F-373 check, refuses a
+// operator id). The in-process twin, `session-reopen.js › messageByThread`'s F-373 check, refuses a
 // direction whose `operatorUserId` differs from the target session's stamp and fails closed on an
 // unstamped one. **Both stand exactly as they did; this ruling widens WHO MAY ASK on the
 // operator's own machine, never WHOSE MACHINE MAY BE ASKED.**

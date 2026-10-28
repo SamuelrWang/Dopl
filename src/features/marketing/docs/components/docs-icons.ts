@@ -2,8 +2,10 @@ import {
   Bell,
   Bot,
   Car,
+  Code,
   FileClock,
   Glasses,
+  Headphones,
   House,
   Laptop,
   Link2,
@@ -17,7 +19,6 @@ import {
   Smartphone,
   Speaker,
   SquareTerminal,
-  Watch,
   Workflow,
   type LucideIcon,
 } from "lucide-react";
@@ -32,16 +33,16 @@ export const DOC_ICONS: Record<DocIcon, LucideIcon> = {
   connect: Link2,
   route: Route,
   glasses: Glasses,
+  headphones: Headphones,
   phone: Smartphone,
-  notch: Laptop,
-  desktop: MonitorSmartphone,
+  desktop: Laptop,
   speaker: Speaker,
-  watch: Watch,
   car: Car,
   robot: Bot,
   quickstart: Rocket,
   api: SquareTerminal,
   security: ShieldCheck,
+  code: Code,
 };
 
 /** Sidebar icons: the home row and one per section. */
@@ -52,6 +53,7 @@ export const NAV_ICONS: Record<"home" | DocSectionId, LucideIcon> = {
   security: ShieldCheck,
   pricing: Receipt,
   changelog: FileClock,
-  "use-cases": Workflow,
   devices: MonitorSmartphone,
+  core: Workflow,
+  sdks: Code,
 };

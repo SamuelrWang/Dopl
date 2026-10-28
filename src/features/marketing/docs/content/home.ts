@@ -1,3 +1,4 @@
+import { CATEGORY_ROWS } from "./pages-categories";
 import type { DocIcon, DocSectionId } from "./types";
 
 /**
@@ -7,11 +8,11 @@ import type { DocIcon, DocSectionId } from "./types";
  */
 export const DOCS_HOME_COPY = {
   title: "Welcome to the Dopl Docs",
-  subtitle: "Guides, device pages and API references for building with Dopl.",
+  subtitle: "Device categories, shared setup and API references for building with Dopl.",
 };
 
 export const HOME_CARDS: { slug: string; icon: DocIcon; title: string }[] = [
-  { slug: "start-here", icon: "quickstart", title: "Quickstart" },
+  { slug: "quickstart", icon: "quickstart", title: "Quickstart" },
   { slug: "api-reference", icon: "api", title: "API Reference" },
   { slug: "security", icon: "security", title: "Security" },
 ];
@@ -21,27 +22,29 @@ export const HOME_LISTS: {
   icons: Record<string, DocIcon>;
 }[] = [
   {
-    section: "use-cases",
+    section: "devices",
     icons: {
-      "use-cases/show": "show",
-      "use-cases/ask": "ask",
-      "use-cases/notify": "notify",
-      "use-cases/connect-devices": "connect",
-      "use-cases/routing": "route",
+      devices: "desktop",
+      ...Object.fromEntries(CATEGORY_ROWS.map((c) => [`devices/${c.slug}`, c.icon])),
     },
   },
   {
-    section: "devices",
+    section: "core",
     icons: {
-      "devices/even-realities-g2": "glasses",
-      "devices/phone-push": "phone",
-      "devices/mac-notch": "notch",
-      "devices/desktop": "desktop",
-      "devices/google-home": "speaker",
-      "devices/apple-watch": "watch",
-      "devices/cars": "car",
-      "devices/meta-ray-ban": "glasses",
-      "devices/robots": "robot",
+      overview: "route",
+      "concepts/projects-and-keys": "security",
+      "concepts/users-and-connections": "connect",
+      "guides/connect-a-device": "connect",
+      "guides/deliver-a-message": "notify",
+      "guides/handle-answers": "ask",
+      "concepts/devices-and-capabilities": "code",
+      "concepts/permissions-and-safety": "security",
+      "concepts/context-profiles-and-routing": "route",
+      "guides/customize-the-glasses-profile": "glasses",
+      "concepts/displays": "show",
+      "guides/custom-display": "show",
+      "concepts/events-and-analytics": "api",
+      "guides/test-mode": "code",
     },
   },
 ];

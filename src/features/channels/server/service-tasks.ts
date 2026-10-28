@@ -1,305 +1,176 @@
 import "server-only";
-import type { ChannelThread, ThreadMode } from "../types";
-import type { TaskCreateInput } from "../schema";
-import {
-  ChannelAddresseeNotMemberError,
-  ChannelChatAddressedError,
-  TaskForbiddenError,
-  TaskNotFoundError,
-  TaskSelfTargetError,
-} from "./errors";
-import type { ChannelTaskRow } from "./dto";
-import { mapTaskRow } from "./dto";
-import * as repo from "./repository";
+import type {
+  ChannelTaskDetail,
+  ChannelTaskPage,
+  ChannelTaskWriteResult,
+  TaskStatus,
+} from "../types";
+import type { TaskActionInput, TaskActionOf } from "../schema-tasks";
+import { CHANNEL_TASK_LIST_LIMIT } from "../constants";
+import { TaskLinkUnresolvedError } from "./errors";
+import { mapTaskRow } from "./dto-tasks";
+import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
-import { postMessage } from "./service-writes";
+import * as repoThreads from "./repository-threads";
+import { insertOrConverge } from "./service-mailbox-idempotency";
+import { loadVisibleChannel, type ChannelContext } from "./service-shared";
+import { assertAssignable, assignActor, assignTask, unassignTask } from "./service-tasks-assign";
+import { addNote, addSubtask, updateSubtask } from "./service-tasks-children";
 import {
-  requireMemberChannel,
-  stripNulDeep,
-  UNIQUE_VIOLATION,
-  type ChannelContext,
-} from "./service-shared";
+  callerActor,
+  loadTaskRow,
+  readTaskDetail,
+  requireTaskEditor,
+  resolveTaskActor,
+  taskResult,
+  type TaskActorIds,
+} from "./service-tasks-shared";
 
 /**
- * First-class channel threads: CREATE and SET MODE. Transcript rides on
- * `postMessage`. The rest of the lifecycle:
- *   - `service-tasks-lifecycle.ts` — CLOSE and REOPEN, the two writes that move
- *     `status`, sharing a guard-then-echo shape.
- *   - `service-tasks-propose.ts` — PROPOSE a close (mutates nothing).
- *
- * ⚠ Server boundary: wire/storage name `task` == domain name `thread`. This lane
- * is STORAGE side and keeps the `task` spelling throughout, but returns
- * {@link ChannelThread} values — everything a human or agent reads says
- * `thread`.
+ * Channel tasks (PLAN.md R5–R10). Reads need channel visibility; writes need membership, and a
+ * guest may only add notes (`service-tasks-shared.ts`). There is no delete (R10). Status moves
+ * through `set_status` alone (R5).
  */
 
-/**
- * The initiating request's idempotency key, derived from the task id. ⚠ The task
- * row and its opening message are two writes with NO transaction around them, so
- * this key is what makes the PAIR converge — whichever attempt gets there posts,
- * every later one dedups on `channel_messages_client_msg_author_key`
- * (`20260822120000`, which widened that index to include the author).
- *
- * ⚠ THE WIDENING IS INVISIBLE TO THIS KEY AND THAT IS NOT LUCK. Only the thread's
- * CREATOR ever reaches this post — the thread probe is author-scoped too
- * (`repository-tasks.ts › findOwnTaskByClientId`, 2026-09-02), so every writer of
- * `task-open-<taskId>` for a given task is the same user by construction and the
- * message dedup still fires.
- */
-function openingMessageClientId(taskId: string): string {
-  return `task-open-${taskId}`;
-}
-
-/**
- * Post (or re-post) a task's initiating request — EXACTLY ONCE per task, on
- * every path that returns that task.
- *
- * ⚠ Insert-then-post as separate unguarded steps loses the request permanently:
- * if the insert lands and the post throws, the retry hits the `client_msg_id`
- * short-circuit, returns the stored task and NEVER posts, leaving a thread in
- * the panel with no message for the responder's desktop to route.
- *
- * ⚠ Both writes stay in the SAME idempotency envelope rather than moving into
- * one RPC — `postMessage` owns the addressee check, the reserved-key strip and
- * the task-key stamping, and forking that into PL/pgSQL gives the metadata
- * contract two homes. So the message gets its own deterministic key and the post
- * is re-driven on every create path.
- *
- * ⚠ Fields come from the STORED task row, never the retry's input, so a re-send
- * cannot rewrite the title or re-address the request.
- */
-async function postOpeningMessage(
-  ctx: ChannelContext,
-  channelId: string,
-  task: { id: string; title: string; target_user_id: string | null },
-  // `handoff`: the opener carries the reserved `metadata.handoff` stamp so the
-  // OPERATOR'S desktop opens the requester session. `intent:"chat"` makes it a
-  // record. ⚠ Neither is stored on the task row, so a retry re-sends them.
-  { body, handoff, intent }: Pick<TaskCreateInput, "body" | "handoff" | "intent">,
-  // Request fan-out: the opener carries the reserved `metadata.fanoutGroup`
-  // stamp so the N threads of ONE request render as ONE card. ⚠ Server-internal
-  // only — {@link TaskCreateOptions}.
-  fanoutGroupId?: string
-): Promise<number> {
-  const message = await postMessage(
-    ctx,
-    channelId,
-    {
-      body,
-      kind: "message",
-      intent,
-      toUserId: task.target_user_id ?? undefined,
-      summary: task.title,
-      metadata: { taskId: task.id },
-      clientMsgId: openingMessageClientId(task.id),
-    },
-    { handoff, fanoutGroupId }
-  );
-  // ⚠ Seq travels back out — it is the requester's `await` cursor and is only
-  // known here. Every return path is idempotent, so a dedup'd re-post yields the
-  // STORED message and the same seq, never a new one.
-  return message.seq;
-}
-
-/**
- * What `createTask` hands back: the thread plus the seq of its opening message —
- * the cursor a requester passes straight to `dopl_channel(op="await")`.
- *
- * ⚠ Without it the requester must `read limit=1` to learn where to start
- * watching: an extra round-trip AND a race, since a peer answering between the
- * create and that read makes the "newest message" its reply, so the await starts
- * one message too late and waits forever for something already delivered.
- *
- * ⚠ `null` is kept on the type for the WIRE, not for this service: the route's
- * field is additive and an older deployment omits it
- * (`packages/dopl-client/src/channel.ts › createChannelThread`), so every reader
- * already handles the absence.
- */
-export interface TaskCreateResult {
-  thread: ChannelThread;
-  openingSeq: number | null;
-}
-
-/**
- * Finish a create that landed on an EXISTING thread — the `client_msg_id`
- * short-circuit and the lost-insert race, the same situation reached two ways,
- * so they must answer IDENTICALLY.
- *
- * The caller always gets the STORED thread: not an error, not a second row, and
- * it re-drives the opening post (the repair for a create that half-landed).
- *
- * ⚠ THE THREAD IS ALWAYS THIS CALLER'S OWN, AND THAT IS ENFORCED, NOT ASSUMED —
- * `findOwnTaskByClientId` narrows by `created_by` and the unique index behind it
- * says the same (`20260913120000_channel_tasks_author_scoped_idempotency.sql`).
- * A colliding key from another member now yields a SEPARATE thread rather than
- * converging here, which is why this function no longer has a
- * somebody-else's-thread arm to take.
- */
-async function convergeOnThread(
-  ctx: ChannelContext,
-  channelId: string,
-  task: ChannelTaskRow,
-  input: TaskCreateInput,
-  opts: TaskCreateOptions
-): Promise<TaskCreateResult> {
-  const openingSeq = await postOpeningMessage(
-    ctx,
-    channelId,
-    task,
-    input,
-    opts.fanoutGroupId
-  );
-  return { thread: mapTaskRow(task), openingSeq };
-}
-
-/**
- * SERVER-INTERNAL create options — not fields of {@link TaskCreateInput}, not
- * parsed by any route, and therefore unreachable from an HTTP caller. Same
- * device as `service-writes-metadata.ts › PostMetadataOptions`.
- *
- * ⚠ This parameter is ADDITIVE and changes nothing `createTask` decides: the
- * authorization, the addressee checks, the self-target refusal and the
- * idempotency short-circuit are untouched, and a thread is still ONE requester
- * plus ONE target (INVARIANTS §5). It exists so the fan-out — which is a
- * CALLER of `createTask`, never a second create path — can put its group id on
- * the opening message through the one function that posts it.
- */
-interface TaskCreateOptions {
-  /** Stamped as reserved `metadata.fanoutGroup` on the opening message. */
-  fanoutGroupId?: string;
-}
-
-/**
- * Create a first-class task. Caller must be a channel member; `toUserId` must be
- * a member of THAT channel AND an ACTIVE workspace member (a departed teammate
- * stays in `channel_members` but can never answer). `body` posts as the task's
- * first message, tagged `metadata.taskId`.
- *
- * ⚠ A thread is between its CREATOR and its TARGET, and that pair is the whole
- * write gate (`service-writes-metadata-thread.ts`).
- */
-export async function createTask(
+export async function listChannelTasks(
   ctx: ChannelContext,
   ref: string,
-  rawInput: TaskCreateInput,
-  opts: TaskCreateOptions = {}
-): Promise<TaskCreateResult> {
-  const input = stripNulDeep(rawInput);
-  const { channel } = await requireMemberChannel(
-    ctx,
-    ref,
-    "create a task in this channel"
-  );
-  const target = input.toUserId;
-  // ⚠ Refused BEFORE the insert: `postMessage` refuses the same contradiction,
-  // but only after the row exists, which would leave a thread with no opener.
-  if (target && input.intent === "chat") {
-    throw new ChannelChatAddressedError("toUserId");
-  }
-  // ⚠ A TARGETLESS thread (no `toUserId`) skips both checks below: its opener is
-  // its only party, and its opening post wakes nobody.
-  // ⚠ Target must be a channel member AND an ACTIVE workspace member.
-  // `channel_members` is never swept on workspace-leave, so a departed teammate
-  // stays addressable: create succeeds, the opener posts, `openingSeq` returns,
-  // the requester arms `await`, and nothing ever answers. Channel check first,
-  // so the workspace round-trip is only paid for an actual channel member.
-  if (
-    target &&
-    !(
-      (await repo.findMembership(channel.id, target)) &&
-      (await repo.isActiveWorkspaceMember(ctx.workspaceId, target))
-    )
-  ) {
-    throw new ChannelAddresseeNotMemberError(target);
-  }
-  // ⚠ A thread addressed to its own creator is DEAD ON ARRIVAL — only creator
-  // and target may post, and here they are one person. Closes the AGENT path
-  // (`to` is whatever user id the model resolved); the web composer already
-  // filters the caller out of its addressee list
-  // (`channels/components/composer.tsx`, off `indexMembers`).
-  //
-  // ⚠ SITS BEFORE THE IDEMPOTENCY SHORT-CIRCUIT ON PURPOSE. Behind it, a retry
-  // with the same `client_msg_id` finds the stored dead thread and returns it as
-  // a success — the caller is told it is fine exactly once it is unfixable.
-  if (target === ctx.userId) {
-    throw new TaskSelfTargetError();
-  }
+  status: TaskStatus | null
+): Promise<ChannelTaskPage> {
+  const { channel } = await loadVisibleChannel(ctx, ref);
+  const rows = await repoTasks.listTasks(channel.id, status, CHANNEL_TASK_LIST_LIMIT);
+  return { tasks: rows.map(mapTaskRow), truncated: rows.length >= CHANNEL_TASK_LIST_LIMIT };
+}
 
-  // A re-sent client_msg_id returns the caller's OWN already-created task WITHOUT
-  // a second row — {@link convergeOnThread}, also the 23505 branch's answer so the
-  // two ways of losing a race cannot drift apart. ⚠ The probe is author-scoped:
-  // another member's row under the same key is not a hit here and never was
-  // supposed to be.
-  if (input.clientMsgId) {
-    const existing = await repoTasks.findOwnTaskByClientId(
-      channel.id,
-      ctx.userId,
-      input.clientMsgId
-    );
-    if (existing) return convergeOnThread(ctx, channel.id, existing, input, opts);
-  }
+export async function readChannelTask(
+  ctx: ChannelContext,
+  ref: string,
+  taskId: string
+): Promise<ChannelTaskDetail> {
+  const { channel } = await loadVisibleChannel(ctx, ref);
+  return readTaskDetail(channel.id, taskId);
+}
 
-  let task;
-  try {
-    task = await repoTasks.insertTask({
-      channel_id: channel.id,
-      workspace_id: ctx.workspaceId,
-      title: input.title,
-      mode: input.mode ?? "interactive",
-      created_by: ctx.userId,
-      target_user_id: target ?? null,
-      client_msg_id: input.clientMsgId ?? null,
-    });
-  } catch (err) {
-    // Lost an idempotency race — converge on the stored winner. Re-driving the
-    // post is safe (same derived key, so at most one message lands) and covers
-    // the winner having crashed before posting.
-    if (repo.pgErrorCode(err) === UNIQUE_VIOLATION && input.clientMsgId) {
-      const raced = await repoTasks.findOwnTaskByClientId(
-        channel.id,
-        ctx.userId,
-        input.clientMsgId
-      );
-      if (raced) return convergeOnThread(ctx, channel.id, raced, input, opts);
+/** The thread or message (by `seq`) the task came from; it must be in this channel. */
+async function resolveLink(
+  channelId: string,
+  input: TaskActionOf<"create">
+): Promise<{ linked_thread_id: string | null; linked_message_id: string | null }> {
+  if (input.thread !== undefined) {
+    const thread = await repoThreads.findThreadByChannelAndId(channelId, input.thread);
+    if (!thread) throw new TaskLinkUnresolvedError(`thread ${input.thread}`);
+    return { linked_thread_id: thread.id, linked_message_id: null };
+  }
+  if (input.message !== undefined) {
+    const [message] = await repoMessages.findMessageRefsBySeqs(channelId, [input.message]);
+    if (!message) throw new TaskLinkUnresolvedError(`message #${input.message}`);
+    return { linked_thread_id: null, linked_message_id: message.id };
+  }
+  return { linked_thread_id: null, linked_message_id: null };
+}
+
+/** Idempotent on `clientMsgId`, author-scoped: a retry returns the caller's first task as it is now. */
+async function createTask(
+  ctx: ChannelContext,
+  ref: string,
+  input: TaskActionOf<"create">
+): Promise<ChannelTaskWriteResult> {
+  const { channel } = await requireTaskEditor(ctx, ref);
+  const clientMsgId = input.clientMsgId ?? null;
+  if (clientMsgId) {
+    const existing = await repoTasks.findOwnTaskIdByClientId(channel.id, ctx.userId, clientMsgId);
+    if (existing) return taskResult(channel.id, existing);
+  }
+  const assignees: TaskActorIds[] = [];
+  for (const assigneeRef of input.assignees ?? []) {
+    const actor = await resolveTaskActor(ctx, channel.id, assigneeRef);
+    assertAssignable(ctx, actor);
+    if (!assignees.some((a) => a.userId === actor.userId && a.agentId === actor.agentId)) {
+      assignees.push(actor);
     }
-    throw err;
   }
-
-  const openingSeq = await postOpeningMessage(
-    ctx,
-    channel.id,
-    task,
-    input,
-    opts.fanoutGroupId
-  );
-
-  return { thread: mapTaskRow(task), openingSeq };
+  const link = await resolveLink(channel.id, input);
+  const creator = callerActor(ctx);
+  const { row: taskId, existing } = await insertOrConverge({
+    clientMsgId,
+    insert: () =>
+      repoTasks.insertTask({
+        channel_id: channel.id,
+        workspace_id: channel.workspace_id,
+        title: input.title,
+        description: input.description ?? "",
+        created_by: creator.userId,
+        created_by_agent: creator.agentId,
+        ...link,
+        due_at: input.dueAt ?? null,
+        client_msg_id: clientMsgId,
+      }),
+    find: (key) => repoTasks.findOwnTaskIdByClientId(channel.id, ctx.userId, key),
+  });
+  if (!existing) {
+    for (const [i, actor] of assignees.entries()) {
+      await assignActor(ctx, channel.id, { id: taskId, title: input.title, assigneeCount: i }, actor);
+    }
+  }
+  return taskResult(channel.id, taskId);
 }
 
-/**
- * Change a task's mode. CREATOR ONLY — mode governs the creator's own machine.
- * ⚠ Posts NO message: deliberately realtime-invisible, since a mode is the
- * creator's machine's business, not a fact about the shared exchange. The two
- * writes that ARE facts about it (close, reopen) live in
- * `service-tasks-lifecycle.ts` and both echo.
- */
-export async function setTaskMode(
+async function updateTask(
   ctx: ChannelContext,
   ref: string,
-  taskId: string,
-  mode: ThreadMode
-): Promise<ChannelThread> {
-  const { channel } = await requireMemberChannel(
-    ctx,
-    ref,
-    "change a task's mode in this channel"
-  );
-  const task = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
-  if (!task) throw new TaskNotFoundError(taskId);
-  if (task.created_by !== ctx.userId) {
-    throw new TaskForbiddenError("set the mode of this task");
-  }
+  input: TaskActionOf<"update">
+): Promise<ChannelTaskWriteResult> {
+  const { channel } = await requireTaskEditor(ctx, ref);
+  const row = await loadTaskRow(channel.id, input.task);
+  await repoTasks.updateTask(channel.id, row.id, {
+    ...(input.title !== undefined && { title: input.title }),
+    ...(input.description !== undefined && { description: input.description }),
+    ...(input.dueAt !== undefined && { due_at: input.dueAt }),
+  });
+  return taskResult(channel.id, row.id);
+}
 
-  const updated = await repoTasks.updateTask(task.id, { mode });
-  return mapTaskRow(updated);
+/** The one status write (R5). Resolving stamps who and when; any other status clears both. */
+async function setTaskStatus(
+  ctx: ChannelContext,
+  ref: string,
+  input: TaskActionOf<"set_status">
+): Promise<ChannelTaskWriteResult> {
+  const { channel } = await requireTaskEditor(ctx, ref);
+  const row = await loadTaskRow(channel.id, input.task);
+  if (row.status !== input.status) {
+    const resolver = input.status === "resolved" ? callerActor(ctx) : null;
+    await repoTasks.updateTask(channel.id, row.id, {
+      status: input.status,
+      resolved_at: resolver ? new Date().toISOString() : null,
+      resolved_by: resolver?.userId ?? null,
+      resolved_by_agent: resolver?.agentId ?? null,
+    });
+  }
+  return taskResult(channel.id, row.id);
+}
+
+export function applyTaskAction(
+  ctx: ChannelContext,
+  ref: string,
+  input: TaskActionInput
+): Promise<ChannelTaskWriteResult> {
+  switch (input.action) {
+    case "create":
+      return createTask(ctx, ref, input);
+    case "update":
+      return updateTask(ctx, ref, input);
+    case "set_status":
+      return setTaskStatus(ctx, ref, input);
+    case "assign":
+      return assignTask(ctx, ref, input);
+    case "unassign":
+      return unassignTask(ctx, ref, input);
+    case "add_subtask":
+      return addSubtask(ctx, ref, input);
+    case "update_subtask":
+      return updateSubtask(ctx, ref, input);
+    case "add_note":
+      return addNote(ctx, ref, input);
+  }
 }

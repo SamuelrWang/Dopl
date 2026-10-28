@@ -24,20 +24,16 @@ import {
  */
 
 /**
- * The rail, in order, AS THE DESKTOP DRAWS IT.
- *
- * ⚠ **SIX ROWS HERE AND FIVE ON THE WEB, and that split is the contract, not a
- * fixture detail.** "Configuration" is default agent settings, held in this
- * machine's own store, so `SettingsModalCore` draws it only when a binding passes
- * `configurationPane` — the desktop does, the web passes nothing. Flattening this
- * list to one shared set would pin a row the web is right not to have.
- * ⚠ **NO "Connect" ROW (Samuel, 2026-10-02)** — it split into Agents + Devices.
+ * The rail, in order, AS THE DESKTOP DRAWS IT: seven rows here and five on the web, because
+ * `SettingsModalCore` draws Configuration and Notifications only when a binding passes their
+ * pane. No "Connect" row: it split into Agents + Devices.
  */
 const NAV_LABELS = [
   "Workspaces",
   "Agents",
   "Devices",
   "Configuration",
+  "Notifications",
   "Account",
   "Plans & Billing",
 ];
@@ -93,11 +89,9 @@ describe("settings modal", () => {
     fireEvent.click(gear());
 
     const dialog = await screen.findByRole("dialog", { name: "Settings" });
-    const rail = within(dialog).getAllByRole("button");
-    expect(
-      rail.map((b) => b.textContent).filter((t) => NAV_LABELS.includes(t ?? ""))
-    ).toEqual(NAV_LABELS);
-    expect(within(dialog).queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
+    const rail = within(dialog).getAllByRole("tab");
+    expect(rail.map((tab) => tab.textContent)).toEqual(NAV_LABELS);
+    expect(within(dialog).queryByRole("tab", { name: "Connect" })).not.toBeInTheDocument();
     expect(within(dialog).queryByText("WORKSPACE")).not.toBeInTheDocument();
     expect(within(dialog).queryByText("ACCOUNT")).not.toBeInTheDocument();
   });
@@ -112,7 +106,7 @@ describe("settings modal", () => {
     await screen.findByText("page body");
     fireEvent.click(gear());
     const dialog = await screen.findByRole("dialog", { name: "Settings" });
-    fireEvent.click(screen.getByRole("button", { name: "Workspaces" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Workspaces" }));
 
     // ⚠ Scoped to the DIALOG: the shell's own switcher pill names "Acme" too,
     // and an unscoped query would pass on the chrome behind the overlay.
@@ -146,7 +140,7 @@ describe("settings modal", () => {
     await screen.findByText("page body");
     fireEvent.click(gear());
     const dialog = await screen.findByRole("dialog", { name: "Settings" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Agents" }));
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Agents" }));
 
     expect(await screen.findByRole("heading", { name: "Agents" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Devices" })).not.toBeInTheDocument();
@@ -175,7 +169,7 @@ describe("settings modal", () => {
     await screen.findByText("page body");
     fireEvent.click(gear());
     const dialog = await screen.findByRole("dialog", { name: "Settings" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Devices" }));
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Devices" }));
 
     expect(await screen.findByRole("heading", { name: "Devices" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Agents" })).not.toBeInTheDocument();
@@ -198,7 +192,7 @@ describe("settings modal", () => {
     await screen.findByText("page body");
     fireEvent.click(gear());
     await screen.findByRole("dialog", { name: "Settings" });
-    fireEvent.click(screen.getByRole("button", { name: "Plans & Billing" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Plans & Billing" }));
   }
 
   it("renders the whole billing pane — status, plan cards, feature lists", async () => {
@@ -240,7 +234,7 @@ describe("settings modal", () => {
       })
     );
 
-    // Standalone billing page, plan included (`lib/open-in-browser.ts`).
+    // Standalone billing page, plan included (`shared/lib/open-in-browser.ts`).
     expect(openExternal).toHaveBeenCalledWith(
       `https://www.usedopl.com/billing/${SEGMENT}?billing=upgrade&plan=team`
     );

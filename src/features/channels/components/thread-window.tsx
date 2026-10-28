@@ -37,8 +37,7 @@ import { useChannelMessages } from "../hooks/use-channel-messages";
 import { useChannelMembers } from "../hooks/use-channel-members";
 import { useChannelThreads } from "../hooks/use-channel-threads";
 import { useChannelAgentSessions } from "../hooks/use-channel-agent-sessions";
-import { liveAgentsFromKey, liveAgentsKey } from "../lib/live-agents";
-import { agentColorVar } from "../lib/agent-colors";
+import { liveAgentsFromKey, liveAgentsKey, useWorkingColors } from "../lib/live-agents";
 import { useConsentInbox } from "../hooks/use-consent-inbox";
 import { useChannelPreferenceWrites } from "../hooks/use-channel-preference-writes";
 import { ChannelsMessagePane, type ScrollTarget } from "./message-pane";
@@ -117,6 +116,8 @@ export function ChannelsThreadWindow({
       void refetchThreads();
     },
     refetchMembers: () => void refetchMembers(),
+    // No tasks read here, so a tasks-only doorbell has nothing to refetch.
+    refetchTasks: () => {},
   });
 
   // The SEND BOX's whole diet: a draft this operator's agent is holding on the
@@ -163,27 +164,7 @@ export function ChannelsThreadWindow({
     () => liveAgentsFromKey(liveAgentsContentKey),
     [liveAgentsContentKey]
   );
-  /**
-   * **EACH LIVE AGENT'S PAINT, BY ID** — the working strip's fills, MIRRORED FROM
-   * `channel-surface.tsx` (release review, 2026-10-11).
-   *
-   * ⚠ **IT IS THE SAME MEMO OVER THE SAME SET, and that identity is the point.** Both
-   * hosts resolve from `liveAgents`, the peer ∪ own union this window already holds, so
-   * one agent cannot be two hues depending on which window the operator is looking at.
-   * `lib/agent-colors.ts › agentColorVar` stays the one place a key becomes a `var()`.
-   * ⚠ **AN AGENT WITH NO COLOUR IS ABSENT RATHER THAN MAPPED TO A FALLBACK** — the
-   * component owns what "no colour" looks like (`agent-bits.tsx › AGENT_PILL_FACE`'s
-   * black), and two places choosing that face is how one agent comes to wear two greys.
-   * ⚠ MEMOISED ON THE SET'S OWN IDENTITY: `liveAgents` is already derived from a stable
-   * key above, so this rebuilds only when the live set really moves.
-   */
-  const workingColors = useMemo(() => {
-    const out = new Map<string, string>();
-    for (const agent of liveAgents) {
-      if (agent.color) out.set(agent.name, agentColorVar(agent.color));
-    }
-    return out;
-  }, [liveAgents]);
+  const workingColors = useWorkingColors(liveAgents);
   const index = useMemo(
     () => indexMembers(members, currentUserId),
     [members, currentUserId]

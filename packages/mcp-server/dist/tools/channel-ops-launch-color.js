@@ -13,7 +13,7 @@ const respond_1 = require("./respond");
 /**
  * The sixteen keys in bank order. The server picks the free key most distinct from the live ones and
  * lists `details.free` best first, so the refusal's first key is the one it would pick.
- * Hand mirror of `src/features/channels/lib/agent-colors.ts › AGENT_COLOR_KEYS`, held to the union by
+ * Hand mirror of `src/shared/lib/agent-colors.ts › AGENT_COLOR_KEYS`, held to the union by
  * `satisfies` and pinned by `channel-ops-launch-color.test.ts`. An enum: a published `pattern` is forbidden (`tool-style.test.ts`).
  */
 exports.AGENT_COLOR_KEYS = [

@@ -15,7 +15,7 @@
  * by saying nothing:
  *
  *  - **"you" OVER A MACHINE'S WORDS.** Ruling 2 (2026-09-25) folds the operator's own agents into
- *    `fromOperator`, so their orchestrator's post read back at them as *"Message received from
+ *    `fromOperator`, so their orchestrator's post read back at them as *"Received from
  *    you"* — their own name over words they never wrote. The ruling is NARROWED for this face
  *    (INVARIANTS §11, 2026-10-12): `authorKind` is read FIRST, and "you" is only for what the
  *    operator typed.
@@ -32,6 +32,7 @@ import { AgentStream } from "./agent-stream";
 import {
   INBOUND_ANON_LABEL,
   INBOUND_OPERATOR_LABEL,
+  inboundFace,
   inboundLabel,
 } from "./agent-stream-inbound-box";
 import { buildAgentStream } from "./agent-stream-model";
@@ -59,28 +60,27 @@ function renderStream(over: Partial<React.ComponentProps<typeof AgentStream>> = 
 
 
 /**
- * 🔴 **THE BANNER CARRIES THE AUTHOR'S WEIGHT: BLACK FOR A PERSON, THE AGENT'S OWN COLOUR FOR AN
- * AGENT** (Samuel, 2026-10-12). Every property here fails quietly, and two of them fail by saying
+ * 🔴 **THE CARD'S EDGE CARRIES THE AUTHOR'S WEIGHT: BLACK FOR A PERSON, THE AGENT'S OWN COLOUR FOR
+ * AN AGENT** (Samuel, 2026-10-12). Every property here fails quietly, and two of them fail by saying
  * something FALSE rather than by saying nothing:
  *
  *  - **"you" OVER A MACHINE'S WORDS.** Ruling 2 (2026-09-25) folds the operator's own agents into
- *    `fromOperator`, so their orchestrator's post read back at them as *"Message received from
+ *    `fromOperator`, so their orchestrator's post read back at them as *"Received from
  *    you"* — their own name over words they never wrote. The ruling is NARROWED for this face:
  *    `authorKind` is read first, and "you" is only for what the operator typed.
  *  - **A KIND RECOVERED FROM PROSE.** `senderName` is main's already-resolved label and a display
  *    name somebody typed can read *"X's agent"*; sniffing it would let a peer choose how this card
  *    is painted. The kind is server-derived from the author's credential or it is ABSENT.
  *  - **UNKNOWN PAINTED AS A PERSON.** An older main stamps no kind. Absent must keep the neutral
- *    inset banner, because black here is a claim that a HUMAN member wrote the words.
+ *    edge, because black here is a claim that a HUMAN member wrote the words.
  */
-describe("the inbound banner's author weight", () => {
-  /** The banner strip and the card, by the hook the face exposes for exactly this question. */
+describe("the inbound card's author weight", () => {
+  /** The card, by the hook the face exposes for exactly this question. */
   function painted(container: HTMLElement) {
     const card = container.querySelector("[data-stream-inbound]") as HTMLElement | null;
     return {
       weight: card?.getAttribute("data-stream-inbound-paint") ?? null,
       cardStyle: card?.getAttribute("style") ?? "",
-      banner: card?.firstElementChild as HTMLElement | null,
     };
   }
 
@@ -89,61 +89,56 @@ describe("the inbound banner's author weight", () => {
     // and the agent is named instead. The handle is `mentionSlug`'s — the form the picker inserts
     // and the mention resolver accepts — so the banner cannot spell one nobody could retype.
     expect(inboundLabel("Sam Wang", true, "agent", "Cleanup Orchestrator")).toBe(
-      "Message received from @cleanup-orchestrator"
+      "Received from @cleanup-orchestrator"
     );
     expect(inboundLabel("Sam Wang", true, "agent", "Cleanup Orchestrator")).not.toBe(
       INBOUND_OPERATOR_LABEL
     );
     // A PEER's agent reads the same way — the agent is the author either way.
     expect(inboundLabel("Diana Taylor's agent", false, "agent", "Picker Fix")).toBe(
-      "Message received from @picker-fix"
+      "Received from @picker-fix"
     );
   });
 
   it("degrades through the facts it has, and never to a blank or an id", () => {
     // No agent name: the resolved label is still TRUE, so it is what shows.
     expect(inboundLabel("Sam Wang's agent", true, "agent")).toBe(
-      "Message received from Sam Wang's agent"
+      "Received from Sam Wang's agent"
     );
     expect(inboundLabel("Sam Wang's agent", true, "agent")).not.toBe(INBOUND_OPERATOR_LABEL);
     // Neither one: the anonymous sentence, which is a complete fact.
     expect(inboundLabel(null, true, "agent")).toBe(INBOUND_ANON_LABEL);
     expect(inboundLabel("  ", false, "agent", "   ")).toBe(INBOUND_ANON_LABEL);
     // A name that slugs to nothing is still somebody — printed as given, never as a bare "@".
-    expect(inboundLabel(null, false, "agent", "!!!")).toBe("Message received from !!!");
+    expect(inboundLabel(null, false, "agent", "!!!")).toBe("Received from !!!");
   });
 
   it("keeps 'you' for what the operator TYPED, and keeps today's answer when the kind is unknown", () => {
     expect(inboundLabel("Sam Wang", true, "user")).toBe(INBOUND_OPERATOR_LABEL);
-    expect(inboundLabel("Diana Taylor", false, "user")).toBe("Message received from Diana Taylor");
+    expect(inboundLabel("Diana Taylor", false, "user")).toBe("Received from Diana Taylor");
     // ⚠ ABSENT IS UNKNOWN: an older main's frame must read exactly as it did before this wave.
     expect(inboundLabel("Sam Wang", true)).toBe(INBOUND_OPERATOR_LABEL);
-    expect(inboundLabel("Diana Taylor")).toBe("Message received from Diana Taylor");
+    expect(inboundLabel("Diana Taylor")).toBe("Received from Diana Taylor");
   });
 
-  it("paints a HUMAN member's message black, banner AND edge, with the on-black ink", () => {
+  it("paints a HUMAN member's message with a black edge and no filled banner", () => {
     const { container } = renderStream({
       entries: [inboundFrame({ senderName: "Diana Taylor", authorKind: "user" })],
     });
-    const { weight, cardStyle, banner } = painted(container);
+    const { weight, cardStyle } = painted(container);
     expect(weight).toBe("human");
     // ⚠ THE TOKEN, NOT A HEX — docs/DESIGN-SYSTEM.md forbids a colour value in a component, and
-    // `--surface-cta` is the one black this tree has (`globals.css` aliases `--black` to it).
+    // `--surface-cta` is the one black this tree has.
     expect(cardStyle).toContain("var(--surface-cta)");
-    expect(banner?.getAttribute("style")).toContain("var(--surface-cta)");
-    // ⚠ BOTH HALVES: the banner may not keep the inset fill it is painted over...
-    expect(banner?.className).not.toContain("bg-bg-inset");
-    // ...and the label must wear the ink that reads on black.
-    expect(banner?.querySelector("span")?.className).toContain("text-text-on-cta");
+    expect(container.querySelector("[data-stream-inbound] [style*='background']")).toBeNull();
   });
 
-  it("leaves an UNKNOWN author kind on the neutral face — black is a claim about a person", () => {
+  it("leaves an UNKNOWN author kind on the neutral edge — black is a claim about a person", () => {
     const { container } = renderStream({ entries: [inboundFrame()] });
-    const { weight, cardStyle, banner } = painted(container);
+    const { weight, cardStyle } = painted(container);
     expect(weight).toBe("neutral");
-    expect(cardStyle).toBe("");
-    expect(banner?.className).toContain("bg-bg-inset");
-    expect(banner?.querySelector("span")?.className).toContain("text-text-secondary");
+    expect(cardStyle).toContain("var(--border-strong)");
+    expect(container.querySelector("[data-stream-inbound] [data-identity-face]")).toBeNull();
   });
 
   it("paints an AGENT's message in that agent's own colour, never in the human's black", () => {
@@ -160,16 +155,13 @@ describe("the inbound banner's author weight", () => {
         }),
       ],
     });
-    const { weight, cardStyle, banner } = painted(container);
+    const { weight, cardStyle } = painted(container);
     expect(weight).toBe("agent");
     // ⚠ THROUGH THE ONE PAINT ROUTE (`lib/agent-colors.ts › agentColorVar`) — a key becomes a
     // `var()` in exactly one place, and no hex ever reaches a component.
     expect(cardStyle).toContain("var(--agent-color-03)");
-    expect(banner?.getAttribute("style")).toContain("var(--agent-color-03)");
-    // ⚠ AND IT IS NOT THE HUMAN'S BLACK: that fill is this surface's claim that a PERSON wrote it.
+    // ⚠ AND IT IS NOT THE HUMAN'S BLACK: that edge is this surface's claim that a PERSON wrote it.
     expect(cardStyle).not.toContain("var(--surface-cta)");
-    // The ink is the badge's own decision, which every one of the sixteen dark ramps shares.
-    expect(banner?.querySelector("span")?.className).toContain("text-text-on-cta");
   });
 
   it("leaves an UNCOLOURED agent neutral rather than borrowing the human's black", () => {
@@ -182,10 +174,9 @@ describe("the inbound banner's author weight", () => {
           inboundFrame({ authorKind: "agent", senderAgentName: "Merge Owner", ...over }),
         ],
       });
-      const { weight, cardStyle, banner } = painted(container);
+      const { weight, cardStyle } = painted(container);
       expect(weight).toBe("neutral");
-      expect(cardStyle).toBe("");
-      expect(banner?.className).toContain("bg-bg-inset");
+      expect(cardStyle).toContain("var(--border-strong)");
     }
   });
 
@@ -255,7 +246,31 @@ describe("the inbound banner's author weight", () => {
         }),
       ],
     });
-    expect(screen.getByText("Message received from @cleanup-orchestrator")).toBeTruthy();
+    expect(screen.getByText("Received from @cleanup-orchestrator")).toBeTruthy();
     expect(screen.queryByText(INBOUND_OPERATOR_LABEL)).toBeNull();
+  });
+});
+
+/** The frame carries no sender id, so only the operator's own photo is ever known. */
+describe("the inbound card's face", () => {
+  it("is the operator's photo only for the operator's words or their own agent", () => {
+    expect(inboundFace({ authorKind: "user", fromOperator: true }, "/me.jpg")?.photo).toBe("/me.jpg");
+    expect(
+      inboundFace(
+        { authorKind: "agent", fromOperator: true, senderAgentName: "Planner", senderColor: "agent-02" },
+        "/me.jpg"
+      )
+    ).toEqual({ photo: "/me.jpg", name: "Planner", ring: "agent-02" });
+    expect(inboundFace({ authorKind: "user", senderName: "Diana Taylor" }, "/me.jpg")).toEqual({
+      photo: null,
+      name: "Diana Taylor",
+    });
+    expect(inboundFace({ authorKind: "agent", senderAgentName: "Picker Fix" }, "/me.jpg")?.ring).toBe(
+      "neutral"
+    );
+  });
+
+  it("draws none for an unknown author kind", () => {
+    expect(inboundFace({ senderName: "Diana Taylor" }, "/me.jpg")).toBeNull();
   });
 });

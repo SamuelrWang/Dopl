@@ -19,7 +19,7 @@ export function RemoteConnect() {
   }, []);
 
   return (
-    <ul aria-label="Connect an agent" className="divide-y divide-border-subtle">
+    <ul aria-label="Connect an agent" className="divide-y divide-border-default">
       {connectRecipes(`${origin}/api/mcp`).map((recipe) => (
         <li key={recipe.client} className="flex min-w-0 items-center gap-3 py-2.5">
           <div className="w-36 shrink-0">

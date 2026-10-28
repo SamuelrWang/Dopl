@@ -103,7 +103,7 @@ done | grep -oE 'F-[0-9]{3}' | sort -u | tail -1
 
 **Pruned 2026-08-11 (fourth pass) — the resolved-in-place sweep. 105 entries in, 91 out.** Scope: every entry carrying RESOLVED / ✅ / "closed" in its title or status line was re-verified **against the working tree on disk** — greps for the named symbols and files, never the entry's own text, never another entry, never a commit message. Strict numeric order survives; the entry template is unchanged. No code was touched and no `git` state was changed. **Where a claim was about PRODUCTION rather than about code, it was settled with read-only introspection against the live project** (`pg_constraint`, `pg_indexes`, `pg_proc`, `pg_publication_tables`, `schema_migrations`) — see the near-miss below for why that was not optional.
 
-- **Deleted as RESOLVED (12):** **F-067** (three-valued `DECISION_OK`/`SETTLED`/`FAILED` at `main/consent.js:149-169`; `submitDecision` at `:213` is the sole entry point and all four call sites use it), **F-156** (both blocks — all six migrations on disk and applied; the USING-INDEX-not-FULL rationale and the "must stay after `20260807110000`" ordering constraint have a permanent home in that migration's own header, `:64-90` and `:142-168`), **F-167** (both blocks — `20260708120001` / `20260708150001` renamed on disk, and F-169's two-sided diff confirmed the remote history records both), **F-168** (`narration.isForeignAuthored` at `:109`, both surface-scoped headers, both read ops, 16-test file present — the essentials inlined into F-101 so the reference does not dangle), **F-171** (route on the `channel_tasks_stale` RPC, `excludeAuthorFilter`, `insertMessage`; its last open step was `CRON_SECRET`, now done — the surviving operational item moved to F-133), **F-173** (`is_direct` branch at the service; **the routed dialog copy landed verbatim** — `channel-pane.tsx`, since deleted at the v2 cutover 2026-08-18; the copy moved to `channels/components/channel-manage.tsx`), **F-174** (`revalidateAutoAllow` on all three consume paths in `consent-service.ts`; `UNRESOLVED_TOOL_PROFILE = "read_only"`), **F-176** (`service-tasks-lifecycle.ts`, `service-writes-metadata-markers.ts`, `updateTaskIfStatus` all present; its one "open" bullet was explicitly *left alone as correct guidance*, not debt), **F-179** (the `server.tools` assignment is gone — `runtime/claude/mcp.js:216` records where it stood — and `alwaysLoad: true` survives at `:190`), **F-183** (see the refutation note below), **F-186** (both props gone from the v1 members tab AND the settings members section; ⚠ both files were themselves DELETED 2026-08-30 under the drift ledger's ASK-1 ruling, so the citations are dropped rather than repointed), **F-188** (`workspaceId` is a required field on `ConsentListOpts`, `repository-collab.ts:91`, filtered at `:105`).
+- **Deleted as RESOLVED (12):** **F-067** (three-valued `DECISION_OK`/`SETTLED`/`FAILED` at `main/consent.js:149-169`; `submitDecision` at `:213` is the sole entry point and all four call sites use it), **F-156** (both blocks — all six migrations on disk and applied; the USING-INDEX-not-FULL rationale and the "must stay after `20260807110000`" ordering constraint have a permanent home in that migration's own header, `:64-90` and `:142-168`), **F-167** (both blocks — `20260708120001` / `20260708150001` renamed on disk, and F-169's two-sided diff confirmed the remote history records both), **F-168** (`narration.isForeignAuthored` at `:109`, both surface-scoped headers, both read ops, 16-test file present — the essentials inlined into F-101 so the reference does not dangle), **F-171** (route on the `channel_tasks_stale` RPC, `excludeAuthorFilter`, `insertMessage`; its last open step was `CRON_SECRET`, now done — the surviving operational item moved to F-133), **F-173** (`is_direct` branch at the service; **the routed dialog copy landed verbatim** — `channel-pane.tsx`, since deleted at the v2 cutover 2026-08-18; the copy moved to `channels/components/channel-manage.tsx`), **F-174** (`revalidateAutoAllow` on all three consume paths in `consent-service.ts`; `UNRESOLVED_TOOL_PROFILE = "read_only"`), **F-176** (service-tasks-lifecycle.ts (since deleted), `service-writes-metadata-markers.ts`, `updateThreadIfStatus` all present; its one "open" bullet was explicitly *left alone as correct guidance*, not debt), **F-179** (the `server.tools` assignment is gone — `runtime/claude/mcp.js:216` records where it stood — and `alwaysLoad: true` survives at `:190`), **F-183** (see the refutation note below), **F-186** (both props gone from the v1 members tab AND the settings members section; ⚠ both files were themselves DELETED 2026-08-30 under the drift ledger's ASK-1 ruling, so the citations are dropped rather than repointed), **F-188** (`workspaceId` is a required field on `ConsentListOpts`, `repository-collab.ts:91`, filtered at `:105`).
 - **⚠⚠ THE MOST IMPORTANT THING THIS PASS PRODUCED IS A NEAR-MISS, NOT A REFUTATION — AND THE STALE SOURCE WAS THE WORKING TREE ITSELF.** This pass came within one edit of writing a loud, confident, **false** refutation into this header. It had drafted: *"F-099's ✅ is wrong, the charset CHECKs are not in production."* **They are in production.** The reasoning that produced the error is worth more than the entry:
   - Three prior prunes established the rule **"verify against the working tree on disk, not against entries or commit messages."** This pass followed it. `supabase/migrations/20260808150000_replay_hardening_wave_20260731.sql` **opens with `-- UNAPPLIED. DO NOT run without reading this header.` and repeats `-- NOT APPLIED. This is a repo file only.` at `:76`.** That is a primary source, on disk, in the file that owns the DDL — and it is **stale**, because a migration header is authored *before* the apply and nothing on earth updates it afterwards. `docs/LAUNCH-READINESS-ROADMAP.md:5` says the same thing and is stale for the same reason.
   - What caught it was an accident: F-102's status line disagreed. Chasing that disagreement into `pg_constraint` gave ground truth — **`profiles_display_name_check` present, `channels_name_check` present *in its charset-bounded form* (not the loose length-only inline one), `channels_topic_check` present, all 14 `*_charset_check` present, `channel_agents_engaged_idx` dropped, `supabase_realtime` at exactly 17 tables, and local files 157 = history rows 157 with zero local-only and zero remote-only.** Everything the 2026-07-31 wave was supposed to do is live, via the replay migration, applied 2026-08-09.
@@ -401,7 +401,7 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
 - Severity: smell (scale)
 - Description: the thread read only the most recent messages with no load-older path, so past the page ceiling the older history was unreachable from the UI. The `seq` cursor already drove incremental FORWARD reads.
 - **Status: RESOLVED 2026-09-01**, along the shape this entry proposed. `MessageReadQuerySchema` takes `before=<seq>`; `listMessages` reads `seq < before` DESC-capped-then-flipped off `channel_messages_channel_seq_idx`; the transcript opens on `CHANNEL_TRANSCRIPT_PAGE_SIZE` (50, down from 200) and pages up on scroll. Two things this entry did not anticipate and that the implementation had to answer:
-  - **The history is NOT a query-cache entry.** A `?before=` entry sits under the same prefix key every messages write patches (`use-thread-writes-shared.ts › messagesKey`), so each send would append its pending row into every loaded page of history. It lives in the hook, beside the newest page — `lib/message-window.ts` carries the argument, and `dropThreadFromWindow` is the one write that has to be told about it by hand.
+  - **The history is NOT a query-cache entry.** A `?before=` entry sits under the same prefix key every messages write patches (`use-writes-shared.ts › messagesKey`), so each send would append its pending row into every loaded page of history. It lives in the hook, beside the newest page — `lib/message-window.ts` carries the argument, and `dropThreadFromWindow` is the one write that has to be told about it by hand.
   - ⚠ **THE PAGE SIZE MOVED AGAIN ON 2026-09-08 AND THE `CHANNEL_TRANSCRIPT_PAGE_SIZE` NAMED ABOVE IS DELETED** (Samuel: a row is not a unit a reader experiences). The transcript pages by ESTIMATED RENDERED LINES — `CHANNEL_TRANSCRIPT_LINE_BUDGET` (300) under `CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS` (200) — and `hasMore` comes from the server rather than from a row count. The Location line above is updated to the live symbol; INVARIANTS §9 carries the current rule.
   - **The newest page can OUTRUN the loaded window.** It is refetched on every doorbell and always returns the newest page, so a burst bigger than one page leaves a gap neither half holds — and `seq` is a table-wide identity, so no arithmetic over the rows can detect it. `message-window.ts › isContiguous` checks a remembered boundary cursor instead and drops the window rather than rendering the hole.
 
@@ -474,12 +474,12 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
 - Status: open
 
 ### F-070: Channels v1.5 — the surviving deferred items
-- Location: `src/features/channels/server/service-tasks.ts`; `dopl-desktop-app/main/{session-io,settings,session-engine,channel-prefs}.js`
+- Location: `src/features/channels/server/service-threads.ts`; `dopl-desktop-app/main/{session-io,settings,session-engine,channel-prefs}.js`
 - Found during: Channels v1.5 build + adversarial review (2026-07-27)
 - Severity: smell (bundle; item 3 is a product question, not a bug)
 - **Re-verified item by item 2026-08-08. Item 1 was already superseded by F-105; item 5 is now RESOLVED and is deleted from this entry.**
-  - **2. `set_thread_mode` posts no message, so the web mode badge is realtime-invisible. STILL OPEN.** `server/service-tasks.ts:388-406` does `repoTasks.updateTask` and returns; the docblock at `:383-386` states the intent in its own words ("Posts NO message: the change is intentionally realtime-invisible"). The badge updates only on the next `useChannelThreads` refetch. Desktop is unaffected (mode is stamped fresh at each post).
-  - **3. The TARGET can declare `outcome=completed`. PARTIALLY narrowed.** The AGENT lane is now closed — `service-tasks.ts:322` throws `ThreadCloseIsHumanOnlyError` for `ctx.source === "agent"` (class at `server/errors.ts:231`). What is still open is the human half: `:329` authorizes `created_by || target_user_id` and `outcome` is an unconstrained parameter, so the human responder can still mark their own thread `completed`. By design under the workspace-trust posture (same as F-061); a product may later want "responder proposes, requester accepts".
+  - **2. `set_thread_mode` posts no message, so the web mode badge is realtime-invisible. STILL OPEN.** `server/service-threads.ts:388-406` does `repoThreads.updateThread` and returns; the docblock at `:383-386` states the intent in its own words ("Posts NO message: the change is intentionally realtime-invisible"). The badge updates only on the next `useChannelThreads` refetch. Desktop is unaffected (mode is stamped fresh at each post).
+  - **3. The TARGET can declare `outcome=completed`. PARTIALLY narrowed.** The AGENT lane is now closed — `service-threads.ts:322` throws `ThreadCloseIsHumanOnlyError` for `ctx.source === "agent"` (class at `server/errors.ts:231`). What is still open is the human half: `:329` authorizes `created_by || target_user_id` and `outcome` is an unconstrained parameter, so the human responder can still mark their own thread `completed`. By design under the workspace-trust posture (same as F-061); a product may later want "responder proposes, requester accepts".
   - **4. Autonomous auto-continuation. PARTIALLY built, and the remaining gap is deliberate.** Mode now gates inbound handling (`main/session-io.js:30`), turn caps exist (`main/settings.js:47` `getTurnCap` → `main/session-engine.js:48`), and resume machinery exists (`session-engine.js:126` → `sessionPark.resumeParked`). **Standing consent is deliberately absent**: `main/channel-prefs.js:15-40` records that the durable channel-wide preset was REMOVED (H2) and replaced with a single-use, expiring, one-consumer arm. Do not "finish" item 4 by re-introducing a durable grant — that reverts a security fix.
   - ~~5. DM revive semantics undocumented in the UI~~ — **RESOLVED.** The copy (in `components/channel-pane.tsx` then, `channels/components/channel-manage.tsx` since the 2026-08-18 cutover) reads "Your direct message with {peer} will be hidden. Opening it again later brings the history back."
 - Proposed resolution: (2) post a lightweight system message on mode change, or have the threads query refetch on the messages-realtime tick; (3) needs-user-decision; (4) next-round feature work.
@@ -528,11 +528,11 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
 - Status: open
 
 ### F-079: Server-side DM auto-address + task inheritance — residuals
-- Location: `src/features/channels/server/service-writes-metadata.ts:399` (`resolveDirectPeer` → `repo.listMembers` at `:107`), `:443` (`resolveInheritableTask` → `repoTasks.listTasksByChannel` at `:126`), `:105` (the `is_direct` bail)
+- Location: `src/features/channels/server/service-writes-metadata.ts:399` (`resolveDirectPeer` → `repo.listMembers` at `:107`), `:443` (`resolveInheritableTask` → `repoThreads.listThreadsByChannel` at `:126`), `:105` (the `is_direct` bail)
 - Found during: cross-user DM delivery-bug fix (2026-07-29)
 - Severity: smell (the delivery bug itself is fixed)
 - Description: all three residuals re-verified STILL OPEN 2026-08-08.
-  - **Two extra reads per DM post.** `listMembers` on every direct post except `intent === "chat"`, plus `listTasksByChannel` when no caller taskId resolved. Both indexed single-channel reads; neither runs for a non-direct channel. Cheapest fix: carry the peer + open-thread set on the already-loaded channel context.
+  - **Two extra reads per DM post.** `listMembers` on every direct post except `intent === "chat"`, plus `listThreadsByChannel` when no caller taskId resolved. Both indexed single-channel reads; neither runs for a non-direct channel. Cheapest fix: carry the peer + open-thread set on the already-loaded channel context.
   - **~~`notify_scope='none'` no longer mutes an agent-authored DM ask.~~ MOOT 2026-08-08 (F-170).** Notify scope is removed from the product, so `classify` reads no preference at all and nothing mutes ANY ask, agent-authored or not. The residual's closing sentence survives it and is now the whole of the matter: a per-channel "quiet DM" preference would need its own design. This residual's `targeting.js:240,248` line references are dead — see F-170 for what replaced them.
   - **Inheritance is direct-channel only.** In a 3+ member channel an untagged reply lands untagged, so a session reply there must pass `thread=<id>` explicitly.
 - Proposed resolution: defer all three; revisit the read cost alongside F-063, which touches the same path.
@@ -554,12 +554,12 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
 - Status: open
 
 ### F-081: Channels vocabulary v3.0 — the server lane and the storage migration
-- Location: `src/features/channels/server/service-tasks.ts` (whole file), `server/dto.ts` (`mapTaskRow`, used at `service-tasks.ts:187,280,379,405,439`), `schema.ts:233` (`TaskCreateSchema`), `server/service-reads.ts:337` (`listChannelTasks`), `server/errors.ts:99` (`TaskNotFoundError`); `channel_tasks` table
+- Location: `src/features/channels/server/service-threads.ts` (whole file), `server/dto.ts` (`mapThreadRow`, used at `service-threads.ts:187,280,379,405,439`), `schema.ts:233` (`ThreadCreateSchema`), `server/service-reads.ts:337` (`listChannelThreads`), `server/errors.ts:99` (`ThreadNotFoundError`); `channel_tasks` table
 - Found during: contract v3.0 Track B (2026-07-30)
 - Severity: smell
 - **Re-verified 2026-08-08; the AGENT-FACING half is closed and is deleted from this entry.** `dopl-desktop-app/main/prompt-framing.js:298` and `main/prompt-framing-text.js:30` now teach `thread=<id>`; the old `task=<id>` survives only inside FIX S1 comments explaining its removal. **That half was the one that had a functional cost** — the prompt taught a parameter that does not exist, so the whole thread-tagging fix was inert on the primary window-mode path. **The lesson stands and is the reason to keep this entry: prompt/description text that names a tool argument IS API surface.**
 - Still open:
-  - **The server lane speaks `task` throughout** while everything above it speaks `thread`, so a reader crossing from `client/api.ts` into `server/service-tasks.ts` changes vocabulary mid-call-stack. Intentional (that lane speaks to storage) and marked with boundary comments — but it is a real comprehension cost.
+  - **The server lane speaks `task` throughout** while everything above it speaks `thread`, so a reader crossing from `client/api.ts` into `server/service-threads.ts` changes vocabulary mid-call-stack. Intentional (that lane speaks to storage) and marked with boundary comments — but it is a real comprehension cost.
   - **The storage migration is unwritten.** Zero occurrences of `channel_threads` in `supabase/migrations/` or `src/`. `channel_tasks` → `channel_threads` plus the `metadata.task*` keys is the real fix. **Sequence it with F-083's `create_thread` dedup**, since both rewrite the same insert path.
   - `X-MCP-Tool` telemetry labels split across old and new names at the cutover date; a future analytics query must union both. No consumer reads them yet.
 - Status: open
@@ -569,9 +569,9 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
 - Found during: six-agent audit server lane (2026-07-30)
 - Severity: smell (all four original bugs are fixed)
 - Description: all four residuals re-verified STILL OPEN 2026-08-08.
-  - **`create_thread` with NO `client_msg_id` has no dedup at all.** The lookup is inside `if (input.clientMsgId)` (`service-tasks.ts:239-245`); with none, `:249` inserts unconditionally, so a retry creates a SECOND thread and the abandoned row stays behind with no message. Real fix is a PL/pgSQL RPC or a server-derived key — **sequence with F-081's storage migration.**
-  - **A `client_msg_id` collision from another member returns THEIR thread DTO.** `repository-tasks.ts:39-52` `findTaskByClientId` filters `(channel_id, client_msg_id)` only, and `convergeOnThread` (`service-tasks.ts:177-188`) returns `mapTaskRow(task)` for a non-creator — leaking that thread's title/creator/target. Probe-only in practice (keys are caller-chosen UUIDs). Fix: scope the lookup by `created_by` and let a foreign hit fall through to the insert's 23505.
-  - **A thread with `target_user_id = NULL` is writable only by its creator.** Still nullable (`supabase/migrations/20260727150000_channel_tasks.sql:20`, `ON DELETE SET NULL`); `isThreadParticipant` (`service-writes-metadata-thread.ts:34-39`) is `created_by === userId || target_user_id === userId`. Mitigated for NEW rows — `TaskCreateSchema.toUserId` is required (`schema.ts:237`) — but the `ON DELETE SET NULL` means a deleted user can still produce one.
+  - **`create_thread` with NO `client_msg_id` has no dedup at all.** The lookup is inside `if (input.clientMsgId)` (`service-threads.ts:239-245`); with none, `:249` inserts unconditionally, so a retry creates a SECOND thread and the abandoned row stays behind with no message. Real fix is a PL/pgSQL RPC or a server-derived key — **sequence with F-081's storage migration.**
+  - **A `client_msg_id` collision from another member returns THEIR thread DTO.** `repository-threads.ts:39-52` `findThreadByClientId` filters `(channel_id, client_msg_id)` only, and `convergeOnThread` (`service-threads.ts:177-188`) returns `mapThreadRow(task)` for a non-creator — leaking that thread's title/creator/target. Probe-only in practice (keys are caller-chosen UUIDs). Fix: scope the lookup by `created_by` and let a foreign hit fall through to the insert's 23505.
+  - **A thread with `target_user_id = NULL` is writable only by its creator.** Still nullable (`supabase/migrations/20260727150000_channel_tasks.sql:20`, `ON DELETE SET NULL`); `isThreadParticipant` (`service-writes-metadata-thread.ts:34-39`) is `created_by === userId || target_user_id === userId`. Mitigated for NEW rows — `ThreadCreateSchema.toUserId` is required (`schema.ts:237`) — but the `ON DELETE SET NULL` means a deleted user can still produce one.
   - **`isLegacyThreadParticipant` costs one extra read** (`service-writes-metadata-thread.ts:56-71`, `findMessageBySeq` at `:68`, called at `service-writes-metadata.ts:430`) — only on a post carrying a calm flag AND a legacy id.
 - Status: open
 
@@ -719,7 +719,7 @@ COMMIT;
 - Status: open (residual)
 
 ### F-105: Nothing ever closes a thread, and three mechanisms that key on thread status degrade as open threads pile up
-- Location: `src/features/channels/server/service-tasks.ts` (`closeTask`, the only writer of `status='closed'`); `server/repository-tasks.ts:71-82` (`listTasksByChannel` — no status filter, no limit); `server/service-writes-metadata.ts:135` (`candidates.length === 1`) and `:448` (the `taskMode` stamp, read at `dopl-desktop-app/main/trigger.js:289` and `main/session-dispatch.js:200`); the four copies of the await stop-rule — `packages/mcp-server/src/tools/channel-ops-write.ts:342`, `channel-description.ts:61`, `channel-ops-hold.ts`, `channel-ops-threads.ts:194`
+- Location: `src/features/channels/server/service-threads.ts` (`closeThread`, the only writer of `status='closed'`); `server/repository-threads.ts:71-82` (`listThreadsByChannel` — no status filter, no limit); `server/service-writes-metadata.ts:135` (`candidates.length === 1`) and `:448` (the `taskMode` stamp, read at `dopl-desktop-app/main/trigger.js:289` and `main/session-dispatch.js:200`); the four copies of the await stop-rule — `packages/mcp-server/src/tools/channel-ops-write.ts:342`, `channel-description.ts:61`, `channel-ops-hold.ts`, `channel-ops-threads.ts:194`
 - Found during: live observation, 2026-07-31 — ONE DM channel holding SIX open threads
 - Severity: bug (the accumulation is silent, and past two open threads in a pair it changes ROUTING, not just tidiness)
 - **All four surviving consequences re-verified line by line 2026-08-08; every line number in this entry is fresh.**
@@ -727,7 +727,7 @@ COMMIT;
   2. **`list_threads` grows without bound and is never ranked.** Every row for the channel, newest first, no status filter, no limit, all rendered under an `N threads` header.
   3. **THE SHARP ONE — DM thread inheritance switches OFF at the second open pair-thread.** `resolveInheritableTask` is deliberately all-or-nothing (a guess would attach the turn to the wrong card and route it to the wrong window). Correct on its own terms — but in the observed six-thread DM every untagged addressed message inherits NOTHING and therefore reads on the peer's machine as a NEW request. **This is not gradual: it flips off at the second open thread and stays off until the extras are closed.**
   4. **A stale `mode` is inherited by whatever runs in the thread next.** A thread left `autonomous` from an earlier test keeps handing `autonomous` to every later session in it.
-- **Consequence 5 ("closing is never prompted") is RESOLVED and is deleted from this entry.** Propose-then-confirm shipped 2026-08-04: `service-tasks-propose.proposeTaskClose` gives an agent a terminal act that mutates nothing, `channel-description.ts:46` makes proposing the protocol's own closing instruction ("you never close a thread yourself"), and `/api/cron/stale-threads/route.ts` sweeps 14-day-idle threads posting the same `closeProposed` marker under a colliding `client_msg_id`, so it is one prompt per thread forever. **That mechanism is NO LONGER INERT: `CRON_SECRET` was set 2026-08-10 and the sweep runs daily at 07:00 UTC — but it has produced zero candidates so far and its first non-empty run lands ~2026-08-14. See F-133.** Option (b), a TTL sweep, was considered and declined in that route's own docblock: a cron is further from the human than the agent is, and it would fire on exactly the threads with the least evidence.
+- **Consequence 5 ("closing is never prompted") is RESOLVED and is deleted from this entry.** Propose-then-confirm shipped 2026-08-04: service-tasks-propose.proposeTaskClose (since deleted) gives an agent a terminal act that mutates nothing, `channel-description.ts:46` makes proposing the protocol's own closing instruction ("you never close a thread yourself"), and `/api/cron/stale-threads/route.ts` sweeps 14-day-idle threads posting the same `closeProposed` marker under a colliding `client_msg_id`, so it is one prompt per thread forever. **That mechanism is NO LONGER INERT: `CRON_SECRET` was set 2026-08-10 and the sweep runs daily at 07:00 UTC — but it has produced zero candidates so far and its first non-empty run lands ~2026-08-14. See F-133.** Option (b), a TTL sweep, was considered and declined in that route's own docblock: a cron is further from the human than the agent is, and it would fire on exactly the threads with the least evidence.
 - Proposed resolution: needs-user-decision — the remaining mechanisms are **(a)** auto-close on a terminal lifecycle event (cheapest and most precise, but it hands the outcome to the responder, which is F-070 item 3's open question, and today's caps post `task_failed` with `capped:true` while leaving the thread resumable); **(c)** an operator prompt surfacing "N open threads" in the channel pane; **(d)** teach agents to close what they opened. Whatever is chosen, consequence 3 argues for making `resolveInheritableTask`'s all-or-nothing MISS visible — a post that could have inherited but did not is the one moment the pile-up is provable.
 - ⚠ **Do NOT read F-109 or F-114 as resolving any part of this.** F-109 gives the requester a TRUE cursor at the moment an exchange ends; F-114 makes closing MEAN something. Neither changes how rarely it happens.
 - Status: open (question) — consequences 1-4
@@ -736,7 +736,7 @@ COMMIT;
 - Location: `src/features/channels/server/service-await.ts`, `service-reads.ts`, `repository-messages.ts`; `packages/mcp-server/src/tools/channel-wake-guidance.ts`
 - Found during: live cross-machine channel work (2026-07-31)
 - Severity: smell (all three original bugs are fixed)
-- **Rewritten down to the residuals 2026-08-08.** The fixes — `excludeAuthor` on the await stack (always-on for the MCP path, NOT sent by the desktop listener, which needs its own rows); `TaskSelfTargetError` → 400 placed BEFORE the `client_msg_id` short-circuit so a retry cannot be handed the stored dead thread as a success; and `channel-wake-guidance.ts` as the one module deciding what may be claimed — are documented in ENGINEERING §8.
+- **Rewritten down to the residuals 2026-08-08.** The fixes — `excludeAuthor` on the await stack (always-on for the MCP path, NOT sent by the desktop listener, which needs its own rows); `ThreadSelfTargetError` → 400 placed BEFORE the `client_msg_id` short-circuit so a retry cannot be handed the stored dead thread as a success; and `channel-wake-guidance.ts` as the one module deciding what may be claimed — are documented in ENGINEERING §8.
 - Residuals, all deliberate and none scheduled:
   - **(a)** `.neq("author_user_id", x)` also drops NULL-author rows (SQL `<> NULL`). No writer produces one today, but `channel_messages.author_user_id` IS nullable — **if system-authored messages are ever added, this filter silently swallows them.**
   - **(b)** The exclusion also drops a SIBLING session on the same account from an MCP await. Intended; it is the one case where "own" and "mine" differ.
@@ -765,7 +765,7 @@ COMMIT;
 - Location: `src/features/channels/**`, `packages/mcp-server/src/tools/channel-ops-hold.ts`, `scripts/dopl-channel-wait.sh`, `dopl-desktop-app/main/queued-notice.js`
 - Found during: a live two-agent cross-machine stress test (2026-07-31)
 - Severity: bug (all six defects fixed)
-- **Rewritten down to the residuals 2026-08-08.** The fixes — `?thread=<id>` as a FILTER on the message read (deliberately moving NO read watermark, because the watermark is content-derived and monotonic so a filtered read would mark unrelated older messages seen); `closeTask` returning `{ thread, echoSeq }` as an ADDITIVE ENVELOPE KEY; the corrected `seq` documentation (the identity sequence is on the TABLE, so a channel's seqs are gappy — an agent reading a range as a count concludes it lost messages); and the background-shell wake — are in ENGINEERING §8.
+- **Rewritten down to the residuals 2026-08-08.** The fixes — `?thread=<id>` as a FILTER on the message read (deliberately moving NO read watermark, because the watermark is content-derived and monotonic so a filtered read would mark unrelated older messages seen); `closeThread` returning `{ thread, echoSeq }` as an ADDITIVE ENVELOPE KEY; the corrected `seq` documentation (the identity sequence is on the TABLE, so a channel's seqs are gappy — an agent reading a range as a count concludes it lost messages); and the background-shell wake — are in ENGINEERING §8.
 - **One BEHAVIOUR CHANGE worth not re-litigating:** a close whose echo post fails no longer throws; it reports `echoSeq: null`. Every error the close ITSELF raises still throws.
 - Residuals:
   - **(a) No index backs the thread filter.** `channel_messages` carries `(channel_id, seq)` and `workspace_id` only — nothing functional on `metadata->>'taskId'` — so a scoped read is a filter over the channel scan. Correct at today's volumes; the fix if channels grow is a functional index, not a schema change.
@@ -830,7 +830,7 @@ COMMIT;
 - Location: `packages/mcp-server/src/tools/channel-render-threads.ts:147` (`isFirstClassThreadId(id) ? "thread" : "ad-hoc"`, the predicate a bare `UUID_RE.test` at `:87-89`); same split at `:194-195`
 - Found during: the 2026-08-01 two-agent live run
 - Severity: papercut
-- **Residual (b) is CLOSED as VERIFIED-ABSENT, which is a distinct verdict from fixed and is worth recording.** It said the web UI "was not audited for the same label defect" and pointed at `src/features/channels/lib/group-thread.ts`. That file was audited on 2026-08-08: it contains no `ad-hoc` label at all and handles legacy ids explicitly (`parseLegacyTaskSeq` at `:175`, `legacySeq` at `:415`, the seq-N backfill at `:711-713`, the B1 legacy trigger backfill at `:760`). **There is no parallel defect** — the residual was a guess about a file nobody had opened, and it stood for a week. (The file was 819 lines; **it is 428 as of 2026-08-08**, split into `-markers` / `-render` / `-types` / `-draft`, so the line references above may have moved — re-grep rather than trusting them. The split is unrelated to this residual's verdict.)
+- **Residual (b) is CLOSED as VERIFIED-ABSENT, which is a distinct verdict from fixed and is worth recording.** It said the web UI "was not audited for the same label defect" and pointed at `src/features/channels/lib/group-thread.ts`. That file was audited on 2026-08-08: it contains no `ad-hoc` label at all and handles legacy ids explicitly (`parseLegacyThreadSeq` at `:175`, `legacySeq` at `:415`, the seq-N backfill at `:711-713`, the B1 legacy trigger backfill at `:760`). **There is no parallel defect** — the residual was a guess about a file nobody had opened, and it stood for a week. (The file was 819 lines; **it is 428 as of 2026-08-08**, split into `-markers` / `-render` / `-types` / `-draft`, so the line references above may have moved — re-grep rather than trusting them. The split is unrelated to this residual's verdict.)
 - **Residual (a) STILL OPEN:** the label does not distinguish "the desktop minted this" from "a peer typed this". Both render `ad-hoc`. Correct — neither names a thread row — and the legend printing the id verbatim is the only tell.
 - **The mechanism is deliberately untouched and must stay so:** deterministic ids, the server-side strip and the desktop's UUID gate are exactly as they were; only the LABEL changed. `shortRef` prints the trailing SEQ for a synthetic id, because a blind `slice(0,8)` collapses every ad-hoc exchange in a channel onto the same prefix.
 - Status: open (residual (a))
@@ -1021,7 +1021,7 @@ COMMIT;
 - Status: open
 
 ### F-164: Two boot-chain follow-ups
-- Location: `apps/desktop-ui/src/pages/chats/index.tsx:49,56`; `apps/desktop-ui/src/components/settings-modal/settings-modal.tsx:64`; the dedicated provisioning route under `src/app/api/workspaces/` (DELETED 2026-09-02 — see the follow-up below)
+- Location: `apps/desktop-ui/src/pages/chats/index.tsx:49,56`; `src/shared/layout/settings-modal/desktop-settings-modal.tsx`; the dedicated provisioning route under `src/app/api/workspaces/` (DELETED 2026-09-02 — see the follow-up below)
 - Found during: launch-readiness P0-2 (2026-08-07)
 - Severity: smell
 - **Rewritten down to the follow-ups 2026-08-08.** The collapse landed: launch → actionable screen is now `bridge.getAuthState()` (IPC, local, no network) → `POST /api/boot` → the page's own data. 5 round trips → 1.
@@ -1410,19 +1410,19 @@ COMMIT;
 - ⚠ **UPDATE 2026-08-18 (Phase 8 shipped): the model did NOT move, so the blocker is unchanged.** The consent card became `components/launch-panel.tsx` and the decision became "Launch agent", but the ROW, its scoping and `requireOperatorRow` are byte-identical — INVARIANTS §6 now records that explicitly. **The addressee side gained a home** (`channels/components/inbox-pane.tsx`, behind the sidebar's Inbox row); the requester side gained nothing, because there is still nothing to read. **The asymmetry is now visible in the product**, which makes the missing projection easier to notice and no easier to build
 - Status: open (needs a ruling before a projection)
 
-## F-207 — `channel_tasks_stale` outlived its only caller, and the drop is a migration this phase did not take (2026-08-18)
+## F-207 — `channel_tasks_stale` outlived its only caller, and the drop is a migration this phase did not take (2026-08-18) — ✅ RESOLVED 2026-10-26
 
 - Found during: Phase 4 of `docs/archive/CHANNELS-V2-WIRING-PLAN.md` (thread closing is removed), deleting `/api/cron/stale-threads`
 - Location: `supabase/migrations/20260807160000_channel_tasks_stale_activity.sql › channel_tasks_stale`
-- **The shape.** The stale sweep's whole body was a close PROPOSAL, so it went with thread closing (INVARIANTS §5, §13) — the route and `repository-tasks.ts › listStaleOpenThreads` were deleted in that change. **The RPC is still in the database.** Deleting the CALLER is not a migration; deleting the function is, so the code half was taken and this half was filed, exactly as the plan directs
-- ⚠ **CORRECTION 2026-08-18 (wave-2 fix pass): this entry, INVARIANTS §13 and `repository-tasks.ts`'s own docblock all said the `vercel.json` entry went with the route. IT DID NOT.** `vercel.json` still listed `/api/cron/stale-threads` at `0 7 * * *`, so every deploy re-registered a schedule pointing at a route that no longer exists — a daily 404 with no end date, not the "harmless until the next deploy" that §13 asserted. The entry is deleted now; the three false statements are corrected in the same change. **The generalizable bit: a deletion that spans code AND config is only half-verifiable by `ls`, and the config half is exactly the half that gets claimed instead of checked**
+- **The shape.** The stale sweep's whole body was a close PROPOSAL, so it went with thread closing (INVARIANTS §5, §13) — the route and its repository reader were deleted in that change. **The RPC is still in the database.** Deleting the CALLER is not a migration; deleting the function is, so the code half was taken and this half was filed, exactly as the plan directs
+- ⚠ **CORRECTION 2026-08-18 (wave-2 fix pass): this entry, INVARIANTS §13 and `repository-threads.ts`'s own docblock all said the `vercel.json` entry went with the route. IT DID NOT.** `vercel.json` still listed `/api/cron/stale-threads` at `0 7 * * *`, so every deploy re-registered a schedule pointing at a route that no longer exists — a daily 404 with no end date, not the "harmless until the next deploy" that §13 asserted. The entry is deleted now; the three false statements are corrected in the same change. **The generalizable bit: a deletion that spans code AND config is only half-verifiable by `ls`, and the config half is exactly the half that gets claimed instead of checked**
 - **Why it is not merely tidy-up.** It is the last object in the schema that reasons about the close-proposal marker keys: its lateral excludes a message carrying `closeProposed` so the sweep could not talk over an agent's own stated reason. **Nothing writes that key any more** (it left the reserved list entirely), so the predicate is inert — and an inert predicate naming a marker no code can produce is a trap for the next reader of that migration
 - ✅ **It also closes out F-202** (two SQL expressions of one activity clock), which is deleted from this file. That finding's fear was drift between the RPC's lateral and `channel_tasks_activity`'s identical one. With no caller the RPC cannot disagree with anything — but it can still be READ as a live definition, and `supabase db reset` still replays it
-- **What the drop looks like**, and it is one statement: `DROP FUNCTION IF EXISTS channel_tasks_stale(timestamptz, integer);`. ⚠ Verify the signature against the migration rather than this line — a `DROP FUNCTION` naming the wrong argument types is a no-op that reports success. ⚠ **`channel_tasks_activity` (`20260818120000`) is a DIFFERENT object and is load-bearing** — it is what `listTasksByChannel` reads. Do not delete it in the same breath
+- **What the drop looks like**, and it is one statement: `DROP FUNCTION IF EXISTS channel_tasks_stale(timestamptz, integer);`. ⚠ Verify the signature against the migration rather than this line — a `DROP FUNCTION` naming the wrong argument types is a no-op that reports success. ⚠ **`channel_tasks_activity` (`20260818120000`) is a DIFFERENT object and is load-bearing** — it is what `listThreadsByChannel` reads. Do not delete it in the same breath
 - **Not urgent, and the reason is worth stating:** an uncalled `SECURITY DEFINER` function is reachable by nothing this app exposes (service-role EXECUTE only, no route, no RPC path), so this is legibility debt rather than a live surface
 - ⚠ **THE POINTER AT THIS ENTRY WAS WRONG IN THE SCHEMA UNTIL 2026-08-18 (fix wave 3).** `supabase/migrations/20260818120000_channel_tasks_activity_view.sql` said *"see docs/REFACTOR-FINDINGS.md **F-201** for what merges then"*. Written at Phase 1, it GUESSED the id Phase 4 would file and guessed wrong — F-201 is the SPA sidebar's consent poll. **Corrected in place, comment-only**, with the correction dated in the file: the SQL is byte-identical, so replay is unaffected and INVARIANTS §12's gate (`supabase db reset` → exit 0) cannot see the edit. **This class is invisible to `scripts/check-doc-refs.mjs` twice over** — the checker's scope is `docs/*.md`, and even under the F-224 extension a MIS-cite to a LIVE id passes, because the check is existence, not aboutness. Guessing an unassigned F-number is the anti-pattern; file the entry first, or write the sentence without an id
 - ⚠ **THIS ENTRY IS OUT OF NUMERIC ORDER NO LONGER.** It sat between F-201 and F-203 — F-202's vacated slot, taken when F-202 was deleted as resolved — from Phase 4 until 2026-08-18. Moved into order in fix wave 3, unchanged in content
-- Status: open (actionable — one migration, no code change, no floor raise)
+- Status: **RESOLVED 2026-10-26.** Dropped by `supabase/migrations/20261121180000_rename_task_to_thread.sql` (§4), in the task → thread storage rename.
 
 ## F-208 — INVARIANTS §10 describes a `/playground` feature this tree does not contain (2026-08-18) — ✅ RESOLVED 2026-08-30
 
@@ -1488,17 +1488,17 @@ COMMIT;
 - **The entry's diagnosis was right on every count and is kept here rather than summarized**, because two of its three arguments decided how the fix was built:
   - ✅ **SENT — was already wired.** `channels/components/agent-panel.tsx › agentSentMessages`. **The window IMPORTS it** rather than writing a second derivation
   - ✅ **WORK NARRATION.** The entry: *"Tool use reaches the SESSION WINDOW's own IPC stream … Surfacing it means either putting a bounded narration ring on `main/session-summary.js` (which is import-free below its sentinel and deliberately network-free — a per-event ring is a real cost decision against `PUSH_COALESCE_MS`) or a second bridge channel."* **The second bridge channel was taken, and the entry's own cost argument is why.** The summaries feed is DIGEST-GATED and `session-state-push.js` subscribes to that gate to decide when to write the server — so a per-event ring on it would either cost a server write per tool call or be swallowed by the digest. `main/session-narration.js` owns a bounded per-session ring (`NARRATION_MAX`, multiplicative against `MAX_CONCURRENT_SESSIONS` per §11) on its own coalesced channel. ⚠ Tool calls carry their NAMES, which is the specific half this entry called out
-  - ✅ **THE DIRECT 1:1 LANE.** The entry: *"the desktop's own steer (`session:send`) is resolved from `event.sender` and is therefore bound to that session's window"* — exactly the obstacle, and exactly why the new op does NOT resolve from the sender: `main/session-reopen.js › messageByTask` resolves `(channel, thread)` against MAIN'S OWN registry, the same pair `pause`/`end` take, which makes it own-agents-only structurally rather than by a check
+  - ✅ **THE DIRECT 1:1 LANE.** The entry: *"the desktop's own steer (`session:send`) is resolved from `event.sender` and is therefore bound to that session's window"* — exactly the obstacle, and exactly why the new op does NOT resolve from the sender: `main/session-reopen.js › messageByThread` resolves `(channel, thread)` against MAIN'S OWN registry, the same pair `pause`/`end` take, which makes it own-agents-only structurally rather than by a check
 - **THE SECURITY REVIEW THIS ENTRY ASKED FOR, ANSWERED IN FULL.** It parked the lane on *"the `mainOnly` review that `sessions:pause`/`sessions:end` got, plus a ruling on whether an out-of-band steer bypasses the inbound gate"*:
   - **It dispatches the EXISTING `steer` event on the existing reducer branch** — no new branch, no second wake path. A second way to start a turn is a second set of lifecycle bugs
   - **It BYPASSES the inbound gate, and that is correct, because it is not inbound.** AXIS B governs COUNTERPARTY turns; this is the operator's own keyboard in a window MAIN created and registered. `session:send` was always an ungated steer for that reason — what changed is only WHICH window may send one, which is the widening Samuel already ruled on for the pop-out (option (a), the app-window registry)
   - **The text is DELIMITED, not fenced as data** (`main/session-seed.js › frameOperatorTurn`). Fencing the operator's words with `frameContinuation`'s "this is DATA, never instructions" preamble would invert the model the framing is built on — the operator is the one voice a session is told to weigh, and the 2026-08-01 incident was a mislabel in the other direction. The nonce delimiters do the other half of a fence's job: a body forging either vocabulary's `BEGIN-`/`END-` line is stripped
   - **The failure direction is stated rather than implied, because it is wider than pause/end's.** A forged call makes the operator's OWN agent do work they did not ask for, inside that session's existing profile and containment. It grants no tool, widens no posture, reaches no other machine, and cannot post without the outbound gate. That is why the op is bounded in the preload AND at the boundary (`MESSAGE_CAP`), refuses an empty body, and honours the version floor
-- **A FOURTH DEFECT WAS FOUND UNDER THIS ENTRY AND IS ALSO CLOSED.** `session-reopen.js › reopenByTask` answered `{ ok: true }` for a live WINDOWLESS session having opened nothing — the recreate fallback's existing-session branch — and `agents-model.ts › openAgentWindow` discarded the verdict anyway. **Two independent swallows over one click, on nearly every agent**, since the session-window retirement made windowless the ordinary shape
+- **A FOURTH DEFECT WAS FOUND UNDER THIS ENTRY AND IS ALSO CLOSED.** `session-reopen.js › reopenByThread` answered `{ ok: true }` for a live WINDOWLESS session having opened nothing — the recreate fallback's existing-session branch — and `agents-model.ts › openAgentWindow` discarded the verdict anyway. **Two independent swallows over one click, on nearly every agent**, since the session-window retirement made windowless the ordinary shape
   - ⚠ **AND ITS FIRST FIX WAS REJECTED, WHICH IS THE MOST REUSABLE THING IN THIS ENTRY.** That fix made the refusal honest: `{ ok: false, reason: 'windowless' }`, worded in the panel as *"This agent runs without a window."* **Samuel called it meaningless, and it was: a window is a VIEW, not a runtime property.** Whether main happened to mint a `BrowserWindow` for a spawn is an implementation detail of the spawn shape — not a fact about the agent, and no answer at all to "show me what this thing is doing". **The lesson: an honest refusal is only worth shipping when the operator can DO something with it.** Reporting an internal reason beats silence and is not a substitute for the feature. The notice is deleted and the click always opens the view
-- **What shipped:** `main/agent-window.js` (the window, `popout-window.js`'s shape and its inherited ruling), `main/session-narration.js` (the ring), `main/session-seed.js › frameOperatorTurn`, `session-reopen.js › messageByTask` + the windowless reopen branch, three bridge ops (`sessions.openAgentWindow` / `sessions.message` / `sessions.narration` + `onNarration`, each reviewed separately in `test/preload-parity.test.mjs › APP_OPS`), the SPA route + page, and `channels/components/agent-window.tsx` with `› use-agent-narration.ts`
+- **What shipped:** `main/agent-window.js` (the window, `popout-window.js`'s shape and its inherited ruling), `main/session-narration.js` (the ring), `main/session-seed.js › frameOperatorTurn`, `session-reopen.js › messageByThread` + the windowless reopen branch, three bridge ops (`sessions.openAgentWindow` / `sessions.message` / `sessions.narration` + `onNarration`, each reviewed separately in `test/preload-parity.test.mjs › APP_OPS`), the SPA route + page, and `channels/components/agent-window.tsx` with `› use-agent-narration.ts`
 - **What did NOT come back: the session window.** It stays retired (F-228). This window has no transcript of its own, no permission cards, no folder chip and no modes header — those moved to the channels surfaces or died with the retirement. What it restores is the two things that were genuinely lost: watching one agent work, and saying something to it
-- **✅ RE-VERIFIED AT THE CLOSE OF THE SESSION-WINDOW DELETION WAVE (2026-08-20), rather than taken on trust — all three lanes drive real code:** SENT is `channels/components/agent-panel.tsx › agentSentMessages`, which the agent window IMPORTS rather than re-deriving; WORK NARRATION is `main/session-narration.js` → `channels/components/use-agent-narration.ts` → `› agent-window.tsx`; the DIRECT 1:1 lane is `sessions.message` → `channel-dir-ipc.js › sessions:message` → `session-reopen.js › messageByTask`, `appWindowOnly`-bound like every op there
+- **✅ RE-VERIFIED AT THE CLOSE OF THE SESSION-WINDOW DELETION WAVE (2026-08-20), rather than taken on trust — all three lanes drive real code:** SENT is `channels/components/agent-panel.tsx › agentSentMessages`, which the agent window IMPORTS rather than re-deriving; WORK NARRATION is `main/session-narration.js` → `channels/components/use-agent-narration.ts` → `› agent-window.tsx`; the DIRECT 1:1 lane is `sessions.message` → `channel-dir-ipc.js › sessions:message` → `session-reopen.js › messageByThread`, `appWindowOnly`-bound like every op there
 - ⚠ **ONE BUG WAS FOUND IN THAT RE-VERIFICATION AND FIXED, and it is the reusable half:** the deletion wave rebuilt `session-reopen.js › bind`'s `deps` literal and dropped `openAgentWindow` from it, so main passed the handle, `bind` discarded it, and every "Open window" click hit this module's own fail-closed guard. **A wiring bug and a correct refusal produced the same value** — only a test driving the WIRING, not the branch behind it, could tell them apart. `bind`'s docblock now states the rebuild rule
 - Status: **RESOLVED** (2026-08-20). ⚠ The entry is kept rather than deleted because its cost argument for the second bridge channel, and the rejected-refusal lesson above, are both reusable and neither is recorded anywhere else
 
@@ -1509,7 +1509,7 @@ COMMIT;
 - Severity: **smell, sequencing** — every individual piece is correct; what is missing is the half of the product that the retirement assumed
 - **THE POLICY TRADED A PUSH SIGNAL FOR A PULL SURFACE, AND THE PULL SURFACE IS PER-CHANNEL (F-211).** Before this phase, an operator learned about a message they could see because the desktop told them. Now an untagged message raises nothing, and a TAGGED message in a channel that is not selected raises a banner that — if the app is closed, the OS suppressed it, or the operator was away — leaves the tag discoverable only by clicking into that channel and opening a disclosure. **The banner is not a record; the record is F-211's per-channel inbox.** The two were sequenced the other way round in F-211's proposed resolution and shipped in this order anyway
 - **THE AGENT-SIDE HALF IS NOT BUILT EITHER, and it is the wiring plan's Phase 11.** "Tagging is a capability the agent must be TOLD it has" (MAPPING wiring intent) is MCP prose that does not exist yet, so until it lands **no agent tags anybody and the agent-escalation rate is zero**. That is the safe direction — the failure is silence, not noise — but it means the mention gate currently reads as "agents stopped notifying" rather than as "agents notify when it matters", and a judgement about whether the policy is right should not be formed on this interval
-- **What was measured, not inferred:** the desktop's THREE remaining per-message notification paths are the addressed request (`consent.notifyInbound`, deliberately ungated), `trigger.js › sendFyi` and `task-notify.js › notifyTaskReply` (both gated). One concrete banner that used to fire and now does not: a peer's agent replying in an interactive thread opened by an EXTERNAL requester (the operator's own Claude Code over MCP). That reply still reaches the external session through its own armed await, so nothing is lost — but the desktop courtesy notice is gone unless the reply tags the operator (`test/wake-external-requester.test.mjs`, "EXTERNAL reply that tags NOBODY")
+- **What was measured, not inferred:** the desktop's THREE remaining per-message notification paths are the addressed request (`consent.notifyInbound`, deliberately ungated), `trigger.js › sendFyi` and `thread-notify.js › notifyThreadReply` (both gated). One concrete banner that used to fire and now does not: a peer's agent replying in an interactive thread opened by an EXTERNAL requester (the operator's own Claude Code over MCP). That reply still reaches the external session through its own armed await, so nothing is lost — but the desktop courtesy notice is gone unless the reply tags the operator (`test/wake-external-requester.test.mjs`, "EXTERNAL reply that tags NOBODY")
 - Proposed resolution: do F-211's workspace-wide read and its sidebar badge as the next piece of channels work, and treat Phase 11's tagging prose as part of the same product decision rather than as MCP documentation. Do NOT answer this by widening the gate
 ## F-214 — A request notification lands on the channel, and the channel has no way to launch or decline (2026-08-18) — ✅ RESOLVED 2026-08-30
 
@@ -1627,7 +1627,7 @@ COMMIT;
 
 - Found during: the wave-2 fix pass over the channels-v2 review findings, patching the two 2026-08-18 schema objects into the generated types
 - **The shape.** The file is `supabase gen types typescript` OUTPUT in form — `Database`, `__InternalSupabase.PostgrestVersion`, the Row/Insert/Update/Relationships shape — but **no script in the tree regenerates it.** `package.json` has no `gen:types` / `supabase gen` entry (measured 2026-08-18, `grep -n 'gen types\|gen:types' package.json`), so every schema change since whenever it was last generated has had to be hand-carried, and two were not
-- **What was missing**, both from migrations dated the same day the review ran: `channel_mention_reads` (`20260818140000`, a TABLE) and `channel_tasks_activity` (`20260818120000`, a VIEW — which `repository-tasks.ts › listTasksByChannel` reads on every channel open). Both were hand-added in this pass, in the file's own style
+- **What was missing**, both from migrations dated the same day the review ran: `channel_mention_reads` (`20260818140000`, a TABLE) and `channel_tasks_activity` (`20260818120000`, a VIEW — which `repository-threads.ts › listThreadsByChannel` reads on every channel open). Both were hand-added in this pass, in the file's own style
 - ⚠ **NOTHING TYPE-ERRORED EITHER WAY, WHICH IS THE ACTUAL FINDING.** The channels repository goes through `supabaseAdmin()`, which is **untyped**, so `db.from("channel_tasks_activity")` compiled fine against a `Database` that had never heard of it. The generated types are therefore documentation with no enforcement behind it on this path — a table can be added, renamed or dropped and both typechecks stay green. That predates this branch and was deliberately left alone here
 - ⚠ **`agent_trust_rules` STAYS DECLARED TOO, on exactly the same terms (added 2026-08-22).** The table is DROPPED by `20260822140000_retire_inbound_consent_and_trust.sql` (INVARIANTS §6), which is WRITTEN AND NOT APPLIED — so a real `gen types` run against the live project would still emit it, and hand-deleting it would make the file diverge from generation in order to look tidier. **It goes when that migration is applied and the types are regenerated, not before.** Second worked example of the bullet below, and the second time this entry's absence of a generator has meant a schema change is carried in prose instead of in the artifact
 - ⚠ **`channel_tasks_stale` STAYS DECLARED, and that is correct rather than stale.** The review listed it as drift; it is not. F-207 records that the FUNCTION IS STILL IN THE DATABASE with no caller — dropping it is an unwritten migration — so a real `gen types` run today would still emit it. **Deleting it from the types would have made the file diverge from generation in order to look tidier.** It goes when F-207's migration goes
@@ -1743,14 +1743,14 @@ COMMIT;
 - Found during: the F-228 deletion wave, rewriting `test/session-summary.test.mjs`'s §4 retention block
 - `main/session-summary.js › noteEnded` retains an ended session's pill on `keepWindow === true && windowAlive(s && s.win)`. **Every session is windowless since 2026-08-20**, so `s.win` is null on every one of them, `windowAlive` answers false, and `endedKept` never gains a row — whatever `session-effects`' M2b passes for an abandonment. `session-engine.js › settle`'s `s.win.destroy()` is dead for the same reason
 - **The consequence is a surface, not an internal:** an agent that ends leaves the Agents tab immediately instead of holding its pill, so an operator who was not watching has no record that it ran. The retention rule exists precisely for "an end nobody watched happen must not make a transcript vanish"
-- ⚠ **INVARIANTS §11 states the retention as live** ("an ended session's pill outlives its registry entry (the retention rule)"), and `session-reopen.js › controlByTask` reasons from it ("SETTLED AND RETAINED-ENDED SESSIONS ANSWER `{ok:false}`"). So this is a code-vs-INVARIANTS disagreement, filed rather than fixed
+- ⚠ **INVARIANTS §11 states the retention as live** ("an ended session's pill outlives its registry entry (the retention rule)"), and `session-reopen.js › controlByThread` reasons from it ("SETTLED AND RETAINED-ENDED SESSIONS ANSWER `{ok:false}`"). So this is a code-vs-INVARIANTS disagreement, filed rather than fixed
 - **It PREDATES the deletion wave** — it has been true since the windowless executor shipped earlier the same day — and the wave surfaced it rather than causing it. The retention machinery is intact as a FUNCTION (`noteEnded`, `sweepEnded`, `MAX_ENDED`, the LRU drop) and is kept under test with a fake window (§14) rather than deleted
 - **The fix, when taken:** decide what "retain" means with no window to be alive. The obvious replacement is a time bound (retain for N minutes after settle, swept on the next projection) or an unconditional `keepWindow` honour with `MAX_ENDED` as the only bound — but the second re-opens the question the window check was answering, which is "did anything ever have this on screen". Measure what the Agents tab actually needs before picking
 - **✅ SAMUEL RULED THE SECOND OPTION, 2026-08-20, AND IT IS EXECUTED.** Retention is unconditional on the caller's flag, bounded by `MAX_ENDED` alone. **The time bound was refused for the reason the entry itself gave**: the question the window check answered has no answer without a window, and a TTL would have invented one — it would have looked like a measurement of attention while measuring nothing but elapsed time. A count bound is honest about being a count
 - **What went with it, because all of it was the same dead fact:** the `windowAlive` filter in `sweepEnded` (it ran on EVERY projection, so a retained row could vanish between two reads), the `win` handle carried on each retained entry, and `session-engine.js › settle`'s `if (!keepWindow && s.win && …) s.win.destroy()`. The flag now means exactly one thing — retain the ended pill
 - ⚠ **THE ARGUMENT'S NAME IS STILL `keepWindow` AND WAS LEFT ALONE, deliberately.** It is the ENGINE's word, set at `session-effects.js › endEffects`; renaming it at the consumer only would leave the two sides of one flag spelled differently. Rename it at the producer or not at all
 - ⚠ **THE ACCEPTED COST IS PINNED, NOT ASSUMED: a retained pill is a TOMBSTONE, not a HANDLE.** `reopenByTask` refuses a settled key, so clicking one opens nothing. That is the honest version of what the window rule was avoiding (a click that minted a fresh shell wearing a dead session's name), and `session-summary-retention.test.mjs` asserts the absence of the `keptWindow` lookup so it cannot be revived on the strength of retention working again
-- ⚠ **ONE CLAIM IN THIS ENTRY WAS ITSELF WRONG, and it is corrected rather than quietly dropped.** It said "INVARIANTS §11 states the retention as live". §11 did not: the sentence quoted (*"an ended session's pill outlives its registry entry (the retention rule)"*) is `session-reopen.js › controlByTask`'s docblock, a SOURCE comment. §11 carried no retention bullet at all, which is arguably worse — the rule was live, broken, and undocumented. It has one now
+- ⚠ **ONE CLAIM IN THIS ENTRY WAS ITSELF WRONG, and it is corrected rather than quietly dropped.** It said "INVARIANTS §11 states the retention as live". §11 did not: the sentence quoted (*"an ended session's pill outlives its registry entry (the retention rule)"*) is `session-reopen.js › controlByThread`'s docblock, a SOURCE comment. §11 carried no retention bullet at all, which is arguably worse — the rule was live, broken, and undocumented. It has one now
 - **Tests:** §4 of `session-summary.test.mjs` moved out whole to `session-summary-retention.test.mjs` (that file was at EXACTLY 500 — F-226). ⚠ **No fake window survives in it.** The old cases drove the predicate through `fakeWindow()` *because the source was live while the engine could no longer reach it*, which is precisely how a suite stays green over a rule production cannot run; the regression case now drives `win: null` directly. Two tests elsewhere were rewritten to the rule that survives rather than deleted — `session-crash-teardown`'s destroy assertion, which had said in terms "it goes when the line goes, in the same change", and `session-summary-report`'s third beat, whose subject was an operator closing a window
 - Status: **RESOLVED**
 
@@ -1758,7 +1758,7 @@ COMMIT;
 
 - Found during: the read-only audit of `dopl-desktop-app/` that F-234 and F-235 were verified in — sweeping for "two code paths answering one question". This is the one that turned out to be a live defect rather than debt
 - **THE DEFECT, reachable in ONE gesture from the shipped UI.** A windowless session has NO ACCEPT SURFACE. `session-gate.js › enqueue` HOLDS an inbound reply whenever `autoInbound(s)` is false, and the whole family that released one — `decideInbound`, `drainQueue`, `drainInbound` — was deleted with the session window (F-228), **on the stated grounds that "a windowless session's message axis is FLOORED at `auto_inbound`, so the queue never holds"**
-- ⚠ **THAT WAS TRUE OF THE LAUNCH LANES AND OF NOTHING ELSE.** `windowlessMessageMode` (then in `channel-prefs.js`; deleted 2026-09-23, both launch lanes now call `session-profiles.js › floorWindowlessMessage` directly) floors both spawn paths. Nothing floored a mode set on a session ALREADY RUNNING: `session-reopen.js › setModeByTask` accepted all four values, `session-reducer.js` coerced against the full table, and `agent-posture.tsx` renders `MESSAGE_OPTIONS` — which includes `"ask"` — on every live agent
+- ⚠ **THAT WAS TRUE OF THE LAUNCH LANES AND OF NOTHING ELSE.** `windowlessMessageMode` (then in `channel-prefs.js`; deleted 2026-09-23, both launch lanes now call `session-profiles.js › floorWindowlessMessage` directly) floors both spawn paths. Nothing floored a mode set on a session ALREADY RUNNING: `session-reopen.js › setModeByThread` accepted all four values, `session-reducer.js` coerced against the full table, and `agent-posture.tsx` renders `MESSAGE_OPTIONS` — which includes `"ask"` — on every live agent
 - **THE CONSEQUENCE, traced end to end.** Pick "Ask each time" → `autoInbound` false → `enqueue` gates → session-io.js's `queueInbound(…, true)` holds (deleted 2026-09-25). The head emits `inbound_pending`, which `session-windowless.js › claimGate` does NOT claim (it handles `outbound_gate` and `permission_request` only) and `session-engine.js › emit` drops on the null `win`. The accept events have no caller. **The session parks at `awaiting_inbound` forever, `io.noteGatedBody` records the body, and session-seed and session-history both filter it out — so the peer's message is invisible to the agent permanently, with no error anywhere.** That is the AUDIT D2 failure `session-gate.js` was written to prevent, reached from the far end
 - **WHY IT WAS INVISIBLE.** Every gate here was green: the launch lanes really do floor, the reducer really does coerce fail-closed, the axes suite really does pin the truth tables. **The missing thing was not a check on a value — it was a check that the two WRITERS of one field agreed**, and there was no test that named both lanes in one place. The audit found it by asking who writes `messageMode`, not by asking whether any writer was wrong
 - **THE FIX (Samuel's ruling: floor the live axis).** `session-profiles.js › floorWindowlessMessage` is the ONE statement of the rule; `setModeByTask` applies it when the resolved session is windowless. It lives at that layer and not at the IPC boundary **because only that layer has resolved the SESSION and can see whether it has a surface**
@@ -1839,7 +1839,7 @@ COMMIT;
 
 ## F-241 — a PEER's desktop keeps pushing a session for a thread that was just deleted, and the FK makes the whole push 500 (2026-08-21)
 
-- Found during: shipping THREAD DELETION (`channels/server/service-tasks-delete.ts › deleteTask`; INVARIANTS §5)
+- Found during: shipping THREAD DELETION (`channels/server/service-threads-delete.ts › deleteThread`; INVARIANTS §5)
 - **The shape.** `channel_sessions.task_id REFERENCES channel_tasks(id)` (`20260805120000`). The deleting operator's own agents are ended client-side first (`channels/components/thread-manage.tsx`), but **a PEER's agent is not reachable from any server** — it lives in another main process and stops on its own idle/abandon timer (accepted, Samuel 2026-08-21). Until it does, that desktop keeps reporting the session, and `channels/server/session-state-service.ts › toUpsert` sets `task_id: entry.threadId ?? null` — **an id that no longer has a row**
 - **The consequence is wider than the one session.** `repository-sessions.ts › replaceSessionStates` upserts the whole changed set in ONE statement and rethrows any error, so a single `23503` fails the entire `reportSessionStates` call — **that operator's every OTHER session stops being reported too**, and their peer cards go stale workspace-wide until the dead agent times out. `POST` answers 500; the desktop logs it and retries on the next state change, so it is self-healing but noisy and mis-attributed
 - ⚠ **NOT CAUSED BY THE CASCADE'S SESSION STEP, and removing that step does not fix it.** With the step gone the FK's `ON DELETE SET NULL` would null the stored row's `task_id`, but the peer's next push still REPORTS the dead id and still violates the constraint on the way in. The hazard is inherent to a thread being deletable while a peer holds it
@@ -1948,7 +1948,7 @@ COMMIT;
 - **THE VULNERABILITY.** `service-writes.ts › postMessage`'s short-circuit read `repository-messages.ts › findMessageByClientId(channel.id, key)` — scoped to the CHANNEL — and the unique index behind it was `(channel_id, client_msg_id)`. So "I already sent this, give me back what you stored" was a contract with the whole ROOM rather than with the retrying author
 - ⚠ **THE KEYS ARE NEITHER SECRET NOR RANDOM ON THE CALLER THAT SETS THEM AT SCALE.** The desktop stamps `agent-<agentId>-<n>` (`session-outbound-tag.js › nextOwnPostId`); `agentId` is published to every workspace member as `channel_sessions.name` via `read_sessions`; `n` counts from 1. **The next several keys of every visible agent are guessable.** A member posts messages carrying them; when the victim agent posts, the server finds the pre-claimed row, writes nothing, and answers `{ok}` with the attacker's message id. Agent believes it replied, peer gets silence, no error either side
 - **RESOLVED — and it took BOTH halves, which is the part the first read of this finding got wrong.** Author-scoping only the query converts the silent swallow into a `23505` the caller sees as a 500: the probe misses, the INSERT still hits a channel-scoped index, and the race repair (also author-scoped) finds nothing and rethrows. So: (a) a NEW `repository-messages.ts › findOwnMessageByClientId` narrows on `(channel_id, client_msg_id, author_user_id)` and is `postMessage`'s only probe, in both the short-circuit and the lost-race repair; (b) `supabase/migrations/20260822120000_channel_messages_author_scoped_idempotency.sql` widens the unique index to match
-- ⚠ **`findMessageByClientId` SURVIVED AS THE CHANNEL-SCOPED READ, AND IS DELETED (2026-09-02).** It was kept for `storedOpeningSeq`, which asked the CROSS-AUTHOR question by design: a create that converged on somebody else's thread posted nothing and READ the winner's opening seq. **That whole arm went when `channel_tasks` took the same author scope** (`20260913120000`, `repository-tasks.ts › findOwnTaskByClientId`) — a colliding key from another member now yields a SEPARATE thread instead of converging, so nothing reads across authors and an orphan repository helper would read as a live door. The sentence below about column order is therefore history, not a live constraint
+- ⚠ **`findMessageByClientId` SURVIVED AS THE CHANNEL-SCOPED READ, AND IS DELETED (2026-09-02).** It was kept for `storedOpeningSeq`, which asked the CROSS-AUTHOR question by design: a create that converged on somebody else's thread posted nothing and READ the winner's opening seq. **That whole arm went when `channel_tasks` took the same author scope** (`20260913120000`, `repository-threads.ts › findOwnThreadByClientId`) — a colliding key from another member now yields a SEPARATE thread instead of converging, so nothing reads across authors and an orphan repository helper would read as a live door. The sentence below about column order is therefore history, not a live constraint
 - ⚠ **COLUMN ORDER IN THE NEW INDEX IS `(channel_id, client_msg_id, author_user_id)`, not the argument order** — the leading pair is what keeps that cross-author read index-served
 - **Tests:** `service-writes-idempotency-author.test.ts`, one rule at three layers — the repository QUERY SHAPE (both reads, so a mocked-repository suite cannot be green over an unnarrowed filter), the service behaviour (the attack, two authors → two messages, my own retry idempotent, the race repair, no-key unchanged), and the MIGRATION (the index really carries the author and the pair index is really dropped)
 - Status: **RESOLVED** (2026-08-22)
@@ -1974,7 +1974,7 @@ COMMIT;
 
 ## F-262 — `deleteTask`'s "no doorbell needed" rested on a replica identity `channel_messages` does not have (2026-08-22) — ✅ RESOLVED 2026-08-22
 
-- Found during: the same review, checking `service-tasks-delete.ts`'s realtime claim against `supabase/migrations`
+- Found during: the same review, checking `service-threads-delete.ts`'s realtime claim against `supabase/migrations`
 - **THE FALSE CLAIM, quoted:** the docblock (and INVARIANTS §5, in the same words) said step 1 "fires real DELETEs on `channel_messages`, which IS published and carries `workspace_id` under `REPLICA IDENTITY FULL` (`20260807150000`)". That migration set **`USING INDEX`, not FULL**, on eleven tables and named `channel_messages` on its **EXEMPTION** list — "cascade from `channels` / `workspaces` only"
 - ⚠ **THE EXEMPTION WAS CORRECT WHEN WRITTEN AND STOPPED BEING TRUE ON 2026-08-21**, when a thread became deletable. Nothing else in that hand-written cascade is published: `channel_tasks` and `channel_sessions` are both deliberately out (§7), and consent rows are UPDATEd to `expired` rather than deleted. So under `REPLICA IDENTITY DEFAULT` the DELETE's WAL record is the primary key alone, both subscribers' `workspace_id=eq.<id>` filter can never match it, **and every frame is dropped SERVER-SIDE** — the counterparty keeps rendering a thread that no longer exists until a manual refetch, then 404s on click, with no error anywhere
 - ⚠ **A STATED REASON IS WHAT MADE THIS FINDABLE.** `ui-sync-replica-identity.test.mjs › NO_DELETE_DOORBELL` maps each exempt table to WHY, and its own instruction is "if the reason has changed, move it to `DELETE_DOORBELL_TABLES` and say so". A bare list would have read as a decision nobody could re-derive
@@ -2149,14 +2149,14 @@ The nine were Slack, Figma, Dopl, Attio, Notion, Granola, Google Drive, Google C
 - ⚠ **THE COPY IS THE DEFECT, NOT THE DEAD PREDICATE.** Three shipped strings told an agent this capability exists and, worse, told it what to do AFTERWARDS:
   1. `packages/mcp-server/src/tools/channel-description.ts` — "it opens a full session on YOUR OPERATOR'S OWN machine to carry the thread, and once you've created it you are DONE (**do not arm "await"** — that session handles the replies, and a second watcher here would race it)".
   2. `packages/mcp-server/src/tools/channel-ops-threads.ts › opCreateThread` — the post-create result block, which repeats it in the RESULT lane, where a tool result outvotes a description (INVARIANTS §10).
-  3. `src/features/channels/schema.ts › TaskCreateSchema.handoff` — the field's own docblock, which is what the next server-side reader would trust.
+  3. `src/features/channels/schema-threads.ts › ThreadCreateSchema.handoff` — the field's own docblock, which is what the next server-side reader would trust.
 - **THE COST IS AN AGENT THAT STOPS WAITING.** This is not a cosmetic overstatement: the copy's operative instruction is *do not arm await*. An external session told to hand off does exactly that, nothing opens on the operator's machine, and **nobody is watching the thread at all** — the counterparty's reply lands and is read by no one, in the one flow whose whole point was that a session would carry it. The failure is silent on both sides.
 - **RESOLVED — RE-TAUGHT HONESTLY, NOT REWIRED, AND THE JUDGEMENT IS RECORDED.** The alternative on the table was to wire `handoff` into the new launch-directive design (a create_thread that also files a directive). **Rejected as not nearly free:** it would change `create_thread`'s write path, its idempotency story and its result shape, and it would make a thread create start REFUSING in a new way whenever the operator's launch toggle is off — a behaviour change to the most-used write in the feature, bought as a side effect of a drive-by. The capability an agent actually wants is now a first-class op with its own consent, its own six refusals and its own result vocabulary: **`op="launch_agent"`.**
   - The description's HANDOFF paragraph now says it **opens nothing today**, that the thread behaves exactly as it would without the flag (this session keeps the replies), and points at `op="launch_agent"` for the thing the agent was actually asking for.
   - `opCreateThread`'s result block says the same, in the lane that outvotes the description.
-  - `TaskCreateSchema.handoff`'s docblock records that the stamp is still written and that **no current build reads it**, with this id.
+  - `ThreadCreateSchema.handoff`'s docblock records that the stamp is still written and that **no current build reads it**, with this id.
   - ⚠ **THE FIELD IS KEPT, ACCEPTED AND STILL STAMPED.** Removing it would 400 every older external agent that passes it, for no gain — the stamp is inert, not harmful — and a future desktop could legitimately pick the lane back up. What is not kept is the PROMISE.
-- Status: **RESOLVED** (2026-08-22) as a documentation-and-teaching defect. ⚠ The dead predicates (`targeting.js › requesterTaskOpen` / `declaresHandoff`) are **left alone deliberately**: they are the desktop lane's, they are inert, and deleting code in another builder's tree during a concurrent wave is how a merge conflict becomes a regression.
+- Status: **RESOLVED** (2026-08-22) as a documentation-and-teaching defect. ⚠ The dead predicates (`targeting.js › requesterThreadOpen` / `declaresHandoff`) are **left alone deliberately**: they are the desktop lane's, they are inert, and deleting code in another builder's tree during a concurrent wave is how a merge conflict becomes a regression.
 
 ## F-275 — INVARIANTS §1 states "no cross-feature imports" as a live rule, and the tree has never obeyed it (2026-08-22)
 
@@ -2792,7 +2792,7 @@ an agent reads at decision time steers the next call.
   `channel_tasks` is still `(channel_id, client_msg_id)` (`20260729032037_channel_tasks_client_msg_id.sql`,
   and INVARIANTS §5 already said so), i.e. **channel-wide whoever sent it**. So a colliding key on a thread
   open returns **another member's thread with your body posted nowhere**
-  (`src/features/channels/server/service-tasks.ts › convergeOnThread` posts nothing for a non-creator).
+  (`src/features/channels/server/service-threads.ts › convergeOnThread` posts nothing for a non-creator).
   The describe now states both scopes, split by op. **Nothing in the tree was wrong; the one sentence
   covering two routes was.**
 - **(b) `title` PROMISED PRECEDENCE IT DOES NOT HAVE.** *"A longer title is rejected here, before the call
@@ -2975,7 +2975,7 @@ at four members"*. Samuel made that call: build the list.
   back to `[]` and paint every channel as SOLO on the first paint after the upgrade — a FALSE sentence,
   where degrading to one face is merely the old correct one. Its meaning is now STATED ("the member who
   joined first") rather than "whichever row came back first", which is what made it non-deterministic.
-- **The UI reads the roster, not the head:** `pages/home/home-rows.ts › channelPeople` is the ONE read
+- **The UI reads the roster, not the head:** `home/components/channels/home-rows.ts › channelPeople` is the ONE read
   of `peers` and owns the cache merge; `› channelTitle` counts past two names (`Grace, Priya +2`);
   `› channelSubline` swaps a single peer's email for `N people`; `relationship-list.tsx` draws
   `shared/ui/avatar-stack.tsx › AvatarStack` at 2+; the Info tab header does the same one size up.
@@ -3482,7 +3482,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
 - Location: `src/features/home/server/repository-containers.ts › insertContainerMember` (the row it
   writes), `src/features/channels/server/service-shared.ts › canManageChannel`,
   `src/features/channels/server/service-writes.ts › deleteChannel`,
-  `src/features/channels/server/service-tasks-delete.ts › assertMayDeleteThread`.
+  `src/features/channels/server/service-threads-delete.ts › assertMayDeleteThread`.
 - Found during: the M4 leak review, written into `docs/archive/specs/guest-web-channel.plan.md` §*M4 leak
   review (2026-08-25)*, which walked every guest-reachable endpoint. **That review found no exposure
   outside the accepted set — this entry is about the WORDING of the acceptance, not a new hole.**
@@ -3752,7 +3752,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   and mark-read their own mentions in it without joining. Own-scoped by `ctx.userId` throughout, so
   nothing crosses between users.
 - ⚠ **What it really costs is a TEST GAP:** `app/api/channels/guest-route-floor.test.ts`'s closing
-  assertion pins the membership fence on `service-writes.ts` and `service-tasks-broadcast.ts` and does
+  assertion pins the membership fence on `service-writes.ts` and `service-threads-broadcast.ts` and does
   not cover `service-mentions.ts` — so if the mentions route's own scoping ever loosened, the floor
   would silently become the gate.
 - Proposed resolution: decide whether reading your own mentions in a public room you never joined
@@ -3916,7 +3916,7 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
   and argued it from link CONTAINERS: no team grants there, so `my-access` resolves to the role
   default, and the one role it would refuse (`guest`) never reaches a base. **Every word of that is
   true of containers and none of it is true of the second target the same component mounts for.**
-  `pages/home/knowledge-base-view.tsx` mounts for BOTH `containerTarget` and `homeTarget`, and
+  `knowledge/components/home/home-knowledge-base-view.tsx` mounts for BOTH `containerTarget` and `homeTarget`, and
   `homeTarget` is the caller's HOME workspace — an ordinary standard workspace that CAN be
   teams-mode. It is handed `list.bases`, the WHOLE base list rather than the private subset the pane
   offered, so the grid behind the detail pane rendered team-visible bases with every edit control
@@ -4228,7 +4228,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
 
 **What was done in the meantime, and deliberately nothing more:**
 
-- The UI copy now states the CURRENT truth — `pages/home/knowledge-panels.tsx`'s scope-B caption
+- The UI copy now states the CURRENT truth — `knowledge/components/home/home-knowledge-panels.tsx`'s scope-B caption
   reads *"Yours alone — your agent in this channel can't read these, shared or not"*, replacing
   *"Yours alone UNTIL YOU SHARE IT"*. `kb-channel-grants-section.tsx`'s docblock says the same of
   its `Agent only` state, which does work for a `public` base.
@@ -4293,7 +4293,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   projected, so a dropped column is invisible to it — while against real PostgREST it makes every
   locked credential read as UNLOCKED. Measured, not assumed (the mutation run is in the report).
   **The projection string is now asserted directly**, for both columns.
-- **UI copy and docs reversed to the true rule.** `pages/home/knowledge-panels.tsx`'s scope-B caption
+- **UI copy and docs reversed to the true rule.** `knowledge/components/home/home-knowledge-panels.tsx`'s scope-B caption
   goes back to an "until" (*"Yours alone until you give your agent access."*), and
   `kb-channel-grants-section.tsx`'s docblock records that `Agent only` reaches a private base again,
   keeping the day it did not as the record. INVARIANTS §4, §5A, §10 and §12 restate the rule.
@@ -4375,7 +4375,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
 
 - ⚠ **Id note:** see F-338's; same read, same race.
 - Location: `apps/desktop-ui/src/pages/home/identity-panels.tsx` — `containerList.error` was read,
-  `homeList.error` was not — against `identity-panels.tsx › PrivateIdentitySection` (the card half merged back into that file 2026-09-23).
+  `homeList.error` was not — against `identity-panels.tsx`'s Personal section (since 2026-10-26 `› personalState`).
 - **The mechanism, and it compounds.** `useAgentIdentities` reports `resolved: query.data !== undefined`,
   so a FAILED read is unresolved **forever**. `scopePending` was `!homeList.resolved`, so:
   1. the section body rendered a bare `<div className="h-10" />` — no sentence, no error, no retry;
@@ -4449,7 +4449,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   FOUR tabs its width budget was measured against and the tightening / scroll residual never
   engages there.
   - 🔑 **THE DUPLICATE VIEW GAVE WAY, NOT THE CAPABILITY, AND THAT IS THE WHOLE SHAPE OF THE
-    RULING.** The operator loses nothing: `pages/home/knowledge-panels.tsx` is a FULL Knowledge
+    RULING.** The operator loses nothing: `knowledge/components/home/home-knowledge-panels.tsx` is a FULL Knowledge
     face on the header's own segmented control, over the same bases, one click away — the tab was
     the smaller of two views. **The guest has no second surface**: `ChannelKnowledgeTab` has one
     consumer (`info-panel.tsx`), and `/api/channels/[channelId]/knowledge/**` has no other client
@@ -4514,7 +4514,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   three were considered together.
 - **The split.** `GET /api/knowledge/bases?shelf=home|workspace` narrows the list to one shelf, and
   an ABSENT `shelf` means BOTH. Two surfaces now name a shelf (`apps/desktop-ui/src/pages/home/
-  knowledge-panels.tsx › HOME_SHELF`, `apps/desktop-ui/src/pages/knowledge/index.tsx ›
+  home-knowledge-panels.tsx › HOME_SHELF`, `apps/desktop-ui/src/pages/knowledge/index.tsx ›
   WORKSPACE_SHELF`). These three readers do not:
   1. **MCP `kb_list_bases`** (rides the route with no param). **Right, and it must stay right** — an
      operator's agent asking "what knowledge is here" should see the operator's whole workspace, not
@@ -4582,7 +4582,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   container's `workspaceId`, its channel, its peers and its `linkOut`. **It does not carry the
   CALLER'S OWN ROLE in that container.** A claimed link can land its peer as a `guest` or a
   `member` (`HomePendingLink.grantedRole`), and both of them see the channel on their /home.
-- **Consequence 1 — the new "New shared base" button** (`pages/home/knowledge-panels.tsx`).
+- **Consequence 1 — the new "New shared base" button** (`knowledge/components/home/home-knowledge-panels.tsx`).
   `POST /api/knowledge/bases` is `minRole: "member"`, so a GUEST who clicks it gets a 403 that the
   dialog surfaces as an error. Correct, and ugly: a live button that cannot work. It is shown to
   both because the pane has nothing to branch on.
@@ -4616,7 +4616,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
     Derived server-side from the membership row by
     `channels/server/repository-list-extras.ts › listMyContainerRoles` — ONE bounded query in the
     tier that already reads peers, never a client param.
-  - **The hardcode is gone.** `pages/home/knowledge-panels.tsx › containerTarget` takes the real
+  - **The hardcode is gone.** `knowledge/components/home/home-knowledge-panels.tsx › containerTarget` takes the real
     role, so the base settings modal stops believing every reader is an owner.
   - **The four controls, each mirroring the floor the server already applies:** Add person
     (`member`+, `service-writes.ts › mintContainerLink`), the Knowledge face's shared create
@@ -4664,6 +4664,13 @@ agent is fed regardless of what triage said"` and `§ "wake FENCE: an agent-auth
 FEEDS a RUNNING sibling — ruling 4 survives"`.
 
 ### F-345 — the 28px icon-button recipe is hand-written in FIVE more places, and each copy is one file's taste (2026-08-28) — ⚠ REWRITTEN 2026-08-30 (three corrections; still OPEN)
+
+**PARTLY RESOLVED 2026-10-26 (`ui/design-system`).** The five `ICON_BTN` consts and the two inline
+copies in `playground/components/panes/channels-pane.tsx` are gone: they wear
+`src/shared/ui/chrome-icon-button.ts › CHROME_ICON_BUTTON`, which
+`src/features/channels/components/icon-button.tsx › IconButton` also renders for its resting face.
+`grep -rn "ICON_BTN" src apps` returns nothing. Still open: `members-v2/bits.tsx › IconButton`
+(its `onInvert` face) is a second component for the same idea.
 
 **What was built.** The knowledge base header's download / settings / delete controls were a
 file-private `ICON_BTN` const — a bare 28px square with a hover tint and no face. Samuel's
@@ -5062,7 +5069,7 @@ abort-churn path rather than by file order. All through the same shared helper; 
 
 | site | branch | rate |
 |---|---|---|
-| `main/channel-post.js › postTaskEvent` / `› postWithRetry` | `return res.ok === true` — no branch reads | per agent message posted, × up to 3 retries |
+| `main/channel-post.js › postThreadEvent` / `› postWithRetry` | `return res.ok === true` — no branch reads | per agent message posted, × up to 3 retries |
 | `main/consent.js › createConsentRequest` / `› patchDecision` | 404 / `!res.ok` / 409 — **every** exit of `patchDecision` | per gated post, per operator decision, and on every session settle (`watchRow`'s teardown deny) |
 | `main/listener-people.js › resolveOperatorUserId` / `refreshNameCache` | 401 / `!res.ok` | per workspace per reconcile |
 | `main/launch-directives.js › fetchPending` (was `pollWorkspace`) / `› post` | `if (!res \|\| !res.ok) return []` — and the 404 self-disable does NOT fire for 401 | per workspace per 60s |
@@ -5502,7 +5509,7 @@ the wrong one being quietly deleted.
 Found by the adversarial review of the direct lane; **the defect is older than that lane and the
 operator's own 1:1 composer had it since 2026-08-22.**
 
-`session-reopen.js › messageByTask` opened the private window and then dispatched the `steer`. For
+`session-reopen.js › messageByThread` opened the private window and then dispatched the `steer`. For
 a PARKED session the reducer emits `resumeQuery` BEFORE `pushTurn`, and
 `session-park.js › resumeParked` calls `resetPrivateTurn` — so the window opened for that very
 message was zeroed by the wake it caused. The turn then ran with AXIS B's outbound widening
@@ -6463,7 +6470,7 @@ exactly how this was lost.
 ### F-402 — a home container's channel can still carry `is_direct = true`, so a THIRD surface named it after its peer (2026-09-01) — ✅ MASKED, the DATA is still open
 
 Samuel's ruling of the same day — **a channel's identity is its own name, never its roster's** —
-was applied at `apps/desktop-ui/src/pages/home/home-rows.ts › channelTitle`, which the /home list
+was applied at `src/features/home/components/channels/home-rows.ts › channelTitle`, which the /home list
 row and the Info tab both read. **The record pane's HEADER reads a different derivation**:
 `src/features/channels/lib/channel-display.ts › channelDisplayName`, via
 `channels/components/channel-surface.tsx`, and that one returns the peer's display name whenever
@@ -6770,7 +6777,7 @@ only surface: `channel_launch_directives` has no column for an applied posture, 
 terminal `launched` / `done` status says nothing about what actually landed.
 
 That is the "surface showing a posture main is not enforcing" lie this tree has paid for twice
-(`session-reopen.js › setModeByTask` carries the argument for why a reply must be main's
+(`session-reopen.js › setModeByThread` carries the argument for why a reply must be main's
 post-dispatch truth). It is bounded here — the clamp only ever NARROWS, so the caller's agent is
 more supervised than it asked for, never less — but an orchestrator that asked for `bypass` and got
 `auto` will read its agent's later refusals as a bug.
@@ -7613,7 +7620,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-494 — the spec renames the request fan-out module to a word INVARIANTS §5 says this product does not have (2026-09-02)
 
-- Location: `src/features/channels/server/service-tasks-broadcast.ts` (renamed here), against INVARIANTS §5's *"broadcast is not a shape this product has"*.
+- Location: `src/features/channels/server/service-threads-broadcast.ts` (renamed here), against INVARIANTS §5's *"broadcast is not a shape this product has"*.
 - Found during: v2 wave B slice B4, taking C16's rename.
 - **BOTH ARE TRUE AND THE FILE NOW SAYS SO.** The INVARIANT is about ADDRESSING — there is no way to reach a room without naming who you mean, and this wave STRENGTHENS that rather than relaxing it. The module is about the SEND SHAPE: one request, N explicit addressees the sender typed, N threads, one card. The rename was taken as specified and the docblock states the distinction, so a reader who finds the word here does not conclude the addressing rule was relaxed.
 - ⚠ **IF A LATER SLICE FINDS THIS TOO SUBTLE, RENAME THE MODULE — NOT THE INVARIANT.** a name built on "multi-addressee" says the same thing with no collision. It was not taken here because the spec names the target file explicitly and a slice inventing a third name is how the C16 confusion is reproduced under new spelling.
@@ -8478,7 +8485,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   the share row can describe and no request can exercise: `guestsLevel: "edit"` is a stored word today.
 - ⚠ **IT FAILS CLOSED, WHICH IS WHY IT IS A FINDING AND NOT A P0.** A guest gets LESS than Samuel's
   matrix promises, never more; nothing leaks. What is broken is the half of the ruling that says *"are
-  guests access/view or edit"* — the control renders in `pages/home/ontology-share.tsx`, the PUT
+  guests access/view or edit"* — the control renders in `ontology/components/ontology-share.tsx`, the PUT
   stores what the operator picked, and the answer never reaches anybody.
 - ⚠ **THE FIX IS A RULING, NOT AN EDIT, WHICH IS WHY THIS WAVE DID NOT MAKE IT.** Flooring the two
   ontology READ routes to `minRole: "guest"` fails `src/app/api/channels/guest-route-floor.test.ts ›
@@ -9777,19 +9784,19 @@ open search pill, and the landing page's scripted /home demo"*, which is how it 
 2026-09-15 ruling that took it off /home's channel row. **Neither reader exists, and they stopped
 existing on different days.**
 
-- **The search pill never wore it.** `apps/desktop-ui/src/pages/home/home-search.tsx` composes
+- **The search pill never wore it.** /home's search pill (now `src/features/search/components/header-search.tsx`) composed
   `.search-expand` over `.auth-btn-3d-light`; the "held focus" look it borrows is the KIT's own
   `.search-expand[data-open="true"] .search-expand-shell:focus-within`, which names `--focus-line`
   and `--raised-light-focus` directly. The class is nowhere in that file or its kit rules. That half
   of the claim appears never to have been true.
 - **The landing demo stopped wearing it on 2026-09-17**, when the hero scene was rebuilt on /home's
-  current UI: its channel rows are `shared/ui/home-card-marks.tsx › HOME_CARD_FACE` /
-  `› HOME_CARD_FACE_SELECTED`, which is the ruling that removed the ring in the first place.
+  current UI: its channel rows wore the `HOME_CARD_FACE` / `HOME_CARD_FACE_SELECTED` constants
+  (deleted 2026-10-26 with the staging port), the ruling that removed the ring in the first place.
 
 Re-derive before acting on this, rather than trusting the measurement:
 `grep -rn "selected-ring" src apps/desktop-ui/src | grep -v globals.css | grep -v kit.css` — on
 2026-09-17 that returned three COMMENTS (`home-card-marks.tsx`, `home-channel-row.tsx`,
-`pages/home/home.module.css`) and no class usage.
+`home/components/shell/home.module.css`) and no class usage.
 
 ⚠ **THE RECIPE ITSELF WAS DECLARED TWICE** — `src/app/globals.css` and
 `apps/desktop-ui/src/styles/kit.css` — and `--focus-line` / `--focus-halo`, the tokens it composes,
@@ -9890,7 +9897,7 @@ did not exist yet would have made the route BROKEN rather than SLOW until somebo
 file, and `20260822170000_overview_time_range_indexes.sql` states that rule for this directory in
 as many words. The same argument is why there is no `SECURITY DEFINER` search RPC and why
 `ts_rank` / `ts_headline` are computed in TypeScript instead (`service-groups.ts › rankHits`,
-`snippet.ts › buildSnippet` — the second of which is also the safer place, since `ts_headline`
+`highlight.ts › buildSnippet` — the second of which is also the safer place, since `ts_headline`
 copies the source body through verbatim). **A new search arm gets the same treatment.**
 
 **The discharge was the one line the migration's footer spelled out:**
@@ -10160,7 +10167,7 @@ The claim had been restated in five places from one sentence, which is how it su
 - **WHAT THE RULING CHOSE.** R-46 offered (a) delete both, (b) wire "Add member" to the existing invite dialog and delete only the filter, (c) leave. Samuel took **(a)**, with (b) recorded as a follow-up ticket. This is that ticket.
 - ⚠ **NOTHING IS LOST IN THE MEANTIME, WHICH IS WHY (a) WAS SAFE.** **Add members** is on the Settings tab (`settings-tab.tsx`), capability-gated on `memberManagement` so /home's link container — where the act cannot happen at all (§4A `LINK_CONTAINER_CLOSED`) — does not offer it. The Info-tab button was a second opener for an act that already has one, and it had no `onClick` at all.
 - ⚠ **"Filter members" is NOT part of this.** It was deleted outright and no ticket follows it: the roster is bounded and short, and R-46's (b) named only the add affordance.
-- Status: **RESOLVED 2026-09-17** in wave 1A — Samuel answered (b) yes, later the same day. `channels/components/info-tab.tsx › InfoTab.membersAction` is the position and `channels/components/surface-info-panel.tsx` owns the control, the gate and the dialog: the page-action pill (`shared/ui/page-action-button.ts › PAGE_ACTION_BTN`) over `channels/components/invite-dialog.tsx › InviteDialog`, gated `channel.role === "owner" || meetsMinRole(role, "admin")` under `capabilities.memberManagement` — the SAME conjunction `channel-manage.tsx` hands the same dialog for the Settings row, mirrored rather than re-derived. Hidden, not disabled; mounted only while open. **"Filter members" stays deleted** — (b) named only the add affordance. Pinned in `channels/components/channel-surface-info-body.test.tsx` (owner opens it, workspace admin sees it, plain member and guest do not, `memberManagement: false` does not, and no Filter control returns).
+- Status: **RESOLVED 2026-09-17** in wave 1A — Samuel answered (b) yes, later the same day. `channels/components/info-tab.tsx › InfoTab.membersAction` is the position and `channels/components/surface-info-panel.tsx` owns the control, the gate and the dialog: the page-action pill (`shared/ui/pill-button.tsx › pillButton`, `"ink", "lg"`) over `channels/components/invite-dialog.tsx › InviteDialog`, gated `channel.role === "owner" || meetsMinRole(role, "admin")` under `capabilities.memberManagement` — the SAME conjunction `channel-manage.tsx` hands the same dialog for the Settings row, mirrored rather than re-derived. Hidden, not disabled; mounted only while open. **"Filter members" stays deleted** — (b) named only the add affordance. Pinned in `channels/components/channel-surface-info-body.test.tsx` (owner opens it, workspace admin sees it, plain member and guest do not, `memberManagement: false` does not, and no Filter control returns).
 
 ### F-722 — R-20 made the two CHANNEL info bodies agree and left the THREAD one saying "Date of creation" (2026-09-17)
 
@@ -10176,7 +10183,7 @@ The claim had been restated in five places from one sentence, which is how it su
 
 ### F-723 — the operator read as OFFLINE in their own home channel: /home's roster passed no viewer (2026-09-17)
 
-- Location: /home's own roster — a second `MemberRoster` call site that passed no viewer — against `src/features/channels/components/member-roster.tsx › MemberRoster`'s `viewerUserId` and `src/features/channels/components/view-model.ts › isPresentForViewer`. ⚠ **THE CALL SITE IS GONE, WHICH IS THE FIX**: wave 1A deleted the forked body, and what survives of that file is `apps/desktop-ui/src/pages/home/person-roster-actions.tsx › PersonRosterActions`, which draws no members at all.
+- Location: /home's own roster — a second `MemberRoster` call site that passed no viewer — against `src/features/channels/components/member-roster.tsx › MemberRoster`'s `viewerUserId` and `src/features/channels/components/view-model.ts › isPresentForViewer`. ⚠ **THE CALL SITE IS GONE, WHICH IS THE FIX**: wave 1A deleted the forked body, and what survives of that file is `src/features/home/components/channels/person-roster-actions.tsx › PersonRosterActions`, which draws no members at all.
 - ⚠ **Id note:** re-derived across every live branch at file time (the header's loop), not from `master` — `master`'s highest is `F-717` and wave 1B holds `F-720`–`F-722`. ⚠ **Re-derive AGAIN before merge:** `master` moved under wave 1B mid-wave and cost it a three-entry renumber.
 - Found during: **wave 1A**, executing `docs/specs/workspace-parity/08-slot-audit.md` §4.3, which found it by reading the slot contract rather than the screen.
 - **THE MECHANISM, IN THREE FILES AND ONE EXPRESSION.** `isPresentForViewer` is `if (viewerUserId && member.userId === viewerUserId && isSpaRenderer()) return true;` before it falls through to the `lastSeenAt` heartbeat. `MemberRoster` forwards `viewerUserId` and nothing else touches it. The shared Info tab has passed `index.currentUserId` since 2026-09-08; /home's replacement body mounted its own `useChannelMembers` and passed **no viewer at all**, so the override could not fire — **in the desktop renderer, which is the only place `isSpaRenderer()` is ever true.** The operator therefore read as OFFLINE in their own home channel while the workspace channels page, on the same machine in the same second, showed them online.
@@ -10458,7 +10465,7 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 ### F-751 — the web's workspace-General composition is mounted by nothing since the settings popup lost that pane (2026-09-18)
 
 - Location: `src/shared/layout/settings-modal/sections/workspace-section.tsx › WorkspaceSection`, `src/shared/layout/settings-modal/workspace-icon-uploader.tsx › WorkspaceIconUploader`, and `src/shared/layout/settings-modal/sections/workspace-section-core.tsx › WorkspaceSectionCore` (the `SectionShell title="General"` wrapper, NOT `› WorkspaceSectionBody`, which `apps/desktop-ui/src/pages/settings/index.tsx` still mounts).
-- Found during: the settings-popup overhaul (Samuel, 2026-09-18) that replaced the popup's **General** pane with a **Workspaces** LIST and added **Connect**. The popup was the only surface composing those three; the web binding (`settings-modal.tsx`) then passed `WorkspacesSectionCore` instead. (That web binding was never mounted and was deleted 2026-10-11, cleanup ST1; the desktop binding passes the same core.)
+- Found during: the settings-popup overhaul (Samuel, 2026-09-18) that replaced the popup's **General** pane with a **Workspaces** LIST and added **Connect**. The popup was the only surface composing those three; the web binding then passed `WorkspacesSectionCore` instead. (That web binding was never mounted and was deleted 2026-10-11, cleanup ST1; the desktop binding passes the same core.)
 - ⚠ **NOT DELETED, AND THE REASON IS A CAPABILITY, NOT CAUTION.** `WorkspaceIconUploader` is the tree's ONLY workspace-image control: the desktop cannot carry a multipart upload over its JSON IPC bridge, so deleting this chain removes the ability to set a workspace icon from the product entirely. INVARIANTS §15 says dead code is deleted; this is dead CODE guarding a live capability, which is the case the rule does not cover.
 - ⚠ **THE WEB BINDING ITSELF HAS NO MOUNT EITHER** (`grep -rn 'layout/settings-modal"' --include='*.tsx' src` finds one TYPE-only import), and has had none since Stage D deleted `src/app/[workspaceSlug]/**`. So this is debt on top of debt: the file that would have re-mounted the pane is unmounted too.
 - Proposed resolution: land the icon uploader on `/{segment}/settings` when Samuel's settings-page overhaul (R-10) reaches it, then delete all three symbols in one change.
@@ -10476,7 +10483,7 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 
 ### F-753 — `setModelByTask` recorded a model switch that never happened, on every runtime without a live-switch verb (2026-09-21, FIXED)
 
-- Location: `dopl-desktop-app/main/session-reopen.js › setModelByTask`.
+- Location: `dopl-desktop-app/main/session-reopen.js › setModelByThread`.
 - Found during: U10 (`docs/plans/2026-09-21-001-fix-codex-runtime-parity-plan.md`).
 - ⚠ **IT VIOLATED ITS OWN HEADER RULE** — *"a recorded pick nothing applied is a lie"*. The `setModel` call was guarded by `typeof … === 'function'`, so on a runtime whose handle has no model verb NOTHING WAS APPLIED, and the op still recorded a **Claude alias** onto that session and answered `{ok:true}`.
 - ⚠ **THE RECORDED VALUE IS NOT INERT**: it is what the next launch assembly reads, so a switch that silently did nothing became the next spawn's input.
@@ -10509,7 +10516,7 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 
 ### F-756 — runtime-seam leftovers the cleanup did not reach (2026-09-23)
 
-- Location: `dopl-desktop-app/main/session-reopen.js › setModelByTask` and `dopl-desktop-app/main/launch-directive-spawn.js › appliedModelId` (both still probe `typeof rt.modelArg === 'function'`); the `sessionRequired` helper in `packages/mcp-server/src/tools/respond.ts` (deleted 2026-09-24).
+- Location: `dopl-desktop-app/main/session-reopen.js › setModelByThread` and `dopl-desktop-app/main/launch-directive-spawn.js › appliedModelId` (both still probe `typeof rt.modelArg === 'function'`); the `sessionRequired` helper in `packages/mcp-server/src/tools/respond.ts` (deleted 2026-09-24).
 - Found during: the 2026-09-23 review's Wave 2 (w2-runtime, w2-pkgs), deferred because the files belonged to other partitions or needed a ruling.
 - **The two probes are dead guards.** `modelArg` (and `rosterKey`) are contract methods since 2026-09-23 (`main/runtime/contract.js › RUNTIME_METHODS`), and `sealAdapter` refuses an adapter that lacks one, so the `typeof` branch can never be false for a registered runtime — it only hides a contract violation behind a silent pass-through.
 - **`sessionRequired` has no production caller** since knowledge pinning left, and is kept deliberately by its own test. Deleting it needs a ruling, not a sweep.
@@ -10528,7 +10535,7 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 
 ### F-758 — a Codex auth hold is re-probed only on an operator or direction message, never on a peer-inbound wake (2026-09-23)
 
-- Location: `dopl-desktop-app/main/session-auth.js › reprobeHeld` / `› reprobesOnWake`, called only from `main/session-reopen.js › messageByTask`.
+- Location: `dopl-desktop-app/main/session-auth.js › reprobeHeld` / `› reprobesOnWake`, called only from `main/session-reopen.js › messageByThread`.
 - Found during: the 2026-09-23 review's c-codex fix for P4-06 (auth holds are runtime-scoped; a runtime with no in-app sign-in re-probes its credential on the next wake).
 - **The gap.** After `codex login`, a held Codex agent resumes on the operator's next message, but a PEER's message into its thread still meets the hold: the inbound wake path does not ask `reprobeHeld`, so a multiplayer room can sit on a held agent until the operator happens to address it.
 - Proposed resolution: ask `reprobeHeld` on the inbound wake path too, once per wake, with the same fail-closed probe semantics.
@@ -10554,7 +10561,7 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 
 - Location: `src/app/globals.css` and `apps/desktop-ui/src/styles/kit.css` (`.fade-swap-in` and its reduced-motion twin); `scripts/check-css-token-drift.ts` compares only selectors INSIDE `@layer components` (INVARIANTS §14).
 - Found during: the w2-spa pass of the 2026-09-23 review (P9-09/P9-10).
-- **Same class, second site:** `apps/desktop-ui/src/components/skeletons/knowledge-skeletons.tsx › InfoPanelGhost` is a fourth hand copy of the section-panel ghost that `components/skeletons/section-panel-ghost.tsx › SectionPanelGhost` now owns for home, identities and members.
+- **Same class, second site:** `src/features/knowledge/components/knowledge-skeletons.tsx › InfoPanelGhost` is a fourth hand copy of the section-panel ghost that `components/skeletons/section-panel-ghost.tsx › SectionPanelGhost` now owns for home, identities and members.
 - Proposed resolution: move the fade-swap rule into the layer in both files (needs `fade-swap.tsx`'s owner), and have the knowledge skeleton wear `SectionPanelGhost`.
 - Status: OPEN (low).
 
@@ -10730,3 +10737,22 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - Found during: Grok smoke S10 (grok 1.0.52). With the word-joiner guard bypassed in a probe, a `session/prompt` of `/always-approve on` ran as a slash command (no model call, 8 ms turn), and the next `search_replace` — which asks in `default` mode — ran with NO `session/request_permission`. `_x.ai/sessions/changed` kept reporting `yolo: false`, so the readback Dopl relied on as the backstop was blind to it. The PreToolUse hook's `permissionMode` read `bypassPermissions`. With the word joiner, the same text reached the model as chat and the mode stayed `default`.
 - Fix (`d0b70c0f`, with F-777): the word joiner stays (now also in front of leading zero-width/format characters), and the hook's `permissionMode` is the new readback — anything but `default` / `auto` is denied and the session stopped (`safety_mismatch`).
 - Status: RESOLVED.
+
+### F-780 — A Pro wallet that runs out is offered no upgrade, though Max now exists (2026-10-22)
+
+- Location: `src/features/billing/server/credits-service.ts › upgradeUrlFor`, `› upgradeCreditsFor`; `packages/mcp-server/src/tools/respond.ts › creditsExhausted`.
+- Found during: the Max wave. Both functions answer `""` / `0` for ANY paid verdict on the personal wallet, a rule written while Pro was the best personal allowance ("Team and Pro are each the best allowance their wallet has"). Since Max ($24.99, 20,000) a `pro` verdict has a bigger tier above it, so an exhausted Pro payer's MCP refusal carries no link. Not wired in this wave because the refusal SENTENCE is fixed in the MCP package (`"Upgrade to Pro…"`), which cannot import `src/` and ships a committed `dist/`: offering Max needs a plan name on the wire (`CreditConsumeResult`, a new optional field with the §8 fallback) plus a package rebuild.
+- Status: OPEN — product call for Samuel (should a Pro refusal upsell Max?).
+
+### F-781 — Refunds and disputes are not webhook events this app handles (2026-10-22)
+
+- Location: `src/features/billing/server/webhook-handler.ts › dispatch`.
+- Found during: the Max wave's edge-case pass. `dispatch` handles `checkout.session.completed`, `customer.subscription.updated|deleted` and `invoice.payment_failed|succeeded` only. A refund or a lost dispute (`charge.refunded`, `charge.dispute.created|closed`) changes nothing here, so entitlement follows the SUBSCRIPTION's state alone: a refunded Max payment keeps Max until the subscription itself is canceled in Stripe. True for every paid plan, not new with Max — recorded because the wave was asked to cover it.
+- Status: OPEN — the operator path today is "cancel the subscription in Stripe", which the existing `customer.subscription.deleted` arm handles.
+
+### F-782 — Browser back into any `next dev` page never hydrates: the disk-cached document replays a spent React debug-channel id (2026-10-16)
+
+- Location: `next.config.ts › experimental.reactDebugChannel`; upstream Next, function `connectReactDebugChannelForHtmlRequest` in its server-side dev debug-channel module (next/dist/server/dev/debug-channel.js, in node_modules) (hands each HTML request id's stream out once, deletes it, and silently returns for an unknown id — so the client's `chunk: null` close never comes). Unchanged in Next 16.4.2 (`curl -sL https://unpkg.com/next@16.4.2/dist/server/dev/debug-channel.js`).
+- Found during: Samuel's report that landing → Get Started → browser Back drops the landing's animations and styling. Measured headless (Chrome + CDP) on :3100: the back navigation's document is `fromDiskCache=true` with the original `self.__next_r`; afterwards 0 elements carry a React fiber (1102 before), every scroll hook sits at its SSR `data-mode="static"`, `data-play`/`data-reveal` are absent, and the `ssr: false` banner-demo chunk and its stylesheet never load. `page.css` itself IS present, so "styling dropped" is the un-hydrated tree, not a lost stylesheet. Not landing-specific: `/pricing` ↔ `/privacy` and back into `/authenticate` fail the same way. Production (`www.usedopl.com`) hydrates on back — the channel is dev-only. Dev HTML is `Cache-Control: no-cache`, which history navigation does not revalidate, and the open HMR WebSocket keeps the page out of bfcache, so in dev every Back takes this path.
+- Fix: `experimental: { reactDebugChannel: false }` (debug info inline in the RSC payload again). Verified on a scratch `next dev` from HEAD: back to `/` → 814 fibers, `scrub` modes, banner-demo CSS loaded; back to `/authenticate` → 191 fibers. Takes effect on the next dev-server restart.
+- Status: RESOLVED (revisit if Next fixes the replay upstream and the channel is wanted back).

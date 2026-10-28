@@ -46,19 +46,19 @@ export function requireConsentId(
   return id;
 }
 
-/** Extract + validate the `[taskId]` dynamic param. ⚠ Same rationale as
+/** Extract + validate the `[threadId]` dynamic param. ⚠ Same rationale as
  *  `requireConsentId`. */
-export function requireTaskId(
+export function requireThreadId(
   params: Record<string, string> | undefined
 ): string {
-  const taskId = params?.taskId;
-  if (!taskId) {
-    throw new HttpError(400, "MISSING_TASK_ID", "Route param taskId is required");
+  const threadId = params?.threadId;
+  if (!threadId) {
+    throw new HttpError(400, "MISSING_THREAD_ID", "Route param threadId is required");
   }
-  if (!isUuid(taskId)) {
-    throw new HttpError(404, "TASK_NOT_FOUND", `Task not found: ${taskId}`);
+  if (!isUuid(threadId)) {
+    throw new HttpError(404, "THREAD_NOT_FOUND", `Thread not found: ${threadId}`);
   }
-  return taskId;
+  return threadId;
 }
 
 // ⚠ There is deliberately NO `requireAgentId`: the `[agentId]` route it guarded

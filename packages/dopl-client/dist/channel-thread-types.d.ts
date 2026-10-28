@@ -31,7 +31,7 @@
 import type { MessageIntent, ThreadMode, ThreadOutcome, ThreadStatus } from "@dopl/contracts";
 /**
  * One titled, mode-tagged exchange; transcript rides on `channel_messages`
- * (`metadata.taskId` = ChannelThread.id — wire key keeps the storage name).
+ * (`metadata.threadId` = ChannelThread.id).
  */
 export interface ChannelThread {
     id: string;
@@ -110,7 +110,7 @@ export interface ChannelThreadCreated {
 /**
  * ⚠ TWO RESULT SHAPES ENDED HERE with thread closing (wiring plan Phase 4,
  * 2026-08-18): `ChannelThreadClosed` (thread + `echoSeq`, the seq of the
- * `task_finished` / `task_failed` marker a close posted) and
+ * `thread_finished` / `thread_failed` marker a close posted) and
  * `ChannelThreadCloseProposed` (thread + `markerSeq` + the proposed outcome).
  *
  * The rule they both carried is live on {@link ChannelThreadCreated.openingSeq}

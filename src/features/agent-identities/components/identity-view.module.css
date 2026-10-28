@@ -1,0 +1,128 @@
+/* The identity view popup (`identity-view-dialog.tsx`) inside `ModalShell size="panel"`: a head
+   that never changes with the tab, the kit's underline tabs, and the body, which alone scrolls. */
+
+.head {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--border-default);
+}
+.headText {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 2px;
+}
+.headMeta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.close {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  transition: background 0.14s ease, color 0.14s ease;
+}
+.close:hover {
+  background: var(--surface-raised-2);
+  color: var(--text-secondary);
+}
+
+.body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+/* The popup's element vocabulary (`identity-view-parts.tsx`). */
+.group {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+/* Two short groups side by side rather than two half-empty rows. */
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: 20px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.fact {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+.rows > li + li {
+  border-top: 1px solid var(--border-default);
+}
+/* lead · title · a second fact in the middle · trail, so no row is a blank majority. */
+.row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+.rowGrow {
+  min-width: 0;
+  flex: 1;
+}
+.rowTrail {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.line {
+  display: flex;
+  gap: 8px;
+}
+.lineMark {
+  margin-top: 2px;
+  flex: none;
+}
+.quote {
+  border-left: 2px solid var(--border-highlight);
+  padding-left: 12px;
+  white-space: pre-wrap;
+}

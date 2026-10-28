@@ -48,7 +48,7 @@ const realGuards = new Function(
 const CH = "44444444-4444-4444-8444-444444444444";
 const AGENT = "a1b2c3d4";
 const KEY = `${CH}:t-1:${AGENT}`;
-const PAYLOAD = { channelId: CH, taskId: "t-1", agentId: AGENT };
+const PAYLOAD = { channelId: CH, threadId: "t-1", agentId: AGENT };
 
 /**
  * Build the op over recording fakes. `live` decides whether the registry still holds the agent,
@@ -63,10 +63,10 @@ function build({ live = false, retained = false } = {}) {
     if (id === "./ipc-guards") return realGuards;
     if (id === "./agent-id") return realAgentId;
     if (id === "./diag") return { diag: () => {} };
-    if (id === "./session-store") return { slotKey: (a) => `${a.channelId}:${a.taskId}:${a.agentId}` };
+    if (id === "./session-store") return { slotKey: (a) => `${a.channelId}:${a.threadId}:${a.agentId}` };
     if (id === "./session-engine") {
       return {
-        controlByTask: (a) => {
+        controlByThread: (a) => {
           log.push({ op: "end", address: a });
           if (!live) return { ok: false, reason: "no-session" };
           // `settle` freezes the ring BEFORE the registry entry goes — the write this
@@ -115,13 +115,13 @@ test("LIVE: it ENDS the agent first, then purges — and the purge outlives sett
 });
 
 test("LIVE: the end goes through the ONE stop path, addressed EXACTLY", () => {
-  // The same `controlByTask` the End button reaches — never a teardown written for delete — and
+  // The same `controlByThread` the End button reaches — never a teardown written for delete — and
   // with the agent NAMED, so a sibling on the same thread can never be the one that stops.
   const { deleteAgent, log } = build({ live: true });
   deleteAgent(PAYLOAD);
   assert.deepEqual(log[0], {
     op: "end",
-    address: { channelId: CH, taskId: "t-1", agentId: AGENT, action: "end" },
+    address: { channelId: CH, threadId: "t-1", agentId: AGENT, action: "end" },
   });
 });
 
@@ -160,7 +160,7 @@ test("AN OPEN WINDOW ONTO THE AGENT IS CLOSED — a composer pointed at nothing 
   deleteAgent(PAYLOAD);
   assert.deepEqual(log.find((e) => e.op === "close-window"), {
     op: "close-window",
-    address: { channelId: CH, taskId: "t-1", agentId: AGENT },
+    address: { channelId: CH, threadId: "t-1", agentId: AGENT },
   });
 });
 
@@ -203,7 +203,7 @@ test("REFUSAL: an agentId is REQUIRED even when the thread holds exactly one age
   // degrades to the oldest live agent on the thread, which is byte-for-byte what a caller got
   // before multiplayer; for a DESTRUCTIVE verb that is a different agent than the card clicked.
   const { deleteAgent } = build({ live: true });
-  assert.deepEqual(deleteAgent({ channelId: CH, taskId: "t-1" }), { ok: false });
+  assert.deepEqual(deleteAgent({ channelId: CH, threadId: "t-1" }), { ok: false });
 });
 
 // ── 4. THE STORES IT MAY NOT REACH ───────────────────────────────────────────
@@ -227,7 +227,7 @@ test("⚠ IT IS ONE STOP PATH: the source dispatches END, it does not settle or 
     .split("\n")
     .filter((l) => !l.trimStart().startsWith("//") && !l.trimStart().startsWith("*"))
     .join("\n");
-  assert.match(CODE, /controlByTask\(/, "it goes through the engine's own stop verb");
+  assert.match(CODE, /controlByThread\(/, "it goes through the engine's own stop verb");
   for (const banned of ["settle(", "abortController", ".kill(", "pushIterator"]) {
     assert.equal(CODE.includes(banned), false, `${banned} would be a second teardown`);
   }

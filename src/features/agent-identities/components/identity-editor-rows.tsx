@@ -248,7 +248,7 @@ export function ChipMultiSelect({
         open={anchor !== null}
         at={anchor ?? undefined}
         onClose={() => setAnchor(null)}
-        className="max-h-[280px] min-w-[240px] overflow-y-auto"
+        className="max-h-[280px] overflow-y-auto"
       >
         {options.map((option) => (
           <MenuItem

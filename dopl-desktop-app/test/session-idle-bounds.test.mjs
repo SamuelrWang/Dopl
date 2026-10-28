@@ -103,13 +103,13 @@ test("FIX 3 / M2: NO card and genuinely quiet past the TTL still PARKS, and keep
   // BURNING. M2 (2026-08-05) inverts what it does to the posture — see the reducer's idle_timeout
   // branch. Stopping the query is about cost; revoking consent the operator gave is not, and
   // fifteen quiet minutes was never evidence they had gone.
-  const c = armedRunning({ toolMode: "bypass", messageMode: "auto_both", allowForTask: ["Bash"] });
+  const c = armedRunning({ toolMode: "bypass", messageMode: "auto_both", allowForThread: ["Bash"] });
   c.dispatch({ type: "launched", payload: {} });
   c.advance(TTL);
   assert.equal(c.s.state.parked, true);
   assert.equal(c.s.state.toolMode, "bypass");
   assert.equal(c.s.state.messageMode, "auto_both");
-  assert.deepEqual(c.s.state.allowForTask, ["Bash"]);
+  assert.deepEqual(c.s.state.allowForThread, ["Bash"]);
 });
 
 test("M2: the park re-arms the ABANDONMENT bound, and reaching it ENDS the session", () => {
@@ -153,11 +153,11 @@ test("M2b: an abandonment KEEPS its window; every watched end still tidies one a
 
 test("FIX 3 / M2: the AUTH HOLD still resets and still clears the timer", () => {
   // A held session arms nothing: it is waiting on a human.
-  const c = armedRunning({ toolMode: "bypass", messageMode: "auto_both", allowForTask: ["Bash"] });
+  const c = armedRunning({ toolMode: "bypass", messageMode: "auto_both", allowForThread: ["Bash"] });
   c.dispatch({ type: "launched", payload: {} });
   c.dispatch({ type: "auth_hold" });
   assert.deepEqual({ t: c.s.state.toolMode, m: c.s.state.messageMode }, { t: "manual", m: "ask" });
-  assert.deepEqual(c.s.state.allowForTask, []);
+  assert.deepEqual(c.s.state.allowForThread, []);
   assert.equal(c.armed(), false, "and it arms no abandonment timer over the Sign in button");
 });
 

@@ -23,7 +23,7 @@ const slugRegex = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
  *
  * ⚠ **NOTHING IN THIS TREE EVER ESCAPED THEM.** Titles and names ride RAW from
  * the client to the column and back out again; the only `escapeHtml` that exists
- * is the web search popup's (`src/features/search/server/snippet.ts`), which
+ * is the web search popup's (`src/features/search/highlight.ts`), which
  * renders and stores nothing. So a stored `R&amp;D` was escaped by whatever
  * WROTE it — a client reading `innerHTML`, an agent pasting rendered HTML — and
  * it arrived with no signal at all: the row is valid, the charset rule passes,

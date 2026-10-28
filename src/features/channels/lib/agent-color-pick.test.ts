@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { AgentColorKey } from "@dopl/contracts";
-import { AGENT_COLOR_KEYS } from "./agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 import { AGENT_COLOR_VALUES, type Oklch } from "./agent-color-values";
 import {
   oklabDistance,

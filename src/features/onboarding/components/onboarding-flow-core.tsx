@@ -181,6 +181,8 @@ export function OnboardingFlowCore({
   const loginView = previewOnly && previewLogin;
   const [submitting, setSubmitting] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  /** Name typed on the naming step, for the checklist's "Configuring X space". */
+  const [spaceName, setSpaceName] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
   const finishRef = useRef(false);
@@ -219,6 +221,7 @@ export function OnboardingFlowCore({
   }
 
   async function finish(args: FinishArgs) {
+    setSpaceName(args.name);
     // Preview: show the provisioning checklist, which is a screen worth
     // reviewing, but neither write nor navigate. Reload to start over.
     if (previewOnly) {
@@ -380,7 +383,7 @@ export function OnboardingFlowCore({
             </p>
           )}
           {finishing ? (
-            <ProvisioningChecklist />
+            <ProvisioningChecklist spaceName={spaceName} />
           ) : step === "survey" ? (
             <SurveyStep submitting={submitting} onSubmit={handleSurveySubmit} />
           ) : step === "connect" ? (

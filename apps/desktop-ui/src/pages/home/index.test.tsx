@@ -80,7 +80,7 @@ describe("home page", () => {
   /**
    * ⚠ THE GATE PAINTS /home's OWN FRAME, NOT A GENERIC PAGE (Samuel,
    * 2026-08-28: the old ghosts were "way off"). It was `PageLoading` in a bare
-   * `h-screen` box — a 52px bar over a centred `max-w-[960px]` column, a
+   * `h-screen` box — a 52px bar over a centred `max-w-240` column, a
    * surface this page has never had — and is `HomePageSkeleton` now: the rail,
    * the header, the 290px list and the bordered record pane, at the page's own
    * width var. The width class is the assertion because it is the ONE number
@@ -94,48 +94,30 @@ describe("home page", () => {
     const { container } = view;
     expect(container.querySelector(".w-\\[var\\(--home-list-w\\)\\]")).not.toBeNull();
     expect(container.querySelector(".border-home-panel-line")).not.toBeNull();
-    expect(container.querySelector(".max-w-\\[960px\\]")).toBeNull();
+    expect(container.querySelector(".max-w-240")).toBeNull();
   });
 
-  /**
-   * THE RECORD PANE IS A COLUMN, NOT A FLOATING CARD (Samuel, live review
-   * 2026-08-27 — the shadow seam beside the info column's tab pills).
-   *
-   * ⚠ WHY THIS IS PINNED AS A CLASS AND NOT A LOOK. `.bento` was painting exactly
-   * ONE thing on this element — its two drop shadows — because the utilities
-   * beside it already restate the fill, the border and the radius, and the
-   * utility layer outranks the kit layer. The pane has no top or left margin
-   * (the header selector is aligned to its left edge), so the upward half of an
-   * 18px blur printed a gray band into the gap under the page header. Re-adding
-   * the class is silent: nothing about the pane's geometry would change, and the
-   * band would come straight back.
-   */
-  it("gives the record pane NO drop shadow — the 2px line is its whole boundary", async () => {
+  /** The record pane is bounded by its line, not floated: it has no top or left gap for a
+   *  drop shadow to fall into (Samuel, 2026-08-27). */
+  it("gives the record pane NO drop shadow — its line is its whole boundary", async () => {
     renderHome();
     await openChannels();
     const pane = (await screen.findByTestId("channel-surface")).parentElement
       ?.parentElement;
-    expect(pane?.className).toMatch(/border-home-panel-line/);
+    expect(pane?.className).toMatch(/\bborder border-home-panel-line\b/);
     expect(pane?.className).not.toMatch(/\bbento\b/);
+    expect(pane?.closest("main")?.getAttribute("data-face")).toBe("channels");
   });
 
-  /**
-   * THE ONLY WAY INTO SETTINGS FROM /home (Samuel, 2026-08-30). The workspace
-   * shell reaches it through the sidebar's gear; this page has no sidebar, and
-   * before this it had no settings entry at all.
-   *
-   * ⚠ PINNED AS "THE CONTROL OPENS THE MODAL", not as a face rendering — but the
-   * SHAPE is Samuel's own words now (2026-09-15: "turn the profile button to be
-   * black, and have it say Profile"). ⚠ **IT ANSWERS TO "Profile", NOT "Settings",
-   * SINCE THAT SAME REVIEW**: it has visible text now, and an `aria-label` that did
-   * not contain it would break voice control. */
+  /** The only way into settings from /home: the operator's pill, their photo (initials here,
+   *  the fixture has no avatar) and first name, in the right-hand group. */
   it("opens settings from the operator's Profile pill", async () => {
     renderHome();
-    // Black face, ONE WORD, no glyph (Samuel, 2026-09-15: "remove the profile
-    // icon"), RIGHT GROUP. The role query proves text IS the accessible name.
-    const control = await screen.findByRole("button", { name: "Profile" });
-    expect(control.className).toMatch(/auth-btn-3d\b/);
-    expect(control.querySelector("svg")).toBeNull();
+    const control = await screen.findByTitle("Profile");
+    expect(control.tagName).toBe("BUTTON");
+    expect(control.textContent).toBe("SSam");
+    expect(control.classList).toContain("white-card");
+    expect(control.classList).toContain("raise-pill");
     expect(control.closest(LIST_CELL)).toBeNull();
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -156,12 +138,12 @@ describe("home page", () => {
     // it "just doesn't make sense imo" on a row). The row's LINE TWO — the absent
     // preview, the peer stack, the `@ N` badge — is `relationship-list.test.tsx`.
     // The pending link is a row of the same list, marked as one.
-    expect(screen.getByText("Link out")).toBeInTheDocument();
+    expect(screen.getByText("Invited")).toBeInTheDocument();
     expect(screen.getByText("Not yet claimed")).toBeInTheDocument();
     // ⚠ THE LIST COLUMN HAS NO CONTROLS OF ITS OWN (Samuel, 2026-08-27). The
     // "All | Links" segmented filter above the rows is DELETED — links are no
     // longer a filterable state — and the rows themselves are untouched: the
-    // link row above is still in this list, still chipped. The only tabs left
+    // link row above is still in this list, still marked Invited. The only tabs left
     // on the page are the header's five faces, and ORDER is the assertion:
     // Overview sits LEFT of Channels (Samuel, 2026-09-01) and Ontology sits to
     // the RIGHT of Agents (Samuel, 2026-09-09: the ontology page comes in "as a
@@ -383,7 +365,7 @@ describe("home page", () => {
    * their picker. Re-pointing a face is the header selector's job, one click away.
    * ⚠ BOTH BRANCHES OF THE OLD CONDITIONAL ARE ASSERTED — the face it already
    * moved from, and a face it did not — so a re-narrowing fails here. The
-   * ONTOLOGY face's own case is next door (`ontology-panels.test.tsx`), where that
+   * ONTOLOGY face's own case is next door (`home-ontology-panels.test.tsx`), where that
    * face's read table is wired.
    */
   it("picking a channel from OVERVIEW raises that channel's own face", async () => {

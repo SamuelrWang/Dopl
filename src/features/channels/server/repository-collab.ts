@@ -126,7 +126,7 @@ const CONSENT_SEQ_CHUNK = 100;
 /**
  * EXPIRE — never delete — every PENDING consent row whose trigger message just
  * went away. The consent step of the thread cascade
- * (`service-tasks-delete.ts › deleteTask`).
+ * (`service-threads-delete.ts › deleteThread`).
  *
  * ⚠ EXPIRE, NOT DELETE: a decided row is the AUDIT of a human decision and a
  * thread deletion is nobody's licence to erase it; a still-`pending` row can

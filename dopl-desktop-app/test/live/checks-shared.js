@@ -57,7 +57,7 @@ function wireOf(m) {
     `to_agent_id=${short(meta.to_agent_id)}`,
     `to_agent_ids=${ids ? `[${ids.map(short).join(',')}]` : '-'}`,
     `author_agent_id=${short(meta.author_agent_id)}`,
-    `taskId=${short(meta.taskId)}`,
+    `threadId=${short(meta.threadId)}`,
   ].join(' ');
 }
 

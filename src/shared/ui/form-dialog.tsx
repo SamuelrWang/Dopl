@@ -69,6 +69,7 @@ export function UnderlineField({
   ariaLabel,
   id,
   caption,
+  placeholder,
   multiline = false,
   minRows = 1,
   maxLength,
@@ -81,6 +82,7 @@ export function UnderlineField({
   ariaLabel: string;
   id: string;
   caption?: string;
+  placeholder?: string;
   multiline?: boolean;
   /** Starting height in lines for a `multiline` field; it grows with the text. */
   minRows?: number;
@@ -107,6 +109,7 @@ export function UnderlineField({
     spellCheck: false,
     maxLength,
     autoFocus,
+    placeholder,
     "aria-label": ariaLabel,
   };
   return (
@@ -141,6 +144,7 @@ export function UnderlineField({
  * the name is the hint inside the line. Born as the ontology board header's fields (Samuel,
  * 2026-09-10: gray rule that turns black while editing) and moved into the kit on 2026-09-28 when
  * the profile popup's inline fields (the pairing code) took the underline — one recipe, not two.
+ * `multiline` swaps in a textarea that grows with its text (a description edited in place).
  *
  * The active class is React state, not `:focus-within`: jsdom loads no stylesheet,
  * so a pure-CSS focus rule would be untestable.
@@ -159,18 +163,18 @@ export function InlineUnderlineField({
   onBlur,
   type = "text",
   inputMode,
+  multiline = false,
+  maxLength,
 }: {
   /** The hint inside the line, and the accessible name. */
   label: string;
   /** The hint, when the row already SAYS the label beside the line (the pairing code). */
   placeholder?: string;
-  /** Extra class on the input itself (the kit's `.inputAction` for a 36px row). */
+  /** Extra class on the input itself (the kit's `.inputSecondary` for secondary ink). */
   inputClassName?: string;
   /**
-   * No rule at rest, black line only while focused (Samuel, 2026-09-14, over the
-   * object panel's rows). The kit's `.inputQuiet` is a resting state of this same
-   * recipe, not a second field, so only the gray goes transparent. Panel row fields
-   * wear it; the two Description fields keep their gray→black line.
+   * No rule at rest, black line only while focused. The kit's `.inputQuiet` is a resting state
+   * of this same recipe, not a second field, so only the gray goes transparent.
    */
   quiet?: boolean;
   value: string;
@@ -190,8 +194,28 @@ export function InlineUnderlineField({
   type?: "text" | "date" | "url";
   /** Soft-keyboard hint (`decimal` for the ontology's number field). */
   inputMode?: "decimal";
+  /** A textarea that grows with its text; `onKeyDown`, `type` and `inputMode` are single-line only. */
+  multiline?: boolean;
+  /** The server's own ceiling, felt at the keyboard. */
+  maxLength?: number;
 }) {
   const [focused, setFocused] = useState(false);
+  const shared = {
+    value,
+    onChange: (e: { target: { value: string } }) => onChange(e.target.value),
+    onFocus: () => setFocused(true),
+    onBlur: () => {
+      setFocused(false);
+      onBlur?.();
+    },
+    autoFocus,
+    readOnly,
+    maxLength,
+    "aria-label": label,
+    placeholder,
+    spellCheck: false,
+  };
+  const face = cn(styles.input, quiet && styles.inputQuiet, inputClassName);
   return (
     <span
       className={cn(
@@ -201,24 +225,17 @@ export function InlineUnderlineField({
         className
       )}
     >
-      <input
-        type={type}
-        inputMode={inputMode}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onFocus={() => setFocused(true)}
-        onBlur={() => {
-          setFocused(false);
-          onBlur?.();
-        }}
-        onKeyDown={onKeyDown}
-        autoFocus={autoFocus}
-        readOnly={readOnly}
-        aria-label={label}
-        placeholder={placeholder}
-        spellCheck={false}
-        className={cn(styles.input, quiet && styles.inputQuiet, inputClassName)}
-      />
+      {multiline ? (
+        <textarea {...shared} rows={1} className={cn(face, styles.inputMultiline)} />
+      ) : (
+        <input
+          {...shared}
+          type={type}
+          inputMode={inputMode}
+          onKeyDown={onKeyDown}
+          className={face}
+        />
+      )}
     </span>
   );
 }

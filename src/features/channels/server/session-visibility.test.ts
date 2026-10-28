@@ -23,7 +23,7 @@ function fullRow(over: Partial<SessionStateRow> = {}): SessionStateRow {
     workspace_id: "22222222-2222-2222-2222-222222222222",
     user_id: "33333333-3333-3333-3333-333333333333",
     session_key: "11111111-1111-1111-1111-111111111111:t:abcd1234",
-    task_id: "44444444-4444-4444-4444-444444444444",
+    thread_id: "44444444-4444-4444-4444-444444444444",
     name: "abcd1234",
     state: "working",
     channel_name: "General",
@@ -42,6 +42,7 @@ function fullRow(over: Partial<SessionStateRow> = {}): SessionStateRow {
     identity_name: "Acme Contract Auditor",
     // Peer-visible by design, so it must survive the peer mapper.
     display_name: "Bug Reviewer",
+    runtime: "codex",
     color: "agent-04",
     // Values chosen to occur nowhere in the peer JSON (`name`, ISO stamps): the value property is a substring search.
     turns: 47,
@@ -115,6 +116,8 @@ describe("the PEER mapper can never emit operator-only telemetry", () => {
         // Peer-visible by design.
         "displayName",
         "name",
+        // Peer-visible by design: the runtime badge on a peer's agent card (R9).
+        "runtime",
         "state",
         "threadId",
         "threadTitle",

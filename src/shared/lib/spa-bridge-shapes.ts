@@ -9,13 +9,13 @@ export type { DesktopNarrationEntry } from "./spa-bridge-narration";
  * One live session as the desktop projects it; the Agents tab renders from these.
  * ⚠ `state` is three-valued because it is filed as `channel_sessions.state` (CHECK + zod enum admit
  * exactly these; one bad row 400s the whole push). The finer signal is {@link detail}.
- * `taskId` is the wire spelling of thread; `""` is real (a responder session with no thread).
+ * `threadId` `""` is real (a responder session with no thread).
  */
 export interface DesktopSessionSummary {
   /** Opaque and not stable across park/recreate: a React key, never an address. */
   sessionId: string;
   channelId: string;
-  taskId: string;
+  threadId: string;
   /**
    * The agent instance's address, `^[a-z][a-z0-9]{7}$` (`main/agent-id.js`): the third coordinate of
    * every session op, and what `@<agentId>` names (parsed on the desktop, never by the server).
@@ -60,6 +60,8 @@ export interface DesktopSessionSummary {
    * (`never/danger-full-access`). Local only; `null` when ended, absent from an older desktop.
    */
   permission?: { runtime: string; level: string; label: string; setting: string } | null;
+  /** The spawn-time tool profile's label (`main/tool-profiles.js › profileLabel`); null/absent = not reported. */
+  profileLabel?: string | null;
   messageMode?: "ask" | "auto_inbound" | "auto_outbound" | "auto_both" | null;
   /**
    * The runtime stamped at spawn, never re-chosen: running-agent surfaces read this runtime's
@@ -95,6 +97,11 @@ export interface DesktopSessionSummary {
    * identity's name on a peer card is an existence oracle).
    */
   identityName?: string | null;
+  /**
+   * That identity's row id, stamped at the same spawn (`main/identity-resolve.js`). Local only, never
+   * pushed. `null`/absent = no identity, or a session from a desktop older than the field.
+   */
+  identityId?: string | null;
   /**
    * The colour key this agent ASKED for. The server resolves per-channel uniqueness and may
    * substitute (`channels/server/session-colors.ts › resolveReportedColors`), so the peer projection

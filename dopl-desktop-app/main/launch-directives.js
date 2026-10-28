@@ -23,7 +23,7 @@ const POLL_MS = 60000;
 const MAX_REMEMBERED = 256;
 
 let armed = false;
-let deps = { getUserId: null, launch: null, watchedChannel: null, workspaces: null };
+let deps = { getUserId: null, launch: null, watchedChannel: null, channelForLaunch: null, workspaces: null };
 let pollTimer = null;
 const decided = new Set(); // directive ids this process has already acted on
 const inflight = new Set(); // …and the ones it is acting on right now
@@ -277,6 +277,7 @@ function start(opts) {
     getUserId: typeof o.getUserId === 'function' ? o.getUserId : null,
     launch: typeof o.launch === 'function' ? o.launch : null,
     watchedChannel: typeof o.watchedChannel === 'function' ? o.watchedChannel : null,
+    channelForLaunch: typeof o.channelForLaunch === 'function' ? o.channelForLaunch : null,
     workspaces: typeof o.workspaces === 'function' ? o.workspaces : null,
   };
   if (!deps.launch || !deps.getUserId) {

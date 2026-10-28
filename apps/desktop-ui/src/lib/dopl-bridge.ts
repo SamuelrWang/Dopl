@@ -41,8 +41,6 @@ export interface DoplBridge extends SpaBridgeSurface {
   /** Main-initiated navigation. The payload is a ROUTER path, never a URL: main must never load
    *  an origin into the SPA window. */
   onNavigate?(callback: (payload: { path: string }) => void): () => void;
-  /** Main clears stored tokens and pushes a signed-out `onAuthState`. */
-  signOut?(): Promise<{ ok: boolean }>;
 }
 
 declare global {

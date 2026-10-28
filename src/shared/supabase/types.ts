@@ -61,6 +61,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_preview_data: {
+        Row: {
+          payload: Json
+          surface: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          payload: Json
+          surface: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          payload?: Json
+          surface?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       agent_identities: {
         Row: {
           created_at: string
@@ -231,7 +252,7 @@ export type Database = {
           reply: string | null
           sender_agent_id: string | null
           status: string
-          task_id: string | null
+          thread_id: string | null
           workspace_id: string
         }
         Insert: {
@@ -249,7 +270,7 @@ export type Database = {
           reply?: string | null
           sender_agent_id?: string | null
           status?: string
-          task_id?: string | null
+          thread_id?: string | null
           workspace_id: string
         }
         Update: {
@@ -267,7 +288,7 @@ export type Database = {
           reply?: string | null
           sender_agent_id?: string | null
           status?: string
-          task_id?: string | null
+          thread_id?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -279,17 +300,17 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_agent_directions_task_id_fkey"
-            columns: ["task_id"]
+            foreignKeyName: "channel_agent_directions_thread_id_fkey"
+            columns: ["thread_id"]
             isOneToOne: false
-            referencedRelation: "channel_tasks"
+            referencedRelation: "channel_threads"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_agent_directions_task_id_fkey"
-            columns: ["task_id"]
+            foreignKeyName: "channel_agent_directions_thread_id_fkey"
+            columns: ["thread_id"]
             isOneToOne: false
-            referencedRelation: "channel_tasks_activity"
+            referencedRelation: "channel_threads_activity"
             referencedColumns: ["id"]
           },
           {
@@ -499,6 +520,7 @@ export type Database = {
           model: string | null
           operator_user_id: string
           refusal_reason: string | null
+          requested_by_agent_id: string | null
           resolved_chain: boolean | null
           resolved_message_mode: string | null
           resolved_model: string | null
@@ -511,7 +533,7 @@ export type Database = {
           target_message_mode: string | null
           target_name: string | null
           target_tool_mode: string | null
-          task_id: string | null
+          thread_id: string | null
           workspace_id: string
         }
         Insert: {
@@ -540,6 +562,7 @@ export type Database = {
           model?: string | null
           operator_user_id: string
           refusal_reason?: string | null
+          requested_by_agent_id?: string | null
           resolved_chain?: boolean | null
           resolved_message_mode?: string | null
           resolved_model?: string | null
@@ -552,7 +575,7 @@ export type Database = {
           target_message_mode?: string | null
           target_name?: string | null
           target_tool_mode?: string | null
-          task_id?: string | null
+          thread_id?: string | null
           workspace_id: string
         }
         Update: {
@@ -581,6 +604,7 @@ export type Database = {
           model?: string | null
           operator_user_id?: string
           refusal_reason?: string | null
+          requested_by_agent_id?: string | null
           resolved_chain?: boolean | null
           resolved_message_mode?: string | null
           resolved_model?: string | null
@@ -593,7 +617,7 @@ export type Database = {
           target_message_mode?: string | null
           target_name?: string | null
           target_tool_mode?: string | null
-          task_id?: string | null
+          thread_id?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -612,17 +636,17 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_launch_directives_task_id_fkey"
-            columns: ["task_id"]
+            foreignKeyName: "channel_launch_directives_thread_id_fkey"
+            columns: ["thread_id"]
             isOneToOne: false
-            referencedRelation: "channel_tasks"
+            referencedRelation: "channel_threads"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_launch_directives_task_id_fkey"
-            columns: ["task_id"]
+            foreignKeyName: "channel_launch_directives_thread_id_fkey"
+            columns: ["thread_id"]
             isOneToOne: false
-            referencedRelation: "channel_tasks_activity"
+            referencedRelation: "channel_threads_activity"
             referencedColumns: ["id"]
           },
           {
@@ -913,6 +937,7 @@ export type Database = {
           channel_id: string
           channel_name: string | null
           color: string | null
+          color_shared: boolean
           context_used: number | null
           context_window: number | null
           created_at: string
@@ -927,11 +952,12 @@ export type Database = {
           last_wake_seq: number | null
           model: string | null
           name: string
+          runtime: string | null
           session_key: string
           stale: boolean | null
           started_at: string | null
           state: string
-          task_id: string | null
+          thread_id: string | null
           thread_title: string | null
           tokens_delta: number | null
           tokens_spent: number | null
@@ -945,6 +971,7 @@ export type Database = {
           channel_id: string
           channel_name?: string | null
           color?: string | null
+          color_shared?: boolean
           context_used?: number | null
           context_window?: number | null
           created_at?: string
@@ -959,11 +986,12 @@ export type Database = {
           last_wake_seq?: number | null
           model?: string | null
           name: string
+          runtime?: string | null
           session_key: string
           stale?: boolean | null
           started_at?: string | null
           state: string
-          task_id?: string | null
+          thread_id?: string | null
           thread_title?: string | null
           tokens_delta?: number | null
           tokens_spent?: number | null
@@ -977,6 +1005,7 @@ export type Database = {
           channel_id?: string
           channel_name?: string | null
           color?: string | null
+          color_shared?: boolean
           context_used?: number | null
           context_window?: number | null
           created_at?: string
@@ -991,11 +1020,12 @@ export type Database = {
           last_wake_seq?: number | null
           model?: string | null
           name?: string
+          runtime?: string | null
           session_key?: string
           stale?: boolean | null
           started_at?: string | null
           state?: string
-          task_id?: string | null
+          thread_id?: string | null
           thread_title?: string | null
           tokens_delta?: number | null
           tokens_spent?: number | null
@@ -1014,17 +1044,17 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_sessions_task_id_fkey"
-            columns: ["task_id"]
+            foreignKeyName: "channel_sessions_thread_id_fkey"
+            columns: ["thread_id"]
             isOneToOne: false
-            referencedRelation: "channel_tasks"
+            referencedRelation: "channel_threads"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_sessions_task_id_fkey"
-            columns: ["task_id"]
+            foreignKeyName: "channel_sessions_thread_id_fkey"
+            columns: ["thread_id"]
             isOneToOne: false
-            referencedRelation: "channel_tasks_activity"
+            referencedRelation: "channel_threads_activity"
             referencedColumns: ["id"]
           },
           {
@@ -1036,7 +1066,226 @@ export type Database = {
           },
         ]
       }
+      channel_task_assignees: {
+        Row: {
+          agent_id: string | null
+          created_at: string
+          id: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string
+          id?: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string
+          id?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_task_assignees_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "channel_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_task_notes: {
+        Row: {
+          author_agent_id: string | null
+          author_user_id: string
+          body: string
+          client_msg_id: string | null
+          created_at: string
+          id: string
+          task_id: string
+        }
+        Insert: {
+          author_agent_id?: string | null
+          author_user_id: string
+          body: string
+          client_msg_id?: string | null
+          created_at?: string
+          id?: string
+          task_id: string
+        }
+        Update: {
+          author_agent_id?: string | null
+          author_user_id?: string
+          body?: string
+          client_msg_id?: string | null
+          created_at?: string
+          id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_task_notes_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "channel_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_task_subtasks: {
+        Row: {
+          client_msg_id: string | null
+          created_at: string
+          created_by: string | null
+          detail: string | null
+          id: string
+          owner_agent_id: string | null
+          owner_user_id: string | null
+          position: number
+          state: string
+          task_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          client_msg_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          detail?: string | null
+          id?: string
+          owner_agent_id?: string | null
+          owner_user_id?: string | null
+          position: number
+          state?: string
+          task_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          client_msg_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          detail?: string | null
+          id?: string
+          owner_agent_id?: string | null
+          owner_user_id?: string | null
+          position?: number
+          state?: string
+          task_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_task_subtasks_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "channel_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       channel_tasks: {
+        Row: {
+          channel_id: string
+          client_msg_id: string | null
+          created_at: string
+          created_by: string
+          created_by_agent: string | null
+          description: string
+          due_at: string | null
+          id: string
+          linked_message_id: string | null
+          linked_thread_id: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_by_agent: string | null
+          status: string
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          channel_id: string
+          client_msg_id?: string | null
+          created_at?: string
+          created_by: string
+          created_by_agent?: string | null
+          description?: string
+          due_at?: string | null
+          id?: string
+          linked_message_id?: string | null
+          linked_thread_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_by_agent?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          channel_id?: string
+          client_msg_id?: string | null
+          created_at?: string
+          created_by?: string
+          created_by_agent?: string | null
+          description?: string
+          due_at?: string | null
+          id?: string
+          linked_message_id?: string | null
+          linked_thread_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_by_agent?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_tasks_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_tasks_linked_message_id_fkey"
+            columns: ["linked_message_id"]
+            isOneToOne: false
+            referencedRelation: "channel_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_tasks_linked_thread_id_fkey"
+            columns: ["linked_thread_id"]
+            isOneToOne: false
+            referencedRelation: "channel_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_tasks_linked_thread_id_fkey"
+            columns: ["linked_thread_id"]
+            isOneToOne: false
+            referencedRelation: "channel_threads_activity"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_tasks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_threads: {
         Row: {
           channel_id: string
           client_msg_id: string | null
@@ -1087,14 +1336,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "channel_tasks_channel_id_fkey"
+            foreignKeyName: "channel_threads_channel_id_fkey"
             columns: ["channel_id"]
             isOneToOne: false
             referencedRelation: "channels"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_tasks_workspace_id_fkey"
+            foreignKeyName: "channel_threads_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -2180,6 +2429,41 @@ export type Database = {
           },
         ]
       }
+      notification_preferences: {
+        Row: {
+          channel_id: string | null
+          enabled: boolean
+          event_type: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          channel_id?: string | null
+          enabled: boolean
+          event_type: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string | null
+          enabled?: boolean
+          event_type?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       oauth_authorization_codes: {
         Row: {
           client_id: string
@@ -2734,6 +3018,44 @@ export type Database = {
           },
         ]
       }
+      runtime_model_catalogs: {
+        Row: {
+          app_version: string | null
+          default_id: string | null
+          device_id: string
+          models: Json
+          published_at: string
+          runtime: string
+          user_id: string
+        }
+        Insert: {
+          app_version?: string | null
+          default_id?: string | null
+          device_id: string
+          models: Json
+          published_at?: string
+          runtime: string
+          user_id: string
+        }
+        Update: {
+          app_version?: string | null
+          default_id?: string | null
+          device_id?: string
+          models?: Json
+          published_at?: string
+          runtime?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "runtime_model_catalogs_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "desktop_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       skill_events: {
         Row: {
           author_id: string | null
@@ -3080,6 +3402,21 @@ export type Database = {
           last_error?: string | null
           processed?: boolean
           processed_at?: string | null
+        }
+        Relationships: []
+      }
+      workspace_access_requests: {
+        Row: {
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -3536,7 +3873,7 @@ export type Database = {
       }
     }
     Views: {
-      channel_tasks_activity: {
+      channel_threads_activity: {
         Row: {
           channel_id: string | null
           client_msg_id: string | null
@@ -3556,14 +3893,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "channel_tasks_channel_id_fkey"
+            foreignKeyName: "channel_threads_channel_id_fkey"
             columns: ["channel_id"]
             isOneToOne: false
             referencedRelation: "channels"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_tasks_workspace_id_fkey"
+            foreignKeyName: "channel_threads_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -3573,6 +3910,29 @@ export type Database = {
       }
     }
     Functions: {
+      analytics_recent_alert_groups: {
+        Args: { p_limit: number; p_severities: string[]; p_since: string }
+        Returns: {
+          category: string
+          event_count: number
+          fingerprint: string
+          first_seen: string
+          last_seen: string
+          sample_message: string
+          severity: string
+          source: string
+        }[]
+      }
+      analytics_route_error_groups: {
+        Args: { p_severities: string[]; p_since: string }
+        Returns: {
+          criticals_24h: number
+          errors_24h: number
+          last_error_at: string
+          last_error_message: string
+          route: string
+        }[]
+      }
       can_current_user_read_agent_identity: {
         Args: { p_identity_id: string }
         Returns: boolean
@@ -3596,6 +3956,13 @@ export type Database = {
           count: number
           first_seq: number
           last_seq: number
+        }[]
+      }
+      channel_member_tally: {
+        Args: { p_channel_ids: string[] }
+        Returns: {
+          channel_id: string
+          member_count: number
         }[]
       }
       channel_message_insert: {
@@ -3639,17 +4006,6 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
-      }
-      channel_tasks_stale: {
-        Args: { p_before: string; p_limit: number }
-        Returns: {
-          anchor_seq: number
-          channel_id: string
-          id: string
-          last_activity_at: string
-          title: string
-          workspace_id: string
-        }[]
       }
       channels_last_message: {
         Args: { p_channel_ids: string[] }
@@ -3862,6 +4218,21 @@ export type Database = {
           updated_at: string
         }[]
       }
+      home_credit_usage_bins: {
+        Args: {
+          p_bucket: string
+          p_channel_id: string
+          p_channel_scope: string
+          p_owned_container_ids: string[]
+          p_payer_user_id: string
+          p_since: string
+          p_until: string
+        }
+        Returns: {
+          bin_start: string
+          credits: number
+        }[]
+      }
       home_space_origin_of: { Args: { p_owner_id: string }; Returns: string }
       is_channel_member: { Args: { p_channel_id: string }; Returns: boolean }
       is_current_workspace_member: {
@@ -3937,6 +4308,55 @@ export type Database = {
       stamp_channel_message_display_answer: {
         Args: { p_answer: Json; p_message_id: string }
         Returns: boolean
+      }
+      workspace_credit_usage_bins: {
+        Args: {
+          p_bucket: string
+          p_channel_id: string
+          p_channel_ids: string[]
+          p_since: string
+          p_until: string
+          p_workspace_id: string
+        }
+        Returns: {
+          bin_start: string
+          credits: number
+        }[]
+      }
+      workspace_credit_usage_tally: {
+        Args: {
+          p_channel_ids: string[]
+          p_since: string
+          p_workspace_id: string
+        }
+        Returns: {
+          credits: number
+          dimension: string
+          events: number
+          tally_key: string
+        }[]
+      }
+      workspace_mcp_tool_tally: {
+        Args: { p_since: string; p_workspace_id: string }
+        Returns: {
+          calls: number
+          op_name: string
+          tool_name: string
+        }[]
+      }
+      workspace_message_author_tally: {
+        Args: { p_since: string; p_workspace_id: string }
+        Returns: {
+          author_id: string
+          messages: number
+        }[]
+      }
+      workspace_message_channel_tally: {
+        Args: { p_since: string; p_workspace_id: string }
+        Returns: {
+          billed_channel_id: string
+          messages: number
+        }[]
       }
     }
     Enums: {

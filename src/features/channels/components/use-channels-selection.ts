@@ -43,6 +43,11 @@ export interface ChannelsSelection {
    * A nonce only ever says "somebody asked, again".
    */
   infoTabSignal: number;
+  /** The task whose detail the Tasks tab shows, or `null` for its list. */
+  openTaskId: string | null;
+  /** ASKS for the info column to land on its Tasks tab, counted since the column last closed: the
+   *  panel mounts with the column, so a nonce it seeded itself would miss the ask that opened it. */
+  tasksTabSignal: number;
   infoOpen: boolean;
   scrollTarget: ScrollTarget | null;
   /**
@@ -79,6 +84,11 @@ export interface ChannelsSelection {
   setDirectOpen: (open: boolean) => void;
   /** Land on a channel: clears the thread. */
   selectChannel: (id: string | null) => void;
+  /** List or detail inside the Tasks tab. */
+  setOpenTaskId: (id: string | null) => void;
+  /** From outside the column (the quick view): open it on Tasks, on that task or the list, over
+   *  any open agent view. */
+  openTask: (id: string | null) => void;
   /** Open a thread in the current channel. */
   openThread: (id: string | null) => void;
   toggleInfo: () => void;
@@ -91,9 +101,12 @@ export interface ChannelsSelection {
 export function useChannelsSelection({
   initialChannelId = null,
   initialThreadId = null,
+  initialTaskId = null,
 }: {
   initialChannelId?: string | null;
   initialThreadId?: string | null;
+  /** A task to open on mount, on the Tasks tab: `openTask`'s state, seeded. */
+  initialTaskId?: string | null;
 }): ChannelsSelection {
   const [selectedId, setSelectedId] = useState<string | null>(initialChannelId);
   const [createOpen, setCreateOpen] = useState(false);
@@ -102,10 +115,12 @@ export function useChannelsSelection({
     initialThreadId
   );
   const [openAgent, setOpenAgent] = useState<string | null>(null);
-  const [infoOpen, setInfoOpen] = useState(true);
+  const [infoOpen, setInfoOpenState] = useState(true);
   const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
   const [newThreadSignal, setNewThreadSignal] = useState(0);
   const [infoTabSignal, setInfoTabSignal] = useState(0);
+  const [openTaskId, setOpenTaskId] = useState<string | null>(initialTaskId);
+  const [tasksTabSignal, setTasksTabSignal] = useState(initialTaskId ? 1 : 0);
 
   // A SECOND notification, with the page already mounted, changes the route but
   // not the component — the initial `useState` above would never see it. So the
@@ -129,12 +144,21 @@ export function useChannelsSelection({
       // so this stays the clear it always was; a pop-out landing names one, and
       // re-routing to a different channel must not silently drop it.
       setRequestedThreadId(initialThreadId);
+      setOpenTaskId(null);
     }
   }
 
   const selectChannel = useCallback((id: string | null) => {
     setSelectedId(id);
     setRequestedThreadId(null);
+    setOpenTaskId(null);
+  }, []);
+
+  const openTask = useCallback((id: string | null) => {
+    setOpenTaskId(id);
+    setOpenAgent(null);
+    setInfoOpenState(true);
+    setTasksTabSignal((n) => n + 1);
   }, []);
 
   const openThread = useCallback(
@@ -145,7 +169,11 @@ export function useChannelsSelection({
     () => setNewThreadSignal((n) => n + 1),
     []
   );
-  const toggleInfo = useCallback(() => setInfoOpen((open) => !open), []);
+  const setInfoOpen = useCallback((open: boolean) => {
+    setInfoOpenState(open);
+    if (!open) setTasksTabSignal(0);
+  }, []);
+  const toggleInfo = useCallback(() => setInfoOpen(!infoOpen), [infoOpen, setInfoOpen]);
 
   // ⚠ READ OUTSIDE THE UPDATER, deliberately. The obvious spelling is a functional
   // `setOpenAgent(open => …)` that bumps the nonce from inside — but a state updater
@@ -184,6 +212,8 @@ export function useChannelsSelection({
     scrollTarget,
     newThreadSignal,
     infoTabSignal,
+    openTaskId,
+    tasksTabSignal,
     createOpen,
     directOpen,
     setOpenAgent,
@@ -192,6 +222,8 @@ export function useChannelsSelection({
     setCreateOpen,
     setDirectOpen,
     selectChannel,
+    setOpenTaskId,
+    openTask,
     openThread,
     toggleInfo,
     requestNewThread,

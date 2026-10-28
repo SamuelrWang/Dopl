@@ -39,7 +39,7 @@ import {
   type FakePostgrest,
   type Row,
 } from "@/shared/testing/postgrest-cap";
-import { AGENT_COLOR_KEYS } from "../lib/agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 import { __resetColorSharedCompatForTests } from "./color-shared-compat";
 import type { ForeignColorsByChannel } from "./session-colors";
 import {

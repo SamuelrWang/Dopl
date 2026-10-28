@@ -25,7 +25,7 @@
 // METHOD. The shared source-extraction harness this file used to import
 // (test/helpers/thread-followup.mjs) is DELETED with the suite it served: it wired four real
 // blocks together — the listener body, SESSION-DISPATCH-PURE, SESSION-GATE-PURE's
-// `feedInboundForTask` and SESSION-PARK-PURE's `recreateParkedShell` — and the last two no
+// `feedInboundForThread` and SESSION-PARK-PURE's `recreateParkedShell` — and the last two no
 // longer exist. What is left needs two of the four, so they are sliced here, in the one file
 // that reads them.
 
@@ -91,7 +91,7 @@ const BODY = "one more thing — can you also check the staging config?";
 // only"), so no test can write to it.
 function harness(over = {}) {
   const cfg = { live: false, counterparty: PEER, ...over };
-  const calls = { feed: [], trigger: [], fyi: [], taskNotify: [], diag: [] };
+  const calls = { feed: [], trigger: [], fyi: [], threadNotify: [], diag: [] };
   // ⚠ THE FEED IS A FAN-OUT SINCE 2026-08-21 (Samuel's multiplayer ruling): the route asks the
   // engine for EVERY live agent on the thread and feeds each of them, rather than resolving one
   // session and checking its counterparty. `cfg.live` now means "is one of my agents on this
@@ -113,13 +113,13 @@ function harness(over = {}) {
     agentHandles, { note: () => true, verdictFor: () => '' }, () => {}, realRoomRoster.agentAuthorNote, realRoomRoster.authorAddress);
 
   const api = new Function(
-    "versionSkew", "sessionDispatch", "targeting", "trigger", "taskNotify", "diag",
+    "versionSkew", "sessionDispatch", "targeting", "trigger", "threadNotify", "diag",
     `${extractAsyncFn(LISTENER, "dispatchMessage")}\n return { dispatchMessage };`
   )(
     { observe: () => {} },
     routes, targeting,
     { handleTrigger: async (e, m) => calls.trigger.push(m.seq), sendFyi: (e, m) => calls.fyi.push(m.seq) },
-    { notifyTaskReply: (e, m) => calls.taskNotify.push(m.seq) },
+    { notifyThreadReply: (e, m) => calls.threadNotify.push(m.seq) },
     (...a) => calls.diag.push(a.join(" "))
   );
 
@@ -137,7 +137,7 @@ const followUp = (tag, over = {}) => {
   const { metadata, ...rest } = over;
   return {
     kind: "message", seq: 443, authorUserId: PEER, authorKind: "agent", body: BODY,
-    metadata: { to_user_id: ME, taskId: tag, ...(metadata || {}) },
+    metadata: { to_user_id: ME, threadId: tag, ...(metadata || {}) },
     ...rest,
   };
 };
@@ -169,7 +169,7 @@ test("PREDICATE: my OWN message TRIGGERS nothing, but it does reach my own agent
   const fresh = harness({ live: true, counterparty: ME });
   await fresh.dispatch(dm(), mine);
   assert.equal(fresh.calls.feed.length, 1);
-  assert.deepEqual([fresh.calls.trigger, fresh.calls.fyi, fresh.calls.taskNotify], [[], [], []]);
+  assert.deepEqual([fresh.calls.trigger, fresh.calls.fyi, fresh.calls.threadNotify], [[], [], []]);
 });
 
 test("PREDICATE: a message addressed to somebody ELSE never takes this path", async () => {
@@ -181,7 +181,7 @@ test("PREDICATE: a message addressed to somebody ELSE never takes this path", as
   assert.equal(targeting.classify(forThird, dm(), ME), "ignore");
   const h = harness();
   await h.dispatch(dm(), forThird);
-  assert.deepEqual([h.calls.trigger, h.calls.taskNotify], [[], []], "nothing is owed and nothing fires");
+  assert.deepEqual([h.calls.trigger, h.calls.threadNotify], [[], []], "nothing is owed and nothing fires");
 
   // Tagging me inside somebody else's request is still a tag — an escalation, never a
   // decision. This is the boundary the route could not see and classify always could.
@@ -208,13 +208,13 @@ test("PREDICATE: a non-message kind, a null identity and an author-less post fai
   const h = harness({ live: true, counterparty: PEER });
   // ⚠ AWAITED SINCE 2026-08-28: the route is async (TIER 3's claim/pass pass).
   const feeds = (m, me) => h.routes.feedLiveSession(dm(), m, me);
-  assert.equal(await feeds(followUp(LEGACY, { kind: "task_started" }), ME), false, "a lifecycle kind");
+  assert.equal(await feeds(followUp(LEGACY, { kind: "thread_started" }), ME), false, "a lifecycle kind");
   assert.equal(await feeds(followUp(LEGACY), null), false, "identity not resolved yet");
   assert.equal(await feeds(followUp(LEGACY, { authorUserId: null }), ME), false, "an author-less post");
   assert.equal(await feeds(null, ME), false, "and no message at all");
   assert.equal(h.calls.feed.length, 0);
 
-  assert.equal(targeting.classify(followUp(LEGACY, { kind: "task_started" }), dm(), ME), "ignore");
+  assert.equal(targeting.classify(followUp(LEGACY, { kind: "thread_started" }), dm(), ME), "ignore");
   assert.equal(targeting.classify(followUp(LEGACY), dm(), null), "ignore");
   assert.equal(targeting.classify(followUp(LEGACY, { authorUserId: null }), dm(), ME), "ignore");
   assert.equal(targeting.classify(null, dm(), ME), "ignore");
@@ -231,13 +231,13 @@ test("PREDICATE: a non-message kind, a null identity and an author-less post fai
 // made `handleTrigger` ANSWER whether the listener's cursor may advance, so the call site
 // became `return trigger.handleTrigger(entry, m)` and the assertion went red over a passing
 // product. F-108 is the standing finding about this class of desktop test.
-test("SEAM: every task-reply reaches the passive notifier, and nothing else claims it", async () => {
-  // The requester-side shape classify answers 'task-reply' for: the peer's AGENT replying in
+test("SEAM: every thread-reply reaches the passive notifier, and nothing else claims it", async () => {
+  // The requester-side shape classify answers 'thread-reply' for: the peer's AGENT replying in
   // an interactive thread I created, addressed back to me.
   const reply = (metadata = {}) => ({
     kind: "message", seq: 77, authorUserId: PEER, authorKind: "agent", body: "here is the answer",
     metadata: {
-      taskId: UUID_THREAD, taskMode: "interactive", taskCreatedBy: ME, taskTarget: PEER,
+      threadId: UUID_THREAD, threadMode: "interactive", threadCreatedBy: ME, threadTarget: PEER,
       to_user_id: ME, ...metadata,
     },
   });
@@ -246,8 +246,8 @@ test("SEAM: every task-reply reaches the passive notifier, and nothing else clai
   // Samuel's spec). The dispatcher's conjunct — `authorKind === 'user' || mentionsMe(...)` — is
   // gone: the reply BANNER is off for both authors, so author kind decides nothing, and the only
   // surviving question ("was I tagged, so this is a MENTION") is asked inside
-  // `task-notify.js › notifyTaskReply`, which is where it has to be, because a tag inside my own
-  // thread classifies 'task-reply' and never reaches `sendFyi`. That gate is pinned in
+  // `thread-notify.js › notifyThreadReply`, which is where it has to be, because a tag inside my own
+  // thread classifies 'thread-reply' and never reaches `sendFyi`. That gate is pinned in
   // test/wake-external-requester.test.mjs and test/notification-prefs.test.mjs.
   //
   // What THIS seam still owns, and the reason it is worth keeping: the verdict reaches the
@@ -261,9 +261,9 @@ test("SEAM: every task-reply reaches the passive notifier, and nothing else clai
   ]) {
     const h = harness();
     await h.dispatch(dm(), m);
-    assert.deepEqual(h.calls.taskNotify, [77], `${label} reaches the passive notifier`);
+    assert.deepEqual(h.calls.threadNotify, [77], `${label} reaches the passive notifier`);
     // ⚠ AND NOTHING ELSE CLAIMED IT INSTEAD. Without this, a dispatcher that had started
-    // spawning against its own reply — the failure the 'task-reply' verdict exists to prevent —
+    // spawning against its own reply — the failure the 'thread-reply' verdict exists to prevent —
     // would wear the same green.
     assert.deepEqual([h.calls.trigger, h.calls.fyi, h.calls.feed], [[], [], []], `${label}: nothing else`);
   }
@@ -279,7 +279,7 @@ test("SEAM: every task-reply reaches the passive notifier, and nothing else clai
 //   its requester session; DIRECTION 3 the operator's `desktop-ui` create took that same route
 //   PLUS the request strip; DIRECTION 4 an external create DECLARING handoff opened the session
 //   here. ⚠ The PREDICATE half of all four survives untouched in
-//   test/operator-typed-request.test.mjs, which is `targeting.requesterTaskOpen`'s own table;
+//   test/operator-typed-request.test.mjs, which is `targeting.requesterThreadOpen`'s own table;
 //   what is deleted is only the dispatch each direction ended in.
 //
 // §3 THE TAG READER + THE RECORD TEST — three tests. "exchangeTag: the two spellings, and

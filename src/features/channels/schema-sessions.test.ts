@@ -1,19 +1,19 @@
 /**
  * The session-state write body (F-147), bound for bound against `channel_sessions`' CHECKs: the write
  * runs on the admin client, so a value zod admits and the column refuses is a 500. Lengths mirror
- * `channels.name` (120) and `channel_tasks.title` (200), never stricter.
+ * `channels.name` (120) and `channel_threads.title` (200), never stricter.
  */
 
 import { describe, it, expect } from "vitest";
 import { SessionStateReportSchema } from "./schema-sessions";
 
 const CHAN = "550e8400-e29b-41d4-a716-446655440000";
-const TASK = "44444444-e29b-41d4-a716-446655440000";
+const THREAD = "44444444-e29b-41d4-a716-446655440000";
 
 const entry = (over: Record<string, unknown> = {}) => ({
-  sessionKey: `${CHAN}:${TASK}`,
+  sessionKey: `${CHAN}:${THREAD}`,
   channelId: CHAN,
-  threadId: TASK,
+  threadId: THREAD,
   name: "flint",
   state: "working",
   channelName: "General",
@@ -73,20 +73,20 @@ describe("SessionStateReportSchema — the migration's CHECKs", () => {
 
   it("`sessionKey` is a uuid pair PLUS an agent segment, and carries no filter-hostile character", () => {
     // `<channel>:<thread>:<agentInstanceId>`: one operator may run several agents on one thread.
-    expect(parse([entry({ sessionKey: `${CHAN}:${TASK}:a1b2c3d4` })]).success).toBe(true);
+    expect(parse([entry({ sessionKey: `${CHAN}:${THREAD}:a1b2c3d4` })]).success).toBe(true);
     // `<channel>::<agent>` is a channel-level agent.
     expect(parse([entry({ sessionKey: `${CHAN}::a1b2c3d4` })]).success).toBe(true);
     // The two-segment form is an older desktop's (INVARIANTS §13); refusing it blanks its rows.
     expect(parse([entry({ sessionKey: `${CHAN}:` })]).success).toBe(true);
-    expect(parse([entry({ sessionKey: `${CHAN}:${TASK}` })]).success).toBe(true);
+    expect(parse([entry({ sessionKey: `${CHAN}:${THREAD}` })]).success).toBe(true);
     // The reconcile deletes by key, so a key must need no escaping.
     for (const bad of [
-      `${CHAN}:${TASK}","other`,
+      `${CHAN}:${THREAD}","other`,
       `${CHAN}:a b`,
       "nocolon",
-      `${CHAN}:${TASK}:a1b2c3d4:more`, // a FOURTH segment is not a shape the desktop mints
-      `${CHAN}:${TASK}:agent id`,
-      `${CHAN}:${TASK}:"x"`,
+      `${CHAN}:${THREAD}:a1b2c3d4:more`, // a FOURTH segment is not a shape the desktop mints
+      `${CHAN}:${THREAD}:agent id`,
+      `${CHAN}:${THREAD}:"x"`,
     ]) {
       expect(parse([entry({ sessionKey: bad })]).success).toBe(false);
     }
@@ -288,5 +288,17 @@ describe("the two INT4 health counts are bounded at the COLUMN's ceiling", () =>
         true
       );
     }
+  });
+});
+
+describe("SessionStateReportSchema — runtime (R9)", () => {
+  it("takes a runtime id on the launch grammar, absent or null as well", () => {
+    expect(parse([entry({ runtime: "codex" })]).success).toBe(true);
+    expect(parse([entry({ runtime: null })]).success).toBe(true);
+    expect(parse([entry()]).success).toBe(true);
+  });
+
+  it("refuses one the column CHECK would refuse, so it is a named 400 and not a 500", () => {
+    expect(parse([entry({ runtime: "Claude Code" })]).success).toBe(false);
   });
 });

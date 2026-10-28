@@ -41,6 +41,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { billingSelfPath, parseCheckoutPlan } from "@/features/billing/url";
+import { isPersonalPaidPlan } from "@/features/billing/plans";
 import { findSoleOwnedStandardWorkspace } from "@/features/workspaces/server/repository";
 import { listMyWorkspacesWithRole } from "@/features/workspaces/server/service";
 import { isStandardWorkspace } from "@/features/workspaces/types";
@@ -80,9 +81,12 @@ export default async function BillingWorkspacePickerPage({
   // ⚠ Pro names its container, so this forward is a resolution, not a guess.
   // A caller with no home space yet (nothing has minted one) falls
   // through to the picker rather than 404ing on a segment that does not exist.
+  // `max` (2026-10-22) names the same container `pro` does — both personal
+  // tiers are sold on the home space and nowhere else.
   if (
-    parseCheckoutPlan(typeof query.plan === "string" ? query.plan : null) ===
-      "pro" &&
+    isPersonalPaidPlan(
+      parseCheckoutPlan(typeof query.plan === "string" ? query.plan : null)
+    ) &&
     personal
   ) {
     redirect(billingSelfPath(workspaceSegment(personal), query));

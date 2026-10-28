@@ -102,6 +102,19 @@ const EXEMPT: Record<string, string> = {
     "Glasses Hey-Even chat-completions shim — per-device Hey Even key (features/glasses/platforms/even-g2/hey-even.ts › deviceFromHeyEvenKey).",
   "glasses/hey-even/v1/chat/completions/route.ts":
     "Glasses Hey-Even chat-completions shim, OpenAI path — same handler and key as glasses/hey-even/route.ts.",
+  // Device SDK (A4): developer API keys via withDeveloperKey (C1), not a Dopl user's OAuth token;
+  // the key's own coarse scopes are the gate.
+  "v1/connect_sessions/route.ts":
+    "Device SDK — developer API key (features/device-sdk/server/with-developer-key.ts › withDeveloperKey), scope `connect`; the one route a publishable key may call.",
+  "v1/connections/exchange/route.ts": "Device SDK — developer secret key via withDeveloperKey, scope `connect`.",
+  "v1/connections/[id]/route.ts": "Device SDK — developer secret key via withDeveloperKey, scope `connect` (revoke).",
+  "v1/users/[external_user_id]/deliver/route.ts": "Device SDK — developer secret key via withDeveloperKey, scope `actions:write`.",
+  "v1/devices/[device_id]/actions/[capability]/route.ts":
+    "Device SDK — developer secret key via withDeveloperKey, scope `actions:write`.",
+  "v1/test/reset/route.ts":
+    "Device SDK — developer sk_test_ key via withDeveloperKey, scopes `connect` + `actions:write`; test env of the calling project only.",
+  "connect/[token]/[step]/route.ts":
+    "Device SDK hosted Connect page steps — authenticated by the connect token in the path (sha256-matched); the end user has no Dopl account (D1). Per-IP rate-limited.",
 };
 
 const files = routeFiles(API_ROOT);
@@ -227,6 +240,10 @@ describe("H-3 write-gate coverage", () => {
         "auth/mcp-device-token/route.ts",
         // Cancel writes on our own route (no Stripe-hosted click-through).
         "billing/cancel/route.ts",
+        // POST switches a live personal subscription Pro ⇄ Max in place
+        // (2026-10-22) — a charge today on an upgrade. GET (the queued switch
+        // the pane shows) stays ungated; it decides nothing.
+        "billing/change-plan/route.ts",
         "billing/checkout/route.ts",
         // The consent gate keeps a HUMAN in the loop. PATCH records the
         // operator's Send / Cancel on their OWN agent's drafted reply; reachable
@@ -260,7 +277,7 @@ describe("H-3 write-gate coverage", () => {
         // token has no confirm dialog to gate it — the same argument the team
         // DELETE below carries. ⚠ Per-METHOD: GET and the set-mode PATCH on that
         // file stay ungated.
-        "channels/[channelId]/tasks/[taskId]/route.ts",
+        "channels/[channelId]/threads/[threadId]/route.ts",
         // HOME CHANNELS (2026-08-23), same credential class as
         // `workspaces/[workspaceSlug]/join-link` above: POST mints the claim
         // URL, DELETE revokes it, and the claim SPENDS one — the outcome of

@@ -47,7 +47,7 @@ function stubClient(overrides: Record<string, unknown>): DoplClient {
   } as unknown as DoplClient;
 }
 
-function msg(seq: number, taskId?: string) {
+function msg(seq: number, threadId?: string) {
   return {
     id: `m-${seq}`,
     seq,
@@ -56,7 +56,7 @@ function msg(seq: number, taskId?: string) {
     authorKind: "agent",
     kind: "message",
     body: `body ${seq}`,
-    metadata: taskId ? { taskId } : {},
+    metadata: threadId ? { threadId } : {},
     clientMsgId: null,
     createdAt: "2026-07-31T00:00:00Z",
     authorName: "Pat",
@@ -84,18 +84,18 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     expect(opts).toEqual({ since: 7, limit: 50, thread: "thread-1" });
   });
 
-  it("accepts ANY non-empty id — a legacy task-… id is a real taskId", async () => {
+  it("accepts ANY non-empty id — a legacy thread-… id is a real threadId", async () => {
     // ⚠ A `.uuid()` here rejects exactly the exchanges hardest to reconstruct
-    // by hand — the transcript still carries `task-<channelId>-<seq>` ids.
+    // by hand — the transcript still carries `thread-<channelId>-<seq>` ids.
     const readChannelMessages = vi.fn<ReadSpy>();
-    readChannelMessages.mockResolvedValue([msg(9, "task-chan-1-3")]);
+    readChannelMessages.mockResolvedValue([msg(9, "thread-chan-1-3")]);
     const client = stubClient({ readChannelMessages });
 
-    const res = await opRead(client, "general", undefined, undefined, null, "task-chan-1-3");
+    const res = await opRead(client, "general", undefined, undefined, null, "thread-chan-1-3");
 
     expect(res.isError).toBeFalsy();
     const [, opts] = readChannelMessages.mock.calls[0];
-    expect(opts.thread).toBe("task-chan-1-3");
+    expect(opts.thread).toBe("thread-chan-1-3");
   });
 
   it("treats a blank thread as unset rather than sending it", async () => {
@@ -226,7 +226,7 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
    * metadata card and no bodies; `read(thread=)` rendered bodies and no card.
    * Two ops for one noun, with 200 characters of published prose keeping them
    * apart. One op renders both — and a tag with no thread ROW behind it (a
-   * legacy `task-<channel>-<seq>` id) still gets its transcript, because
+   * legacy `thread-<channel>-<seq>` id) still gets its transcript, because
    * "this names no thread row" is a fact about ad-hoc exchanges rather than an
    * error.
    */
@@ -245,14 +245,14 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
 
   it("an AD-HOC tag with no thread row still returns the exchange", async () => {
     const client = stubClient({
-      readChannelMessages: vi.fn(async () => [msg(41, "task-chan-1-7")]),
+      readChannelMessages: vi.fn(async () => [msg(41, "thread-chan-1-7")]),
       getChannelThread: vi.fn(async () => {
         throw Object.assign(new Error("not found"), { status: 404 });
       }),
     });
 
     const text = (
-      await opRead(client, "general", undefined, undefined, null, "task-chan-1-7")
+      await opRead(client, "general", undefined, undefined, null, "thread-chan-1-7")
     ).content[0].text;
 
     expect(text).toContain("body 41");
@@ -314,7 +314,7 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
   });
 
   it("neutralizes the id it echoes — a thread id round-trips from peer metadata", async () => {
-    // ⚠ `metadata.taskId` is stored verbatim for non-UUID values, so an id
+    // ⚠ `metadata.threadId` is stored verbatim for non-UUID values, so an id
     // copied out of a read legend is peer bytes by the time it comes back.
     const client = stubClient({ readChannelMessages: vi.fn(async () => []) });
 

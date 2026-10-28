@@ -8,7 +8,8 @@ import {
   parseEscalationAnswer,
   type ChannelEscalationAnswer,
 } from "../escalation";
-import { agentColorOrNull } from "../lib/agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
+import { memberLabel } from "../lib/channel-display";
 import type {
   AgentColorKey,
   Channel,
@@ -18,9 +19,9 @@ import type {
 } from "../types";
 import type { AvatarPerson } from "@/shared/ui/avatar";
 
-/** A message's thread, or null; `metadata.taskId` is its storage key (INVARIANTS §5). */
+/** A message's thread, or null; `metadata.threadId` is its storage key (INVARIANTS §5). */
 export function threadIdOf(message: ChannelMessage): string | null {
-  const value = message.metadata.taskId;
+  const value = message.metadata.threadId;
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
@@ -234,9 +235,7 @@ export function labelFor(message: ChannelMessage, index: AuthorIndex): string {
   const member = message.authorUserId
     ? index.byId.get(message.authorUserId)
     : undefined;
-  return (
-    member?.displayName ?? member?.email ?? message.authorName ?? "Member"
-  );
+  return member ? memberLabel(member) : (message.authorName ?? "Member");
 }
 
 /** A thread's two parties (INVARIANTS §5), via the roster; unknown ids are dropped, not faked. */

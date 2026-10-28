@@ -3,12 +3,13 @@
 import { X } from "lucide-react";
 import type { Dispatch } from "react";
 import { cn } from "@/shared/lib/utils";
+import fieldStyles from "@/shared/ui/form-dialog.module.css";
 import type { GraphAction } from "../graph-state";
 import type { ObjectMethod, OntologyObject } from "../types";
-import { InlineUnderlineField } from "./board-header-bits";
+import { InlineUnderlineField } from "@/shared/ui/form-dialog";
 import {
   PANEL_ROW,
-  PANEL_ROWS,
+  SECTION_ROWS,
   PanelAddButton,
   PanelSection,
   ROW_REMOVE_BUTTON,
@@ -19,19 +20,9 @@ import {
 const BLANK_ACTION: ObjectMethod = { name: "", description: "", outcome: "", tools: "" };
 
 /**
- * Actions section — what the object can do. One white bar per action holding its
- * name with description / outcome / tools under it.
- *
- * 2026-09-13: `+ Add` appends an empty bar with all four fields on it, so an
- * action's outcome and tools are typeable before its name is written.
- *
- * The row is written when it has a name (label blur, or Enter), for the reason in
- * `panel-section.tsx › useDraftRows`: `METHOD_UPSERT` appends by position, so a
- * nameless action would be a row nobody can read or address.
- *
- * Flat since 2026-09-12 — the fields are the popup kit's underline, never a
- * `FIELD_WELL`, and the bar restores a surface under the four lines, not the
- * nested frames that ruling cut (`panel-section.tsx › PanelSection`).
+ * Actions: what the object can do, one hairline row per action — its name over description, outcome
+ * and tools. An action is written once it has a name (blur or Enter): `METHOD_UPSERT` appends by
+ * position, so a nameless one would be a row nobody can address.
  */
 export function ActionsEditor({
   object,
@@ -57,7 +48,7 @@ export function ActionsEditor({
 
   return (
     <PanelSection label="Actions">
-      <div className={PANEL_ROWS}>
+      <div className={SECTION_ROWS}>
         {object.methods.map((m, i) => (
           <ActionRow
             key={`row-${i}`}
@@ -85,15 +76,6 @@ export function ActionsEditor({
   );
 }
 
-/**
- * Fields are `quiet` since 2026-09-14: the kit's `.inputQuiet`, a resting state of
- * the one underline recipe (`board-header-bits.tsx › InlineUnderlineField`), not
- * a second face. The panel's own description keeps its gray-at-rest line; the rule
- * is about row cells.
- *
- * Order untouched: the `Attribute : value dropdown` reordering is the attribute
- * row's shape, and an action is a stack of four named fields with no value cell.
- */
 function ActionRow({
   method,
   canEdit,
@@ -109,11 +91,9 @@ function ActionRow({
   onRemove: () => void;
 }) {
   return (
-    <div className={cn(PANEL_ROW, "group flex flex-col gap-1.5")}>
-      {/* The three under-fields keep their "Action …" accessible names and show
-          them as the hint: a bare "Description" here would collide with the
-          object's own Description two sections up. */}
-      <div className="flex items-center gap-2">
+    <div className={cn(PANEL_ROW, "flex flex-col")}>
+      {/* "Action …" names, so none collides with the object's own Description. */}
+      <div className="flex items-center gap-1.5">
         <InlineUnderlineField
           label="Action name"
           value={method.name}
@@ -144,6 +124,7 @@ function ActionRow({
         readOnly={!canEdit}
         quiet
         onChange={(description) => onChange({ ...method, description })}
+        inputClassName={fieldStyles.inputSecondary}
       />
       <InlineUnderlineField
         label="Action outcome"
@@ -151,6 +132,7 @@ function ActionRow({
         readOnly={!canEdit}
         quiet
         onChange={(outcome) => onChange({ ...method, outcome })}
+        inputClassName={fieldStyles.inputSecondary}
       />
       <InlineUnderlineField
         label="Action tools"
@@ -158,6 +140,7 @@ function ActionRow({
         readOnly={!canEdit}
         quiet
         onChange={(tools) => onChange({ ...method, tools })}
+        inputClassName={fieldStyles.inputSecondary}
       />
     </div>
   );

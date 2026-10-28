@@ -1,60 +1,20 @@
 "use client";
 
-/**
- * The ontology board header's own controls: the underline fields (Description and
- * the Rename face of the name) and the gear menu. They sit beside
- * `ontology-view.tsx` for the 500-line cap; nothing else mounts them.
- */
+/** The ontology board header's own controls: the rename field, the display
+ *  picker and the gear menu. Split from `ontology-view.tsx` for the 500-line cap. */
 
-import {
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Pencil, Settings, Trash2 } from "lucide-react";
+import { cn } from "@/shared/lib/utils";
 import { InlineUnderlineField } from "@/shared/ui/form-dialog";
-import fieldStyles from "@/shared/ui/form-dialog.module.css";
+import { pillButton } from "@/shared/ui/pill-button";
 import { MenuDivider, MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { useBoardDisplay, type BoardDisplay } from "../hooks/use-board-display";
 
-/** The label-less underline field lives in the popup form kit now (2026-09-28); re-exported for
- *  the ontology callers that import it from here. */
-export { InlineUnderlineField };
-
 /**
- * The ontology's description, hinted "Description". Saves through `ONTOLOGY_UPDATE`
- * at `purpose`, debounced by the store — "purpose" is still what agents read.
- */
-export function DescriptionField({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  return (
-    <InlineUnderlineField
-      label="Description"
-      value={value}
-      onChange={onChange}
-      className="flex-1"
-      // as tall as the black button beside it, so the hairline is flush with that
-      // button's bottom edge (Samuel, 2026-09-10).
-      inputClassName={fieldStyles.inputAction}
-    />
-  );
-}
-
-/**
- * The ontology's name while being renamed — the same underline field, in the slot
- * the switcher's trigger occupies. Renaming is a menu act (2026-09-10), so this is
- * mounted only while renaming.
- *
- * Enter and blur save; Escape and an empty name cancel — a rename to "" would read
- * as "Untitled" and hide a slipped keystroke. No blur-after-Escape double-fire to
- * guard: the host unmounts the field and React fires no `blur` on an unmounted
- * input (`skills/components/skill-folder-control.tsx` is the same shape).
+ * The ontology's name while being renamed, in the switcher's slot. Enter and blur save; Escape and
+ * an empty name cancel (a rename to "" would read as "Untitled" and hide a slipped keystroke).
  */
 export function NameField({
   name,
@@ -62,9 +22,8 @@ export function NameField({
   onCancel,
 }: {
   name: string;
-  /** The existing `ONTOLOGY_UPDATE.name` path — never called with "". */
+  /** Never called with "". */
   onCommit: (next: string) => void;
-  /** Leave the rename face untouched (Escape, empty, or no change). */
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState(name);
@@ -81,7 +40,8 @@ export function NameField({
       label="Name"
       value={draft}
       onChange={setDraft}
-      className="w-[220px] shrink-0"
+      className="w-55 shrink-0"
+      inputClassName="font-medium"
       autoFocus
       onBlur={commit}
       onKeyDown={(e) => {
@@ -99,20 +59,11 @@ export function NameField({
 }
 
 /**
- * The board's gear: one round 36px trigger over every menu row this header has
- * (Samuel, 2026-09-10).
+ * The board's gear: one round white pill over every settings row. Rename is the view's; the rows
+ * under the divider are the host's (/home's Share, Changelog and agents rungs). Delete is the last
+ * row and one slot: a host that brings its own passes it in `hostRows` and no `onDelete`.
  *
- * Two sources of rows — Rename is the view's; everything under the divider is the
- * host's (/home's Share, Changelog and agents rungs).
- *
- * 2026-09-11: no "+ Column" row — the header's black button makes the lane
- * (`ontology-view.tsx › handleNewObject`). One place per control.
- *
- * Delete is one slot and the last row. A host that brings its own Delete passes it
- * in `hostRows` and no `onDelete`, so exactly one Delete shows on either surface.
- *
- * Coordinate mode, like the switcher beside it: this menu opens inside
- * `.page-float`, where a trigger-anchored panel renders as a clipped sliver.
+ * Coordinate mode: inside `.page-float` a trigger-anchored panel renders as a clipped sliver.
  */
 export function BoardSettingsMenu({
   ontologyName,
@@ -149,7 +100,7 @@ export function BoardSettingsMenu({
           const rect = triggerRef.current?.getBoundingClientRect();
           if (rect) setAnchor({ x: rect.right - 200, y: rect.bottom + 6 });
         }}
-        className="btn-light flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-primary"
+        className={cn(pillButton("white", "lg"), "w-9 shrink-0 justify-center px-0")}
       >
         <Settings size={14} />
       </button>
@@ -157,7 +108,7 @@ export function BoardSettingsMenu({
         open={anchor !== null}
         at={anchor ?? undefined}
         onClose={close}
-        className="min-w-[200px]"
+        className="min-w-50"
       >
         {onRename && (
           <MenuItem
@@ -197,21 +148,12 @@ export function BoardSettingsMenu({
 }
 
 const DISPLAY_OPTIONS: ReadonlyArray<SelectMenuOption<BoardDisplay>> = [
-  { value: "canvas", label: "Canvas", description: "Each object type is a lane of cards." },
-  {
-    value: "rows",
-    label: "Rows",
-    description: "Each object type spans the page, with every object as a row of its details.",
-  },
+  { value: "canvas", label: "Canvas" },
+  { value: "rows", label: "Rows" },
 ];
 
-/**
- * The board's display picker, left of the gear (Samuel, 2026-10-09). The kit's
- * `raised` select face is 36px tall, the gear's height, so the two sit level.
- * Everyone may switch: it is a view preference on this device, not an edit.
- * Owns the preference itself; the board reads the same store
- * (`kanban-board.tsx`), so the view threads nothing between them.
- */
+/** The board's display picker, a text link left of the gear. A view preference on this device,
+ *  not an edit, so everyone may switch; the board reads the same store. */
 export function BoardDisplayMenu() {
   const [value, onChange] = useBoardDisplay();
   return (
@@ -220,7 +162,7 @@ export function BoardDisplayMenu() {
       options={DISPLAY_OPTIONS}
       onChange={onChange}
       ariaLabel="Board display"
-      variant="raised"
+      variant="link"
       className="shrink-0"
     />
   );

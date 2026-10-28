@@ -14,8 +14,8 @@ vi.mock("./repository-overview", () => ({
   countOpenChannels: vi.fn(),
   listVisibleChannelRefs: vi.fn(),
   listRecentMessages: vi.fn(),
-  listRecentTasksOpened: vi.fn(),
-  listRecentTasksClosed: vi.fn(),
+  listRecentThreadsOpened: vi.fn(),
+  listRecentThreadsClosed: vi.fn(),
   listRecentUserMessageAuthors: vi.fn(),
   // ⚠ Defaults to `null` below — the un-applied database — so these cases run the
   // member-load DEGRADE path. `member-load-row-cap.test.ts` drives the applied side.
@@ -65,8 +65,8 @@ beforeEach(() => {
   mocked.countOpenChannels.mockResolvedValue(0);
   mocked.listVisibleChannelRefs.mockResolvedValue([]);
   mocked.listRecentMessages.mockResolvedValue([]);
-  mocked.listRecentTasksOpened.mockResolvedValue([]);
-  mocked.listRecentTasksClosed.mockResolvedValue([]);
+  mocked.listRecentThreadsOpened.mockResolvedValue([]);
+  mocked.listRecentThreadsClosed.mockResolvedValue([]);
   mocked.listRecentUserMessageAuthors.mockResolvedValue({
     rows: [],
     truncated: false,
@@ -375,8 +375,8 @@ describe("getWorkspaceOverview", () => {
     // these run on the RLS-bypassing admin client.
     for (const fn of [
       mocked.listRecentMessages,
-      mocked.listRecentTasksOpened,
-      mocked.listRecentTasksClosed,
+      mocked.listRecentThreadsOpened,
+      mocked.listRecentThreadsClosed,
     ]) {
       expect(fn).toHaveBeenCalledWith(["c1", "c2"], 8);
     }

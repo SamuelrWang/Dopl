@@ -7,9 +7,9 @@
  * ⚠ IT REPLACES THE CHANNEL'S SETTINGS TAB, IT DOES NOT EXTEND IT. Same rule the
  * Info tab took the day before (`thread-info-tab.tsx`): in thread view the whole
  * right column is about the exchange the centre pane is showing, so the channel's
- * invite / visibility / archive / trust rows have no business standing in it.
- * `settings-tab.tsx` is untouched and still renders verbatim in channel view; the
- * two are separate files because they answer two different questions.
+ * invite / visibility / delete / leave rows have no business standing in it. The
+ * two are separate files because they answer two different questions; both are
+ * built from `settings-agent-rows.tsx`'s vocabulary.
  *
  * ⚠ EVERYTHING A THREAD ACTUALLY HAS IS HERE, WHICH IS TWO THINGS. A thread is a
  * titled, mode-tagged exchange between two fixed parties (INVARIANTS §5) — the
@@ -20,7 +20,7 @@
  * EXISTING rather than mark it done.
  *
  * ⚠ NO DEAD ROWS (INVARIANTS §5). Mode is CREATOR-only, because the server is
- * (`service-tasks.ts › setTaskMode` — a mode governs the creator's own machine);
+ * (`service-threads.ts › setThreadMode` — a mode governs the creator's own machine);
  * Delete is creator-or-channel-manager. A reader entitled to neither gets the
  * empty state, not a heading over greyed-out controls. ⚠ These gates are a
  * DISPLAY convenience — the service refuses regardless, and it is the fence.
@@ -34,15 +34,8 @@
 import { Trash2 } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
-import { cn } from "@/shared/lib/utils";
 import { THREAD_MODE_LABELS } from "../constants";
-import { PanelHeading } from "./bits";
-// ⚠ THE CHANNEL FACE'S ROW SEPARATOR, BY IMPORT (Samuel, 2026-09-13: *"in the
-// settings tab for channels AND THREADS. In between each setting, add a horizontal
-// line"*). It wraps `bits.tsx › MetaRowDivider` — the Info tab's hairline, which is
-// the surface he named — and importing it is what keeps the two Settings faces from
-// separating their rows at two different insets.
-import { SettingDivider } from "./settings-agent-rows";
+import { SettingAction, SettingRow, SettingsSection } from "./settings-agent-rows";
 import type { ChannelThread, ThreadMode } from "../types";
 
 /** The two real modes, label-only. ⚠ Derived from the shared label map rather
@@ -85,55 +78,24 @@ export function ChannelsThreadSettingsTab({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto pb-6">
-      <PanelHeading title="Thread" />
-      <div className="flex flex-col gap-px px-2">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3.5 pb-6 pt-3.5">
+      <SettingsSection title="Thread">
         {canSetMode && (
-          <div data-settings-row className="flex min-h-[40px] items-center gap-2 px-2">
-            <span className="shrink-0 text-body font-medium text-text-primary">
-              Mode
-            </span>
-            <span className="flex min-w-0 flex-1 justify-end">
-              <SelectMenu<ThreadMode>
-                variant="text"
-                value={thread.mode}
-                options={MODE_OPTIONS}
-                onChange={onSetMode}
-                ariaLabel="How this thread is worked"
-                disabled={modeBusy}
-              />
-            </span>
-          </div>
+          <SettingRow name="Mode">
+            <SelectMenu<ThreadMode>
+              variant="bare"
+              value={thread.mode}
+              options={MODE_OPTIONS}
+              onChange={onSetMode}
+              ariaLabel="How this thread is worked"
+              disabled={modeBusy}
+            />
+          </SettingRow>
         )}
-        {/* ⚠ IT BELONGS TO THE ROW BELOW IT, which is why it rides Delete's own gate:
-            a hairline under the LAST row is a rule framing the box rather than
-            separating two settings. The other direction needs no gate — with Mode
-            suppressed for a non-creator this becomes the container's first child and
-            `:first-child` hides it (`settings-agent-rows.tsx › SettingDivider`). */}
         {canDelete && (
-          <>
-            <SettingDivider />
-            <button
-              type="button"
-              data-settings-row
-              onClick={onRequestDelete}
-              // ⚠ The ACTION-ROW recipe from `settings-tab.tsx › ActionRow`,
-              // repeated rather than imported: that component is private to the
-              // channel tab and exporting it would make one file the other's
-              // layout dependency for four utility classes. If a third caller ever
-              // appears, promote it to `bits.tsx` instead of chaining imports.
-              // `destructive` is INK ONLY — the click opens a dialog.
-              className={cn(
-                "flex h-10 w-full items-center gap-2 rounded-[8px] px-2 text-left text-small transition-colors",
-                "text-danger hover:bg-danger/10"
-              )}
-            >
-              <Trash2 size={14} className="shrink-0" />
-              <span className="truncate">Delete thread</span>
-            </button>
-          </>
+          <SettingAction icon={Trash2} label="Delete thread" destructive onSelect={onRequestDelete} />
         )}
-      </div>
+      </SettingsSection>
     </div>
   );
 }

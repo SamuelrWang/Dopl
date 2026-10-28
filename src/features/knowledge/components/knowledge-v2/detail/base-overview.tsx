@@ -6,6 +6,7 @@ import { useBaseMetaEdit } from "./use-base-meta-edit";
 import { longWhen } from "../utils";
 import type { ViewModel } from "./view-model";
 import type { KnowledgeBase } from "../../../types";
+import styles from "../knowledge-v2.module.css";
 
 interface Props {
   base: KnowledgeBase;
@@ -25,18 +26,14 @@ interface Props {
 
 /**
  * The info face: what the detail column rests on when a base rather than a file
- * is selected. Two flat sections on one ground — Details (name + description
- * persist live, the rest read-only) and Changelog, the base's day-grouped
- * roll-up of every revision of it and of everything in it.
+ * is selected. One reading column — the name and description edited in place,
+ * the Details card, then the Changelog, the base's day-grouped roll-up of every
+ * revision of it and of everything in it.
  *
  * Changelog replaced "Contents" on 2026-09-09; the inline folder/entry
  * description editor it carried has no other home today. The loss is filed as
  * F-687 in `docs/REFACTOR-FINDINGS.md`; the unmounted Contents modules were
  * deleted under INVARIANTS §15 (cleanup K02, F-726) — read them from git history.
- *
- * No wrapper, on purpose: the stack's gap and padding belong to the scroll body
- * that hosts it (`../knowledge-v2.module.css › .infoBody`), so the sections are
- * siblings of the pane rather than children of a third box.
  */
 export function BaseOverview({
   base,
@@ -52,7 +49,7 @@ export function BaseOverview({
     useBaseMetaEdit(base, workspaceId, onSaved);
 
   return (
-    <>
+    <div className={styles.infoColumn}>
       <MetaCard
         name={name}
         description={description}
@@ -73,6 +70,6 @@ export function BaseOverview({
         workspaceId={workspaceId}
         canEdit={canEdit}
       />
-    </>
+    </div>
   );
 }

@@ -31,7 +31,7 @@ them through, so the model is built so that a new device kind is a new source, n
   container tokens (`DEVICE_CLIENT_ID`), and the playground (`PLAYGROUND_CLIENT_ID`), are filtered out
   in `agent-apps-repository.ts`. Container sessions are listed nowhere and die with their computer.
 - The desktop also shows **Sign-ins**, the runtimes Dopl runs agents on
-  (`channels/components/runtime-credential-bars.tsx`, `variant="rows"`).
+  (`channels/components/runtime-credential-bars.tsx`).
 - `GET /api/oauth/grants` and `DELETE /api/oauth/grants/{id}` still exist, but the UI no longer reads
   them.
 

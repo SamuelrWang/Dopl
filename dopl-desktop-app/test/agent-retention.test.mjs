@@ -52,7 +52,7 @@ const rec = (over = {}) => ({
   key: `${CH}:t-1:a1b2c3d4`,
   agentId: "a1b2c3d4",
   channelId: CH,
-  taskId: "t-1",
+  threadId: "t-1",
   endedAt: NOW,
   entries: [],
   ...over,

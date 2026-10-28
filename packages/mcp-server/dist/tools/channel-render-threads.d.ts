@@ -11,7 +11,7 @@
  * here goes through `inlineOr` first, because both splice sites (line head,
  * legend) sit OUTSIDE the untrusted-body framing and the route's `metadata` is a
  * bare record with no charset or newline rule. Today's write path stores either
- * a uuid or a fixed `task-<channel>-<seq>` shape, so this is DEFENCE IN DEPTH
+ * a uuid or a fixed `thread-<channel>-<seq>` shape, so this is DEFENCE IN DEPTH
  * for rows written before that gate — a channel carries dozens — and for the
  * render's own rule that it be safe on whatever jsonb hands it.
  */
@@ -40,20 +40,20 @@ export declare const UNREADABLE_ID = "(unreadable id)";
  */
 export declare function threadsClippedNote(ref: string): string;
 /**
- * The thread a message belongs to. `metadata.taskId` is the STORAGE key for the
+ * The thread a message belongs to. `metadata.threadId` is the STORAGE key for the
  * domain's `thread` and is what decides continuation-vs-new on the receiving
  * side — the body cannot tell them apart.
  */
 export declare function threadIdOf(m: ChannelMessage): string | undefined;
 /**
- * True when this id names a real, shared `channel_tasks` thread. Must stay the uuid test the
- * product gates on (`resolvePostMetadata › isUuid`, desktop `targeting.firstClassTaskId`).
+ * True when this id names a real, shared `channel_threads` thread. Must stay the uuid test the
+ * product gates on (`resolvePostMetadata › isUuid`, desktop `targeting.firstClassThreadId`).
  */
 export declare function isFirstClassThreadId(id: string): boolean;
 /**
  * A SHORT, STABLE stand-in for an id — the half that distinguishes it.
  *
- * ⚠ NOT a blind `slice(0, 8)`: every synthetic id in one channel begins `task-`
+ * ⚠ NOT a blind `slice(0, 8)`: every synthetic id in one channel begins `thread-`
  * + the SAME channel uuid, so the first eight chars of two different ad-hoc
  * exchanges are byte-identical. The distinguishing half is the trailing SEQ,
  * which is also the seq of the message that OPENED the exchange.
@@ -86,7 +86,7 @@ export declare function threadTagOf(m: ChannelMessage, anyTagged: boolean): stri
  *
  * ⚠ TWO LINES, NOT ONE — they promise different things. The threads line says
  * "continue one with thread=<id>", meaning a shared, titled exchange both
- * members see. The ad-hoc line cannot: a `task-…` id names no row.
+ * members see. The ad-hoc line cannot: a `thread-…` id names no row.
  *
  * ⚠ But it must NOT tell the reader not to pass one. The receiving desktop's
  * prompt (`main/prompt-framing.js` THREAD_TAG) tells a session to keep its

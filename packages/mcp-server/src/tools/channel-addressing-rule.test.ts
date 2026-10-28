@@ -40,8 +40,8 @@ const ME = "u-me";
 const PEER = "u-peer";
 /** A first-class thread id — the only shape the desktop routes on. */
 const UUID = "3f1c2b90-7a44-4c2e-9b11-0d8e6a5c4321";
-/** The deterministic legacy shape (`task-<channel>-<seq>`) — routes nowhere. */
-const LEGACY = "task-chan-1-7";
+/** The deterministic legacy shape (`thread-<channel>-<seq>`) — routes nowhere. */
+const LEGACY = "thread-chan-1-7";
 
 const CHANNEL = {
   id: "chan-1",
@@ -98,13 +98,14 @@ describe("the group-channel threshold is not restated per lane", () => {
 });
 
 describe("the removed named-agent surface is ABSENT from the published shape", () => {
-  it("declares no to_agent / to_agents / as_agent / participants / agent / status", () => {
+  it("declares no to_agent / to_agents / as_agent / participants / agent, and `status` is only a task's", () => {
     // ⚠ Not "declared and ignored" — a param an MCP client can see is a param a
     // model will try, and a silently-dropped address is the invisible-delivery
     // failure the addressing contract exists to prevent.
-    for (const key of ["to_agent", "to_agents", "as_agent", "participants", "agent", "status"]) {
+    for (const key of ["to_agent", "to_agents", "as_agent", "participants", "agent"]) {
       expect(CHANNEL_INPUT_SHAPE, key).not.toHaveProperty(key);
     }
+    expect(CHANNEL_INPUT_SHAPE.status.unwrap().options).toEqual(["open", "in_progress", "resolved"]);
   });
 
   it("REFUSES every removed op at the enum, before any handler runs", () => {
@@ -219,7 +220,7 @@ describe("the removed named-agent surface is ABSENT from the published shape", (
 
 describe("isFirstClassThreadId — first-class only, and ONE definition of it", () => {
   it("is true for a uuid thread id and false for everything else", () => {
-    // ⚠ Mirrors `firstClassTaskId` (targeting.js): pre-classify routes call it
+    // ⚠ Mirrors `firstClassThreadId` (targeting.js): pre-classify routes call it
     // and it returns '' for a legacy id, so only a uuid reaches a session.
     expect(isFirstClassThreadId(UUID)).toBe(true);
     expect(isFirstClassThreadId(UUID.toUpperCase())).toBe(true);
@@ -232,8 +233,8 @@ describe("isFirstClassThreadId — first-class only, and ONE definition of it", 
     // ⚠ TWO REGEXES FOR "IS THIS A REAL THREAD" IS HOW THE WRITE AND READ LANES
     // LEARN TO DISAGREE ABOUT ONE ID. The ABSENT case is expressed here rather
     // than as an argument: an id nothing carries is a ROOM post, or a DROP.
-    const at = (taskId?: string) =>
-      ({ id: "m", seq: 1, kind: "message", metadata: taskId ? { taskId } : {} }) as unknown as ChannelMessage;
+    const at = (threadId?: string) =>
+      ({ id: "m", seq: 1, kind: "message", metadata: threadId ? { threadId } : {} }) as unknown as ChannelMessage;
     expect(threadFacts(at(UUID), UUID).landed).toBe("thread");
     expect(threadFacts(at(LEGACY), LEGACY).landed).toBe("adhoc");
     expect(threadFacts(at(), undefined).landed).toBe("room");
@@ -297,7 +298,7 @@ describe("addressed= / landed= — what the note became", () => {
     // is the whole reason there are two fields: "nobody was woken" is FALSE for a
     // threaded post (`feedLiveSession` reads the tag before the addressing), and
     // the old remedy "re-post with `to=`" manufactured a duplicate request.
-    const text = await bare({ isDirect: false }, { taskId: UUID });
+    const text = await bare({ isDirect: false }, { threadId: UUID });
     expect(text).toContain("landed=thread addressed=no");
     expect(text).not.toContain("re-post");
     expect(rosterAddressingRule("general", 2)).toContain(
@@ -316,7 +317,7 @@ describe("addressed= / landed= — what the note became", () => {
   it("keeps the two apart for a LEGACY tag, which routes to no session", async () => {
     // ⚠ Only a FIRST-CLASS (uuid) tag reaches a session, so the two cases may
     // never be narrated with one word: `adhoc` groups on a card and wakes nobody.
-    const text = await bare({ isDirect: false }, { taskId: LEGACY });
+    const text = await bare({ isDirect: false }, { threadId: LEGACY });
     expect(text).toContain("landed=adhoc addressed=no");
     expect(text).not.toContain("landed=thread");
   });
@@ -324,7 +325,7 @@ describe("addressed= / landed= — what the note became", () => {
 
 describe("post — the addressing and the linkage on ONE line", () => {
   it("a threaded post never reads as nobody-was-woken", async () => {
-    const text = await bare({ isDirect: false }, { taskId: UUID });
+    const text = await bare({ isDirect: false }, { threadId: UUID });
     expect(text).toContain("landed=thread addressed=no");
     expect(text).not.toContain("nobody was woken");
     expect(text).not.toContain("NO member's agent was triggered");
@@ -345,7 +346,7 @@ describe("post — the addressing and the linkage on ONE line", () => {
     // post reports the thread it landed in beside `addressed=no`, which is what
     // tells the caller to WAIT rather than re-post — the one remedy that would
     // double the request.
-    const text = await bare({ isDirect: true }, { taskId: UUID });
+    const text = await bare({ isDirect: true }, { threadId: UUID });
     expect(text).toContain(`thread=${UUID} landed=thread addressed=no`);
     expect(text).not.toContain("Do NOT re-post it");
   });

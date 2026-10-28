@@ -42,7 +42,7 @@ const locked = (over) => ({
   audience: "container-only",
   toolMode: "bypass",
   messageMode: "auto_both",
-  allowForTask: [],
+  allowForThread: [],
   ...over,
 });
 

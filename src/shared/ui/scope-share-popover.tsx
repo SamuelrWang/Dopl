@@ -104,7 +104,7 @@ export function ScopeSharePopover({
         open={open}
         onClose={() => setOpen(false)}
         align="right"
-        className={cn("w-[264px]", locked ? "p-3" : "p-1.5")}
+        className={cn("w-66", locked ? "p-3" : "p-1.5")}
       >
         {locked ? locked.note : children(() => setOpen(false))}
       </Popover>
@@ -194,7 +194,7 @@ export function ScopeShareMenu({
           aria-checked={draftScope === key}
           onClick={() => setDraftScope(key)}
           className={cn(
-            "flex items-start gap-2 rounded-[7px] px-2.5 py-2 text-left transition-colors",
+            "flex items-start gap-2 rounded-tile px-2.5 py-2 text-left transition-colors",
             draftScope === key
               ? "bg-surface-raised-3"
               // ⚠ THE SHARED OPTION-HOVER TOKEN (Samuel, 2026-09-10). Same face as
@@ -229,7 +229,7 @@ export function ScopeShareMenu({
               You&apos;re not in any team yet.
             </p>
           ) : (
-            <ul className="max-h-[168px] overflow-y-auto">
+            <ul className="max-h-42 overflow-y-auto">
               {pickableTeams.map((t) => {
                 const checked = draftTeams.has(t.id);
                 const locked = !isAdmin && !myTeamIds.has(t.id);
@@ -242,7 +242,7 @@ export function ScopeShareMenu({
                       disabled={locked}
                       onClick={() => toggleTeam(t.id)}
                       className={cn(
-                        "flex w-full items-center gap-2 rounded-[7px] px-2.5 py-1.5 text-left transition-colors",
+                        "flex w-full items-center gap-2 rounded-tile px-2.5 py-1.5 text-left transition-colors",
                         locked
                           ? "cursor-not-allowed opacity-50"
                           : "cursor-pointer hover:bg-menu-item-hover-bg"
@@ -273,7 +273,7 @@ export function ScopeShareMenu({
       )}
 
       {warning && dirty && (
-        <p className="mx-1 mt-0.5 rounded-[7px] bg-bg-inset px-2 py-1.5 text-micro leading-relaxed text-text-secondary">
+        <p className="mx-1 mt-0.5 rounded-tile bg-bg-inset px-2 py-1.5 text-micro leading-relaxed text-text-secondary">
           {warning}
         </p>
       )}
@@ -283,7 +283,7 @@ export function ScopeShareMenu({
           type="button"
           onClick={() => void apply()}
           disabled={!dirty || saving}
-          className="h-7 w-full rounded-[7px] bg-text-primary text-caption font-medium text-bg-elevated transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="h-7 w-full rounded-tile bg-text-primary text-caption font-medium text-bg-elevated transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {saving ? "Saving…" : "Apply"}
         </button>

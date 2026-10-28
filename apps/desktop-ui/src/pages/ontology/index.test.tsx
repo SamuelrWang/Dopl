@@ -223,7 +223,7 @@ describe("ontology page", () => {
     await screen.findByTitle("Switch ontology");
 
     const object = screen.getByRole("button", { name: "Object" });
-    expect(object.className).toMatch(/auth-btn-3d/);
+    expect(object.className).toMatch(/raise-ink/);
     expect(screen.getByRole("button", { name: /^Settings for Revenue/ })).toBeInTheDocument();
     // The other ontologies are BEHIND the trigger, never beside it as pills.
     expect(screen.queryByRole("button", { name: /^Delivery/ })).not.toBeInTheDocument();

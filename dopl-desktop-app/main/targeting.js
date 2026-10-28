@@ -1,6 +1,6 @@
 // Channels listener — message targeting + window handoff.
 //
-// ⚠ CRITICAL: test/classify.test.mjs (plus main-audit-targeting / task-notify /
+// ⚠ CRITICAL: test/classify.test.mjs (plus main-audit-targeting / thread-notify /
 // wake-external-requester) reads THIS file and evaluates the `classify` and `metaStr` function
 // bodies verbatim. Keep them plain top-level `function` declarations with NO braces inside
 // their strings/comments/regex, or the brace-balancing extractor breaks. classify also calls
@@ -24,22 +24,22 @@ function metaStr(m, key) {
 // ── Targeting classification (Feature A) ─────────────────────────────────────
 //
 // classify() returns 'trigger' (consent prompt + maybe spawn), 'fyi' (THE MENTION ESCALATION —
-// a silent notify), 'task-reply' (passive news) or 'ignore'.
+// a silent notify), 'thread-reply' (passive news) or 'ignore'.
 //
 // ⚠ **IT ASKS TWO QUESTIONS (2026-09-02, ruling B1), AND IT USED TO SPELL THE SECOND ONE FOUR
 // TIMES.** Under the fan-out this function was one of five parallel rule sets over "who does a
-// message reach", and it had grown a branch per message shape: a first-class task reply, a legacy
-// task reply, chat, addressed-to-me, addressed-to-its-own-author, addressed-to-a-third-party and
+// message reach", and it had grown a branch per message shape: a first-class thread reply, a legacy
+// thread reply, chat, addressed-to-me, addressed-to-its-own-author, addressed-to-a-third-party and
 // unaddressed. FOUR of those seven ended in the SAME expression — `isMember && mentionsMe ? 'fyi'
 // : 'ignore'` — which is four places one rule could drift. The questions are:
 //
 //   1. IS THIS MESSAGE ADDRESSED TO ME? A fresh request is a 'trigger' (consent + maybe spawn);
-//      a reply inside an exchange I opened is 'task-reply' (passive news); a post that declared
+//      a reply inside an exchange I opened is 'thread-reply' (passive news); a post that declared
 //      `intent:'chat'` or aimed at its own author is neither.
 //   2. DOES IT @-TAG ME? 'fyi' as a member, 'ignore' otherwise — written ONCE, at the foot.
 //
 // ⚠ THE VERDICTS AND THEIR INPUTS ARE UNCHANGED. This is a branch collapse, not a rewiring: the
-// four `to_user_id` / task-stamp reads are the same reads in the same order, and the routing this
+// four `to_user_id` / thread-stamp reads are the same reads in the same order, and the routing this
 // function performs is the same routing. **`wake_verdict` is deliberately NOT consulted here** —
 // this is the HUMAN lane (a consent card, an OS banner), the delivery lane executes the verdict in
 // `session-dispatch.js`, and folding one into the other would put a consent decision behind a
@@ -97,7 +97,7 @@ function isChatIntent(m) {
 
 // TRUE iff the server's stamped mention set for this message names ME.
 // ⚠ TWO READERS, ONE PREDICATE — the same rule isChatIntent carries: classify gates its 'fyi'
-// verdict on this, and listener-messages.js gates the passive TASK-REPLY notice on it (that
+// verdict on this, and listener-messages.js gates the passive THREAD-REPLY notice on it (that
 // verdict is a routing statement as well as a notice, so it cannot be gated inside classify
 // without losing the suppression it exists for). A second copy of this comparison is how two
 // readers come to disagree about whether one post was an escalation.
@@ -127,7 +127,7 @@ function mentionsMe(m, myId) {
 
 function classify(m, entry, myId) {
   // Guard / fail closed. ⚠ The `kind !== 'message'` guard DROPS milestones and lifecycle
-  // markers silently — safe only because the server refuses task_* kinds from an agent, so
+  // markers silently — safe only because the server refuses thread_* kinds from an agent, so
   // prose can no longer ride in one. session-dispatch.feedLiveSession states the same rule.
   if (!m || m.kind !== 'message' || !m.authorUserId) return 'ignore';
   if (m.authorKind !== 'user' && m.authorKind !== 'agent') return 'ignore';
@@ -168,26 +168,26 @@ function classify(m, entry, myId) {
   // (consent), a REPLY inside an exchange I opened (passive news), or nothing.
   const toUserId = metaStr(m, 'to_user_id');
   if (toUserId === myId) {
-    // A REPLY on a task I created, from the party I created it against, is passive news — no
-    // consent, no spawn, silent notification only. task* keys are stamped SERVER-SIDE so they
-    // cannot be spoofed; `taskCreatedBy === me` separates REQUESTER from RESPONDER and
-    // `taskTarget === author` binds the suppression to the responder, so a THIRD member posting
-    // into my task still triggers.
+    // A REPLY on a thread I created, from the party I created it against, is passive news — no
+    // consent, no spawn, silent notification only. thread* keys are stamped SERVER-SIDE so they
+    // cannot be spoofed; `threadCreatedBy === me` separates REQUESTER from RESPONDER and
+    // `threadTarget === author` binds the suppression to the responder, so a THIRD member posting
+    // into my thread still triggers.
     // ⚠ EVERY MODE AND EVERY AUTHOR KIND since 2026-08-20 (Samuel's ruling retiring the session
-    // window). It carried `taskMode === 'interactive'` and `authorKind === 'agent'` conjuncts
+    // window). It carried `threadMode === 'interactive'` and `authorKind === 'agent'` conjuncts
     // while the requester ran a live window that consumed replies first; with that lane retired,
     // either conjunct failing turned the counterparty's reply IN MY OWN THREAD into a consent
     // card against myself.
-    if (metaStr(m, 'taskId') && metaStr(m, 'taskCreatedBy') === myId
-      && metaStr(m, 'taskTarget') === m.authorUserId) return 'task-reply';
+    if (metaStr(m, 'threadId') && metaStr(m, 'threadCreatedBy') === myId
+      && metaStr(m, 'threadTarget') === m.authorUserId) return 'thread-reply';
     // THE LEGACY HALF OF THE SAME ANSWER. The branch above fires only for FIRST-CLASS threads —
-    // taskMode / taskCreatedBy / taskTarget are stamped ONLY from a resolved channel_tasks row,
-    // and a legacy 'task-<channel>-<seq>' id is not a UUID. Without this, a session answering a
+    // threadMode / threadCreatedBy / threadTarget are stamped ONLY from a resolved channel_threads row,
+    // and a legacy 'thread-<channel>-<seq>' id is not a UUID. Without this, a session answering a
     // legacy request posts a reply that looks like a fresh request on the requester's machine and
     // spawns a counter-session against itself. ⚠ Provenance cannot come off the wire — a legacy
     // id is caller-settable — so it comes from the LOCAL registry of threads *I* opened, and it
     // fails safe toward 'trigger', where consent is the net.
-    if (knownLegacyReply(m, myId)) return 'task-reply';
+    if (knownLegacyReply(m, myId)) return 'thread-reply';
   }
   // CHAT — a post that declared it addresses nobody triggers nobody, and it is asked HERE, after
   // both passive answers (they have nothing to suppress) and before the only branch that can
@@ -217,11 +217,11 @@ function classify(m, entry, myId) {
   return isMember && mentionsMe(m, myId) ? 'fyi' : 'ignore';
 }
 
-// First-class (UUID) task id off an inbound message, else ''. Legacy task-<uuid>-<seq> ids are
-// NOT UUIDs -> '' here, leaving taskIdFor's deterministic fallback path unchanged.
+// First-class (UUID) thread id off an inbound message, else ''. Legacy thread-<uuid>-<seq> ids are
+// NOT UUIDs -> '' here, leaving threadIdFor's deterministic fallback path unchanged.
 // ⚠ Mirrors the server's isUuid gate — keep in sync.
-function firstClassTaskId(m) {
-  const id = metaStr(m, 'taskId');
+function firstClassThreadId(m) {
+  const id = metaStr(m, 'threadId');
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : '';
 }
 
@@ -270,8 +270,8 @@ function desktopRuntime(m) {
 // `handoff` is a RESERVED metadata key: the server strips any caller copy and re-stamps only
 // from the validated create_thread field (src/features/channels/server/
 // service-writes-metadata.ts), so read `=== true`, the strict boolean the server writes.
-// ⚠ ROUTING HINT, NOT AUTHORIZATION: requesterTaskOpen still demands the unforgeable identity
-// pair (author === me AND task creator === me) around it.
+// ⚠ ROUTING HINT, NOT AUTHORIZATION: requesterThreadOpen still demands the unforgeable identity
+// pair (author === me AND thread creator === me) around it.
 function declaresHandoff(m) {
   return !!(m && m.metadata && m.metadata.handoff === true);
 }
@@ -282,15 +282,15 @@ function declaresHandoff(m) {
 // the truth tables `test/operator-typed-request.test.mjs` pins. Deleting them is a product call.
 // TRUE iff this message is MY OWN first-class thread opener addressed to a peer (the case that
 // used to open a REQUESTER session window). Never read inside classify's body — the 1536-case
-// truth table depends on that. task* keys are stamped SERVER-SIDE, so they cannot be spoofed.
+// truth table depends on that. thread* keys are stamped SERVER-SIDE, so they cannot be spoofed.
 //
-//   - firstClassTaskId(m) present   → a real first-class (UUID) task, not legacy.
+//   - firstClassThreadId(m) present   → a real first-class (UUID) thread, not legacy.
 //   - m.authorUserId === myId       → MY message.
-//   - taskCreatedBy === myId        → I created the task (requester, not peer).
+//   - threadCreatedBy === myId        → I created the thread (requester, not peer).
 //   - a DESKTOP runtime stamp       → this app posted it; OR the create DECLARED a handoff,
 //     OR a declared handoff           the operator asking an EXTERNAL session to hand the
 //                                     thread to a window here.
-//   - taskTarget present && !== me  → addressed to a PEER (a self-targeted task has no
+//   - threadTarget present && !== me  → addressed to a PEER (a self-targeted thread has no
 //                                     counterparty to drive against).
 // De-dupe, backlog suppression and the settled-set are the listener's job; pure predicate.
 //
@@ -302,14 +302,14 @@ function declaresHandoff(m) {
 // §"Header-only, deliberately"): a device-token holder can set the header. Safe only because
 // it fails CLOSED and is one conjunct of an AND whose identity checks are the real bound.
 // A handoff substitutes for the stamp, NEVER for "this is MY OWN thread".
-function requesterTaskOpen(m, myId) {
+function requesterThreadOpen(m, myId) {
   if (!m || m.kind !== 'message' || !myId) return false;
-  if (!firstClassTaskId(m)) return false;
+  if (!firstClassThreadId(m)) return false;
   if (m.authorUserId !== myId) return false;
-  if (metaStr(m, 'taskCreatedBy') !== myId) return false;
+  if (metaStr(m, 'threadCreatedBy') !== myId) return false;
   // Stamp conjunct, OR a declared handoff in its place. Nothing else opens anything.
   if (!desktopRuntime(m) && !declaresHandoff(m)) return false;
-  const target = metaStr(m, 'taskTarget');
+  const target = metaStr(m, 'threadTarget');
   return !!target && target !== myId;
 }
 
@@ -330,8 +330,8 @@ module.exports = {
   // neighbour — listener-messages names `isChatIntent` in PROSE only. Exported for the
   // extraction harnesses, which slice it by name.
   isChatIntent,
-  mentionsMe, // read by classify's fyi verdict AND by listener-messages' task-reply notice gate
-  firstClassTaskId,
+  mentionsMe, // read by classify's fyi verdict AND by listener-messages' thread-reply notice gate
+  firstClassThreadId,
   LEGACY_THREAD_CAP,
   LEGACY_THREAD_TTL_MS, // registry's two bounds, asserted by the truth tables
   LEGACY_THREAD_KEY,
@@ -341,7 +341,7 @@ module.exports = {
   useLegacyThreadStore, // index.js injects electron-store at boot
   DESKTOP_RUNTIMES, // the two stamps this app produces
   declaresHandoff, // reserved handoff flag an external create may set
-  requesterTaskOpen,
+  requesterThreadOpen,
   requesterTypedByOperator, // no production caller (see its block)
   openChannelForEntry: win.openChannelForEntry,
   resolveToolProfile: win.resolveToolProfile, // the channel's STORED scope

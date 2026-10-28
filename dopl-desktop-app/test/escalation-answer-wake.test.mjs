@@ -28,7 +28,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  harness, agent, idle, entry, peerMsg, ME, PEER, TASK, A1, A2,
+  harness, agent, idle, entry, peerMsg, ME, PEER, THREAD, A1, A2,
 } from "./_wake-dispatch-harness.mjs";
 
 /** An answer naming one agent, as the server stamps it. */
@@ -112,7 +112,7 @@ test("FENCE: THE LOOP FENCE IS UNCHANGED — an AGENT-authored answer wakes noth
 
 test("FENCE: a lifecycle kind carrying the key still wakes nothing", async () => {
   const h = harness({ agents: [idle(A1)] });
-  await h.feedLiveSession(entry, answer(A1, { kind: "task_progress" }), ME);
+  await h.feedLiveSession(entry, answer(A1, { kind: "thread_progress" }), ME);
   assert.equal(h.calls.feedInbound.length, 0);
 });
 

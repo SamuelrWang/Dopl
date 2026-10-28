@@ -54,7 +54,7 @@ function harness() {
   const sessions = new Map();
   const store = {
     // The record's OWN slot, all three parts — as `main/session-store.js › slotKey` composes it.
-    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && a.taskId) || ""}:${(a && a.agentId) || ""}`,
+    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && a.threadId) || ""}:${(a && a.agentId) || ""}`,
   };
   // ⚠ `sessionWindowless` JOINED 2026-08-22 (F-272): `startResume` now enforces
   // `MAX_CONCURRENT_SESSIONS`, which it did not before — a resume could reach seven. These cases
@@ -95,7 +95,7 @@ function harness() {
 
 // The durable record of a session that nearly spent its budget and then crashed.
 const spentRecord = {
-  key: "c1:t1", channelId: "c1", taskId: "t1", workspaceId: "w1",
+  key: "c1:t1", channelId: "c1", threadId: "t1", workspaceId: "w1",
   side: "responder", profile: "full", mode: "interactive", phase: "ended",
   // ⚠ `costUsd: 4.75` STAYS ON THIS INPUT, deliberately: the field is deleted from the record and
   // from the spec, and handing one in is how the case below proves neither carries it forward.
@@ -113,7 +113,7 @@ test("D3(a): startResume passes the record's spent turn counter into the new ses
 
 test("D3(a): a legacy record with no counters resumes at zero, never NaN", async () => {
   const h = harness();
-  const legacy = { key: "c1:t1", channelId: "c1", taskId: "t1", workspaceId: "w1", side: "responder", phase: "ended" };
+  const legacy = { key: "c1:t1", channelId: "c1", threadId: "t1", workspaceId: "w1", side: "responder", phase: "ended" };
   assert.equal(await h.startResume(legacy, "sdk-1", "go on"), true);
   const spec = h.calls.startSession[0];
   assert.ok(spec.turns === undefined || spec.turns === 0, "nothing to rehydrate");

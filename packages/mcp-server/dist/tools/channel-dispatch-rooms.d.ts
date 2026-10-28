@@ -7,7 +7,7 @@
  * conversation in it. `read` answers "what was said", `status` "what is
  * running", and this answers "what is this place, and who is in it".
  *
- * ⚠ **FOUR OF THE EIGHT WRITE, AND THE GATE IS PER ACTION** (`gating.ts ›
+ * ⚠ **FOUR ACTIONS WRITE, AND THE GATE IS PER ACTION** (`gating.ts ›
  * WRITE_OPS` names `rooms.open`, `rooms.invite`, `rooms.thread_mode` and
  * `rooms.update`). Classifying the whole op as a write would refuse a
  * `dopl.read` token the four calls it exists to make — listing its channels

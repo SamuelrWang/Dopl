@@ -241,7 +241,7 @@ test("both interpolated values pass the ONE segment rule, and it is not a local 
 test("the notification seam hands the channel over, and never invents one", () => {
   // `targeting-window.js › openChannelForEntry` is the ONE seam all three
   // notification producers reach (the inbound request, the silent FYI, the
-  // passive task-reply notice), which is why the destination is one channel
+  // passive thread-reply notice), which is why the destination is one channel
   // route rather than a per-kind fork.
   const TW = M("targeting-window.js");
   const fn = fnOf(TW, "openChannelForEntry");

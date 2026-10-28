@@ -57,7 +57,7 @@ export { RAIL_COLLAPSED, RAIL_EXPANDED };
  * row keeps it.
  */
 const ROW_BASE =
-  "flex w-full items-center gap-2 rounded-[10px] px-2 py-1.5 text-left transition-colors";
+  "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors";
 
 /**
  * 🔒 **THE COLLAPSED ROW IS THE TILE ITSELF — a perfect square, and the shaded area IS the row**

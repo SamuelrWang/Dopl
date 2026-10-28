@@ -1,110 +1,55 @@
 "use client";
 
 /**
- * The Settings tab's DESKTOP-ONLY groups, out of `settings-agent.tsx` — one file
- * per reason to change: these rows exist only
- * inside the desktop shell (each gated on its own bridge upstream — no dead
- * rows), and both drive main-process launch state, never a server write.
+ * The Settings tab's DESKTOP-ONLY rows, each gated on its own bridge upstream (no dead rows), all
+ * driving main-process launch state, never a server write.
  *
- * - **Working Folder** — where this
- *   channel's agent RUNS on the operator's Mac.
- *   ⚠ FOR DEVELOPERS, and no longer printed (Samuel, 2026-08-19): CONTEXT, NOT
- *   A SANDBOX. The tool profile applies on top whatever the cwd is
- *   (`main/tool-profiles.js`), so changing the folder never changes what the
- *   agent may do. ⚠ An unset or vanished path falls back to the DESKTOP DEFAULT —
- *   `~/Downloads`, or the homedir when that is missing. There is no sandbox
- *   anywhere in this feature.
- * - **Launch agents** — one pick over two records: agent chaining `(this channel)`,
- *   default OFF = the one-generation bound (`main/session-own-launch.js`), and
- *   orchestrator launches `(this Mac)`. See {@link LaunchAgentsRow}.
- * - **Direct agents** — may the operator's other sessions direct agents running on
- *   this Mac. See {@link DirectAgentsRow}.
+ * - **Working folder** — where this channel's agent RUNS on the operator's Mac. CONTEXT, NOT A
+ *   SANDBOX: the tool profile applies whatever the cwd is (`main/tool-profiles.js`). An unset or
+ *   vanished path falls back to the desktop default.
+ * - **Launch agents** — one pick over two records. See {@link LaunchAgentsRow}.
+ * - **Direct agents** — may the operator's other sessions direct agents on this Mac. See
+ *   {@link DirectAgentsRow}.
  * - **Use my tools** — a shared channel's opt-in to the operator's own tools. See
  *   {@link UseMyToolsRow}.
  */
 
-// ⚠ No `Switch` on this tab (2026-09-06, items 8 and 9): every control is a `SelectMenu`
-// or the folder button, and an import kept "in case" is how a deleted recipe comes back.
-import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
+import { cn } from "@/shared/lib/utils";
+import { BARE_TRIGGER_FACE, SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
+import { pillButton } from "@/shared/ui/pill-button";
 import { SettingRow } from "./settings-agent-rows";
 import type { AgentFolderState } from "./settings-agent";
 
 /**
- * ⚠ NO DEFAULT-FOLDER LABEL LIVES HERE (2026-09-05, task 15; Samuel's ruling is the
- * ABBREVIATED form). The bridge answers the EFFECTIVE directory always, derived through
- * the same function that produces the spawn cwd (`main/channel-dirs.js ›
- * defaultSessionDir` when unset), and the reset control reads `custom`. Do not
- * reintroduce a constant here: a label this file can spell is a label main did not
- * agree to.
+ * The path IS the control (a real `<button>` naming the act, since its text is a path) and wears
+ * the dropdown values' face. The label is main's EFFECTIVE directory, never a default this file
+ * spells; "Use default" gates on `custom`, because the label is always present.
  */
-
-export function AgentFolderRows({
-  folder,
-}: {
-  folder: AgentFolderState;
-  // No `SettingName` prop: the name is `SettingRow`'s left column.
-}) {
+export function AgentFolderRows({ folder }: { folder: AgentFolderState }) {
   return (
-    <>
-      {/* ⚠ "Agent folder" → "Working Folder", ONE LINE, AND THE NAME IS THE BUTTON
-          (2026-09-06, Samuel's settings overhaul, item 4).
-
-          ⚠ NO SEPARATE "Change folder…" BUTTON: the plain-text value IS the control,
-          so the row is a NAME and a CONTROL on one line, the shape `SettingRow`
-          states for this tab.
-          ⚠ IT IS A REAL `<button>`, not a styled span with a click handler. It opens
-          a native picker, so it has to be reachable by keyboard and has to announce
-          itself; `aria-label` names the ACT because the visible text is a path.
-          ⚠ THE BUSY WORD STAYS ON THE CONTROL rather than beside it — with the
-          separate button gone there is nowhere else for it, and a picker that is
-          already open must not look clickable again.
-
-          ⚠ "Use default" IS DELIBERATELY KEPT (2026-09-06, and flagged to Samuel
-          rather than assumed): it is the only way back to the desktop default once a
-          folder is set, and the overhaul did not mention it. It keeps gating on
-          `custom`, NOT on the label — the label is always present, so gating on it
-          would offer the reset on a channel already using the default. */}
-      <SettingRow name="Working Folder">
+    <SettingRow name="Working folder">
+      <span className="inline-flex min-w-0 items-center gap-2">
         <button
           type="button"
           onClick={folder.onChoose}
           disabled={folder.busy}
           aria-label="Change the working folder for this channel's agents"
-          /* ⚠ KIT TOKENS ONLY — no hex, no raw px (docs/DESIGN-SYSTEM.md).
-             ⚠ NO UNDERLINE, REGULAR WEIGHT (Samuel, 2026-09-10): "Working Folder
-             ~/Downloads … also remove the underline." The path is a VALUE in the
-             Agent Settings block, so it wears exactly what the block's dropdown
-             values wear (`select-menu.tsx › TRIGGER_FACE.text`) — and it is a real
-             `<button>` with an `aria-label`, which is what keeps it operable and
-             announced.
-             ⚠ THE GRAY HOVER IS THAT FACE'S, TO THE LETTER (Samuel, 2026-09-13:
-             *"Anything that can be clicked"*) — same `--menu-item-hover-bg` token,
-             same `rounded-md`, same `-mx-1.5 px-1.5` so the path does not shift when
-             the highlight appears. This row is the one clickable VALUE on the tab
-             that is not a `SelectMenu`, so it has to state the recipe rather than
-             inherit it; if a third caller ever appears, promote the string. */
-          className="-mx-1.5 min-w-0 truncate rounded-md px-1.5 text-body text-text-primary transition-colors hover:bg-menu-item-hover-bg hover:text-text-secondary disabled:opacity-60 disabled:hover:bg-transparent"
+          className={cn(BARE_TRIGGER_FACE, "min-w-0 truncate disabled:opacity-60")}
         >
           {folder.busy ? "Opening picker…" : folder.label}
         </button>
-      </SettingRow>
-      {folder.custom && (
-        <div className="flex justify-end">
+        {folder.custom && (
           <button
             type="button"
             onClick={folder.onClear}
             disabled={folder.busy}
-            /* ⚠ `--menu-item-hover-bg`, NOT A SECOND SPELLING OF `--surface-raised-1`
-               (Samuel, 2026-09-13). Same pixels — the token IS `var(--surface-raised-1)`
-               by reference — and one name for the hover gray is the point of the
-               2026-09-10 ruling. */
-            className="rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-secondary transition-colors hover:bg-menu-item-hover-bg hover:text-text-primary disabled:opacity-60"
+            className={cn(pillButton("outline", "fit"), "disabled:opacity-60")}
           >
             Use default
           </button>
-        </div>
-      )}
-    </>
+        )}
+      </span>
+    </SettingRow>
   );
 }
 
@@ -177,7 +122,7 @@ export function LaunchAgentsRow({
   return (
     <SettingRow name="Launch agents">
       <SelectMenu<LaunchAgentsValue>
-        variant="text"
+        variant="bare"
         value={value}
         options={LAUNCH_AGENTS_OPTIONS}
         onChange={(next) => {
@@ -263,7 +208,7 @@ export function DirectAgentsRow({
   return (
     <SettingRow name="Direct agents">
       <SelectMenu<DirectAgentsValue>
-        variant="text"
+        variant="bare"
         value={value}
         options={DIRECT_AGENTS_OPTIONS}
         onChange={(next) => {
@@ -297,7 +242,7 @@ export function UseMyToolsRow({
   return (
     <SettingRow name="Use my tools">
       <SelectMenu<OnOff>
-        variant="text"
+        variant="bare"
         value={value}
         options={USE_MY_TOOLS_OPTIONS}
         onChange={(next) => {

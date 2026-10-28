@@ -3,12 +3,14 @@
  * `metadata.source` (docs/specs/device-aware-messages.md) rendered as one compact tag,
  * plus ONE guidance line when the member is on glasses.
  *
- * ⚠ `GLASSES_REPLY_GUIDANCE` IS THE ONE COPY. The desktop feeds its sessions the same line
+ * ⚠ `GLASSES_REPLY_GUIDANCE` IS THE ONE COPY, declared in `glasses-reply-guidance.ts` (a leaf the
+ * Device SDK imports too) and re-exported here. The desktop feeds its sessions the same line
  * (`dopl-desktop-app/main/message-source.js`), which a desktop test holds byte-equal to this.
  * ⚠ SAID ONCE PER PAGE, never per message: MCP payload size is a budget (`tool-budget.test.ts`).
  */
 import type { ChannelMessage } from "@dopl/client";
-export declare const GLASSES_REPLY_GUIDANCE: string;
+import { GLASSES_REPLY_GUIDANCE } from "./glasses-reply-guidance.js";
+export { GLASSES_REPLY_GUIDANCE };
 /** ` · via glasses (`Even G2`)`, ` · via web`, or "" for a missing / unreadable stamp. */
 export declare function viaTag(raw: unknown): string;
 /** {@link viaTag} for one transcript line; "" on an agent line. */

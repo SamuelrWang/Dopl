@@ -96,14 +96,14 @@ function reported(over: Partial<SessionStateUpsert> = {}): SessionStateUpsert {
     last_wake_at: null,
     session_key: `${CHAN}:t-1`,
     channel_id: CHAN,
-    task_id: null,
+    thread_id: null,
     name: "flint",
     state: "working",
     channel_name: "General",
     thread_title: null,
     detail: null, tool_label: null, model: null,
     context_used: null, context_window: null, tokens_spent: null,
-    started_at: null, last_activity_at: null, identity_name: null, display_name: null,
+    started_at: null, last_activity_at: null, identity_name: null, display_name: null, runtime: null,
     // Every current desktop requests a colour; a `null` default would make every stored row read as changed.
     color: "agent-01",
     ...over,
@@ -205,7 +205,7 @@ describe("replaceSessionStates — the row lifetime", () => {
       { name: "onyx" },
       { channel_name: "Renamed" },
       { thread_title: "New title" },
-      { task_id: "44444444-e29b-41d4-a716-446655440000" },
+      { thread_id: "44444444-e29b-41d4-a716-446655440000" },
       { channel_id: "55555555-e29b-41d4-a716-446655440000" },
       // Never moves mid-session, and must still count.
       { identity_name: "Code Auditor" },
@@ -241,7 +241,7 @@ describe("replaceSessionStates — failures are LOUD", () => {
   });
 });
 
-/** A peer's running agent can re-push a `task_id` whose thread was deleted; one `23503` must not fail the
+/** A peer's running agent can re-push a `thread_id` whose thread was deleted; one `23503` must not fail the
  *  whole replace. The degrade nulls only the dead ids (what `ON DELETE SET NULL` leaves) and retries once (F-241). */
 describe("replaceSessionStates — a thread deleted under a live peer agent", () => {
   const DEAD = "44444444-e29b-41d4-a716-446655440000";
@@ -252,9 +252,9 @@ describe("replaceSessionStates — a thread deleted under a live peer agent", ()
   const makeScriptedAdmin = (results: Array<{ data: unknown; error: unknown }>) =>
     makeSequencedAdmin(results, { repeatTail: false });
 
-  it("REPLACE SUCCEEDS when one row's task_id is dead, and only that row is nulled", async () => {
-    const deadRow = reported({ session_key: `${CHAN}:${DEAD}:a1b2c3d4`, task_id: DEAD });
-    const liveRow = reported({ session_key: `${CHAN}:${LIVE}:z9y8x7w6`, task_id: LIVE, name: "z9y8x7w6" });
+  it("REPLACE SUCCEEDS when one row's thread_id is dead, and only that row is nulled", async () => {
+    const deadRow = reported({ session_key: `${CHAN}:${DEAD}:a1b2c3d4`, thread_id: DEAD });
+    const liveRow = reported({ session_key: `${CHAN}:${LIVE}:z9y8x7w6`, thread_id: LIVE, name: "z9y8x7w6" });
     const steps = makeScriptedAdmin([
       { data: [], error: null }, // the reconcile read: nothing stored yet
       { data: null, error: FK }, // the upsert: the deleted thread violates the FK
@@ -264,15 +264,15 @@ describe("replaceSessionStates — a thread deleted under a live peer agent", ()
     const out = await replaceSessionStates(USER, WS, [deadRow, liveRow]);
     expect(out).toEqual({ stored: 2, changed: 2, removed: 0 });
 
-    // The existence check asks `channel_tasks`, only for the ids reported.
+    // The existence check asks `channel_threads`, only for the ids reported.
     const probe = steps.find((s) => s.op === "in" && s.args[0] === "id");
     expect(probe?.args).toEqual(["id", [DEAD, LIVE]]);
 
     const upserts = steps.filter((s) => s.op === "upsert");
     expect(upserts).toHaveLength(2);
     const retried = upserts[1].args[0] as Array<Record<string, unknown>>;
-    expect(retried[0].task_id).toBeNull();
-    expect(retried[1].task_id).toBe(LIVE);
+    expect(retried[0].thread_id).toBeNull();
+    expect(retried[1].thread_id).toBe(LIVE);
     // Nothing else changes: the live row keeps its thread and both keys stay.
     expect(retried.map((r) => r.session_key)).toEqual([deadRow.session_key, liveRow.session_key]);
   });
@@ -285,7 +285,7 @@ describe("replaceSessionStates — a thread deleted under a live peer agent", ()
       { data: [{ id: LIVE }], error: null }, // every reported thread still exists
     ]);
     await expect(
-      replaceSessionStates(USER, WS, [reported({ session_key: `${CHAN}:${LIVE}:a1b2c3d4`, task_id: LIVE })])
+      replaceSessionStates(USER, WS, [reported({ session_key: `${CHAN}:${LIVE}:a1b2c3d4`, thread_id: LIVE })])
     ).rejects.toMatchObject({ code: "23503" });
   });
 
@@ -295,7 +295,7 @@ describe("replaceSessionStates — a thread deleted under a live peer agent", ()
       { data: null, error: FK },
     ]);
     await expect(replaceSessionStates(USER, WS, [reported()])).rejects.toMatchObject({ code: "23503" });
-    expect(steps.some((s) => s.op === "from" && s.args[0] === "channel_tasks")).toBe(false);
+    expect(steps.some((s) => s.op === "from" && s.args[0] === "channel_threads")).toBe(false);
   });
 
   it("EVERY OTHER write error still surfaces — the degrade is one code wide", async () => {
@@ -307,7 +307,7 @@ describe("replaceSessionStates — a thread deleted under a live peer agent", ()
     ]) {
       makeScriptedAdmin([{ data: [], error: null }, { data: null, error }]);
       await expect(
-        replaceSessionStates(USER, WS, [reported({ task_id: DEAD })])
+        replaceSessionStates(USER, WS, [reported({ thread_id: DEAD })])
       ).rejects.toBeTruthy();
     }
   });
@@ -320,7 +320,7 @@ describe("replaceSessionStates — a thread deleted under a live peer agent", ()
       { data: null, error: { code: "23503", message: "still violating" } },
     ]);
     await expect(
-      replaceSessionStates(USER, WS, [reported({ task_id: DEAD })])
+      replaceSessionStates(USER, WS, [reported({ thread_id: DEAD })])
     ).rejects.toMatchObject({ message: "still violating" });
   });
 });

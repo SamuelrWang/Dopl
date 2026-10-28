@@ -65,7 +65,7 @@ function SidebarRow({
       aria-current={active ? "true" : undefined}
       onClick={onClick}
       className={cn(
-        "flex h-[36px] w-full items-center gap-2 rounded-[8px] text-left text-small text-text-secondary transition-colors",
+        "flex h-9 w-full items-center gap-2 rounded-md text-left text-small text-text-secondary transition-colors",
         trailingPad ? "pr-8" : "pr-2",
         DEPTH_PAD[indent],
         active
@@ -185,7 +185,7 @@ export function ChannelRow({
         <Avatar
           person={person}
           size="xs"
-          className="h-[26px] w-[26px] text-caption"
+          className="h-6.5 w-6.5 text-caption"
         />
       ) : (
         <IconTile>

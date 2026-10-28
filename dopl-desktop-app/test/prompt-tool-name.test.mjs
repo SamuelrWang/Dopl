@@ -42,7 +42,7 @@ const seed = require("../main/session-seed.js");
 
 const CH = "aaaaaaaa-1111-4bbb-8ccc-dddddddddddd";
 const WS = "bbbbbbbb-2222-4ccc-8ddd-eeeeeeeeeeee";
-const TASK = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
+const THREAD = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
 const AGENT = "11111111-2222-3333-4444-555555555555";
 
 // A `dopl_*` tool named WITHOUT the `mcp__dopl__` prefix the agent's list actually carries.
@@ -66,7 +66,7 @@ const ctx = (over = {}) => ({
 function everyTurn() {
   const turns = [];
   for (const side of ["responder", "requester"]) {
-    for (const over of [{}, { taskId: TASK }, { agentId: AGENT }, { channelId: "" }, { workspaceId: null }]) {
+    for (const over of [{}, { threadId: THREAD }, { agentId: AGENT }, { channelId: "" }, { workspaceId: null }]) {
       turns.push([
         `${side} ${JSON.stringify(over)}`,
         framing.buildFencedTurn({ side, message: "do the thing", nonce: "n1", context: ctx(over) }),
@@ -113,7 +113,7 @@ const DELIVERY = /Deliver every message to the peer|DELIVERY: post your reply/;
 function deliveryBranches() {
   const out = [];
   for (const side of ["responder", "requester"]) {
-    for (const over of [{}, { taskId: TASK }, { channelId: "" }, { workspaceId: null }]) {
+    for (const over of [{}, { threadId: THREAD }, { channelId: "" }, { workspaceId: null }]) {
       out.push([
         `${side} ${JSON.stringify(over)}`,
         framing.buildFencedTurn({ side, message: "x", nonce: "n5", context: ctx(over) }),
@@ -168,26 +168,26 @@ test("FIX F3b: FIRST ACTIONS states the GRANT, once, and ABOVE the delivery sect
 });
 
 test("FIX F7: a responder that knows its thread is ordered to READ it before it answers", () => {
-  const out = framing.buildFencedTurn({ side: "responder", message: "x", nonce: "f7", context: ctx({ taskId: TASK }) });
+  const out = framing.buildFencedTurn({ side: "responder", message: "x", nonce: "f7", context: ctx({ threadId: THREAD }) });
   assert.match(out, /Your SECOND action is to read the exchange you are joining/, "stated as an order too");
   assert.ok(
-    out.includes(`with op "read", channel "${CH}", container "${WS}", thread "${TASK}"`),
+    out.includes(`with op "read", channel "${CH}", container "${WS}", thread "${THREAD}"`),
     `the whole scoped call, ids and all:\n${out}`
   );
   assert.match(out, /filtered to this one thread/, "says the read is scoped, not the whole channel");
   assert.match(out, /none of its earlier messages/, "and why a fresh spawn needs it at all");
   assert.equal(out.split('op "read"').length - 1, 1, "one read instruction");
   assert.ok(out.indexOf('op "read"') < out.indexOf('op "send", channel "'), "read first, then deliver");
-  // A LEGACY `task-<channel>-<seq>` id threads posts, so it filters a read the same way.
+  // A LEGACY `thread-<channel>-<seq>` id threads posts, so it filters a read the same way.
   const legacy = framing.buildFencedTurn({
-    side: "responder", message: "x", nonce: "f7", context: ctx({ taskId: `task-${CH}-42` }),
+    side: "responder", message: "x", nonce: "f7", context: ctx({ threadId: `thread-${CH}-42` }),
   });
-  assert.ok(legacy.includes(`thread "task-${CH}-42"`), "legacy ids seed too");
+  assert.ok(legacy.includes(`thread "thread-${CH}-42"`), "legacy ids seed too");
   assert.equal(legacy.split('op "read"').length - 1, 1, "still once");
 });
 
 test("FIX F7: no thread (or a half-known address) prints no read, and the requester never does", () => {
-  const shapes = [{}, { taskId: "" }, { taskId: null }, { taskId: TASK, channelId: "" }, { taskId: TASK, workspaceId: null }];
+  const shapes = [{}, { threadId: "" }, { threadId: null }, { threadId: THREAD, channelId: "" }, { threadId: THREAD, workspaceId: null }];
   for (const over of shapes) {
     const label = JSON.stringify(over);
     const out = framing.buildFencedTurn({ side: "responder", message: "x", nonce: "f7b", context: ctx(over) });
@@ -197,7 +197,7 @@ test("FIX F7: no thread (or a half-known address) prints no read, and the reques
     assert.match(out, /mcp__dopl__dopl_channel is GRANTED to this session/, `${label}: the grant line still rides alone`);
   }
   // The requester OPENED this thread and has been driving it; it is not the session with a hole.
-  const req = framing.buildFencedTurn({ side: "requester", message: "x", nonce: "f7c", context: ctx({ taskId: TASK }) });
+  const req = framing.buildFencedTurn({ side: "requester", message: "x", nonce: "f7c", context: ctx({ threadId: THREAD }) });
   assert.ok(!req.includes('op "read"'), "no seed for the side that already has the thread");
   assert.match(req, /mcp__dopl__dopl_channel is GRANTED to this session/, "but it still gets the grant line");
 });

@@ -1,35 +1,67 @@
 /**
- * The "Connect an agent" window's tabs. ⚠ THE SAME FOUR PATHS AS THE LANDING'S CONNECT SECTION
- * (`marketing/components/connect-section.tsx › TABS`, which is not exported) — keep the commands
- * in step with it. The MCP route lives on the app origin, not a subdomain (that file says why).
+ * The "Connect an agent" `dopl-mcp` code window's rows. ⚠ SAME VALUES AS THE LANDING'S CONNECT
+ * SECTION (`marketing/components/connect-section.tsx › ROWS` / `CURSOR_INSTALL_URL`, not
+ * exported) — keep them in step. The MCP route lives on the app origin, not a subdomain (that
+ * file says why).
  */
 export const MCP_URL = "https://www.usedopl.com/api/mcp";
 
-export interface ConnectTab {
-  id: "claude" | "codex" | "cursor" | "sdk";
-  label: string;
-  command: string;
-  hint?: string;
+/** Cursor's one-click install link: base64 of `{"url": MCP_URL}` (connect-section.tsx). */
+export const CURSOR_INSTALL_URL = `https://cursor.com/en/install-mcp?name=dopl&config=${encodeURIComponent(
+  "eyJ1cmwiOiJodHRwczovL3d3dy51c2Vkb3BsLmNvbS9hcGkvbWNwIn0=",
+)}`;
+
+/** One value token; `str` renders in the window's string blue. */
+export interface ConnectToken {
+  k?: "str";
+  t: string;
 }
 
-export const CONNECT_TABS: ConnectTab[] = [
+/** A `#` comment naming the client, then the value to copy. */
+export interface ConnectRow {
+  id: "claude" | "codex" | "cursor" | "any";
+  /** Copy button's accessible name. */
+  label: string;
+  comment: string;
+  value: ConnectToken[];
+  copy: string;
+}
+
+export const CONNECT_ROWS: ConnectRow[] = [
   {
     id: "claude",
-    label: "Claude",
-    command: MCP_URL,
-    hint: "Paste in Settings → Connectors → Add custom connector — syncs to claude.ai, Desktop, and Claude Code.",
+    label: "Claude connector URL",
+    comment: "Claude: Settings › Connectors › Add custom connector",
+    value: [{ k: "str", t: MCP_URL }],
+    copy: MCP_URL,
   },
   {
     id: "codex",
-    label: "Codex",
-    command: `codex mcp add dopl --url ${MCP_URL}`,
-    hint: "One command covers the Codex CLI, IDE extension, and ChatGPT desktop app.",
+    label: "Codex command",
+    comment: "ChatGPT (Codex app, CLI, IDE)",
+    value: [{ t: "codex mcp add dopl --url " }, { k: "str", t: MCP_URL }],
+    copy: `codex mcp add dopl --url ${MCP_URL}`,
   },
   {
     id: "cursor",
-    label: "Cursor",
-    command: `"dopl": { "url": "${MCP_URL}" }`,
-    hint: "Paste the snippet into ~/.cursor/mcp.json.",
+    label: "Cursor snippet",
+    comment: "Cursor: add to ~/.cursor/mcp.json",
+    value: [{ t: '"dopl": { "url": ' }, { k: "str", t: `"${MCP_URL}"` }, { t: " }" }],
+    copy: `"dopl": { "url": "${MCP_URL}" }`,
   },
-  { id: "sdk", label: "SDK", command: "npm install @dopl/client" },
+  {
+    id: "any",
+    label: "MCP URL",
+    comment: "Any MCP client",
+    value: [{ k: "str", t: MCP_URL }],
+    copy: MCP_URL,
+  },
 ];
+
+/** The docs connect window's tabs (`../components/docs-interactive.tsx › DocsConnect`), read off {@link CONNECT_ROWS}. */
+export const CONNECT_TABS: { id: ConnectRow["id"]; label: string; command: string; hint: string }[] = CONNECT_ROWS.map((r) => ({
+  id: r.id,
+  label: { claude: "Claude", codex: "Codex", cursor: "Cursor", any: "Any MCP client" }[r.id],
+  command: r.copy,
+  hint: r.comment,
+}));

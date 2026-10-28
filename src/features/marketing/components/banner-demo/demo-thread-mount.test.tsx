@@ -4,7 +4,7 @@
  * **THE MOUNT PROBE FOR THREAD VIEW** (v3, ordered first by @cleanup-orchestrator).
  *
  * The v3 audit was READ-level: it established that `message-pane.tsx` takes a `thread`,
- * that `threadRows` filters by `metadata.taskId`, and that the thread card and the
+ * that `threadRows` filters by `metadata.threadId`, and that the thread card and the
  * breadcrumb crumb are real `<button>`s the scripted cursor can press. What it could NOT
  * establish from reading is whether the DEMO can feed those components — the scene has
  * never rendered a thread, and `demo-steps.ts` records that the last attempt was reverted.
@@ -144,8 +144,9 @@ describe("4. the cursor's agent target is the one the private chat belongs to", 
     const { container } = mount(OPEN_THREAD);
     const name = AGENT_INDEX.get(AGENT_IDS.teardown)?.displayName;
     expect(name).toBeTruthy();
-    const agentRows = labelled(container, (l) =>
-      l.includes("agent") && l.length > "agent".length
+    // An agent's message badge is a button named "Open agent <name>" (`attribution-pill.tsx`).
+    const agentRows = domButtons(container).filter((b) =>
+      (b.getAttribute("aria-label") ?? "").startsWith("Open agent ")
     );
     expect(agentRows.length).toBeGreaterThan(0);
     const first = agentRows.find((b) =>

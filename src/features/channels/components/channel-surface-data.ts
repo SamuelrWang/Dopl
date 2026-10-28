@@ -31,6 +31,7 @@ import { useChannelMessages } from "../hooks/use-channel-messages";
 import { useChannelMembers } from "../hooks/use-channel-members";
 import { useChannelThreads } from "../hooks/use-channel-threads";
 import { useChannelMentions } from "../hooks/use-channel-mentions";
+import { useChannelTasks } from "../hooks/use-channel-tasks";
 import { useMentionWrites } from "../hooks/use-mention-writes";
 import { useDisplayAnswer, type AnswerDisplay } from "../hooks/use-display-writes";
 import { useChannelPreferenceWrites } from "../hooks/use-channel-preference-writes";
@@ -59,6 +60,7 @@ import type {
   ChannelMember,
   ChannelMention,
   ChannelMessage,
+  ChannelTask,
   ChannelThread,
 } from "../types";
 
@@ -92,6 +94,12 @@ export interface ChannelSurfaceData extends ChannelsDerivations {
   mentions: ChannelMention[];
   mentionsTruncated: boolean;
   mentionsLoading: boolean;
+  /** The channel's tasks; empty and never read without the `tasks` capability. */
+  tasks: readonly ChannelTask[];
+  tasksTruncated: boolean;
+  tasksLoading: boolean;
+  /** The last tasks read failed, so `tasks` is not a count anyone can trust. */
+  tasksFailed: boolean;
   /** The viewer's pending OUTBOUND reviews, workspace-wide — see the note at the
    *  read below for why the scope is not the channel's. */
   requests: ChannelConsentRequest[];
@@ -197,6 +205,10 @@ export function useChannelSurfaceData({
     loading: mentionsLoading,
     refetch: refetchMentions,
   } = useChannelMentions(channel?.id ?? null, workspaceId);
+  const tasksRead = useChannelTasks(
+    capabilities?.tasks ? (channel?.id ?? null) : null,
+    workspaceId
+  );
   // ⚠ Poll BACKSTOP for a downed socket only; pauses while the tab is hidden.
   // ⚠ WORKSPACE-WIDE ON PURPOSE: the Inbox badge counts every pending draft and the
   // same rows place the thread view's send box — one read, two consumers, and a
@@ -264,6 +276,7 @@ export function useChannelSurfaceData({
       // the cards ride the `channel_messages` doorbell already paid for and the 30s
       // poll drops back to an idle backstop.
       void agentsPanel.refetch();
+      tasksRead.refetch();
     },
     refetchMembers: () => void refetchMembers(),
     // ⚠ A `channel_members`-only doorbell (the read watermark, joins, favourites) can change the
@@ -272,6 +285,7 @@ export function useChannelSurfaceData({
       onDoorbell?.();
       void refetchMembers();
     },
+    refetchTasks: tasksRead.refetch,
   });
   // ⚠ THE SAME gate the reads register — the mark-read write holds the realtime
   // doorbell open for its own life, or a coalesced refetch mid-flight reverts
@@ -374,6 +388,10 @@ export function useChannelSurfaceData({
     mentions,
     mentionsTruncated,
     mentionsLoading,
+    tasks: tasksRead.tasks,
+    tasksTruncated: tasksRead.truncated,
+    tasksLoading: tasksRead.loading,
+    tasksFailed: tasksRead.error != null,
     activityBins,
     activityLoading,
     requests,

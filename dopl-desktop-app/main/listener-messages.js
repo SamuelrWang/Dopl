@@ -14,7 +14,7 @@
 
 const targeting = require('./targeting');
 const trigger = require('./trigger');
-const taskNotify = require('./task-notify');
+const threadNotify = require('./thread-notify');
 const sessionDispatch = require('./session-dispatch');
 const versionSkew = require('./version-skew');
 const io = require('./listener-io'); // the cursor store + sleep (listener-io requires nothing back)
@@ -72,10 +72,10 @@ async function dispatchMessage(entry, m, myUserId) {
   // the route fell through to on every miss anyway.
   if (verdict === 'trigger') return trigger.handleTrigger(entry, m);
   // ⚠ `myUserId` RIDES ALONG so the banner can tell MY agent from a PEER's: an agent posts under
-  // its operator's `author_user_id`, so the author id alone cannot (`task-notify.js ›
+  // its operator's `author_user_id`, so the author id alone cannot (`thread-notify.js ›
   // mentionAuthorLabel`). Nothing is decided here — the verdict still reaches the action directly.
   if (verdict === 'fyi') trigger.sendFyi(entry, m, myUserId);
-  // A reply in one of MY interactive tasks: passive notify only — no consent row, no watcher
+  // A reply in one of MY interactive threads: passive notify only — no consent row, no watcher
   // record, no spawn. ⚠ AND SINCE 2026-08-18 (wiring plan Phase 7) ONLY WHEN IT @-TAGS ME.
   // The verdict itself is unchanged and must stay so: it is a ROUTING statement — "this reply
   // is not a fresh request" — and folding the mention into classify would drop the suppression
@@ -87,12 +87,12 @@ async function dispatchMessage(entry, m, myUserId) {
   // `m.authorKind === 'user' || targeting.mentionsMe(...)` here, because a HUMAN-typed reply
   // notified even untagged (2026-08-20 review) while agent replies stayed mention-gated. The
   // spec turns the REPLY notice off for both authors, so author kind no longer decides anything
-  // and the only question left is "was I tagged", which `notifyTaskReply` now asks — see its
+  // and the only question left is "was I tagged", which `notifyThreadReply` now asks — see its
   // header for why that path must survive at all (a tag inside my own thread never reaches
-  // `sendFyi`). The arm still fires on every task-reply so the verdict stays observable.
+  // `sendFyi`). The arm still fires on every thread-reply so the verdict stays observable.
   // ⚠ ONE PREDICATE, TWO READERS still holds: `targeting.mentionsMe` is the same function
   // classify's 'fyi' verdict is conjoined with — it is just read one frame deeper now.
-  else if (verdict === 'task-reply') taskNotify.notifyTaskReply(entry, m, myUserId);
+  else if (verdict === 'thread-reply') threadNotify.notifyThreadReply(entry, m, myUserId);
 }
 
 // ─── BEGIN DISPATCH-DEFERRAL (pure; unit-tested via source extraction) ───────

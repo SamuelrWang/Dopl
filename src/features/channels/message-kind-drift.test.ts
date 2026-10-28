@@ -3,7 +3,6 @@ import { resolve } from "path";
 import { describe, expect, it } from "vitest";
 import {
   FAMILIES,
-  KIND_MIGRATION,
   checkFamily,
   laterConstraintRedefinitions,
   sqlCheckValues,
@@ -51,6 +50,8 @@ const REFERENCE_FILE = "packages/contracts/src/channels.ts";
 
 const messageKind = FAMILIES.find((f) => f.label === "message kind")!;
 const authorKind = FAMILIES.find((f) => f.label === "author kind")!;
+const KIND_MIGRATION = messageKind.migration;
+const AUTHOR_KIND_MIGRATION = authorKind.migration;
 
 describe("check-message-kind-drift catches drift at every site it names", () => {
   it("is clean on the tree as it stands", () => {
@@ -83,19 +84,20 @@ describe("check-message-kind-drift catches drift at every site it names", () => 
   it("catches the AUTHOR-kind family separately from the message one", () => {
     // Two constraints four lines apart, one name a suffix of the other: a reader
     // anchored on the first `CHECK` in the file would compare the wrong column.
-    const read = readWith(KIND_MIGRATION, (s) =>
+    const read = readWith(AUTHOR_KIND_MIGRATION, (s) =>
       s.replace("CHECK (author_kind IN ('user'", "CHECK (author_kind IN ('operator', 'user'")
     );
     expect(checkFamily(read, authorKind)).toEqual([
-      `${KIND_MIGRATION} › CHECK (author_kind IN …): extra operator`,
+      `${AUTHOR_KIND_MIGRATION} › CHECK (author_kind IN …): extra operator`,
     ]);
     expect(checkFamily(read, messageKind)).toEqual([]);
   });
 
   it("reads each column's OWN check, `kind` not being `author_kind`'s suffix", () => {
-    const sql = realRead(KIND_MIGRATION);
+    const sql = realRead(AUTHOR_KIND_MIGRATION);
     expect(sqlCheckValues(sql, "kind")).toContain("task_progress");
     expect(sqlCheckValues(sql, "author_kind")).toEqual(["user", "agent", "system"]);
+    expect(sqlCheckValues(realRead(KIND_MIGRATION), "kind")).toContain("thread_progress");
   });
 
   it("catches a postable subset that was RE-TYPED instead of derived", () => {
@@ -104,7 +106,7 @@ describe("check-message-kind-drift catches drift at every site it names", () => 
     const read = readWith(REFERENCE_FILE, (s) =>
       s.replace(
         'export type PostableMessageKind = Exclude<ChannelMessageKind, "system">;',
-        'export type PostableMessageKind =\n  | "message"\n  | "task_started"\n  | "task_progress"\n  | "task_finished"\n  | "task_failed";'
+        'export type PostableMessageKind =\n  | "message"\n  | "thread_started"\n  | "thread_progress"\n  | "thread_finished"\n  | "thread_failed";'
       )
     );
     const problems = checkFamily(read, messageKind);
@@ -118,7 +120,7 @@ describe("check-message-kind-drift catches drift at every site it names", () => 
     // says nothing. Every mirror reports it as extra as well, which is right:
     // the database would still accept a kind the union no longer has.
     const read = readWith(REFERENCE_FILE, (s) =>
-      s.replace('  | "task_failed"\n  | "system";', '  | "task_failed";')
+      s.replace('  | "thread_failed"\n  | "system";', '  | "thread_failed";')
     );
     const problems = checkFamily(read, messageKind);
     expect(problems).toContain(
@@ -133,14 +135,19 @@ describe("check-message-kind-drift catches drift at every site it names", () => 
       rel === `supabase/migrations/${later}`
         ? "ALTER TABLE public.channel_messages\n  DROP CONSTRAINT channel_messages_kind_check;"
         : realRead(rel);
-    expect(laterConstraintRedefinitions(read, [later])).toEqual([later]);
+    expect(laterConstraintRedefinitions(read, [later], messageKind)).toEqual([later]);
     // The base migration is never its own redefinition, and neither is an
     // earlier file — this list is filename-ordered, like the replay (§12).
     expect(
-      laterConstraintRedefinitions(realRead, [
-        "20260725120000_channels.sql",
-        "20260101000000_before.sql",
-      ])
+      laterConstraintRedefinitions(
+        realRead,
+        ["20261121180000_rename_task_to_thread.sql", "20260101000000_before.sql"],
+        messageKind
+      )
+    ).toEqual([]);
+    // The `kind` redefinition is not an `author_kind` one.
+    expect(
+      laterConstraintRedefinitions(realRead, ["20261121180000_rename_task_to_thread.sql"], authorKind)
     ).toEqual([]);
   });
 
@@ -154,7 +161,9 @@ describe("check-message-kind-drift catches drift at every site it names", () => 
       rel === `supabase/migrations/${other}`
         ? "ALTER TABLE public.channel_messages\n  ADD CONSTRAINT channel_messages_delivery_check\n  CHECK (delivery IN ('none', 'woken'));"
         : realRead(rel);
-    expect(laterConstraintRedefinitions(read, [other])).toEqual([]);
+    for (const family of FAMILIES) {
+      expect(laterConstraintRedefinitions(read, [other], family)).toEqual([]);
+    }
   });
 
   it("still catches a later constraint on author_kind", () => {
@@ -163,6 +172,7 @@ describe("check-message-kind-drift catches drift at every site it names", () => 
       rel === `supabase/migrations/${later}`
         ? "ALTER TABLE public.channel_messages\n  ADD CONSTRAINT ck CHECK (author_kind IN ('user'));"
         : realRead(rel);
-    expect(laterConstraintRedefinitions(read, [later])).toEqual([later]);
+    expect(laterConstraintRedefinitions(read, [later], authorKind)).toEqual([later]);
+    expect(laterConstraintRedefinitions(read, [later], messageKind)).toEqual([]);
   });
 });

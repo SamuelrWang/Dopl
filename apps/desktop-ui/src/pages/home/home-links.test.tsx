@@ -106,7 +106,7 @@ describe("home link lifecycle", () => {
     renderHome();
     await openChannels();
 
-    fireEvent.click(screen.getByText("Link out"));
+    fireEvent.click(screen.getByText("Invited"));
     fireEvent.click(await screen.findByRole("button", { name: "Revoke" }));
 
     await waitFor(() => {
@@ -123,7 +123,7 @@ describe("home link lifecycle", () => {
     );
   });
 
-  it("wears the Link out chip and offers Revoke where Add person was", async () => {
+  it("wears the Invited pill and offers Revoke where Add person was", async () => {
     // ⚠ ONE SECTION, TWO STATES, and this is the rule that SURVIVED the member
     // cap's retirement. An invitation already out IS the answer to "add a
     // person": a container may hold at most one OPEN link at a time, so
@@ -137,10 +137,10 @@ describe("home link lifecycle", () => {
     renderHome();
     await openChannelRecord();
 
-    // TWICE, and both are load-bearing: the chip names it on the ROW, where you
-    // scan for it, and the section heading names it INSIDE the channel, where
-    // you act on it.
-    expect(screen.getAllByText("Link out")).toHaveLength(2);
+    // Both are load-bearing: the pill names it on the ROW, where you scan for it,
+    // and the section heading names it INSIDE the channel, where you act on it.
+    expect(screen.getByText("Invited")).toBeInTheDocument();
+    expect(screen.getByText("Link out")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add person" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
@@ -150,7 +150,7 @@ describe("home link lifecycle", () => {
       );
       expect(revoke?.opts.method).toBe("DELETE");
     });
-    // Revoking re-reads the channels; the chip clears with the payload, never
+    // Revoking re-reads the channels; the pill clears with the payload, never
     // by a cache edit here.
     await waitFor(() =>
       expect(

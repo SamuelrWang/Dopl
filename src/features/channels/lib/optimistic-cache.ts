@@ -16,7 +16,7 @@ import type { UnaddressedResponderSetting } from "./agent-mentions";
  *
  * ⚠ THE CACHE SHAPES ARE THE RAW RESPONSE BODIES. `useApiQuery` stores what the
  * endpoint returned and applies `select` on READ, so a patch operates on
- * `{ messages: [...] }` / `{ tasks: [...] }`, never on the selected array.
+ * `{ messages: [...] }` / `{ threads: [...] }`, never on the selected array.
  */
 
 /** Marks a row that exists only in this client's cache. */
@@ -33,7 +33,7 @@ export function isPendingId(id: string): boolean {
 
 /**
  * Idempotency key (`channel_messages.client_msg_id`, unique per channel; same
- * for `channel_tasks`). It is what makes a retry safe: the second POST returns
+ * for `channel_threads`). It is what makes a retry safe: the second POST returns
  * the FIRST one's row, so hammering Send cannot double-post and a rolled-back
  * optimistic row can be resent verbatim.
  */
@@ -49,7 +49,7 @@ export interface MessagesCache {
   messages: ChannelMessage[];
 }
 export interface ThreadsCache {
-  tasks: ChannelThread[];
+  threads: ChannelThread[];
 }
 export interface ChannelsCache {
   channels: Channel[];
@@ -73,7 +73,7 @@ interface PendingMessageInput {
   authorUserId: string;
   authorName?: string | null;
   authorAvatarUrl?: string | null;
-  /** `taskId` binds the row into its THREAD — the transcript's thread card
+  /** `threadId` binds the row into its THREAD — the transcript's thread card
    *  (`channels/components/view-model.ts › threadIdOf`); it bound a session card until
    *  wiring plan Phase 5 deleted that. `to_user_id` renders the addressee line.
    *  ⚠ Wire spellings, as the transcript reads them. */
@@ -215,11 +215,11 @@ export function upsertThread(
   replaceId = thread.id
 ): ThreadsCache | undefined {
   if (!cache) return cache;
-  const index = cache.tasks.findIndex((t) => t.id === replaceId);
-  const tasks = cache.tasks.slice();
-  if (index >= 0) tasks[index] = thread;
-  else tasks.push(thread);
-  return { ...cache, tasks };
+  const index = cache.threads.findIndex((t) => t.id === replaceId);
+  const threads = cache.threads.slice();
+  if (index >= 0) threads[index] = thread;
+  else threads.push(thread);
+  return { ...cache, threads };
 }
 
 /**
@@ -234,7 +234,7 @@ export function dropThread(
   threadId: string
 ): ThreadsCache | undefined {
   if (!cache) return cache;
-  return { ...cache, tasks: cache.tasks.filter((t) => t.id !== threadId) };
+  return { ...cache, threads: cache.threads.filter((t) => t.id !== threadId) };
 }
 
 /**
@@ -244,10 +244,10 @@ export function dropThread(
  * ⚠ BOTH HALVES OR NEITHER. The thread list and the transcript are separate cache
  * entries, and dropping only the thread leaves its messages rendering in the
  * channel view under a thread card that no longer exists. The server deletes them
- * in the same call (`service-tasks-delete.ts › deleteTask`), so this is the cache
+ * in the same call (`service-threads-delete.ts › deleteThread`), so this is the cache
  * saying the same thing.
  *
- * ⚠ THE TAG IS READ FROM THE WIRE KEY `metadata.taskId`, exactly as the server
+ * ⚠ THE TAG IS READ FROM THE WIRE KEY `metadata.threadId`, exactly as the server
  * matches it and as `buildPendingMessage` writes it — never from a domain field,
  * because there is not one.
  */
@@ -258,7 +258,7 @@ export function dropThreadMessages(
   if (!cache) return cache;
   return {
     ...cache,
-    messages: cache.messages.filter((m) => m.metadata?.taskId !== threadId),
+    messages: cache.messages.filter((m) => m.metadata?.threadId !== threadId),
   };
 }
 
