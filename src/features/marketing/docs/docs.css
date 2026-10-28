@@ -519,6 +519,7 @@ body.legal-active {
 .docs-home-card,
 .docs-home-tile,
 .docs-home-pick {
+  --lift: 1px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #ffffff;
@@ -534,7 +535,19 @@ body.legal-active {
 .docs-home-pick:hover {
   border-color: var(--muted);
   box-shadow: 0 4px 16px -8px rgb(0 0 0 / 0.15);
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
+}
+/* The hit band: a lifted card keeps a still hit box (src/shared/ui/lift-hit-box.test.ts). */
+:where(.docs-home-card, .docs-home-tile, .docs-home-pick) {
+  position: relative;
+}
+:where(.docs-home-card, .docs-home-tile, .docs-home-pick):hover:not(:disabled)::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: calc(var(--lift) + 1px);
 }
 
 .docs-home-cards {
