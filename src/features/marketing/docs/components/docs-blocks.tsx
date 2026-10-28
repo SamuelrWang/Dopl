@@ -1,7 +1,7 @@
 import { ArrowRight, Info } from "lucide-react";
 import Link from "next/link";
 
-import { capabilityAnchor, docHref, slugify, type CapabilityCard, type DocBlock, type DocParam, type ListItem } from "../content";
+import { capabilityAnchor, DOC_STATUS_LABEL, docHref, slugify, type CapabilityCard, type DocBlock, type DocParam, type ListItem } from "../content";
 import { DOC_ICONS } from "./docs-icons";
 import { CodeGroup, DocsConnect, PromptWindow } from "./docs-interactive";
 import { RichText } from "./rich-text";
@@ -224,6 +224,30 @@ function Block({ block: b }: { block: DocBlock }) {
               ))}
             </tbody>
           </table>
+        </div>
+      );
+    case "models":
+      return (
+        <div className="docs-models">
+          <div className="docs-models-grid">
+            {b.items.map((m) => (
+              <div key={m.name} className="docs-model" data-status={m.status}>
+                <div className="docs-model-top">
+                  <span className="docs-model-name">{m.name}</span>
+                  <span className="docs-model-status" data-status={m.status}>
+                    {m.status === "coming_soon" ? "Planned" : DOC_STATUS_LABEL[m.status]}
+                  </span>
+                </div>
+                <p className="docs-model-reach">{m.reach}</p>
+              </div>
+            ))}
+          </div>
+          {b.unsupported && b.unsupported.length > 0 && (
+            <p className="docs-models-unsupported">
+              <span>Not supported yet</span>
+              {b.unsupported.join(" · ")}
+            </p>
+          )}
         </div>
       );
     case "support":

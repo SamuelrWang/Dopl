@@ -36,8 +36,10 @@ export interface Category {
   icon: DocIcon;
   description: string;
   kinds: DeviceKind[];
-  /** Model name → how Dopl reaches it. */
+  /** Model name → how Dopl reaches it. Status is derived from the cards' support, never set here. */
   models: { name: string; reach: string }[];
+  /** Brands in this category Dopl has no integration for, named under the model cards. */
+  unsupported?: string[];
   notes?: string[];
   receives: CardSpec[];
   sends: CardSpec[];
@@ -56,8 +58,9 @@ const DISPLAY_GLASSES: Category = {
   kinds: ["glasses"],
   models: [
     { name: G2, reach: "The Dopl plugin in Even Hub, Even's official plugin runtime" },
-    { name: MENTRA, reach: "A Dopl app on MentraOS, planned" },
+    { name: MENTRA, reach: "A Dopl app on MentraOS" },
   ],
+  unsupported: ["Rokid", "XREAL", "Vuzix", "Brilliant Labs", "INMO"],
   receives: [
     {
       capability: "ask.choice",
@@ -164,7 +167,8 @@ const AUDIO_GLASSES: Category = {
   icon: "headphones",
   description: "Glasses without a display: speech, spoken questions, voice and the camera",
   kinds: ["glasses"],
-  models: [{ name: "Meta glasses", reach: "Meta's official device toolkit, starting with the Ray-Ban models it supports, planned" }],
+  models: [{ name: "Meta glasses", reach: "Meta's official device toolkit, starting with the Ray-Ban models it supports" }],
+  unsupported: ["Amazon Echo Frames", "Solos"],
   receives: [
     { capability: "input.utterance", title: "Voice transcripts", what: "What the user says, as text.", limits: [NOT_CONNECTED], call: "event", support: [soon("Meta glasses")] },
     { capability: "capture.photo", title: "Photos", what: "A photo from the glasses' camera, taken when your agent asks. T2: the user must tick it on the consent screen.", limits: [NOT_CONNECTED], call: "read", responseFrom: "test", support: [soon("Meta glasses")] },
@@ -189,8 +193,9 @@ const SMART_HOME: Category = {
   kinds: ["home_hub", "home_device"],
   models: [
     { name: GH, reach: "Google Cast over the local network, from the user's Mac" },
-    { name: HA, reach: "A local bridge to the user's Home Assistant, planned" },
+    { name: HA, reach: "A local bridge to the user's Home Assistant" },
   ],
+  unsupported: ["Amazon Alexa", "Apple Home"],
   notes: [
     "Google Home is output only. Cast plays to the speaker and no answer can come back, so Google Home has nothing under What your agent receives.",
   ],
@@ -213,7 +218,7 @@ const PHONES: Category = {
   icon: "phone",
   description: "Notifications, screens and questions on your user's phone",
   kinds: ["phone"],
-  models: [{ name: "Phone", reach: "Push to the user's phone, planned. It is the first kind in the routing fallback order" }],
+  models: [{ name: "Phone", reach: "Push to the user's phone. It is the first kind in the routing fallback order" }],
   receives: [
     { capability: "input.utterance", title: "Voice transcripts", what: "What the user says to the phone, as text.", limits: [NOT_CONNECTED], call: "event", support: [soon("Phone")] },
     { capability: "input.tap", title: "Taps", what: "Taps on a screen your agent showed.", limits: [NOT_CONNECTED], call: "event", support: [soon("Phone")] },
@@ -234,6 +239,7 @@ const COMPUTERS: Category = {
   description: "The Dopl desktop app on your user's Mac",
   kinds: ["desktop"],
   models: [{ name: "Dopl desktop app", reach: "Dopl's own app on macOS" }],
+  unsupported: ["Windows", "Linux"],
   receives: [
     { capability: "presence.read", title: "Online status", what: "Whether the computer is on and the app has checked in recently.", limits: ["Online when the app checked in within the last 150 seconds."], call: "read", responseFrom: "test", support: [soon("Dopl desktop app", DESKTOP_NOTE)] },
   ],
@@ -248,7 +254,7 @@ const VEHICLES: Category = {
   icon: "car",
   description: "Telemetry, navigation and commands for connected cars",
   kinds: ["vehicle"],
-  models: [{ name: "Cars", reach: "A connected car provider rather than one integration per manufacturer, planned" }],
+  models: [{ name: "Cars", reach: "A connected car provider rather than one integration per manufacturer" }],
   notes: ["Vehicle commands are T4. The default profile denies them, and safety limits are enforced outside the model."],
   receives: [
     { capability: "telemetry.read", title: "Telemetry", what: "Location, charge or fuel, and odometer.", limits: [NOT_CONNECTED], call: "read", responseFrom: "test", support: [soon("Cars")] },
@@ -266,7 +272,7 @@ const ROBOTS: Category = {
   icon: "robot",
   description: "Telemetry and motion for robots that work alongside your users",
   kinds: ["robot"],
-  models: [{ name: "Robots", reach: "A robotics bridge, simulator first, planned" }],
+  models: [{ name: "Robots", reach: "A robotics bridge, simulator first" }],
   notes: ["Motion is T4: confirmed on every call, with speed, area and time limits and a safe stop if the connection drops."],
   receives: [
     { capability: "telemetry.read", title: "Telemetry", what: "Pose, battery and joint state.", limits: [NOT_CONNECTED], call: "read", responseFrom: "test", support: [soon("Robots")] },
@@ -305,6 +311,21 @@ function grid(c: Category): DocBlock {
   };
 }
 
+/** Each model's card: its best status on any capability (`live` > `beta` > planned). */
+function models(c: Category): DocBlock {
+  const support = grid(c);
+  if (support.type !== "support") throw new Error("grid() returns a support block");
+  return {
+    type: "models",
+    items: c.models.map((m, i) => {
+      const cells = support.rows.map((r) => r.cells[i]);
+      const status: DocStatus = cells.includes("live") ? "live" : cells.includes("beta") ? "beta" : "coming_soon";
+      return { name: m.name, reach: m.reach, status };
+    }),
+    unsupported: c.unsupported,
+  };
+}
+
 const SHARED: DocBlock = {
   type: "p",
   text: "Keys, connecting a user's device, permissions, routing, errors and test mode work the same for every category: see [Projects, environments and keys](/docs/concepts/projects-and-keys), [Connect a device](/docs/guides/connect-a-device), [Permissions and safety](/docs/concepts/permissions-and-safety), [Errors](/docs/api-reference/errors) and [Test mode](/docs/guides/test-mode). The examples assume a `dopl` client and a `deviceId` from the [Quickstart](/docs/quickstart).",
@@ -322,7 +343,7 @@ function categoryPage(c: Category): DocPage {
     blocks: [
       ...(c.notes ?? []).map((text): DocBlock => ({ type: "quote", text })),
       { type: "h2", text: "Models" },
-      { type: "table", columns: ["Model", "Reached through"], rows: c.models.map((m) => [m.name, m.reach]) },
+      models(c),
       grid(c),
       SHARED,
       { type: "h2", text: "What your agent receives" },

@@ -4,10 +4,12 @@
    loads this file.
 
    LAYOUT is a measured clone of Plaid's docs at 1440px (Samuel,
-   2026-10-27): a full-height 320px sidebar holding the logo, a 96px top bar
+   2026-10-27): a full-height sidebar holding the logo, a 96px top bar
    over the content column only, content 99px right of the sidebar, a
    624px reading column, 800px endpoint tables, 960px home and API split.
-   Sizes, spacing and hierarchy are Plaid's; only fonts, colours and
+   The home page's own layout is not Plaid's (2026-10-27 redesign, see its block).
+   Sizes, spacing and hierarchy are Plaid's, except the sidebar (own
+   design, 288px, see its block); only fonts, colours and
    buttons are Dopl's.
 
    SKIN is by reference only: `.lp` gives `--ink` / `--muted` / `--line` /
@@ -30,7 +32,7 @@ body.legal-active {
 }
 
 .docs {
-  --docs-sidebar-w: 320px;
+  --docs-sidebar-w: 288px;
   --docs-topbar-h: 96px;
   --docs-mono:
     var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -39,7 +41,11 @@ body.legal-active {
   color: var(--ink);
 }
 
-/* ── Sidebar ────────────────────────────────────────────────────────── */
+/* ── Sidebar ────────────────────────────────────────────────────────────
+   One tree on every page: small muted headings ("Get started", "Build", "Reference") over
+   14px rows. A section with several pages is a folder that animates open in place; its pages
+   hang off a hairline guide. The active row is an inset rounded pill, never a full-bleed slab.
+   Only "Soon" is tagged: once on a folder whose pages all share it, else on the row. */
 .docs-sidebar {
   position: fixed;
   top: 0;
@@ -48,22 +54,35 @@ body.legal-active {
   z-index: 20;
   width: var(--docs-sidebar-w);
   overflow-y: auto;
-  padding-bottom: 24px;
+  padding-bottom: 32px;
   background: var(--surface-raised-1);
+  border-right: 1px solid var(--line);
+  scrollbar-width: thin;
 }
 
 .docs-sidebar-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
-  height: 40px;
-  margin: 28px 0 24px;
-  padding: 0 24px;
+  gap: 10px;
+  height: 64px;
+  margin-bottom: 8px;
+  padding: 0 20px;
+  background: var(--surface-raised-1);
 }
 .docs-sidebar-label {
-  margin-left: 8px;
-  padding-top: 3px;
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--surface-raised-2);
+  font-family: var(--grotesk);
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--text-secondary);
 }
 .docs .docs-close-btn {
@@ -73,139 +92,202 @@ body.legal-active {
   height: 32px;
 }
 
+.docs-nav {
+  padding: 0 12px;
+  font-family: var(--grotesk);
+}
 .docs-nav ul {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 .docs-nav a {
-  color: var(--ink);
   text-decoration: none;
 }
+.docs-nav-block + .docs-nav-block {
+  margin-top: 20px;
+}
+.docs-nav-heading {
+  margin: 0 0 4px;
+  padding: 0 10px;
+  font-size: 11px;
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 
+/* A row: a page link or a folder toggle. */
+.docs-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 32px;
+  margin: 1px 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+.docs-nav-row:hover {
+  background: var(--surface-raised-2);
+  color: var(--ink);
+}
+.docs-nav-row[data-active] {
+  background: var(--surface-raised-2);
+  color: var(--ink);
+}
+.docs-nav-row:focus-visible,
+.docs-nav-child:focus-visible {
+  outline: 2px solid var(--line);
+  outline-offset: -2px;
+}
 .docs-nav-icon {
   display: inline-flex;
-  flex: 0 0 24px;
+  flex: 0 0 16px;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  margin: -2px 8px 0 0;
+  color: var(--muted);
+  transition: color 120ms ease;
+}
+.docs-nav-row:hover .docs-nav-icon,
+.docs-nav-row[data-active] .docs-nav-icon,
+.docs-nav-folder[data-open] > .docs-nav-row .docs-nav-icon {
+  color: var(--ink);
+}
+.docs-nav-folder[data-open] > .docs-nav-row {
+  color: var(--ink);
+}
+.docs-nav-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.docs-nav-chevron {
+  flex: none;
+  color: var(--muted);
+  transition: transform 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+.docs-nav-folder[data-open] .docs-nav-chevron {
+  transform: rotate(90deg);
 }
 
-/* Home view: rows, then group headings over their pages. */
-.docs-nav-top {
-  margin-bottom: 12px !important;
-}
-.docs-nav-item {
-  display: flex;
-  align-items: center;
-  height: 32px;
-  padding: 0 16px 0 24px;
-  font-size: 16px;
-  line-height: 32px;
-  font-weight: 600;
-}
-.docs-nav-item:hover,
-.docs-nav-page:hover {
+/* A row's quiet status tag: no border, small, never wraps. */
+.docs-nav-tag {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 4px;
   background: var(--surface-raised-2);
+  font-size: 10.5px;
+  line-height: 17px;
+  font-weight: 500;
+  color: var(--muted);
 }
-.docs-nav-item[data-active],
-.docs-nav-page[data-active] {
-  background: var(--surface-raised-2);
-  font-weight: 700;
+.docs-nav-row:hover .docs-nav-tag,
+.docs-nav-row[data-active] .docs-nav-tag {
+  background: var(--surface-raised-1);
 }
 
-.docs-nav-group {
-  margin-bottom: 16px;
+/* The folder body: grid rows animate 0fr → 1fr, so the open height is never measured. */
+.docs-nav-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 220ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 160ms ease;
 }
-.docs-nav-group-title {
-  display: flex;
-  align-items: center;
-  padding-left: 24px;
-  font-size: 16px;
+.docs-nav-folder[data-open] > .docs-nav-collapse {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.docs-nav-collapse-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.docs-nav-children {
+  margin: 2px 0 6px 17px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+.docs-nav-children + .docs-nav-children {
+  margin-top: 8px;
+}
+.docs-nav-subheading {
+  margin: 4px 0 2px;
+  padding: 0 10px;
+  font-size: 12px;
   line-height: 22px;
   font-weight: 600;
+  color: var(--ink);
 }
 .docs-nav .docs-nav-child {
-  display: block;
-  margin: 8px 0 8px 32px;
-  padding: 0 16px 0 24px;
-  font-size: 14px;
-  line-height: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  margin: 1px 0;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 13.5px;
+  font-weight: 450;
   color: var(--text-secondary);
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
 }
 .docs-nav .docs-nav-child:hover {
+  background: var(--surface-raised-2);
+  color: var(--ink);
+}
+.docs-nav .docs-nav-child[data-active] {
+  background: var(--surface-raised-2);
+  color: var(--ink);
+  font-weight: 500;
+}
+.docs-nav .docs-nav-child[data-soon] .docs-nav-label {
+  color: var(--muted);
+}
+
+/* The active page's headings, under its row. */
+.docs-nav-anchors {
+  margin: 2px 0 6px 10px !important;
+  padding-left: 10px !important;
+  border-left: 1px solid var(--line);
+}
+.docs-nav-anchors a {
+  display: block;
+  overflow: hidden;
+  padding: 0 8px;
+  font-size: 12.5px;
+  line-height: 26px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  transition: color 120ms ease;
+}
+.docs-nav-anchors a:hover {
   color: var(--ink);
 }
 
-/* Section view: "All docs", the section's title, its pages, the active page's anchors. */
-.docs-nav-back {
-  display: flex;
-  align-items: center;
-  height: 24px;
-  margin: 32px 0 32px; /* collapses with the head's 24px: lands 8px below it, as measured */
-  padding-left: 40px;
-  font-family: var(--docs-mono);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-}
-.docs-nav-back .docs-nav-icon {
-  flex-basis: 16px;
-  width: 16px;
-  margin-right: 4px;
-}
-
-.docs-nav-section-title {
-  display: flex;
-  align-items: center;
-  margin: 0 0 16px;
-  padding-left: 40px;
-  font-size: 16px;
-  line-height: 22px;
-  font-weight: 600;
-}
-
-.docs-nav-sub + .docs-nav-sub {
-  margin-top: 16px;
-}
-.docs-nav-sub-title {
-  margin: 0;
-  padding-left: 56px;
-  font-size: 14px;
-  line-height: 21px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-.docs-nav-page {
-  display: block;
-  margin-left: 56px;
-  font-size: 14px;
-  line-height: 28px;
-}
-.docs-nav-anchors {
-  margin: 11px 0 8px 72px !important;
-}
-.docs-nav-anchors li + li {
-  margin-top: 2px;
-}
-.docs-nav-anchors a {
-  display: flex;
-  margin-right: 24px;
-  font-size: 14px;
-  line-height: 21px;
-}
-.docs-nav-anchors a:hover span:last-child {
-  text-decoration: underline;
-}
-.docs-nav-hash {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-.docs-nav-anchors a span:last-child {
-  padding-left: 5px;
+@media (prefers-reduced-motion: reduce) {
+  .docs-nav-collapse,
+  .docs-nav-chevron {
+    transition: none;
+  }
 }
 
 /* ── Main column and its top bar ────────────────────────────────────── */
@@ -327,55 +409,229 @@ body.legal-active {
   color: var(--muted);
 }
 
-/* ── Home ───────────────────────────────────────────────────────────── */
-.docs-banner {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 40px;
-  min-height: 560px;
-  padding: 80px 0 20px;
-}
-.docs-banner-text {
-  flex: 0 1 345px;
-  padding-top: 21px;
-}
-.docs-banner-text h1 {
-  margin: 0 0 10px;
-  font-size: 50px;
-  line-height: 60px;
-  font-weight: 700;
-}
-.docs-banner-text p {
-  margin: 0;
-  font-size: 30px;
-  line-height: 42px;
-}
-.docs-banner-image {
-  flex: 0 1 508px;
-  min-width: 0;
-  height: auto;
-  aspect-ratio: 508 / 380;
-  object-fit: cover;
-  border-radius: 18px;
-}
-
-.docs-separator {
-  margin: 0;
-  border: 0;
-  border-top: 1px solid var(--line);
-}
-
+/* ── Home ─────────────────────────────────────────────────────────────
+   A hero (eyebrow, promise, two actions, a code sample), then three sections under one
+   heading style: "Start here" cards, device tiles, Core picks. Every link is a card with a
+   hover lift; descriptions clamp to two lines so rows stay even. */
 .docs-home {
-  padding-top: 20px;
+  padding: 56px 0 0;
 }
+.docs-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 48px;
+  align-items: center;
+  padding-bottom: 64px;
+}
+.docs-intro-eyebrow {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.docs-intro h1 {
+  margin: 0 0 16px;
+  font-size: 40px;
+  line-height: 46px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.docs-intro-sub {
+  margin: 0 0 28px;
+  max-width: 440px;
+  font-size: 16px;
+  line-height: 26px;
+  color: var(--text-secondary);
+}
+.docs-intro-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.docs-intro-actions .lp-btn {
+  white-space: nowrap;
+}
+.docs-intro-code .docs-window {
+  margin: 0;
+}
+.docs-intro-code .docs-window-body {
+  font-size: 13px;
+  line-height: 21px;
+}
+
+.docs-home-section {
+  padding-top: 40px;
+  border-top: 1px solid var(--line);
+  margin-bottom: 48px;
+}
+.docs-home-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.docs-home-head h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.docs-home-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+.docs-home-more:hover {
+  color: var(--ink);
+}
+
+/* Shared: the icon tile, the clamped description, the card surface. */
+.docs-home-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-raised-1);
+  color: var(--ink);
+}
+.docs-home-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--text-secondary);
+}
+.docs-home-card,
+.docs-home-tile,
+.docs-home-pick {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--ink);
+  text-decoration: none;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+.docs-home-card:hover,
+.docs-home-tile:hover,
+.docs-home-pick:hover {
+  border-color: var(--muted);
+  box-shadow: 0 4px 16px -8px rgb(0 0 0 / 0.15);
+  transform: translateY(-1px);
+}
+
 .docs-home-cards {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 24px;
-  margin: 24px 0 64px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.docs-home-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+}
+.docs-home-card .docs-home-icon {
+  margin-bottom: 6px;
+}
+.docs-home-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+}
+.docs-home-arrow {
+  color: var(--muted);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+.docs-home-card:hover .docs-home-arrow {
+  opacity: 1;
+  transform: none;
 }
 
+.docs-home-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.docs-home-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+}
+.docs-home-tile-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.docs-home-tile-title {
+  font-size: 14.5px;
+  line-height: 22px;
+  font-weight: 600;
+}
+.docs-home-tile[data-soon] .docs-home-tile-title,
+.docs-home-tile[data-soon] .docs-home-icon {
+  color: var(--text-secondary);
+}
+
+.docs-home-picks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.docs-home-pick {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+}
+.docs-home-pick-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.docs-home-pick-title {
+  font-size: 14.5px;
+  line-height: 22px;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docs-home-card,
+  .docs-home-tile,
+  .docs-home-pick,
+  .docs-home-arrow {
+    transition: none;
+  }
+}
+
+/* Prose cards (`cards` blocks on content pages). */
 .docs .docs-card {
   gap: 0;
   padding: 24px;
@@ -386,9 +642,6 @@ body.legal-active {
 .docs .docs-card:hover {
   border-color: var(--muted);
 }
-.docs .docs-home-card {
-  min-height: 220px;
-}
 .docs-card-title {
   margin-top: 8px;
   font-size: 16px;
@@ -398,54 +651,6 @@ body.legal-active {
 .docs-card-desc {
   font-size: 14px;
   line-height: 20px;
-  color: var(--text-secondary);
-}
-
-.docs-home-list {
-  margin-bottom: 64px;
-}
-.docs-home-list h2 {
-  margin: 0 0 16px;
-  font-size: 24px;
-  line-height: 32px;
-  font-weight: 400;
-}
-.docs-home-list h2 a {
-  color: var(--ink);
-  text-decoration: none;
-}
-.docs-home-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 24px;
-}
-.docs-home-item {
-  display: flex;
-  gap: 16px;
-  padding: 24px 36px 8px 12px;
-  color: var(--ink);
-  text-decoration: none;
-}
-.docs-home-item-icon {
-  display: inline-flex;
-  flex: 0 0 48px;
-  align-items: center;
-  justify-content: center;
-  height: 48px;
-}
-.docs-home-item-title {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 24px;
-  line-height: 32px;
-}
-.docs-home-item:hover .docs-home-item-title {
-  text-decoration: underline;
-}
-.docs-home-item-desc {
-  display: block;
-  font-size: 14px;
-  line-height: 21px;
   color: var(--text-secondary);
 }
 
@@ -898,9 +1103,16 @@ body.legal-active {
   .docs-content {
     padding-top: 40px;
   }
-  .docs-banner {
-    min-height: 0;
+  .docs-home {
     padding-top: 40px;
+  }
+  .docs-intro {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+  .docs-home-cards,
+  .docs-home-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -915,35 +1127,15 @@ body.legal-active {
   .docs-main-site {
     display: none;
   }
-  .docs-banner {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .docs-banner-text {
-    flex-basis: auto;
-  }
-  .docs-banner-text h1 {
-    font-size: 36px;
-    line-height: 48px;
-  }
-  .docs-banner-text p {
-    font-size: 24px;
-    line-height: 32px;
-  }
-  .docs-banner-image {
-    width: 100%;
-    flex-basis: auto;
+  .docs-intro h1 {
+    font-size: 32px;
+    line-height: 38px;
   }
   .docs-home-cards,
-  .docs-home-grid,
+  .docs-home-tiles,
+  .docs-home-picks,
   .docs-cards {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .docs-home-cards {
-    gap: 16px;
-  }
-  .docs .docs-home-card {
-    min-height: 0;
   }
   .docs-head h1 {
     font-size: 30px;
@@ -958,7 +1150,87 @@ body.legal-active {
   }
 }
 
-/* ── Status badges (Live / Beta / Coming soon): beside the H1, on non-live sidebar rows, in
+/* ── Device category model cards ─────────────────────────────────────
+   One card per model: name and status on top, how Dopl reaches it below. Live gets a green dot;
+   planned is muted. Brands with no integration sit on one quiet line under the cards. */
+.docs-models {
+  margin: 4px 0 32px;
+}
+.docs-models-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.docs-model {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+}
+.docs-model[data-status="live"] {
+  border-color: var(--muted);
+}
+.docs-model-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.docs-model-name {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+}
+.docs-model-status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--surface-raised-1);
+  font-size: 12px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.docs-model-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.docs-model-status[data-status="live"] {
+  color: var(--ink);
+}
+.docs-model-status[data-status="live"]::before {
+  background: var(--success);
+}
+.docs-model-reach {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--text-secondary);
+}
+.docs-models-unsupported {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 14px 0 0;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--text-secondary);
+}
+.docs-models-unsupported span {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ── Status badges (Live / Beta / Coming soon): beside the H1, in
    device support grids and capability cards. ─────────────────────────── */
 .docs-status {
   display: inline-flex;
@@ -982,12 +1254,6 @@ body.legal-active {
 }
 .docs-head h1 .docs-status {
   margin-left: 8px;
-}
-.docs-nav .docs-status {
-  margin-left: 8px;
-  padding: 0 6px;
-  font-size: 11px;
-  line-height: 16px;
 }
 
 /* ── Overview "how it works" chain ─────────────────────────────────── */

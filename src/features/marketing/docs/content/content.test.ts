@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 import { createEvenG2Adapter } from "@/features/device-sdk/adapters/even-g2";
 import { createSimulatorAdapter } from "@/features/device-sdk/adapters/simulator";
 
-import { DOC_PAGES, DOC_SECTIONS, getDocPage, HOME_CARDS, HOME_LISTS, pageToMarkdown, statusOf } from "./index";
+import { DOC_PAGES, DOC_SECTIONS, getDocPage, HOME_CARDS, HOME_CORE, HOME_DEVICES, pageToMarkdown, statusOf } from "./index";
 import { ERROR_ROWS } from "./pages-api";
 import { CATEGORIES } from "./pages-categories";
 import { CAPABILITY_ROWS } from "./pages-concepts";
@@ -121,12 +121,8 @@ describe("docs structure", () => {
     }
   });
 
-  it("points the home cards and lists at pages and sections that exist", () => {
-    for (const c of HOME_CARDS) expect(getDocPage(c.slug), c.slug).toBeDefined();
-    for (const list of HOME_LISTS) {
-      const section = DOC_SECTIONS.find((s) => s.id === list.section)!;
-      for (const l of section.groups.flatMap((g) => g.links)) expect(list.icons[l.slug], l.slug).toBeDefined();
-    }
+  it("points the home cards, device tiles and Core picks at pages that exist", () => {
+    for (const { slug } of [...HOME_CARDS, ...HOME_DEVICES, ...HOME_CORE]) expect(getDocPage(slug), slug).toBeDefined();
   });
 
   it("links only to pages that exist", () => {
@@ -202,7 +198,15 @@ describe("device categories", () => {
       const h2 = categoryPage(c.slug).blocks.flatMap((b) => (b.type === "h2" ? [b.text] : []));
       expect(h2, c.slug).toEqual(["Models", "What your agent receives", "What your agent can send"]);
       expect(categoryPage(c.slug).blocks.some((b) => b.type === "support"), c.slug).toBe(true);
+      const cards = categoryPage(c.slug).blocks.find((b) => b.type === "models");
+      expect(cards?.type === "models" && cards.items.map((m) => m.name), c.slug).toEqual(c.models.map((m) => m.name));
     }
+  });
+
+  it("marks a model card live only when the model is live on some capability", () => {
+    const cards = categoryPage("display-glasses").blocks.find((b) => b.type === "models");
+    const status = cards?.type === "models" ? Object.fromEntries(cards.items.map((m) => [m.name, m.status])) : {};
+    expect(status).toEqual({ "Even Realities G2": "live", Mentra: "coming_soon" });
   });
 
   it("uses one card shape for every capability, with contract ids and tiers", () => {

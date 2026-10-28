@@ -11,7 +11,7 @@ import { DOC_STATUS_LABEL } from "./types";
 import type { CapabilityCard, DocBlock, DocPage, DocSection, DocStatus } from "./types";
 
 export { CONNECT_ROWS, CURSOR_INSTALL_URL, DOC_SECTIONS, DOC_STATUS_LABEL };
-export { DOCS_HOME_COPY, HOME_CARDS, HOME_LISTS } from "./home";
+export { DOCS_HOME_COPY, HOME_CARDS, HOME_CORE, HOME_DEVICES } from "./home";
 export type * from "./types";
 
 /** The docs home (`src/app/docs/home/page.tsx`); bare `/docs` 308s here — `next.config.ts › redirects`. */
@@ -137,6 +137,11 @@ function blockText(b: DocBlock): string[] {
           `| ${b.columns.map(() => "---").join(" | ")} |`,
           ...b.rows.map((r) => `| ${r.map(plain).join(" | ")} |`),
         ].join("\n"),
+      ];
+    case "models":
+      return [
+        b.items.map((m) => `- **${m.name}** (${m.status === "coming_soon" ? "Planned" : DOC_STATUS_LABEL[m.status]}): ${m.reach}`).join("\n"),
+        ...(b.unsupported?.length ? [`Not supported yet: ${b.unsupported.join(", ")}.`] : []),
       ];
     case "support":
       return [

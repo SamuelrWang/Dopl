@@ -123,7 +123,12 @@ export type DocBlock =
     }
   /** A chain of hairline boxes joined by arrows (the Overview's "how it works" diagram). */
   | { type: "flow"; label: string; items: { title: string; detail: string }[] }
-  /** A model × capability grid of status badges (a device category's "Models" table). */
+  /**
+   * A device category's model cards: each model, how Dopl reaches it and its best status, then
+   * the brands Dopl does not reach yet.
+   */
+  | { type: "models"; items: { name: string; reach: string; status: DocStatus }[]; unsupported?: string[] }
+  /** A model × capability grid of status badges (under a device category's model cards). */
   | { type: "support"; models: string[]; rows: { capability: string; cells: (DocStatus | null)[] }[] }
   | ({ type: "capability" } & CapabilityCard);
 
