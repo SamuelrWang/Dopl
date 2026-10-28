@@ -163,6 +163,16 @@ export class ChannelInHomeSpaceError extends ChannelError {
   }
 }
 
+/** A home channel (`kind='link'` container) holds exactly ONE room, and this one already has it
+ *  (INVARIANTS §4A). A new room is a new container, so the message names that door. */
+export class HomeChannelHasRoomError extends ChannelError {
+  constructor() {
+    super(
+      "This container is a home channel, and a home channel holds exactly one room; it already has it, so nothing was created. To make a new room, create a new home channel: over MCP, dopl_create_workspace(name=\"...\"); over HTTP, POST /api/channels?scope=account. To talk in this room, post in its existing channel."
+    );
+  }
+}
+
 /** A direct channel is immutable (two members, always private). Refused as 400 instead of the
  *  CHECK-constraint 500. `aspect` names what was attempted. */
 export class DirectChannelImmutableError extends ChannelError {
