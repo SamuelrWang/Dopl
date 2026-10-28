@@ -1,5 +1,5 @@
 /**
- * Drift gate: every path + method in docs/specs/device-sdk/openapi.yaml has an SDK method in
+ * Drift gate: every path + method in the package's own spec copy (`spec/openapi.yaml`) has an SDK method in
  * `ROUTES`, and every `ROUTES` entry is in the spec. A route added to the spec without a client
  * method fails CI here.
  *
@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 
 import { Dopl, ROUTES } from "./index.js";
 
-const SPEC = join(dirname(fileURLToPath(import.meta.url)), "../../../docs/specs/device-sdk/openapi.yaml");
+const SPEC = join(dirname(fileURLToPath(import.meta.url)), "../spec/openapi.yaml");
 const VERBS = new Set(["get", "post", "put", "patch", "delete"]);
 
 function specOperations(yaml: string): string[] {

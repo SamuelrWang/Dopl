@@ -1,8 +1,8 @@
 # @dopl/sdk
 
 The TypeScript client for the Dopl Device SDK API, plus a project MCP server with three tools.
-Every method maps to one operation in `docs/specs/device-sdk/openapi.yaml`, and the request and
-response types come from `@dopl/contracts/device-sdk`.
+Every method maps to one operation in `spec/openapi.yaml`, and the request and
+response types come from `@dopl/device-contracts`.
 
 ## Install
 
