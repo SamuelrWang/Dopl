@@ -139,7 +139,7 @@ describe("queryPortalEvents", () => {
     expect(ops).toContainEqual(["eq", "route_decision->>target", "auto"]);
     expect(ops).toContainEqual([
       "or",
-      "ts.lt.2026-10-28T11:30:00.000Z,and(ts.eq.2026-10-28T11:30:00.000Z,event_id.lt.55555555-5555-4555-8555-555555555555)",
+      'ts.lt."2026-10-28T11:30:00.000Z",and(ts.eq."2026-10-28T11:30:00.000Z",event_id.lt.55555555-5555-4555-8555-555555555555)',
     ]);
     expect(ops).toContainEqual(["order", "event_id", { ascending: false }]);
     expect(ops).toContainEqual(["limit", LOG_PAGE_SIZE + 1]);
@@ -158,6 +158,26 @@ describe("queryPortalEvents", () => {
 
     canned.set("dev_events", { data: rows.slice(0, 3) });
     expect((await queryPortalEvents({ projectIds: ["p1"], env: "test", now, filters: EMPTY_FILTERS })).nextBefore).toBeNull();
+  });
+
+  it("cursors on the stored microsecond ts, so same-ms rows at a page edge are not skipped", async () => {
+    const rows = Array.from({ length: LOG_PAGE_SIZE + 1 }, (_, i) => ({
+      event_id: `00000000-0000-4000-8000-${String(LOG_PAGE_SIZE + 1 - i).padStart(12, "0")}`,
+      // The last two rows on the page share one millisecond, different microseconds.
+      ts: i >= LOG_PAGE_SIZE - 2 ? `2026-10-28T11:00:00.12345${9 - i + LOG_PAGE_SIZE - 2}+00:00` : `2026-10-28T11:59:${String(59 - i).padStart(2, "0")}.000000+00:00`,
+    }));
+    canned.set("dev_events", { data: rows });
+    const page = await queryPortalEvents({ projectIds: ["p1"], env: "test", now, filters: EMPTY_FILTERS });
+    const last = rows[LOG_PAGE_SIZE - 1];
+    expect(last.ts).toMatch(/\.12345\d\+00:00$/);
+    expect(page.nextBefore).toBe(`${last.ts}~${last.event_id}`);
+
+    calls.length = 0;
+    await queryPortalEvents({ projectIds: ["p1"], env: "test", now, filters: { ...EMPTY_FILTERS, before: page.nextBefore } });
+    expect(opsOn("dev_events")).toContainEqual([
+      "or",
+      `ts.lt."${last.ts}",and(ts.eq."${last.ts}",event_id.lt.${last.event_id})`,
+    ]);
   });
 
   it("reads nothing for an empty project list", async () => {

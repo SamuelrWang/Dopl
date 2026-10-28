@@ -153,7 +153,10 @@ export async function queryPortalEvents(input: {
   // Compound keyset `(ts, event_id) < cursor`. Both parts were validated (ISO + UUID) by
   // `parseLogCursor`, so neither can carry PostgREST `or` syntax.
   const cursor = parseLogCursor(f.before);
-  if (cursor) q = q.or(`ts.lt.${cursor.ts},and(ts.eq.${cursor.ts},event_id.lt.${cursor.eventId})`);
+  // Values are double-quoted so an offset `+00:00` or the fraction dot is read as data.
+  if (cursor) {
+    q = q.or(`ts.lt."${cursor.ts}",and(ts.eq."${cursor.ts}",event_id.lt.${cursor.eventId})`);
+  }
   const { data, error } = await q
     .order("ts", { ascending: false })
     .order("event_id", { ascending: false })

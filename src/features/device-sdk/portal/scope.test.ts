@@ -9,7 +9,9 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY_FILTERS,
   canManageKeys,
+  logCursor,
   logProjectIds,
+  parseLogCursor,
   parsePortalParams,
   portalQuery,
   withFilters,
@@ -61,7 +63,7 @@ describe("parsePortalParams", () => {
   });
 
   it("takes the first of a repeated param, a valid event id and an ISO cursor", () => {
-    const p = parsePortalParams({ env: ["live", "test"], event: EVT, before: `2026-10-28T10:00:00Z~${EVT}` }, projects);
+    const p = parsePortalParams({ env: ["live", "test"], event: EVT, before: `2026-10-28T10:00:00.000Z~${EVT}` }, projects);
     expect(p.env).toBe("live");
     expect(p.filters.event).toBe(EVT);
     expect(p.filters.before).toBe(`2026-10-28T10:00:00.000Z~${EVT}`);
@@ -88,6 +90,30 @@ describe("logProjectIds", () => {
   it("an internal project with internal hidden reads nothing", () => {
     const one = parsePortalParams({ project: P2, internal: "0" }, projects);
     expect(logProjectIds(one, projects)).toEqual([]);
+  });
+});
+
+describe("log cursor", () => {
+  it("keeps a microsecond / offset ts exactly (no Date round-trip)", () => {
+    for (const ts of ["2026-10-28T10:00:00.123456+00:00", "2026-10-28T10:00:00.123456Z", "2026-10-28T10:00:00Z"]) {
+      const c = logCursor({ ts, event_id: EVT });
+      expect(parseLogCursor(c)).toEqual({ ts, eventId: EVT });
+      expect(parsePortalParams({ before: c }, projects).filters.before).toBe(c);
+    }
+  });
+
+  it("survives the URL: `+` is encoded, not read back as a space", () => {
+    const c = logCursor({ ts: "2026-10-28T10:00:00.123456+00:00", event_id: EVT });
+    const p = withFilters(parsePortalParams({}, projects), { before: c });
+    const q = portalQuery(p);
+    expect(q).toContain("%2B00%3A00");
+    expect(parsePortalParams(Object.fromEntries(new URLSearchParams(q)), projects).filters.before).toBe(c);
+  });
+
+  it("refuses a ts with more than 6 fraction digits or no zone", () => {
+    for (const ts of ["2026-10-28T10:00:00.1234567Z", "2026-10-28T10:00:00", "2026-10-28 10:00:00Z"]) {
+      expect(parseLogCursor(`${ts}~${EVT}`)).toBeNull();
+    }
   });
 });
 

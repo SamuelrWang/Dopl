@@ -89,23 +89,24 @@ function token(value: string | null): string | null {
   return value !== null && TOKEN.test(value) ? value : null;
 }
 
-function isoOrNull(value: string | null): string | null {
-  if (value === null) return null;
-  const t = Date.parse(value);
-  return Number.isNaN(t) ? null : new Date(t).toISOString();
-}
+/**
+ * A Postgres timestamptz as PostgREST returns it: up to MICROSECONDS, with `Z` or an offset.
+ * ⚠ Never round-trip a cursor ts through `Date`: it truncates to milliseconds, so the `ts.eq` tie
+ * branch stops matching the row's tie-mates and `ts.lt` drops older rows inside the same ms.
+ */
+const PG_TS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/;
 
-/** The cursor for the row a page ended on. */
+/** The cursor for the row a page ended on: its ts string exactly as stored, then its id. */
 export function logCursor(row: { ts: string; event_id: string }): string {
-  return `${new Date(Date.parse(row.ts)).toISOString()}~${row.event_id}`;
+  return `${row.ts}~${row.event_id}`;
 }
 
 /** A cursor split back into its parts, or null when malformed. Both parts are validated. */
 export function parseLogCursor(value: string | null): { ts: string; eventId: string } | null {
   if (value === null) return null;
-  const [rawTs, eventId, extra] = value.split("~");
-  const ts = isoOrNull(rawTs ?? null);
-  if (extra !== undefined || ts === null || !eventId || !UUID.test(eventId)) return null;
+  const [ts, eventId, extra] = value.split("~");
+  if (extra !== undefined || !ts || !PG_TS.test(ts) || Number.isNaN(Date.parse(ts))) return null;
+  if (!eventId || !UUID.test(eventId)) return null;
   return { ts, eventId: eventId.toLowerCase() };
 }
 
