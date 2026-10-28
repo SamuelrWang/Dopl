@@ -20,6 +20,10 @@ describe("/playground/tasks", () => {
     const today = within(week).getByRole("listitem", { name: /Wed Oct 28, today/ });
     expect(today.getAttribute("aria-current")).toBe("date");
     expect(within(today).getByRole("button", { name: /8:30 Standup notes, Missed/ })).toBeTruthy();
+    // The cap hides quiet runs first: running and needs-you show without "+N".
+    expect(within(today).getByRole("button", { name: /11:40 .*, Running/ })).toBeTruthy();
+    expect(within(today).getByRole("button", { name: /14:00 .*, Needs you/ })).toBeTruthy();
+    expect(within(today).queryByRole("button", { name: /17:00 Migration review/ })).toBeNull();
     const more = within(today).getByRole("button", { name: /^\+\d more$/ });
     fireEvent.click(more);
     expect(within(today).getByRole("button", { name: /17:00 Migration review, Scheduled/ })).toBeTruthy();
@@ -38,8 +42,9 @@ describe("/playground/tasks", () => {
     const needs = screen.getByRole("list", { name: "Needs you" });
     expect(within(needs).getByText("Review the pricing page copy")).toBeTruthy();
     expect(within(needs).getByText("Standup notes")).toBeTruthy();
+    expect(within(needs).getByText("Last run today 11:05")).toBeTruthy();
     expect(within(screen.getByRole("list", { name: "One-off" })).getByText("Audit unused feature flags")).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: "#releases" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^#releases/ }));
     expect(screen.queryByRole("list", { name: "One-off" })).toBeNull();
     expect(within(screen.getByRole("list", { name: "Repeating" })).getByText("Cut a release")).toBeTruthy();
   });

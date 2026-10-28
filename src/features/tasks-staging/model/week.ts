@@ -105,3 +105,16 @@ export function weekChips(tasks: readonly SavedTask[], offset: number): WeekChip
   }
   return chips.sort((a, b) => a.dayIndex - b.dayIndex || minutes(a.time) - minutes(b.time));
 }
+
+/** States a day never hides behind "+N": they need a look, or a person. */
+const LOUD: ReadonlySet<ChipState> = new Set<ChipState>(["running", "needs_you", "failed", "missed"]);
+
+/**
+ * One day's chips under the cap: every loud run always shows, quiet ones (done, upcoming) fill
+ * what is left of `cap`. The shown set stays in time order; `hidden` is what "+N" opens.
+ */
+export function capDay(own: readonly WeekChip[], cap: number): { shown: WeekChip[]; hidden: number } {
+  let room = Math.max(0, cap - own.filter((c) => LOUD.has(c.state)).length);
+  const shown = own.filter((c) => LOUD.has(c.state) || room-- > 0);
+  return { shown, hidden: own.length - shown.length };
+}

@@ -111,10 +111,11 @@ export function TasksHome({ currentUserId }: { currentUserId: string }) {
             <SegmentedControl
               variant="track"
               options={[
-                { key: "all", label: "All channels" },
+                { key: "all", label: "All channels", count: tasks.length },
                 ...STAGING_TASK_CHANNELS.map((c) => ({
                   key: c.id,
                   label: `#${c.name}`,
+                  count: tasks.filter((t) => t.channelId === c.id).length,
                 })),
               ]}
               value={scope}
@@ -122,9 +123,6 @@ export function TasksHome({ currentUserId }: { currentUserId: string }) {
               ariaLabel="Channel"
               className="flex-none"
             />
-            <p className="flex-none text-caption text-text-muted">
-              {`${visible.length} ${visible.length === 1 ? "task" : "tasks"}`}
-            </p>
             <div className="ml-auto flex-none">
               <CreateButton onClick={() => setEditing({ task: null })}>
                 Task
@@ -134,7 +132,6 @@ export function TasksHome({ currentUserId }: { currentUserId: string }) {
 
           <WeekBar
             chips={chips}
-            taskOf={(id) => tasks.find((t) => t.id === id)}
             offset={offset}
             onOffset={setOffset}
             onOpen={(chip) => setViewingId(chip.taskId)}
