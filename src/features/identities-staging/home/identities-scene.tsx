@@ -41,6 +41,7 @@ import { useStagingAttachableBases } from "../store/use-staging-attachable-bases
 import { useStagingIdentities } from "../store/use-staging-identities";
 import { useStagingIdentitySave } from "../store/use-staging-identity-save";
 import { TeamsHome } from "../teams/teams-home";
+import { RecurringHome } from "../recurring/recurring-home";
 
 
 const runtimeLabel = (id: string) => STAGING_RUNTIMES.find((r) => r.id === id)?.label ?? id;
@@ -62,7 +63,7 @@ export function IdentitiesScene({
   const [launching, setLaunching] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<{ identityId: string; message: string } | null>(null);
   const [sessions] = useState(() => stagingSessions(Date.now()));
-  const [view, setView] = useState<"identities" | "teams">("identities");
+  const [view, setView] = useState<"identities" | "teams" | "recurring">("identities");
 
   const containerList = useStagingIdentities(channel?.workspaceId ?? null);
   const homeList = useStagingIdentities(homeWorkspaceId);
@@ -88,13 +89,16 @@ export function IdentitiesScene({
         options={[
           { key: "identities", label: "Identities" },
           { key: "teams", label: "Teams" },
+          { key: "recurring", label: "Recurring tasks" },
         ]}
         value={view}
         onChange={setView}
-        ariaLabel="Identities or agent teams"
+        ariaLabel="Identities, agent teams or recurring tasks"
         className="flex-none border-b border-border-default px-3"
       />
-      {view === "teams" ? (
+      {view === "recurring" ? (
+        <RecurringHome channelName={channel?.name ?? null} currentUserId={currentUserId} />
+      ) : view === "teams" ? (
         <TeamsHome
           channelName={channel?.name ?? null}
           currentUserId={currentUserId}
