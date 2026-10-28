@@ -164,6 +164,75 @@ export function createDeviceHandlers(input: DeviceHandlerDeps) {
     },
   });
 
+  /** An SDK row answered on its own queue settles the `dev_actions` row it serves. */
+  const sdkAnswer = async (port: SdkGlassesPort, deviceId: string, body: unknown): Promise<AnswerOutcome> => {
+    const outcome = await answerAsk({ store: port.store, now: deps.now }, deviceId, body);
+    if (outcome.ok && outcome.message) await port.settled(deviceId, outcome.message);
+    return outcome;
+  };
+
+  const sdkDismiss = async (port: SdkGlassesPort, deviceId: string, body: unknown): Promise<AnswerOutcome> => {
+    const outcome = await dismissMessage({ store: port.store, now: deps.now }, deviceId, body);
+    const id = (body as { id?: unknown } | null)?.id;
+    if (outcome.ok && typeof id === "string" && isUuid(id)) {
+      const row = await port.store.get(deviceId, id);
+      if (row?.status === "dismissed") await port.settled(deviceId, row);
+    }
+    return outcome;
+  };
+
+  /**
+   * W1.2 DOGFOOD WINDOW (Plan §8): a prosumer device MIGRATED to an SDK row keeps its id and its legacy
+   * token (menu / voice / home have no SDK branch), so the prosumer lookup above resolves it. When its
+   * owner's `sdk_delivery` flag lists it, this is the SDK device it now is; else null. A failed flag
+   * lookup is null (prosumer only, logged): the poll must not fail on it.
+   */
+  const migratedSdk = async (device: GlassesDevice): Promise<{ port: SdkGlassesPort; deviceId: string } | null> => {
+    const port = deps.sdk;
+    if (!port?.migratedDeviceIds) return null;
+    try {
+      if (!(await port.migratedDeviceIds(device.user_id)).includes(device.id)) return null;
+    } catch (err) {
+      console.error("[glasses] sdk_delivery lookup failed; prosumer queue only", err);
+      return null;
+    }
+    return { port, deviceId: device.id };
+  };
+
+  /** The migrated SDK device when `body.id` is a row of ITS queue (not the user's prosumer queue). */
+  const sdkRowOwner = async (device: GlassesDevice, body: unknown) => {
+    const id = (body as { id?: unknown } | null)?.id;
+    if (typeof id !== "string" || !isUuid(id)) return null;
+    const sdk = await migratedSdk(device);
+    if (!sdk || (await deps.store.get(device.user_id, id))) return null;
+    return (await sdk.port.store.get(sdk.deviceId, id)) ? sdk : null;
+  };
+
+  /**
+   * The user's prosumer queue and the migrated device's SDK queue as ONE inbox (keyed by the user).
+   * Row ids are uuids from two tables, so the device's `(id, updated_at)` dedupe holds; the cursor is
+   * `updated_at` in both. Rows handed over move in their own table (SDK ones also move their action).
+   */
+  const mergedQueue = (port: SdkGlassesPort, deviceId: string): GlassesStore => {
+    const sdkIds = new Set<string>();
+    const queue = sdkQueue(port);
+    return {
+      ...deps.store,
+      async expireStale(userId, now) {
+        await Promise.all([deps.store.expireStale(userId, now), queue.expireStale(deviceId, now)]);
+      },
+      async listInbox(userId, now, since) {
+        const [mine, sdk] = await Promise.all([deps.store.listInbox(userId, now, since), queue.listInbox(deviceId, now, since)]);
+        for (const r of sdk) sdkIds.add(r.id);
+        return [...mine, ...sdk].sort((a, b) => Date.parse(a.updated_at) - Date.parse(b.updated_at));
+      },
+      async markDelivered(userId, ids) {
+        const sdk = ids.filter((id) => sdkIds.has(id));
+        await Promise.all([deps.store.markDelivered(userId, ids.filter((id) => !sdkIds.has(id))), queue.markDelivered(deviceId, sdk)]);
+      },
+    };
+  };
+
   return {
     inbox: authed("inbox", async (req, device) => {
       const parsed = parseInboxQuery(new URL(req.url));
@@ -174,8 +243,10 @@ export function createDeviceHandlers(input: DeviceHandlerDeps) {
         if (!deps.mirrorThrottle.tryAcquire(device.id, nowOf(deps))) return;
         await mirrorReplies(deps, device);
       };
+      // A migrated device (W1.2) also reads its SDK lens queue: same cursor, one merged list.
+      const sdk = await migratedSdk(device);
       const result = await readInbox(
-        { store: deps.store, beforeRead, now: deps.now, sleep: deps.sleep },
+        { store: sdk ? mergedQueue(sdk.port, sdk.deviceId) : deps.store, beforeRead, now: deps.now, sleep: deps.sleep },
         device.user_id,
         parsed.after,
         parsed.waitSec,
@@ -196,7 +267,10 @@ export function createDeviceHandlers(input: DeviceHandlerDeps) {
     }),
 
     answer: authed("answer", async (request, device) => {
-      const outcome = await answerAsk(deps, device.user_id, await readJson(request));
+      const body = await readJson(request);
+      const sdk = await sdkRowOwner(device, body);
+      if (sdk) return outcomeResponse(request, await sdkAnswer(sdk.port, sdk.deviceId, body));
+      const outcome = await answerAsk(deps, device.user_id, body);
       if (outcome.ok && outcome.message && deps.answerLinked) {
         // The channel decision was answered first: the lens now shows THAT answer; the tap lost.
         if ((await deps.answerLinked(device, outcome.message)) === "conflict") {
@@ -204,27 +278,15 @@ export function createDeviceHandlers(input: DeviceHandlerDeps) {
         }
       }
       return outcomeResponse(request, outcome);
-    }, async (request, device, port) => {
-      const outcome = await answerAsk({ store: port.store, now: deps.now }, device.id, await readJson(request));
-      if (outcome.ok && outcome.message) await port.settled(device.id, outcome.message);
-      return outcomeResponse(request, outcome);
-    }),
+    }, async (request, device, port) => outcomeResponse(request, await sdkAnswer(port, device.id, await readJson(request)))),
 
-    dismiss: authed("dismiss", async (request, device) =>
-      outcomeResponse(
-        request,
-        await dismissMessage(deps, device.user_id, await readJson(request)),
-      ),
-    async (request, device, port) => {
+    dismiss: authed("dismiss", async (request, device) => {
       const body = await readJson(request);
-      const outcome = await dismissMessage({ store: port.store, now: deps.now }, device.id, body);
-      const id = (body as { id?: unknown } | null)?.id;
-      if (outcome.ok && typeof id === "string" && isUuid(id)) {
-        const row = await port.store.get(device.id, id);
-        if (row?.status === "dismissed") await port.settled(device.id, row);
-      }
-      return outcomeResponse(request, outcome);
-    }),
+      const sdk = await sdkRowOwner(device, body);
+      if (sdk) return outcomeResponse(request, await sdkDismiss(sdk.port, sdk.deviceId, body));
+      return outcomeResponse(request, await dismissMessage(deps, device.user_id, body));
+    },
+    async (request, device, port) => outcomeResponse(request, await sdkDismiss(port, device.id, await readJson(request)))),
 
     /** The device signs itself out: its token dies with the revoke. */
     unpair: authed("unpair", async (request, device) => {

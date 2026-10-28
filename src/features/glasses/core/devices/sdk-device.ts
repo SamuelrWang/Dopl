@@ -33,4 +33,11 @@ export interface SdkGlassesPort {
   delivered(deviceId: string, messageIds: string[]): Promise<void>;
   /** A lens row was answered or dismissed: settle the `dev_actions` row it serves. */
   settled(deviceId: string, row: GlassesMessage): Promise<void>;
+  /**
+   * W1.2 dogfood window (Plan §8): the ids of this Dopl user's prosumer glasses that were MIGRATED to
+   * SDK rows (same id, `sdk_delivery` on). Such a device still signs in with its legacy token, so the
+   * prosumer lookup wins; its inbox then also carries its SDK lens queue. Throws on a failed lookup.
+   * Absent = no migrated devices.
+   */
+  migratedDeviceIds?(userId: string): Promise<string[]>;
 }

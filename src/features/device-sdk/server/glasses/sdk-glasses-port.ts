@@ -1,8 +1,10 @@
 import "server-only";
 import type { SdkGlassesDevice, SdkGlassesPort } from "@/features/glasses/core/devices/sdk-device";
 import { EVEN_G2_INFO } from "@/features/glasses/platforms/even-g2/info";
+import { TtlCache } from "@/features/glasses/core/ttl-cache";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { ActionStatus } from "../../types";
+import { sdkDeliveryFor } from "../sdk-delivery-flag";
 import { markDelivered, settle, withStatus, type LensActionStore } from "./lens-actions";
 import { sdkGlassesStore } from "./sdk-glasses-store";
 
@@ -87,4 +89,19 @@ export const sdkGlassesPort: SdkGlassesPort = {
 
   delivered: (deviceId, ids) => markDelivered(supabaseLensActions, deviceId, ids),
   settled: (deviceId, row) => settle(supabaseLensActions, deviceId, row),
+  migratedDeviceIds: migratedDeviceIdsCached,
 };
+
+/** Every inbox poll asks; the flag moves rarely. A failed lookup is not cached (it throws through). */
+const MIGRATED_TTL_MS = 30_000;
+const migratedCache = new TtlCache<string, string[]>(MIGRATED_TTL_MS, 10_000);
+
+async function migratedDeviceIdsCached(userId: string): Promise<string[]> {
+  const now = Date.now();
+  const hit = migratedCache.get(userId, now);
+  if (hit) return hit;
+  const state = await sdkDeliveryFor(userId);
+  const ids = state.on ? state.deviceIds : [];
+  migratedCache.set(userId, ids, now);
+  return ids;
+}

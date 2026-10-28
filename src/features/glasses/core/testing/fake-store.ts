@@ -5,7 +5,9 @@ import type { GlassesMessage, GlassesStatus, GlassesStore, GlassesTemplate } fro
  * semantics. The `now` each write receives stands in for the DB clock that
  * stamps `created_at`/`updated_at` in production.
  */
-export function createFakeGlassesStore() {
+export function createFakeGlassesStore(opts: { idBlock?: "8000" | "9000" | "a000" } = {}) {
+  /** The uuid's 4th group: two stores in one suite (prosumer + SDK queue) need disjoint ids, as in prod. */
+  const idBlock = opts.idBlock ?? "8000";
   const rows: (GlassesMessage & { user_id: string; spec?: unknown })[] = [];
   const templates = new Map<string, GlassesTemplate>();
   let seq = 0;
@@ -24,7 +26,7 @@ export function createFakeGlassesStore() {
     async insert(userId, row) {
       seq += 1;
       const r = {
-        id: `00000000-0000-4000-8000-${String(seq).padStart(12, "0")}`,
+        id: `00000000-0000-4000-${idBlock}-${String(seq).padStart(12, "0")}`,
         user_id: userId,
         kind: row.kind,
         card_id: row.card_id,
