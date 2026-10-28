@@ -16,21 +16,29 @@ import {
   type StagingState,
 } from "./stubs/staging-state";
 import { useStagingOverviewReads } from "./stubs/use-staging-overview-reads";
+import { ProposedOverview } from "./proposed/proposed-overview";
+
+/** Which face the page mounts: the shipped product face, or the staging-only proposed fork. */
+type StagingFace = "proposed" | "current";
 
 /**
  * `/overview`: the product Overview face inside the landing demo window, on fake data.
  *
  * The small toolbar bottom-right is STAGING ONLY (not part of the desktop UI): it flips the states
- * the Overview can be in, so each can be reviewed without real data.
+ * the Overview can be in, so each can be reviewed without real data, and swaps the product face
+ * (Current) for the proposed redesign (`./proposed/`, PORTING.md › Proposed fork).
  */
 export function OverviewStagingPage() {
   const [state, setState] = useState<StagingState>(DEFAULT_STAGING_STATE);
+  const [face, setFace] = useState<StagingFace>("proposed");
   const router = useRouter();
+  const Face = face === "proposed" ? ProposedOverview : HomeOverview;
 
   return (
     <StagingStateProvider value={state}>
       <StagingFrame tab="overview" showChannels>
-        <HomeOverview
+        <Face
+          key={face}
           homeWorkspaceId={STAGING_HOME_WORKSPACE_ID}
           homeChannels={HOME_CHANNELS}
           onOpenSettings={(next) => openStagingSettings(next, state.plan)}
@@ -40,13 +48,17 @@ export function OverviewStagingPage() {
           useReads={useStagingOverviewReads}
         />
       </StagingFrame>
-      <StagingToolbar state={state} onChange={setState} />
+      <StagingToolbar state={state} onChange={setState} face={face} onFace={setFace} />
     </StagingStateProvider>
   );
 }
 
 /* ─────────────────────────── staging-only toolbar ─────────────────────────── */
 
+const FACES: Array<{ key: StagingFace; label: string }> = [
+  { key: "current", label: "Current" },
+  { key: "proposed", label: "Proposed" },
+];
 const LOADS: Array<{ key: StagingLoad; label: string }> = [
   { key: "ready", label: "Data" },
   { key: "loading", label: "Loading" },
@@ -99,9 +111,13 @@ function Segmented<K extends string>({
 function StagingToolbar({
   state,
   onChange,
+  face,
+  onFace,
 }: {
   state: StagingState;
   onChange: (next: StagingState) => void;
+  face: StagingFace;
+  onFace: (next: StagingFace) => void;
 }) {
   const [open, setOpen] = useState(true);
   return (
@@ -123,6 +139,7 @@ function StagingToolbar({
       </div>
       {open && (
         <>
+          <Segmented label="Face" options={FACES} value={face} onChange={onFace} />
           <Segmented
             label="Reads"
             options={LOADS}

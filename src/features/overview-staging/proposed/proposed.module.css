@@ -1,0 +1,450 @@
+/* PROPOSED Overview (staging fork). Tokens only. Three surfaces in all: one white panel per column
+   and one under them, sections split by hairlines, no shadow. No grey fill behind content (the grey
+   ban, PORTING.md); a 3px meter track and a bar's zero tick keep their translucent tone. Colour is
+   for attention only (`data-tone="attention"`); everything else is ink or muted text. */
+
+.root {
+  --pro-gap: 14px;
+  /* Both column panels are one height, so they end on one line; the last section in each panel
+     takes the rest and scrolls. */
+  --pro-cols-h: 460px;
+  --pro-full-h: 660px;
+  --pro-needs-max: 268px;
+  min-width: 0;
+  flex: 1;
+  overflow-y: auto;
+  container-type: inline-size;
+  color: var(--text-secondary);
+  font-size: var(--text-body);
+  font-variant-numeric: tabular-nums;
+}
+.inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pro-gap);
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 18px 20px 28px;
+}
+
+/* a panel: white, one hairline, no shadow */
+.panel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: var(--bg-overlay);
+}
+.section {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: none;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+}
+.section + .section {
+  border-top: 1px solid var(--border-default);
+}
+.head {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+}
+.count {
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+}
+.count[data-tone="attention"] {
+  color: var(--warning);
+}
+.aside {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+/* the two columns */
+.grid {
+  display: grid;
+  height: var(--pro-cols-h);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--pro-gap);
+}
+.grid[data-full="true"] {
+  height: var(--pro-full-h);
+}
+.panel > .section:last-child {
+  max-height: none;
+  flex: 1 1 0%;
+}
+.needs {
+  max-height: var(--pro-needs-max);
+}
+/* the people/tools pair inside the lower panel, a hairline between */
+.pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  border-top: 1px solid var(--border-default);
+}
+.pair > .section + .section {
+  border-top: 0;
+  border-left: 1px solid var(--border-default);
+}
+.pair > .section {
+  max-height: 300px;
+}
+@container (max-width: 720px) {
+  .grid,
+  .grid[data-full="true"] {
+    height: auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+  .panel > .section:last-child,
+  .needs,
+  .pair > .section {
+    max-height: none;
+    flex: none;
+  }
+  .pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pair > .section + .section {
+    border-top: 1px solid var(--border-default);
+    border-left: 0;
+  }
+}
+
+/* rows: a fixed leading slot, a title over one meta line, hairline between */
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+.row {
+  display: flex;
+  min-width: 0;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+.row + .row {
+  border-top: 1px solid var(--border-default);
+}
+.rowMain {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 0%;
+  flex-direction: column;
+  gap: 2px;
+}
+.rowTitle {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rowMeta,
+.rowAside,
+.num,
+.state {
+  overflow: hidden;
+  font-size: var(--text-label);
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rowAside {
+  flex: none;
+  max-width: 40%;
+}
+.num,
+.state {
+  flex: none;
+}
+.state[data-tone="attention"] {
+  color: var(--warning);
+}
+.tag {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  font-size: var(--text-micro);
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+/* the one leading slot every row wears: 24px, an icon or a face centred in it */
+.slot {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--border-default);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  font-size: var(--text-micro);
+  font-weight: 600;
+}
+.slot[data-shape="tile"] {
+  border-radius: 7px;
+}
+.slot[data-tone="attention"] {
+  color: var(--warning);
+}
+.slot[data-bare="true"] {
+  border: 0;
+}
+/* a row that opens something: the button's `::after` covers the row */
+.openRow {
+  position: relative;
+  margin: 0 -8px;
+  padding-inline: 8px;
+}
+.openRow:has(.open:hover),
+.openRow:has(.open:focus-visible) {
+  background: var(--menu-item-hover-bg);
+}
+.open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+}
+.open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.link:hover {
+  color: var(--text-primary);
+}
+
+/* agents: a quiet device subheader, no pill, no dot */
+.group + .group {
+  margin-top: 6px;
+}
+.groupName {
+  overflow: hidden;
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* usage: the allowance, then the chart's one control row */
+.figure {
+  font-size: var(--text-title);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.lead {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.metaLine {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+}
+.metaLine > * + *::before {
+  content: "·";
+  margin: 0 6px;
+}
+.controls {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.total {
+  margin-left: auto;
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.note {
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+}
+.note[data-tone="attention"] {
+  color: var(--warning);
+}
+
+/* devices: the reach order on one line, truncated */
+.reach {
+  overflow: hidden;
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reachLabel {
+  margin-right: 6px;
+  color: var(--text-muted);
+}
+.reachWait {
+  margin: 0 4px;
+  color: var(--text-muted);
+}
+
+/* add device: a kind picker, then the pairing code */
+.add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+}
+.kinds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: none;
+  font-size: var(--text-caption);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.kind[aria-pressed="true"] {
+  border-color: var(--text-primary);
+}
+.code {
+  padding: 2px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  letter-spacing: 0.12em;
+  color: var(--text-primary);
+}
+
+/* activity feed */
+.time {
+  width: 58px;
+  flex: none;
+  font-size: var(--text-label);
+  color: var(--text-muted);
+}
+.hops {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+}
+.hop {
+  font-size: var(--text-label);
+  color: var(--text-muted);
+  text-decoration: line-through;
+  white-space: nowrap;
+}
+.hop[data-landed="true"] {
+  font-weight: 500;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+.level {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.level[data-level="warn"] {
+  background: var(--warning);
+}
+.level[data-level="error"] {
+  background: var(--danger);
+}
+
+/* the channels table */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table th {
+  padding: 0 8px 6px;
+  border-bottom: 1px solid var(--border-default);
+  font-size: var(--text-caption);
+  font-weight: 400;
+  color: var(--text-muted);
+  text-align: left;
+}
+.table td {
+  height: 36px;
+  padding: 0 8px;
+  color: var(--text-primary);
+}
+.table tbody tr {
+  position: relative;
+}
+.table tbody tr:has(.open:hover) td,
+.table tbody tr:has(.open:focus-visible) td {
+  background: var(--menu-item-hover-bg);
+}
+.table tbody tr + tr td {
+  border-top: 1px solid var(--border-default);
+}
+.table .numCol {
+  width: 22%;
+  text-align: right;
+}
+.numMeter {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.name {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 8px;
+}

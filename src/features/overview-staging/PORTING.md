@@ -23,6 +23,26 @@ segmented background is staging-only chrome and never ports.
 Devices through `ui-staging/staging-popups-provider.tsx › openStagingSettings`, with billing answering
 for the toolbar's plan (`src/features/settings-staging/PORTING.md`).
 
+## Proposed fork (2026-10-28, staging only until Samuel approves)
+
+The toolbar's **Face** switch mounts `proposed/proposed-overview.tsx › ProposedOverview` (default)
+or the untouched product face (Current). The fork takes the same props and the same `useReads`, and
+imports the product's pure helpers (`creditAllowance`, `deviceViews`, `agentTally`, `Bars`,
+`GhostRows`) without changing them. Porting it means replacing each product file below with its
+proposed twin, then deleting `overview-summary.tsx`, `overview-tokens.tsx` and `overview-card.tsx ›
+OverviewCard` once nothing reads them.
+
+| Proposed file | Replaces |
+|---|---|
+| `proposed/proposed-overview.tsx` | `home/components/overview/home-overview.tsx` (+ `overview-skeleton.tsx`'s ghost) |
+| `proposed/proposed-section.tsx` | `overview-card.tsx › OverviewCard`; `overview-summary.tsx` (deleted, no strip) |
+| `proposed/proposed-needs.tsx` | `overview-needs.tsx` |
+| `proposed/proposed-agents.tsx` | `overview-agents.tsx` |
+| `proposed/proposed-usage.tsx` | `overview-credits.tsx` + `overview-tokens.tsx` (one Usage section) |
+| `proposed/proposed-devices.tsx` | `overview-devices.tsx` |
+| `proposed/proposed-ledger.tsx` | `overview-ledger.tsx` |
+| `proposed/proposed.module.css` | `overview.module.css` + `overview-preview.module.css` |
+
 ## Stubs and staging-only files (do NOT port)
 
 | Staging file | Stands in for |
