@@ -22,7 +22,7 @@
     "node": ">=18.17"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/fix-esm-specifiers.mjs dist",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json && node scripts/fix-esm-specifiers.mjs dist",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },
