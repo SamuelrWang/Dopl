@@ -20,7 +20,8 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@dopl/device-contracts": ["./packages/device-contracts/src/index.ts"]
+      "@dopl/device-contracts": ["./packages/device-contracts/src/index.ts"],
+      "@dopl/sdk": ["./packages/sdk/src/index.ts"]
     }
   },
   "include": [

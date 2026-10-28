@@ -135,22 +135,44 @@ async function legacyLane(
  */
 export async function answerFromLens(userId: string, row: GlassesMessage, source: MessageSourceStamp): Promise<"ok" | "conflict"> {
   if (!row.channel_message_id || !row.answer) return "ok";
+  const out = await answerDecisionFromLens(userId, row.channel_message_id, row.answer.index, source);
+  if (out.result !== "conflict") return "ok";
   try {
-    const message = await findMessageRow(row.channel_message_id);
+    await syncLensToStamp(userId, row, out.channelId, row.channel_message_id);
+    return "conflict";
+  } catch (err) {
+    // As before the W1.2 split: a failed re-sync is logged and the tap stands.
+    console.error("[display] lens answer post failed", err);
+    return "ok";
+  }
+}
+
+/**
+ * A lens answer to a channel DECISION posts through the decision lane as the owner, from glasses: the
+ * prosumer lens tap ({@link answerFromLens}) and the SDK lens ask (`service.ts`, W1.2). `skipped`: no
+ * such message, or not a decision; `conflict`: already answered there. Never throws (logged).
+ */
+export async function answerDecisionFromLens(
+  userId: string,
+  channelMessageId: string,
+  index: number,
+  source: MessageSourceStamp
+): Promise<{ result: "ok" | "skipped"; answer?: DisplayAnswerStamp } | { result: "conflict"; channelId: string }> {
+  try {
+    const message = await findMessageRow(channelMessageId);
     const meta = (message?.metadata ?? {}) as Record<string, unknown>;
-    if (!message || !displayOf(meta)?.decision) return "ok";
+    if (!message || !displayOf(meta)?.decision) return { result: "skipped" };
     const ctx = { ...(await operatorChannelContext(userId, message.workspace_id)), messageSource: source };
     try {
-      await answerDisplay(ctx, message.channel_id, message.id, { index: row.answer.index });
-      return "ok";
+      const { answer } = await answerDisplay(ctx, message.channel_id, message.id, { index });
+      return { result: "ok", answer };
     } catch (err) {
       if (!(err instanceof HttpError && err.status === 409)) throw err;
-      await syncLensToStamp(userId, row, message.channel_id, message.id);
-      return "conflict";
+      return { result: "conflict", channelId: message.channel_id };
     }
   } catch (err) {
     console.error("[display] lens answer post failed", err);
-    return "ok";
+    return { result: "skipped" };
   }
 }
 

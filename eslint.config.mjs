@@ -120,9 +120,22 @@ const eslintConfig = defineConfig([
       "src/app/playground/developers/**",
       "src/features/marketing/docs/**",
       "src/features/glasses/glasses-runtime.ts",
+      "src/features/display/server/sdk-lens.ts",
     ],
     rules: {
       "no-restricted-imports": ["error", { patterns: [{ regex: DEVICE_SDK_IMPORT, message: DEVICE_SDK_MSG }] }],
+    },
+  },
+
+  // FENCE 2, the seam's one exception (W1.2): `display/server/sdk-lens.ts` reads the per-user
+  // `sdk_delivery` flag and NOTHING else of the Device SDK server. It reaches devices over `@dopl/sdk`.
+  {
+    files: ["src/features/display/server/sdk-lens.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { patterns: [{ regex: "^(@/features/|(\\.\\./)+(src/)?(features/)?|\\./)device-sdk(/(?!server/sdk-delivery-flag$)|$)", message: DEVICE_SDK_MSG }] },
+      ],
     },
   },
 
