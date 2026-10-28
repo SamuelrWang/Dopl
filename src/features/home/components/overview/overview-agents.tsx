@@ -55,7 +55,7 @@ export function AgentsCard({ hosts }: { hosts: readonly PreviewHost[] }) {
               <ul className={styles.rows}>
                 {host.agents.map((agent) => (
                   <li key={agent.id} className={styles.row}>
-                    <AgentFace size={24} photo={null} name={agent.name} color={null} runtime={agent.runtime} />
+                    <AgentFace size="s" photo={null} name={agent.name} color={null} runtime={agent.runtime} />
                     <span className={styles.rowMain}>
                       <span className={styles.rowTitle}>{agent.name}</span>
                       <span className={styles.rowMeta}>

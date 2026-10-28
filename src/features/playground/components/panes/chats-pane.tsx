@@ -317,7 +317,7 @@ function HeaderCard({ chat }: { chat: PaneChat }) {
         {chat.isPublic && (
           <div className="mt-3 flex items-center gap-2">
             <Avatar
-              size="xs"
+              size="s"
               person={{
                 userId: chat.ownerUserId,
                 email: null,

@@ -207,7 +207,7 @@ export function InviteDialog({
                 onClick={() => void add(m.userId)}
                 className="flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-surface-raised-1 disabled:opacity-60"
               >
-                <Avatar person={m} size="xs" />
+                <Avatar person={m} size="s" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-body font-medium text-text-primary">
                     {m.displayName || m.email || m.userId}
@@ -244,7 +244,7 @@ export function InviteDialog({
                       avatarUrl: m.avatarUrl,
                     }}
                     online={m.agentOnline}
-                    size="xs"
+                    size="s"
                     title={m.agentOnline ? "Agent listening" : "Agent offline"}
                   />
                   <span className="min-w-0 flex-1 truncate text-body text-text-primary">

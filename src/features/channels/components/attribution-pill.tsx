@@ -107,7 +107,7 @@ export function AttributionPill({
   // An agent wears its operator's photo on the neutral hairline: the frame is its one coloured line.
   const body = agent ? (
     <>
-      <IdentityFace size={32} photo={author.avatarUrl} name={author.displayName ?? author.email} />
+      <IdentityFace size="m" photo={author.avatarUrl} name={author.displayName ?? author.email} />
       <span className="flex min-w-0 flex-col">
         <span className="flex min-w-0 flex-wrap items-center gap-1.5">
           {/* `wrap-anywhere`: an unbroken name must not size the pill past the pane. */}
@@ -119,7 +119,7 @@ export function AttributionPill({
     </>
   ) : (
     <>
-      <Avatar person={author} size="px36" />
+      <Avatar person={author} size="m" />
       <span className="flex min-w-0 flex-col">
         <span className="wrap-anywhere text-body font-semibold leading-tight">{label}</span>
         <span className="text-micro leading-tight text-text-muted">{time}</span>

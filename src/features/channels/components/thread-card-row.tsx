@@ -39,7 +39,7 @@ function AgentRow({
   const body = (
     <>
       <AgentFace
-        size={26}
+        size="m"
         photo={agent.photo}
         name={agent.name}
         color={agent.color}

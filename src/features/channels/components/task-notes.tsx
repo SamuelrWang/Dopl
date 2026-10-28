@@ -47,7 +47,7 @@ export function TaskNotes({
             const face = faceOf(n.author);
             return (
               <li key={n.id} className="grid grid-cols-[22px_minmax(0,1fr)] gap-2">
-                <IdentityFace size={22} {...face} />
+                <IdentityFace size="s" {...face} />
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="flex items-baseline gap-1.5">
                     <span className="text-caption font-semibold text-text-primary">{face.name}</span>

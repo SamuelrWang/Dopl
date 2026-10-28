@@ -1,3 +1,4 @@
+import type { AvatarScale } from "@/shared/ui/avatar-size";
 import type { ReactNode } from "react";
 import type { DesktopSessionSummary } from "./spa-bridge";
 
@@ -11,5 +12,5 @@ export interface AgentRunPresenter {
   /** `live` greens the dot: the agent is working right now. */
   state: (session: DesktopSessionSummary) => { label: string; live: boolean };
   /** `photo` is the agent's owner, which on this machine's feed is always the operator. */
-  face: (session: DesktopSessionSummary, photo: string | null, size: number) => ReactNode;
+  face: (session: DesktopSessionSummary, photo: string | null, size: AvatarScale) => ReactNode;
 }

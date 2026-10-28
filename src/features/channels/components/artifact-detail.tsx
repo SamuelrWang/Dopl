@@ -76,7 +76,7 @@ function ArtifactMessage({
       data-artifact-member={message.seq}
       className={cn(ROW_CARD_ROW, "grid grid-cols-[24px_minmax(0,1fr)] gap-x-2.5 py-3 first:pt-0")}
     >
-      <IdentityFace size={24} {...face} />
+      <IdentityFace size="s" {...face} />
       <div className="flex min-w-0 flex-col gap-1">
         <p className="flex min-w-0 items-baseline gap-1.5">
           <span className="truncate text-caption font-semibold text-text-primary">{face.name}</span>
@@ -173,7 +173,7 @@ export function ArtifactDetail({
         <div className="flex min-w-0 items-center gap-2 border-t border-border-default pt-2.5 text-caption text-text-muted">
           <IdentityStack
             faces={faces}
-            size={22}
+            size="s"
             max={AUTHOR_FACES}
             label={faces.length > 0 ? `By ${faces.map((f) => f.name).join(", ")}` : undefined}
           />

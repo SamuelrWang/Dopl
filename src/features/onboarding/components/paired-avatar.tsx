@@ -48,7 +48,8 @@ export function PairedAvatar({
   if (thinFrame) {
     return (
       <IdentityFace
-        size={d}
+        size="m"
+        px={d}
         photo={photo}
         runtimeLogo={agentLogo}
         ring={slotKey(color) ?? "neutral"}

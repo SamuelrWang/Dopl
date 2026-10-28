@@ -250,7 +250,7 @@ function MemberRow({
 }) {
   return (
     <RowShell selected={selected} onSelect={onSelect}>
-      <AvatarWithPresence person={m.person} online={m.online} size="xs" />
+      <AvatarWithPresence person={m.person} online={m.online} size="s" />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           <span className="min-w-0 truncate text-body font-semibold text-text-primary">
@@ -352,7 +352,7 @@ function MemberDetail({ member: m }: { member: PaneMember }) {
       <div className="min-h-0 flex-1 overflow-y-auto px-14 pb-16 pt-8">
         <div className="mx-auto flex max-w-190 flex-col gap-4">
           <section className="flex items-center gap-4 rounded-xl border border-border-strong bg-bg-elevated px-5 py-4">
-            <AvatarWithPresence person={m.person} online={m.online} size="md" />
+            <AvatarWithPresence person={m.person} online={m.online} size="l" />
             <div className="min-w-0 flex-1">
               <h2 className="flex items-center gap-2 truncate text-display font-semibold tracking-tight text-text-primary">
                 {m.person.displayName}

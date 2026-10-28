@@ -97,7 +97,7 @@ export function IdentityViewDialog({
   return (
     <ModalShell open onClose={onClose} label={identity.name} size="panel">
       <div className={styles.head}>
-        <IdentityFace size={44} photo={photo} runtimeLogo={logo} ring="neutral" />
+        <IdentityFace size="l" photo={photo} runtimeLogo={logo} ring="neutral" />
         <div className={styles.headText}>
           <h2 className="min-w-0 truncate text-display font-semibold text-text-primary">
             {identity.name}

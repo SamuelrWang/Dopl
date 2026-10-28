@@ -1,5 +1,6 @@
 "use client";
 
+import type { AvatarScale } from "@/shared/ui/avatar-size";
 import type { AgentColorKey } from "@dopl/contracts";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { IdentityFace, type IdentityFacts } from "@/shared/ui/identity-face";
@@ -35,7 +36,7 @@ export function useAgentIdentity(agent: AgentIdentity): IdentityFacts {
   return agentIdentity(agent, useRuntimeLogo());
 }
 
-export function AgentFace({ size, ...agent }: AgentIdentity & { size: number }) {
+export function AgentFace({ size, ...agent }: AgentIdentity & { size: AvatarScale }) {
   return <IdentityFace size={size} {...useAgentIdentity(agent)} />;
 }
 

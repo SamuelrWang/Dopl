@@ -74,19 +74,19 @@ export function FacesSection() {
   return (
     <SystemSection id="faces" title="Faces, status, meters" rule="IdentityFace: 2px ring, 2px white, photo; badge is half the face.">
       <SpecimenRow label="IdentityFace">
-        {[16, 22, 30, 44].map((size) => (
-          <Specimen key={size} name={`size={${size}} ring="agent-03"`}>
-            <IdentityFace size={size} photo={PHOTO} ring="agent-03" online={size >= 30} />
+        {(["xs", "s", "m", "l"] as const).map((size) => (
+          <Specimen key={size} name={`size="${size}" ring="agent-03"`}>
+            <IdentityFace size={size} photo={PHOTO} ring="agent-03" online={size === "m" || size === "l"} />
           </Specimen>
         ))}
         <Specimen name={`ring="neutral"`}>
-          <IdentityFace size={30} photo={PHOTO} ring="neutral" />
+          <IdentityFace size="m" photo={PHOTO} ring="neutral" />
         </Specimen>
         <Specimen name="no ring (a person)">
-          <IdentityFace size={30} photo={PHOTO} />
+          <IdentityFace size="m" photo={PHOTO} />
         </Specimen>
         <Specimen name="initials">
-          <IdentityFace size={30} name="Grace Kim" ring="agent-10" />
+          <IdentityFace size="m" name="Grace Kim" ring="agent-10" />
         </Specimen>
       </SpecimenRow>
       <SpecimenRow label="StatusPill">

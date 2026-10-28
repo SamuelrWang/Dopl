@@ -84,7 +84,7 @@ export function TasksQuickView({
         )}
       >
         {faces.length > 0 ? (
-          <IdentityStack faces={faces} size={18} />
+          <IdentityStack faces={faces} size="s" />
         ) : (
           <ListChecks size={13} aria-hidden="true" />
         )}

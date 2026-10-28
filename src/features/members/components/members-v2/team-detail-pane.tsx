@@ -105,7 +105,7 @@ export function TeamDetailPane({
                   key={m.userId}
                   className="flex items-center gap-2.5 border-b border-border-subtle px-1 py-2 last:border-b-0"
                 >
-                  <Avatar person={m} size="sm" />
+                  <Avatar person={m} size="m" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-body text-text-primary">
                       {displayNameOf(m)}

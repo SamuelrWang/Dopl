@@ -17,7 +17,7 @@ import { Avatar, type AvatarPerson, type AvatarSize } from "./avatar";
 export function AvatarWithPresence({
   person,
   online,
-  size = "xs",
+  size = "s",
   title,
   className,
 }: {

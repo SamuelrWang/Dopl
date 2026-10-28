@@ -29,7 +29,7 @@ export function MemberHeader({
       <div className="flex items-start gap-3.5">
         <Avatar
           person={m}
-          size="md"
+          size="l"
           className="border-text-on-invert/20 bg-text-on-invert/10 text-text-on-invert"
         />
         <div className="min-w-0 flex-1 pt-0.5">

@@ -39,7 +39,7 @@ export function AgentPanelHeader({
   const profileLabel = agentProfileLabel(agent);
   return (
     <header className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border-default pr-2.5 pl-3.5">
-      <IdentityFace size={30} {...face} />
+      <IdentityFace size="m" {...face} />
       <span className="ml-0.5 flex min-w-0 flex-1 flex-col">
         <span className="truncate text-body font-semibold text-text-primary">
           {agentDisplayName(agent)}

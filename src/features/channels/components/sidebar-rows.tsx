@@ -27,7 +27,7 @@ import type { ChannelThread } from "../types";
  *  and `max={3}` are /home's own numbers (`home-channel-row.tsx`) — the same
  *  sample on both surfaces, so a row that says "three people and +2" says it
  *  once. ⚠ `2xs` also keeps this row at its 36px: `xs` grows it. */
-const FACE_SIZE = "2xs" as const;
+const FACE_SIZE = "s" as const;
 const FACE_MAX = 3;
 
 const DEPTH_PAD = ["pl-2", "pl-5"] as const;
@@ -184,7 +184,7 @@ export function ChannelRow({
       {person ? (
         <Avatar
           person={person}
-          size="xs"
+          size="s"
           className="h-6.5 w-6.5 text-caption"
         />
       ) : (

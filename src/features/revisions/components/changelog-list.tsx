@@ -65,7 +65,7 @@ const OP_LABEL: Record<Revision["op"], string> = {
   restore: "Restored",
 };
 
-const FACE = 22;
+const FACE = "s" as const;
 
 /** ⚠ The day KEY is UTC (`../lib/group.ts`); this LABELS it and never
  *  re-derives it from a row's stamp, or the heading and its rows can disagree. */

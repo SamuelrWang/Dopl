@@ -84,7 +84,7 @@ function TaskRow({
           {task.title}
         </button>
         <span className="flex min-w-0 flex-wrap items-center gap-x-1.25 gap-y-0.5 text-label text-text-muted">
-          <IdentityFace size={14} {...face} />
+          <IdentityFace size="xs" {...face} />
           <span>
             {face.name} {done ? "resolved" : "opened"}{" "}
             {formatRelativeTime(done ? task.resolvedAt : task.createdAt)}

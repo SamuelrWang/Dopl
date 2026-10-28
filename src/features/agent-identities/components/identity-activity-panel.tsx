@@ -162,7 +162,7 @@ function RunCard({ run, agents, photo, onOpen }: RunProps) {
       className="white-card select-card flex w-full min-w-0 cursor-pointer flex-col gap-1.5 px-3 py-2.5 text-left"
     >
       <span className="flex w-full min-w-0 items-center gap-2">
-        {agents.face(session, photo, 34)}
+        {agents.face(session, photo, "m")}
         <span className="min-w-0 flex-1 truncate text-small font-semibold text-text-primary" title={name}>
           {name}
         </span>
@@ -195,7 +195,7 @@ function RecentRow({ run, agents, photo, onOpen }: RunProps) {
       onClick={() => onOpen(identity)}
       className="flex w-full min-w-0 cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-surface-raised-1"
     >
-      {agents.face(session, photo, 30)}
+      {agents.face(session, photo, "m")}
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="line-clamp-2 text-small font-medium text-text-primary" title={what}>
           {what}
@@ -231,7 +231,7 @@ function LogRow({
       onClick={() => onOpen(identity)}
       className="flex w-full min-w-0 cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-surface-raised-1"
     >
-      <IdentityFace size={30} photo={photo} runtimeLogo={logo} ring="neutral" />
+      <IdentityFace size="m" photo={photo} runtimeLogo={logo} ring="neutral" />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="line-clamp-2 text-small font-medium text-text-primary" title={action.action}>
           {action.action}

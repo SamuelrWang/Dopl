@@ -89,7 +89,7 @@ export function TaskSubtasks({
                 )}
                 {owner && (
                   <span title={owner.name}>
-                    <IdentityFace size={20} {...owner} label={`Owner ${owner.name}`} />
+                    <IdentityFace size="m" {...owner} label={`Owner ${owner.name}`} />
                   </span>
                 )}
               </span>

@@ -60,7 +60,7 @@ export function MemberRow({
       <AvatarWithPresence
         person={memberPerson(member)}
         online={online}
-        size="px36"
+        size="m"
         title={online ? "Agent listening" : "Agent offline"}
       />
       <span className="flex min-w-0 flex-1 flex-col">

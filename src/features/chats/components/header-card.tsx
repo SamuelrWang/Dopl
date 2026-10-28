@@ -53,7 +53,7 @@ export function HeaderCard({
         {chat.visibility === "public" && (
           <div className="mt-3 flex items-center gap-2">
             <Avatar
-              size="xs"
+              size="s"
               person={{
                 userId: chat.owner.userId,
                 email: null,

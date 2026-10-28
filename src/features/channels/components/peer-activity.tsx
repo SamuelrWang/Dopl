@@ -116,7 +116,7 @@ export function PeerActivityRow({
       role="status"
       className="flex shrink-0 items-center gap-2 border-t border-border-subtle px-8 py-1.5"
     >
-      {owner && <Avatar person={memberPerson(owner)} size="px30" />}
+      {owner && <Avatar person={memberPerson(owner)} size="m" />}
       <span
         aria-hidden
         className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-success motion-reduce:animate-none"

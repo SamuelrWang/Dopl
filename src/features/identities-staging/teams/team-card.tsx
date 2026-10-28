@@ -35,7 +35,7 @@ export function TeamCard({
         className="flex flex-1 cursor-pointer flex-col items-start gap-2.5 text-left"
       >
         <span className="flex w-full min-w-0 items-center gap-2.5">
-          <TeamStack team={team} size={30} />
+          <TeamStack team={team} size="m" />
           <span className="flex min-w-0 flex-1 flex-col">
             <span className={cn("min-w-0 truncate", IDENTITY_NAME_TEXT)}>{team.name}</span>
             {marker && <span className="min-w-0 truncate text-label text-text-muted">{marker}</span>}

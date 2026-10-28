@@ -1,5 +1,6 @@
 "use client";
 
+import type { AvatarScale } from "@/shared/ui/avatar-size";
 import { IdentityFace } from "@/shared/ui/identity-face";
 import { IdentityStack, type IdentityStackFace } from "@/shared/ui/avatar-stack";
 import { useRuntimeLogo } from "@/shared/ui/runtime-logo";
@@ -21,7 +22,7 @@ function useSlotFace() {
 }
 
 /** One face per slot, so a team reads as the roles it is made of. */
-export function TeamStack({ team, size }: { team: StagingAgentTeam; size: number }) {
+export function TeamStack({ team, size }: { team: StagingAgentTeam; size: AvatarScale }) {
   const faceOf = useSlotFace();
   return (
     <IdentityStack
@@ -32,7 +33,7 @@ export function TeamStack({ team, size }: { team: StagingAgentTeam; size: number
   );
 }
 
-export function SlotFace({ identityId, size }: { identityId: string; size: number }) {
+export function SlotFace({ identityId, size }: { identityId: string; size: AvatarScale }) {
   const faceOf = useSlotFace();
   return <IdentityFace size={size} {...faceOf(identityId)} />;
 }

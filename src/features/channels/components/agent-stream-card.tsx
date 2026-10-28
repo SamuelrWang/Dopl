@@ -68,7 +68,7 @@ export function StreamCard({
       style={{ borderColor: edge ?? NEUTRAL_EDGE }}
     >
       <div className="flex min-w-0 items-center gap-1.75 px-3 pt-2.25">
-        {face && <IdentityFace size={18} {...face} />}
+        {face && <IdentityFace size="xs" {...face} />}
         <span data-stream-card-label className="min-w-0 truncate text-label font-medium text-text-secondary">
           {label}
         </span>

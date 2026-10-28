@@ -110,7 +110,7 @@ export function InfoTabCard({
           <>
             <Avatar
               person={memberPerson(creator)}
-              size="xs"
+              size="s"
               className="h-5 w-5 text-micro"
             />
             <span className="text-body text-text-primary">

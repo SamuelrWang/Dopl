@@ -231,7 +231,7 @@ function ChannelRow({
             displayName: c.name,
             avatarUrl: null,
           }}
-          size="xs"
+          size="s"
         />
       ) : (
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-bg-inset text-text-secondary">
@@ -286,7 +286,7 @@ function ChannelDetail({
                 displayName: channel.name,
                 avatarUrl: null,
               }}
-              size="xs"
+              size="s"
             />
             <span className="shrink-0 truncate text-lead font-semibold text-text-primary">
               {channel.name}
@@ -397,7 +397,7 @@ function MessageBubble({ message: m }: { message: DemoMessage }) {
               displayName: m.author,
               avatarUrl: null,
             }}
-            size="xs"
+            size="s"
           />
         )}
         <span className="text-micro font-medium uppercase tracking-wide text-text-muted">

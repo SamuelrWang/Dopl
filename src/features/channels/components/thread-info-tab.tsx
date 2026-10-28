@@ -231,7 +231,7 @@ function AgentStateRow({ agent }: { agent: ThreadCardAgent }) {
   return (
     <div className="flex h-9.5 items-center gap-2.25 px-2">
       <AgentFace
-        size={26}
+        size="m"
         photo={agent.photo}
         name={agent.name}
         color={agent.color}

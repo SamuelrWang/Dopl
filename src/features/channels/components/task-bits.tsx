@@ -112,7 +112,7 @@ export function TaskAssignees({
     online: active?.has(actorKey(a)) ?? false,
   }));
   const names = faces.map((f) => (f.online ? `${f.name} (active)` : f.name)).join(", ");
-  return <IdentityStack faces={faces} size={22} max={3} label={`Assigned to ${names}`} />;
+  return <IdentityStack faces={faces} size="m" max={3} label={`Assigned to ${names}`} />;
 }
 
 /** The thread or message a task came from; pressing it opens that. */

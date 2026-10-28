@@ -158,7 +158,7 @@ export function CreateTeamDialog({
                         onClick={() => toggleMember(m.userId)}
                         className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-surface-raised-2 transition-colors cursor-pointer"
                       >
-                        <Avatar person={m} size="xs" />
+                        <Avatar person={m} size="s" />
                         <span className="flex-1 text-small text-text-primary truncate">
                           {m.displayName || m.email || m.userId}
                         </span>

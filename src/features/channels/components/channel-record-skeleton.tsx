@@ -135,8 +135,8 @@ function MessageRowGhost({
           "py-1 pl-1"
         )}
       >
-        {/* `avatar.tsx › SIZE.px36`. */}
-        <Skeleton className="w-9 h-9 shrink-0 rounded-full" />
+        {/* `avatar.tsx › SIZE.m` (the pill asks for `m`). */}
+        <Skeleton className="w-7.5 h-7.5 shrink-0 rounded-full" />
         <span className="flex min-w-0 flex-col gap-1">
           <SkeletonLine w={name} h={10} />
           <SkeletonLine w={40} h={7} />
@@ -228,12 +228,12 @@ function InfoColumnGhost() {
           </div>
         </div>
 
-        {/* `member-roster.tsx`: `MemberRow`s (`h-11.5`, avatar `px36`, name over email). */}
+        {/* `member-roster.tsx`: `MemberRow`s (`h-11.5`, avatar `m`, name over email). */}
         <HeadingGhost w={SECTION_HEADINGS.members} />
         <div className="flex flex-col gap-px px-2">
           {Array.from({ length: MEMBER_ROWS }).map((_, i) => (
             <div key={i} className="flex h-11.5 items-center gap-2.5 rounded-md px-2">
-              <Skeleton className="w-9 h-9 shrink-0 rounded-full" />
+              <Skeleton className="w-7.5 h-7.5 shrink-0 rounded-full" />
               <span className="flex min-w-0 flex-1 flex-col gap-1.5">
                 <SkeletonLine w={i === 0 ? 96 : 120} h={10} />
                 <SkeletonLine w={i === 0 ? 140 : 112} h={8} />

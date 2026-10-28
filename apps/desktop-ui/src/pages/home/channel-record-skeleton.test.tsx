@@ -253,9 +253,9 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
     // IS NOT — it keeps the geometry on `GHOST_FLAT_FACE`'s invisible border box.
     expect(v2("attribution-pill.tsx")).toContain('!framed && "bento"');
     expect(GHOST).toContain("GHOST_FLAT_FACE,");
-    // The pill's avatar slot is the size the pill asks for — `avatar.tsx › SIZE.px36`.
-    expect(file("../../../../../src/shared/ui/avatar.tsx")).toContain('px36: "w-9 h-9');
-    expect(GHOST).toContain("w-9 h-9");
+    // The pill's avatar slot is the size the pill asks for — `avatar.tsx › SIZE.m`.
+    expect(file("../../../../../src/shared/ui/avatar.tsx")).toContain('m: "w-7.5 h-7.5');
+    expect(GHOST).toContain("w-7.5 h-7.5");
 
     const { container } = render(<ChannelRecordSkeleton />);
     // Three to four groups, each a pill over its body lines.

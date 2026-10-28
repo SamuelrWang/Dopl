@@ -107,7 +107,7 @@ export function StagingAgentTeamsSlot({ channelName }: { channelName: string }) 
                   onClick={() => launch(team)}
                   className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-menu-item-hover-bg"
                 >
-                  <TeamStack team={team} size={22} />
+                  <TeamStack team={team} size="s" />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-small font-medium text-text-primary">{team.name}</span>
                     <span className="truncate text-caption text-text-muted">{slotSummary(team)}</span>

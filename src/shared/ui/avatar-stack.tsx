@@ -4,6 +4,7 @@ import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import { cn } from "@/shared/lib/utils";
 import { initialFor } from "./avatar";
 import { IdentityFace, type IdentityFaceProps } from "./identity-face";
+import type { AvatarScale } from "./avatar-size";
 
 export interface AvatarStackUser {
   userId: string;
@@ -16,16 +17,15 @@ export interface AvatarStackUser {
 }
 
 /**
- * `xs`/`sm`/`md` are `avatar.tsx › SIZE`'s own keys and pixels, so a stack and a lone `Avatar`
- * on one row stand the same height; `2xs` (20px) is a compact row's. The overlap scales with the
- * face, or a `md` stack barely overlaps at all.
+ * The avatar scale (`avatar-size.ts`), so a stack and a lone `Avatar` on one row stand the same
+ * height. The overlap scales with the face, or an `l` stack barely overlaps at all.
  */
 const SIZE = {
-  "2xs": { box: "h-5 w-5", text: "text-micro", dot: "h-2 w-2", bite: "-space-x-1" },
-  xs: { box: "h-6 w-6", text: "text-micro", dot: "h-2 w-2", bite: "-space-x-1.5" },
-  sm: { box: "h-8 w-8", text: "text-caption", dot: "h-2.5 w-2.5", bite: "-space-x-2" },
-  md: { box: "h-10 w-10", text: "text-body", dot: "h-2.5 w-2.5", bite: "-space-x-2.5" },
-} as const;
+  xs: { box: "h-4 w-4", text: "text-micro", dot: "h-1.5 w-1.5", bite: "-space-x-1" },
+  s: { box: "h-5 w-5", text: "text-micro", dot: "h-2 w-2", bite: "-space-x-1" },
+  m: { box: "h-7.5 w-7.5", text: "text-caption", dot: "h-2.5 w-2.5", bite: "-space-x-2" },
+  l: { box: "h-10 w-10", text: "text-body", dot: "h-2.5 w-2.5", bite: "-space-x-2.5" },
+} as const satisfies Record<AvatarScale, unknown>;
 
 export type AvatarStackSize = keyof typeof SIZE;
 
@@ -95,7 +95,7 @@ function Avatar({
 export function AvatarStack({
   users,
   max = 4,
-  size = "xs",
+  size = "s",
 }: {
   /** ⚠ `readonly` so a caller holding a frozen or readonly roster hands it over
    *  directly — this component only reads it, and a defensive `[...users]` at
@@ -129,7 +129,7 @@ export function AvatarStack({
   );
 }
 
-export type IdentityStackFace = Omit<IdentityFaceProps, "size" | "label" | "className"> & {
+export type IdentityStackFace = Omit<IdentityFaceProps, "size" | "px" | "label" | "className"> & {
   key: string;
 };
 
@@ -145,7 +145,7 @@ export function IdentityStack({
   label,
 }: {
   faces: readonly IdentityStackFace[];
-  size: number;
+  size: AvatarScale;
   max?: number;
   label?: string;
 }) {

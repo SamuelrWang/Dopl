@@ -83,7 +83,7 @@ export function HomeSettingsControl({
         onClick={() => setOpen(true)}
         className={PROFILE_PILL}
       >
-        <IdentityFace size={26} photo={viewer?.avatarUrl} name={name} />
+        <IdentityFace size="m" photo={viewer?.avatarUrl} name={name} />
         {firstNameOf(name, "Profile")}
       </button>
       <SettingsModal

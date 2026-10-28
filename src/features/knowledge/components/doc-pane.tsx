@@ -382,7 +382,7 @@ export function DocPane({
             placeholder="Untitled"
           />
           <WriteRuleWarnings labels={ruleLabels} />
-          <AvatarStack users={otherEditors} size="2xs" />
+          <AvatarStack users={otherEditors} size="s" />
           <SaveStatusIndicator state={status} />
         </div>
         <InPlaceDescription

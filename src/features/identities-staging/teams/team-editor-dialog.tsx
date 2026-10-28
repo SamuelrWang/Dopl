@@ -134,7 +134,7 @@ export function TeamEditorDialog({
         <ul className="flex flex-col gap-2">
           {draft.slots.map((slot) => (
             <li key={slot.id} className="flex min-w-0 items-center gap-2.5">
-              <SlotFace identityId={slot.identityId} size={26} />
+              <SlotFace identityId={slot.identityId} size="m" />
               <SelectMenu
                 value={slot.identityId}
                 options={IDENTITY_OPTIONS}
@@ -195,7 +195,7 @@ export function TeamEditorDialog({
               return (
                 <li key={step.slotId} className="flex flex-col gap-1.5">
                   <span className="flex items-center gap-1.5 text-caption text-text-muted">
-                    {slot && <SlotFace identityId={slot.identityId} size={18} />}
+                    {slot && <SlotFace identityId={slot.identityId} size="s" />}
                     {slot?.label}
                   </span>
                   <InlineUnderlineField

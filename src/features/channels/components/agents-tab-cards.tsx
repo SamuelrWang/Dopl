@@ -61,7 +61,7 @@ function CardHead({
   return (
     <div className="flex items-center gap-2.25">
       <AgentFace
-        size={30}
+        size="m"
         photo={owner?.avatarUrl}
         name={owner?.displayName}
         color={color}

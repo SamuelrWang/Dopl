@@ -7,6 +7,7 @@
 
 import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import { cn } from "@/shared/lib/utils";
+import type { AvatarScale } from "./avatar-size";
 
 export interface AvatarPerson {
   userId: string;
@@ -15,24 +16,24 @@ export interface AvatarPerson {
   avatarUrl: string | null;
 }
 
+/** The avatar scale (`avatar-size.ts › AVATAR_PX`): xs 16, s 20, m 30, l 40. */
 const SIZE = {
-  xs: "w-6 h-6 text-micro",
-  px30: "w-7.5 h-7.5 text-caption",
-  sm: "w-8 h-8 text-caption",
-  px36: "w-9 h-9 text-small",
-  md: "w-10 h-10 text-body",
-} as const;
+  xs: "w-4 h-4 text-micro",
+  s: "w-5 h-5 text-micro",
+  m: "w-7.5 h-7.5 text-caption",
+  l: "w-10 h-10 text-body",
+} as const satisfies Record<AvatarScale, string>;
 
 export function initialFor(name: string | null, email: string | null): string {
   const source = (name || email || "?").trim();
   return source.charAt(0).toUpperCase() || "?";
 }
 
-export type AvatarSize = keyof typeof SIZE;
+export type AvatarSize = AvatarScale;
 
 export function Avatar({
   person,
-  size = "sm",
+  size = "m",
   className,
 }: {
   person: AvatarPerson;

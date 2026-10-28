@@ -89,7 +89,7 @@ function ChannelName({
       <span className={row.name ? "truncate" : "truncate text-text-muted"}>{label}</span>
       {faces.length > 0 && (
         <IdentityStack
-          size={20}
+          size="s"
           max={3}
           faces={faces.map((f) => ({ key: f.userId, photo: f.avatarUrl, name: f.displayName }))}
         />

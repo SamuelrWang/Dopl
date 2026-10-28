@@ -50,7 +50,7 @@ export function TeamDetailDialog({
   return (
     <ModalShell open onClose={onClose} label={team.name} size="panel">
       <div className={styles.head}>
-        <TeamStack team={team} size={40} />
+        <TeamStack team={team} size="l" />
         <div className={styles.headText}>
           <h2 className="min-w-0 truncate text-display font-semibold text-text-primary">{team.name}</h2>
           <p className={cn(styles.headMeta, "text-caption text-text-muted")}>
@@ -73,7 +73,7 @@ export function TeamDetailDialog({
           </OpenScaleButton>
         )}
         <button type="button" onClick={onClose} className={styles.close} aria-label="Close agent team">
-          <X size={18} />
+          <X size="s" />
         </button>
       </div>
 
@@ -101,7 +101,7 @@ export function TeamDetailDialog({
                 {team.slots.map((slot) => (
                   <EventRow
                     key={slot.id}
-                    lead={<SlotFace identityId={slot.identityId} size={28} />}
+                    lead={<SlotFace identityId={slot.identityId} size="m" />}
                     title={slot.label}
                     middle={identityOf(slot.identityId)?.name ?? "Deleted identity"}
                     trail={
@@ -167,7 +167,7 @@ function TemplateGroup({
                   </span>
                   {slot && (
                     <span className="flex flex-none items-center gap-1 text-caption text-text-muted">
-                      <SlotFace identityId={slot.identityId} size={18} />
+                      <SlotFace identityId={slot.identityId} size="s" />
                       {slot.label}
                     </span>
                   )}

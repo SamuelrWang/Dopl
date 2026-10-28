@@ -221,7 +221,7 @@ export function MentionPopover({
             {suggestion.kind === "member" ? (
               <Avatar
                 person={memberPerson(suggestion.member)}
-                size="xs"
+                size="s"
                 className="h-5 w-5 text-micro"
               />
             ) : (

@@ -67,7 +67,7 @@ export function TeamRunGroup({
           return (
             <li key={seat.agentName} className="flex min-w-0 items-center gap-2">
               <IdentityFace
-                size={24}
+                size="s"
                 photo={ownerPhoto}
                 ring={seat.color}
                 runtimeLogo={logoFor(identity?.runtime)}

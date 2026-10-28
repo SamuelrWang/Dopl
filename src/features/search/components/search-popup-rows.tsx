@@ -45,7 +45,7 @@ const ONE_LINE_KINDS: ReadonlySet<SearchGroupKind> = new Set<SearchGroupKind>([
   "threads",
 ]);
 
-const LEAD_PX = 20;
+const LEAD_PX = "s" as const;
 
 /** The row face; `[&_mark]` paints the server's snippet marks and the title's alike. */
 const ROW =

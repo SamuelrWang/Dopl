@@ -70,7 +70,7 @@ function NeedRow({
   );
 }
 
-const FACE_PX = 24;
+const FACE_PX = "s" as const;
 
 /** The asker: an agent as its identity (owner's photo in its colour ring, runtime badge), a person as their photo. */
 function AuthorFace({ author, name }: { author: HomeNeedAuthor; name: string }) {

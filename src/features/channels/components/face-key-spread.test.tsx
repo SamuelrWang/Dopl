@@ -139,7 +139,7 @@ describe("no face carries a key into a spread", () => {
   });
 
   it("the agent face, the agent view's header and the stream card", () => {
-    render(<AgentFace size={22} photo={FACE.photo} name="Debt Triage" color="agent-02" runtime={null} />);
+    render(<AgentFace size="s" photo={FACE.photo} name="Debt Triage" color="agent-02" runtime={null} />);
     render(<AgentPanelHeader agent={sessionSummary({ agentId: AGENT })} face={FACE} onClose={() => {}} />);
     render(
       <StreamCard edge={null} face={FACE} label="Posted" at={Date.now()}>

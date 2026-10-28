@@ -334,7 +334,7 @@ export function CreateChannelDialog({
                           displayName: m.displayName,
                           avatarUrl: m.avatarUrl,
                         }}
-                        size="xs"
+                        size="s"
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-body font-medium text-text-primary">

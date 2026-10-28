@@ -90,7 +90,7 @@ export function HomeChannelRow({
         )}
         {row.faces.length > 0 && (
           <IdentityStack
-            size={20}
+            size="s"
             max={3}
             faces={row.faces.map((f) => ({ key: f.userId, photo: f.avatarUrl, name: f.displayName }))}
             label={row.faces.map((f) => f.displayName).join(", ")}

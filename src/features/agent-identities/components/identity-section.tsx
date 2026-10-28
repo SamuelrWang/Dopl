@@ -229,7 +229,7 @@ function IdentityCard({
     <>
       <span className="flex w-full items-center gap-2.5">
         <IdentityFace
-          size={38}
+          size="l"
           photo={host.photoFor?.(identity)}
           runtimeLogo={logo}
           ring="neutral"
@@ -240,7 +240,7 @@ function IdentityCard({
         </span>
         {logo && runtimeName && <span className="sr-only">Runs on {runtimeName}</span>}
         {stats && stats.wornBy.length > 0 && (
-          <AvatarStack users={stats.wornBy} max={3} size="2xs" />
+          <AvatarStack users={stats.wornBy} max={3} size="s" />
         )}
       </span>
 

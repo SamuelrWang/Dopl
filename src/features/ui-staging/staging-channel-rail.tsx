@@ -77,7 +77,7 @@ function RowBody({ row, selected }: { row: HomeRowMock; selected: boolean }) {
       <span className="flex h-5 w-full items-center gap-1.5">
         <span className={cn("min-w-0 flex-1 truncate text-caption", quiet)}>{subline(row)}</span>
         <IdentityStack
-          size={18}
+          size="s"
           max={3}
           faces={row.faces.map((f) => ({ key: f.userId, photo: f.avatarUrl, name: f.displayName }))}
           label={row.faces.map((f) => f.displayName).join(", ")}

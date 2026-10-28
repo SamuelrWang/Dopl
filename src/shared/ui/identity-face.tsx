@@ -6,6 +6,7 @@ import { agentColorVar } from "@/shared/lib/agent-colors";
 import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import { cn } from "@/shared/lib/utils";
 import { initialFor } from "./avatar";
+import { AVATAR_PX, type AvatarScale } from "./avatar-size";
 
 /**
  * 🔒 THE IDENTITY AVATAR RATIO (Samuel, 2026-10-22; DESIGN-LANGUAGE §3): colour ring → white frame
@@ -19,8 +20,13 @@ export const IDENTITY_RING_PX = 2;
 type IdentityRing = AgentColorKey | "neutral";
 
 export interface IdentityFaceProps {
-  /** Diameter in px; the badge is half of it. */
-  size: number;
+  /** The scale step (`avatar-size.ts`); the badge is half of it. */
+  size: AvatarScale;
+  /**
+   * ⚠ RAW DIAMETER, FOR DEMO AND ONBOARDING ART ONLY (scaled showcases, the size sweep). Product
+   * surfaces use `size`; a px here is how the 13-size drift came back.
+   */
+  px?: number;
   photo?: string | null;
   /** Initials when there is no photo; a ringed face with neither shows the profile glyph. */
   name?: string | null;
@@ -36,6 +42,7 @@ export interface IdentityFaceProps {
 
 /** Who a face shows, without how big it is drawn: what a host hands a component that sizes it. */
 export type IdentityFacts = Pick<IdentityFaceProps, "photo" | "name" | "ring" | "runtimeLogo">;
+export type { AvatarScale };
 
 function initialsTextClass(size: number): string {
   if (size >= 32) return "text-body";
@@ -45,7 +52,8 @@ function initialsTextClass(size: number): string {
 
 /** Spans only, so a face is valid inside a `<p>` (a recipients line, a meta line). */
 export function IdentityFace({
-  size,
+  size: scale,
+  px,
   photo,
   name,
   ring,
@@ -54,6 +62,7 @@ export function IdentityFace({
   label,
   className,
 }: IdentityFaceProps) {
+  const size = px ?? AVATAR_PX[scale];
   const src = useBridgedImageSrc(photo);
   const ringColor =
     ring === undefined ? null : ring === "neutral" ? "var(--raised-light-line)" : agentColorVar(ring);

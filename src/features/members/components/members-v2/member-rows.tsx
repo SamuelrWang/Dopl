@@ -98,7 +98,7 @@ export function MemberSectionCard({
               aria-current={open ? "true" : undefined}
               className="flex min-w-0 cursor-pointer items-center gap-2.5 text-left"
             >
-              <Avatar person={m} size="sm" />
+              <Avatar person={m} size="m" />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
                   <span className="min-w-0 truncate text-body font-medium text-text-primary">
@@ -179,7 +179,7 @@ export function PendingSectionCard({
           <span className="flex min-w-0 items-center gap-2.5">
             <Avatar
               person={{ userId: inv.id, email: inv.email, displayName: null, avatarUrl: null }}
-              size="sm"
+              size="m"
             />
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-1.5">
@@ -240,7 +240,7 @@ function JoinRequestRow({
   return (
     <div className={cn(GRID_PLAIN, ROW_BORDER, ZEBRA_ROW, "py-2")}>
       <span className="flex min-w-0 items-center gap-2.5">
-        <Avatar person={r} size="sm" />
+        <Avatar person={r} size="m" />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
             <span className="min-w-0 truncate text-body font-medium text-text-primary">

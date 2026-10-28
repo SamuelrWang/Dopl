@@ -94,7 +94,7 @@ export function AccountSectionCore({
           <div className="flex items-center gap-3">
             {/* The app's own avatar (bridged image on desktop, initials fallback). */}
             <Avatar
-              size="md"
+              size="l"
               person={{
                 userId: "",
                 email: profile?.email ?? null,

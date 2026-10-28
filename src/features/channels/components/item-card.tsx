@@ -30,7 +30,7 @@ export function ItemCard({
         <span className="truncate text-body font-medium text-text-primary">{title}</span>
         {detail}
         <span className="flex min-h-5 min-w-0 items-center gap-1.5 text-label text-text-muted">
-          <IdentityStack faces={faces} size={20} max={META_FACES} label={facesLabel} />
+          <IdentityStack faces={faces} size="s" max={META_FACES} label={facesLabel} />
           {meta}
         </span>
       </span>
