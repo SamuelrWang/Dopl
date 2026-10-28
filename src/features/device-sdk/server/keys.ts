@@ -217,6 +217,9 @@ export async function rotateApiKey(input: {
   } catch (err) {
     // Release OUR claim (only if it is still ours: same expires_at value), so the old key stays
     // live and a retry can rotate. Best effort: a failed release must not hide the mint error.
+    // Logged once (key id only, never a secret) so a stuck KEY_ROTATING is diagnosable.
+    const logRelease = (detail: string) =>
+      console.error(`[rotateApiKey] could not release rotation claim on key ${prev.id}: ${detail}`);
     await db
       .from(TABLE)
       .update({ expires_at: null })
@@ -224,8 +227,10 @@ export async function rotateApiKey(input: {
       .eq("project_id", prev.project_id)
       .eq("expires_at", expiresAt)
       .then(
-        () => undefined,
-        () => undefined
+        ({ error: relErr }) => {
+          if (relErr) logRelease(relErr.message);
+        },
+        (relErr: unknown) => logRelease(relErr instanceof Error ? relErr.message : String(relErr))
       );
     throw err;
   }
