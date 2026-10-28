@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { OverviewStagingPage } from "./overview-staging-page";
 
 vi.mock("next/link", () => ({
@@ -19,11 +19,32 @@ const tick = async (ms: number) => {
 };
 
 describe("/overview staging", () => {
+  afterEach(cleanup);
+
+  it("renders the Proposed face by default and the switch flips to Current", async () => {
+    vi.useFakeTimers();
+    globalThis.ResizeObserver ??= class { observe() {} disconnect() {} unobserve() {} } as never;
+    render(<OverviewStagingPage />);
+    await tick(1000);
+    expect(screen.getByRole("region", { name: "Usage" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Needs you" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Summary" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Tokens" }));
+    expect(screen.getByRole("list", { name: /Daily tokens/ })).toBeTruthy();
+    fireEvent.click(within(screen.getByLabelText("Staging controls")).getByText("Current"));
+    await tick(1000);
+    expect(screen.getByRole("region", { name: "Summary" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Usage" })).toBeNull();
+    vi.useRealTimers();
+  });
+
   it("renders the Overview and opens Settings without a network call", async () => {
     vi.useFakeTimers();
     globalThis.ResizeObserver ??= class { observe() {} disconnect() {} unobserve() {} } as never;
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     render(<OverviewStagingPage />);
+    await tick(1000);
+    fireEvent.click(within(screen.getByLabelText("Staging controls")).getByText("Current"));
     await tick(1000);
     expect(screen.getByRole("region", { name: "Summary" })).toBeTruthy();
     fireEvent.click(within(screen.getByRole("region", { name: "Credits" })).getByText("Get more credits"));
