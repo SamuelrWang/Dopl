@@ -113,6 +113,14 @@ const EXEMPT: Record<string, string> = {
     "Device SDK — developer secret key via withDeveloperKey, scope `actions:write`.",
   "v1/test/reset/route.ts":
     "Device SDK — developer sk_test_ key via withDeveloperKey, scopes `connect` + `actions:write`; test env of the calling project only.",
+  "v1/webhook_endpoints/route.ts":
+    "Device SDK — developer secret key via withDeveloperKey (any secret key, publishable refused); create a webhook endpoint (C8).",
+  "v1/webhook_endpoints/[id]/route.ts":
+    "Device SDK — developer secret key via withDeveloperKey; update / delete a webhook endpoint of the key's project + env (C8).",
+  "v1/webhook_endpoints/[id]/rotate_secret/route.ts":
+    "Device SDK — developer secret key via withDeveloperKey; rotate a webhook signing secret (C8).",
+  "v1/webhook_deliveries/[id]/replay/route.ts":
+    "Device SDK — developer secret key via withDeveloperKey; replay a webhook delivery of the key's project + env (C8).",
   "connect/[token]/[step]/route.ts":
     "Device SDK hosted Connect page steps — authenticated by the connect token in the path (sha256-matched); the end user has no Dopl account (D1). Per-IP rate-limited.",
 };
