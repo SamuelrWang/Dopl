@@ -10,7 +10,7 @@ vi.mock("@/features/device-sdk/server/sdk-delivery-flag", () => ({ sdkDeliveryFo
 
 import { Dopl, DoplError } from "@dopl/sdk";
 import { GlassesValidationError } from "@/features/glasses/core/validation";
-import { askOutcomeOf, classify, createSdkLens, isPreSendFailure, SDK_LENS_HEADERS, sdkUserLens, SdkLensError, toSdkBlocks } from "./sdk-lens";
+import { askOutcomeOf, classify, createSdkLens, isPreSendFailure, neverLeft, preSendAwareFetch, SDK_LENS_HEADERS, sdkUserLens, SdkLensError, toSdkBlocks } from "./sdk-lens";
 import { sdkPlanOf } from "./sdk-seam";
 
 const KEY = "sk_test_EXAMPLE0000000000000000";
@@ -144,6 +144,31 @@ describe("sdkUserLens", () => {
     expect(await read(action("delivered", { lens_message_id: "x" }))).toBeNull();
     expect(await sdkUserLens(client({}).dopl, USER).askOutcome("dl1")).toBeNull();
     expect(askOutcomeOf({ status: "done", result: { index: "x" }, error: null, device_id: "g2" })).toEqual({ status: "refused", code: "unexpected_answer" });
+  });
+});
+
+describe("🔒 preSendAwareFetch under a retrying SDK (W2.2)", () => {
+  const refused = () => Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNREFUSED" } });
+  const reset = () => Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNRESET" } });
+  const twice = async (first: () => Promise<Response>, second: () => Promise<Response>) => {
+    const steps = [first, second];
+    const f = preSendAwareFetch(() => steps.shift()!());
+    const signal = new AbortController().signal;
+    // A retrying SDK fetches twice under ONE call's signal.
+    for (let i = 0; i < 2; i++) await f("u", { signal }).catch(() => undefined);
+    return neverLeft(signal);
+  };
+
+  it("only connect failures, every time: proven never left", async () => {
+    expect(await twice(() => Promise.reject(refused()), () => Promise.reject(refused()))).toBe(true);
+  });
+
+  it("a reset, then a connect refusal on the retry: NOT proven (the first may have landed)", async () => {
+    expect(await twice(() => Promise.reject(reset()), () => Promise.reject(refused()))).toBe(false);
+  });
+
+  it("a response, then a connect refusal on the retry: NOT proven", async () => {
+    expect(await twice(async () => new Response("{}", { status: 503 }), () => Promise.reject(refused()))).toBe(false);
   });
 });
 

@@ -114,16 +114,27 @@ export function isPreSendFailure(err: unknown, depth = 0): boolean {
 
 /**
  * The SDK maps every fetch throw to `network_error` and keeps only its message, so the lens's own fetch
- * records, per call (keyed by the call's own AbortSignal), whether the request never left.
+ * records, per call (keyed by the call's own AbortSignal), whether the request never left. 🔒 A call
+ * that EVER reached the network (a response, or a failure after connecting) stays "sent" for good: an
+ * SDK that retries under the same signal (the standalone `@dopl/sdk`, W2.2) cannot turn a reset into a
+ * proven non-delivery with a later connect refusal. W2.2: also pin `maxRetries: 0` in `createDoplApp`.
  */
-const preSendFailed = new WeakSet<AbortSignal>();
+const sendState = new WeakMap<AbortSignal, "pre_send" | "sent">();
+/** True only when every fetch under this call's signal failed before connecting. Exported for the suites. */
+export const neverLeft = (signal: AbortSignal) => sendState.get(signal) === "pre_send";
 
 export function preSendAwareFetch(inner: (input: string, init: RequestInit) => Promise<Response>) {
   return async (input: string, init: RequestInit): Promise<Response> => {
+    const signal = init.signal ?? null;
     try {
-      return await inner(input, init);
+      const res = await inner(input, init);
+      if (signal) sendState.set(signal, "sent");
+      return res;
     } catch (err) {
-      if (init.signal && !init.signal.aborted && isPreSendFailure(err)) preSendFailed.add(init.signal);
+      if (signal) {
+        const neverLeft = !signal.aborted && isPreSendFailure(err) && sendState.get(signal) !== "sent";
+        sendState.set(signal, neverLeft ? "pre_send" : "sent");
+      }
       throw err;
     }
   };
@@ -160,7 +171,7 @@ async function timed<T>(op: string, fn: (signal: AbortSignal) => Promise<T>, ext
     log({ op, ms: Date.now() - started, outcome: "ok", ...extra(r) });
     return r;
   } catch (err) {
-    const e = classify(err, { timedOut: timeout.aborted, preSend: preSendFailed.has(timeout) });
+    const e = classify(err, { timedOut: timeout.aborted, preSend: neverLeft(timeout) });
     log({ op, ms: Date.now() - started, outcome: e.code, fallback: e.fallback, ...(e.unconfirmed && { unconfirmed: true }) });
     throw e;
   }
