@@ -323,7 +323,7 @@ components:
 
   headers:
     PreferenceApplied:
-      description: "`respond-async` when the request asked for it and the ask was not held."
+      description: "`respond-async` when the request asked for it and an open ask returned without its hold (absent on non-asks and stored replays)."
       schema: { type: string }
 
     ListCursor:

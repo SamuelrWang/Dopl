@@ -212,12 +212,11 @@ export async function deliver(
     return { ok: false, code: info.code, message: info.message, decision, event: { ...ev(), latency_ms: { device_delivery: delivery } } };
   }
   await deps.store.updateAction(scope, action.id, { status: res.status, result: res.result });
-  if (opts.hold !== false && isAsk(primary.capability) && (res.status === "queued" || res.status === "delivered")) {
-    res = await holdAndSettle(deps, scope, action.id, res);
-  }
+  const open = isAsk(primary.capability) && (res.status === "queued" || res.status === "delivered");
+  if (open && opts.hold !== false) res = await holdAndSettle(deps, scope, action.id, res);
   const fanout = results.length > 1 ? { fanout: routed.chosen.map((r, i) => ({ device_id: r.candidate.device.id, status: results[i].status })) } : {};
   const done = await finish(res.status, { ...(res.result ?? {}), ...fanout, ...(fit.kind === "truncated" ? { truncated: true } : {}) }, res.error);
-  return { ...done, event: { ...done.event, latency_ms: { device_delivery: delivery } } };
+  return { ...done, event: { ...done.event, latency_ms: { device_delivery: delivery } }, ...(open && opts.hold === false && { respondedAsync: true as const }) };
 }
 
 /** A fan-out extra: its own limits, always truncated (never a second overflow hop). */

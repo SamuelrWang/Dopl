@@ -209,9 +209,10 @@ export async function deviceAction(
     return { ok: false, code: res.error.code, message: res.error.message, decision, event: { ...evDone, latency_ms: latency } };
   }
   await deps.store.updateAction(scope, id, { status: res.status, result: res.result });
-  if (opts.hold !== false && isAsk(capability) && (res.status === "queued" || res.status === "delivered")) res = await holdAndSettle(deps, scope, id, res);
+  const open = isAsk(capability) && (res.status === "queued" || res.status === "delivered");
+  if (open && opts.hold !== false) res = await holdAndSettle(deps, scope, id, res);
   const out = await accept(res.status, res.result);
-  return { ...out, event: { ...out.event, latency_ms: latency } };
+  return { ...out, event: { ...out.event, latency_ms: latency }, ...(open && opts.hold === false && { respondedAsync: true as const }) };
 }
 
 function refusal(code: ServiceResultCode, message: string, decision: RouteDecision, event: DevEventAnnotation): ServiceResult {

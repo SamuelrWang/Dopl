@@ -23,9 +23,8 @@ export const POST = withDeveloperKey(
     if (headerKeyMismatch(request, body.data.idempotency_key)) {
       return refuseBody(ctx, deviceId, "The Idempotency-Key header and body idempotency_key differ.", { capability: cap.data });
     }
-    const respondAsync = prefersRespondAsync(request);
-    const result = await deviceAction(deliveryDeps(), { projectId: ctx.projectId, env: ctx.env }, deviceId, cap.data, body.data, { hold: !respondAsync });
-    return respond(ctx, result, { respondAsync });
+    const result = await deviceAction(deliveryDeps(), { projectId: ctx.projectId, env: ctx.env }, deviceId, cap.data, body.data, { hold: !prefersRespondAsync(request) });
+    return respond(ctx, result);
   },
   { scopes: ["actions:write"] }
 );

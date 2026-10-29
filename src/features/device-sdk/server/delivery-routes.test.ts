@@ -336,6 +336,16 @@ describe("POST /v1/devices/{id}/actions/{capability} + GET /v1/actions/{id}", ()
       expect(store.actions.filter((a) => a.idempotency_key === "ra5")).toHaveLength(1);
     });
 
+    it("Preference-Applied only when an ask skipped its hold: not on a non-ask, not on a stored replay", async () => {
+      const msg = await deliver({ intent: "message", content: { text: "Hi" }, idempotency_key: "ra7" }, { prefer: "respond-async" });
+      expect(msg.status).toBe(202);
+      expect(msg.headers.get("preference-applied")).toBeNull();
+      unanswered();
+      const body = { args: { options: [{ label: "Yes" }, { label: "No" }] }, idempotency_key: "ra8" };
+      expect((await act(ids.glasses, "ask.choice", body, { prefer: "respond-async" })).headers.get("preference-applied")).toBe("respond-async");
+      expect((await act(ids.glasses, "ask.choice", body, { prefer: "respond-async" })).headers.get("preference-applied")).toBeNull();
+    });
+
     it("a refusal under respond-async is the same C10 error (no Preference-Applied)", async () => {
       const off = store.addDevice(scope, { kind: "glasses", end_user_id: store.endUsers[0].id, id: "sim_device_offline_2" });
       const res = await act(off.id, "ask.choice", { args: { options: [{ label: "Yes" }, { label: "No" }] }, idempotency_key: "ra6" }, { prefer: "respond-async" });

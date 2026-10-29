@@ -25,12 +25,12 @@ export function setDeliveryDepsForTests(next: DeliveryDeps | null): void {
   deps = next ?? productionDeps;
 }
 
-export function respond(ctx: DeveloperKeyContext, result: ServiceResult, opts: { respondAsync?: boolean } = {}): Response {
+export function respond(ctx: DeveloperKeyContext, result: ServiceResult): Response {
   ctx.event.setRouteDecision(result.decision);
   ctx.event.annotate(result.event);
   if (!result.ok) return devSdkError(result.code, result.message);
-  // RFC 7240 §3: say the preference was honoured (the route skipped the `ask.*` hold).
-  const headers = opts.respondAsync ? { "Preference-Applied": "respond-async" } : undefined;
+  // RFC 7240 §3: only when the preference changed something: an open ask returned without its hold.
+  const headers = result.respondedAsync ? { "Preference-Applied": "respond-async" } : undefined;
   return NextResponse.json(result.body, { status: result.status, headers });
 }
 

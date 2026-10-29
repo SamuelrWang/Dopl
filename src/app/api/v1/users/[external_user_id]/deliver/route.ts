@@ -22,9 +22,8 @@ export const POST = withDeveloperKey(
         external_user_id: userId,
       });
     }
-    const respondAsync = prefersRespondAsync(request);
-    const result = await deliver(deliveryDeps(), { projectId: ctx.projectId, env: ctx.env }, userId, body.data, { hold: !respondAsync });
-    return respond(ctx, result, { respondAsync });
+    const result = await deliver(deliveryDeps(), { projectId: ctx.projectId, env: ctx.env }, userId, body.data, { hold: !prefersRespondAsync(request) });
+    return respond(ctx, result);
   },
   { scopes: ["actions:write"] }
 );
