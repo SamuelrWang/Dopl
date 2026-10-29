@@ -94,9 +94,11 @@ says.** (Samuel, 2026-10-29; replaces the 2026-10-08 per-task rule — live agen
 vitest per task pushed the Dopl app's process tree to 12 GB.)
 
 - **While working, and for small changes (copy, layout tweaks, one-line fixes):** no tests, no typecheck.
-- **Once, at the end of a significant change:** the typecheck that covers the files you touched
-  (`npm run typecheck`, or `npm run typecheck -w @dopl/desktop-ui` for the SPA) plus `vitest run <the changed
-  files and their direct tests>`. Never a bare `npm test`, never a multi-directory run, never `test:all`.
+- **Once, at the end of a significant change:** `vitest run <the changed files and their direct tests>`.
+  Never a bare `npm test`, never a multi-directory run, never `test:all`.
+- **No agent typechecks.** `tsc` checks the whole repo (minutes per run) and agents queued on the lock
+  behind each other's runs (Samuel, 2026-10-29). Typecheck runs once, as part of the full set below, when
+  Samuel says; CI runs it again after the push. Vite does not typecheck, so the live preview is unaffected.
 - **Full Definition of green** (everything below): only when Samuel says (he asks before a push or release) —
   and by one agent at a time, not each worker. CI still runs all of it and red CI is still a P0; this rule
   moves WHO pays for the full run, not WHETHER it is green.
