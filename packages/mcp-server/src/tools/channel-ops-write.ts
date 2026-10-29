@@ -473,8 +473,26 @@ export async function opPost(
       delivery: deliveryFact(message.delivery, message.deliveryAt),
       hold: holdFact(opts.runtime ?? null, message.seq),
       ...(opts.resultFacts ?? {}),
-    }) + displayTip(message.displayHint),
+    }) + displayTip(message.displayHint) + reachWarning(message),
   );
+}
+
+/**
+ * **THE AGENT YOU NAMED IS NOT ON THIS SCOPE** (2026-10-29, Thread Mention Reach Fix
+ * step 1). The server stored the address but predicted `unreachable`: every agent
+ * named works a different thread or the main room, and its desktop feeds only its
+ * own scope. Said in the result, never silently, so the sender can re-post where
+ * the agent works. ⚠ Only on the PREDICTION: a machine receipt that upgraded the row
+ * (`deliveryAt` set) means it landed after all.
+ */
+function reachWarning(message: {
+  delivery?: string | null;
+  deliveryAt?: string | null;
+  recipientAgentIds?: string[] | null;
+}): string {
+  if (message.delivery !== "unreachable" || message.deliveryAt) return "";
+  if ((message.recipientAgentIds?.length ?? 0) === 0) return "";
+  return "\nWarning: unreachable. The agent you named is not working this thread (or the main room, for a room post), so nothing woke it. Post where it works with the same `to=`; a main-room post reaches a main-room agent.";
 }
 
 /**

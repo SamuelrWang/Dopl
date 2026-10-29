@@ -116,7 +116,12 @@ function handleTokenOf(to: string): string | null {
  * caller wrote and LISTING candidates in a refusal, and both get worse when a
  * quiet-but-running agent is dropped: the first turns a real address into a 400,
  * the second hides the handle the caller needed. Freshness gates the WAKE, in
- * `service-wake-verdict.ts`, where dropping a stale row costs nothing.
+ * `service-wake-verdict.ts`, where dropping a stale row costs nothing. *
+ * ⚠ **CHANNEL-WIDE RESOLUTION IS NOT CHANNEL-WIDE DELIVERY** (2026-10-29, Thread
+ * Mention Reach Fix). A handle resolves here whatever thread its session works;
+ * whether that session's desktop can be handed the post is a separate question,
+ * answered by `service-wake-verdict-reach.ts`, which turns `woken` into
+ * `unreachable` for an addressee working a different scope.
  */
 async function liveAgentHandles(
   ctx: ChannelContext,

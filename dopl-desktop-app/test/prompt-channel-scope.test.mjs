@@ -85,13 +85,12 @@ test("PUSH: it says the feed is the MAIN ROOM and that an unaddressed post start
   assert.match(out, /Silence is not a failure/);
 });
 
-test("PUSH: it states outright that a thread cannot summon it, @-mention included", () => {
-  // Samuel confirmed there is NO cross-scope push: `main/session-dispatch.js` fans a message
-  // out only to sessions whose own thread id matches, so a thread message naming this agent's
-  // id reaches it never. Saying so is what stops it waiting for one.
+test("PUSH: it states honestly that a thread post does not reach it, and the sender is told", () => {
+  // 2026-10-29 (Thread Mention Reach Fix step 1): the old line said NOBODY could summon it while
+  // the server told the sender `woken`. Now both sides say the same thing: not fed, `unreachable`.
   const out = text(channelCtx());
-  assert.match(out, /NOBODY IN A THREAD CAN SUMMON YOU/);
-  assert.match(out, /even if\n?.*@-mentions your agent id/s);
+  assert.match(out, /A MESSAGE INSIDE A THREAD DOES NOT REACH YOU/);
+  assert.match(out, /told the post was unreachable/);
   assert.match(out, /operator directs you from the main room/);
 });
 

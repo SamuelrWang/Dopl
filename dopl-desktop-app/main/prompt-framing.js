@@ -83,9 +83,9 @@ function channelScopeFraming(ctx) {
     `- DO NOT WAIT FOR MESSAGES. You cannot, and you do not need to: a HELD read (${doplOp(set, 'channel.read')} with`,
     `  wait_ms) is refused in this session, and a post that names you is`,
     `  delivered to you as a new TURN by the app itself. Ending your turn is how you wait.`,
-    `- NOBODY IN A THREAD CAN SUMMON YOU. A message inside a thread never reaches you, even if`,
-    `  it @-mentions your agent id. Your operator directs you from the main room, or privately;`,
-    `  thread participants cannot.`,
+    `- A MESSAGE INSIDE A THREAD DOES NOT REACH YOU, even when it names you in to=: this build`,
+    `  feeds you only main-room posts, and the sender is told the post was unreachable. Your`,
+    `  operator directs you from the main room, or privately.`,
   ];
 }
 

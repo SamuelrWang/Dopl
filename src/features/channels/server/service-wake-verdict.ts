@@ -10,6 +10,8 @@ import {
   selfAgentIdOf,
 } from "./service-wake-verdict-handles";
 import { isRecordPost } from "./service-wake-verdict-record";
+// ⚠ WHETHER A NAMED AGENT IS ON A SCOPE ITS DESKTOP FEEDS (2026-10-29) — that file.
+import { unreachableAddressees } from "./service-wake-verdict-reach";
 import type { ResponderReason } from "../lib/agent-mentions";
 import {
   defaultResponder,
@@ -457,6 +459,18 @@ export async function resolveWakeVerdict(
         ? resilience.agentIds
         : bodyAgentIds;
 
+  // ⚠ **A NAMED AGENT ITS DESKTOP CANNOT FEED IS NOT `woken`** (2026-10-29, Thread
+  // Mention Reach Fix step 1). The ids stay stored — the address is what the author
+  // wrote, and a newer machine may still reach it and upgrade the receipt — but when
+  // EVERY named agent works a different scope the prediction is `unreachable`.
+  // Members named alongside still reached somebody, so they keep the stronger word.
+  const offScope =
+    verdict === "agent" && wakeCtx.toUserIds.length === 0 && !toUserId
+      ? await unreachableAddressees(ctx, channelId, metadata, namedAgentIds ?? [])
+      : [];
+  const allOffScope =
+    offScope.length > 0 && (namedAgentIds ?? []).every((id) => offScope.includes(id));
+
   return {
     verdict,
     recipientUserIds,
@@ -482,8 +496,9 @@ export async function resolveWakeVerdict(
     // to address somebody is the `to=` resolver's own 400.
     // ⚠ **A FIFTH TERM SINCE 2026-09-18: `verdict !== "desktop"`** — the same
     // argument `!== "member"` makes, and reachable via a dead handle in prose.
-    delivery:
-      isMessage &&
+    delivery: allOffScope
+      ? "unreachable"
+      : isMessage &&
       bodyAgentIds === null &&
       toAgentIds.length === 0 &&
       verdict !== "member" &&
