@@ -13,6 +13,7 @@ import { CapabilityIdSchema, DeviceKindSchema, RiskTierSchema } from "./capabili
 import { CONNECT_WEBHOOK_EVENTS } from "./connect";
 import { ErrorCodeSchema } from "./errors";
 import { EnvironmentSchema } from "./keys";
+import { listResponseSchema } from "./lists";
 
 export const EVENT_OUTCOMES = ["ok", "error", "denied"] as const;
 export const EventOutcomeSchema = z.enum(EVENT_OUTCOMES);
@@ -74,6 +75,53 @@ export type DeviceEventRow = z.infer<typeof DeviceEventRowSchema>;
 
 /** The spec's field list, in order (pinned by `events.test.ts`). */
 export const EVENT_ROW_FIELDS = Object.keys(DeviceEventRowSchema.shape) as (keyof DeviceEventRow)[];
+
+/**
+ * The PUBLIC event (`GET /events`, ruled 2026-10-28): the C8 row a developer may read back about
+ * their own calls. A curated subset, not the row: `org_id` (internal tenancy), `bytes_in`,
+ * `bytes_out` and `cost_units` (metering, pricing held by D5) stay server-side. Everything kept
+ * names the developer's own objects (`external_user_id` is THEIR id for the user, never a Dopl one)
+ * or explains the call (route, profile, tier, outcome, latency).
+ */
+export const PublicDeviceEventSchema = DeviceEventRowSchema.pick({
+  event_id: true,
+  ts: true,
+  project_id: true,
+  env: true,
+  external_user_id: true,
+  connection_id: true,
+  device_id: true,
+  device_kind: true,
+  vendor: true,
+  model: true,
+  firmware: true,
+  adapter_version: true,
+  capability: true,
+  intent: true,
+  route_decision: true,
+  profile_id: true,
+  profile_version: true,
+  risk_tier: true,
+  confirmation: true,
+  outcome: true,
+  error_code: true,
+  latency_ms: true,
+});
+export type PublicDeviceEvent = z.infer<typeof PublicDeviceEventSchema>;
+
+/** The C8 fields `PublicDeviceEventSchema` never exposes (pinned by `events.test.ts`). */
+export const PRIVATE_EVENT_FIELDS = ["org_id", "bytes_in", "bytes_out", "cost_units"] as const;
+
+/** `GET /events` response: the shared list envelope (`lists.ts`). */
+export const EventListResponseSchema = listResponseSchema(PublicDeviceEventSchema);
+export type EventListResponse = z.infer<typeof EventListResponseSchema>;
+
+/** A row → its public shape (drops the private fields; never copies an unknown one). */
+export function toPublicDeviceEvent(row: DeviceEventRow): PublicDeviceEvent {
+  const out = {} as Record<string, unknown>;
+  for (const key of Object.keys(PublicDeviceEventSchema.shape)) out[key] = row[key as keyof DeviceEventRow];
+  return out as PublicDeviceEvent;
+}
 
 /** Every webhook event name (C2 + C8). Signed, retried, replayable (P1). */
 export const WEBHOOK_EVENT_NAMES = [

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Dopl Device SDK API
-  version: "2026-10-27"
+  version: "2026-10-28"
   summary: The /v1 surface of the Dopl Device SDK (frozen contracts v1).
   description: |
     Field-for-field mirror of `packages/device-contracts/src/*` (zod). The TypeScript contracts
@@ -9,6 +9,11 @@ info:
     plus a changelog line.
 
     Every action is async and idempotent. Every error uses the one `ErrorResponse` shape (C10).
+
+    `info.version` is the spec revision. The dated API version a project is pinned to stays
+    `2026-10-27`: every change since is additive (see SPEC-v1 › Changelog).
+
+    Every list route uses one envelope: `cursor` + `limit` in, `{ data, next_cursor, has_more }` out.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
@@ -26,6 +31,8 @@ tags:
     description: C4 intent-level deliver and device-level actions.
   - name: devices
     description: C3 devices and capability descriptors.
+  - name: events
+    description: C8 request log, read back by the developer.
 
 paths:
   /connect_sessions:
@@ -227,6 +234,54 @@ paths:
               schema: { $ref: "#/components/schemas/Device" }
         "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+
+  /events:
+    get:
+      tags: [events]
+      operationId: listEvents
+      summary: List this project's request log
+      description: |
+        The calls made with this key's project and environment, newest first. Needs the
+        `analytics:read` scope. Reading the log is not itself logged. Rate limited per key.
+      parameters:
+        - $ref: "#/components/parameters/ListCursor"
+        - $ref: "#/components/parameters/ListLimit"
+        - name: since
+          in: query
+          required: false
+          description: Oldest event to include. Defaults to 24 hours ago; at most 30 days ago.
+          schema: { type: string, format: date-time }
+        - name: outcome
+          in: query
+          required: false
+          schema: { $ref: "#/components/schemas/EventOutcome" }
+        - name: device_kind
+          in: query
+          required: false
+          schema: { $ref: "#/components/schemas/DeviceKind" }
+        - name: capability
+          in: query
+          required: false
+          schema: { $ref: "#/components/schemas/CapabilityId" }
+        - name: intent
+          in: query
+          required: false
+          schema: { $ref: "#/components/schemas/DeliverIntent" }
+        - name: route
+          in: query
+          required: false
+          description: The `route_decision.target` the call asked for (`auto`, a kind, a device id).
+          schema: { type: string, pattern: "^[A-Za-z0-9_.:@-]{1,128}$" }
+      responses:
+        "200":
+          description: One page of events.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventListResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
 
 components:
   securitySchemes:
@@ -754,6 +809,118 @@ components:
           oneOf:
             - $ref: "#/components/schemas/DeviceKind"
             - type: "null"
+
+    # ── C8 ──────────────────────────────────────────────────────────────
+    EventOutcome:
+      type: string
+      enum: [ok, error, denied]
+    RouteDecision:
+      type: object
+      required: [target, reason, candidates]
+      properties:
+        target: { type: string, minLength: 1 }
+        reason: { type: string, minLength: 1 }
+        candidates:
+          type: array
+          items: { type: string }
+    EventConfirmation:
+      type: object
+      required: [required, result]
+      properties:
+        required: { type: boolean }
+        result:
+          oneOf:
+            - type: string
+              enum: [approved, denied, timeout]
+            - type: "null"
+    EventLatency:
+      type: object
+      required: [api, device_delivery, user_response]
+      properties:
+        api: { type: number, minimum: 0 }
+        device_delivery: { type: [number, "null"], minimum: 0 }
+        user_response: { type: [number, "null"], minimum: 0 }
+    PublicDeviceEvent:
+      description: One logged call, as the developer reads it back. Metering fields are not exposed.
+      type: object
+      required:
+        - event_id
+        - ts
+        - project_id
+        - env
+        - external_user_id
+        - connection_id
+        - device_id
+        - device_kind
+        - vendor
+        - model
+        - firmware
+        - adapter_version
+        - capability
+        - intent
+        - route_decision
+        - profile_id
+        - profile_version
+        - risk_tier
+        - confirmation
+        - outcome
+        - error_code
+        - latency_ms
+      properties:
+        event_id: { type: string, minLength: 1, description: "Equals the call's `Request-Id` header." }
+        ts: { type: string, format: date-time }
+        project_id: { type: string, minLength: 1 }
+        env: { type: string, enum: [test, live] }
+        external_user_id: { type: [string, "null"] }
+        connection_id: { type: [string, "null"] }
+        device_id: { type: [string, "null"] }
+        device_kind:
+          oneOf:
+            - $ref: "#/components/schemas/DeviceKind"
+            - type: "null"
+        vendor: { type: [string, "null"] }
+        model: { type: [string, "null"] }
+        firmware: { type: [string, "null"] }
+        adapter_version: { type: [string, "null"] }
+        capability:
+          oneOf:
+            - $ref: "#/components/schemas/CapabilityId"
+            - type: "null"
+        intent:
+          oneOf:
+            - $ref: "#/components/schemas/DeliverIntent"
+            - type: "null"
+        route_decision:
+          oneOf:
+            - $ref: "#/components/schemas/RouteDecision"
+            - type: "null"
+        profile_id: { type: [string, "null"] }
+        profile_version: { type: [integer, "null"], minimum: 1 }
+        risk_tier:
+          oneOf:
+            - $ref: "#/components/schemas/RiskTier"
+            - type: "null"
+        confirmation:
+          oneOf:
+            - $ref: "#/components/schemas/EventConfirmation"
+            - type: "null"
+        outcome: { $ref: "#/components/schemas/EventOutcome" }
+        error_code:
+          oneOf:
+            - $ref: "#/components/schemas/ErrorCode"
+            - type: "null"
+        latency_ms: { $ref: "#/components/schemas/EventLatency" }
+    EventListResponse:
+      type: object
+      required: [data, next_cursor, has_more]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PublicDeviceEvent" }
+        next_cursor:
+          description: Opaque. Pass as `cursor` for the next page. Null on the last page.
+          type: [string, "null"]
+        has_more: { type: boolean }
 
     # ── C10 ─────────────────────────────────────────────────────────────
     ErrorType:

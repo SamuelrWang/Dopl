@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { DeviceEventRowSchema, EVENT_ROW_FIELDS, WEBHOOK_EVENT_NAMES } from "./events.js";
+import {
+  DeviceEventRowSchema,
+  EVENT_ROW_FIELDS,
+  EventListResponseSchema,
+  PRIVATE_EVENT_FIELDS,
+  PublicDeviceEventSchema,
+  WEBHOOK_EVENT_NAMES,
+  toPublicDeviceEvent,
+} from "./events.js";
 import { NOW, expectRoundTrip } from "./test-fixtures.js";
 
 /** Spec v1 › C8, in order; `profile_id@version` and `bytes_in/out` split into columns. */
@@ -65,5 +73,23 @@ describe("C8 events", () => {
         "ask.answered", "input.utterance",
       ].sort(),
     );
+  });
+
+  it("the public event is the row minus exactly the private fields, in row order", () => {
+    expect(Object.keys(PublicDeviceEventSchema.shape)).toEqual(
+      EVENT_ROW_FIELDS.filter((f) => !(PRIVATE_EVENT_FIELDS as readonly string[]).includes(f))
+    );
+  });
+
+  it("toPublicDeviceEvent drops org, bytes and cost and keeps the rest", () => {
+    const pub = toPublicDeviceEvent(ROW);
+    for (const f of PRIVATE_EVENT_FIELDS) expect(pub).not.toHaveProperty(f);
+    expectRoundTrip(PublicDeviceEventSchema, pub);
+    expect(pub.route_decision).toEqual(ROW.route_decision);
+  });
+
+  it("an event page uses the list envelope", () => {
+    const page = { data: [toPublicDeviceEvent(ROW)], next_cursor: null, has_more: false };
+    expect(EventListResponseSchema.parse(page)).toEqual(page);
   });
 });

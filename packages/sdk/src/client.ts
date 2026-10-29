@@ -20,6 +20,10 @@ import type {
   Device,
   DeviceActionResponse,
   DeviceContext,
+  DeviceKind,
+  DeliverIntent,
+  EventListResponse,
+  EventOutcome,
 } from "@dopl/device-contracts";
 
 import { DOC_BASE, DoplError } from "./errors.js";
@@ -58,7 +62,33 @@ export const ROUTES = {
   "devices.action": { method: "POST", path: "/devices/{device_id}/actions/{capability}" },
   "devices.get": { method: "GET", path: "/devices/{id}" },
   "actions.get": { method: "GET", path: "/actions/{id}" },
+  "events.list": { method: "GET", path: "/events" },
 } as const;
+
+/** `events.list` query: the shared list params plus the log filters (openapi `listEvents`). */
+export interface EventListParams {
+  /** Opaque: the `next_cursor` of the previous page. */
+  cursor?: string;
+  /** 1 to 100, default 50. */
+  limit?: number;
+  /** ISO date-time; default 24 hours ago, at most 30 days ago. */
+  since?: string;
+  outcome?: EventOutcome;
+  device_kind?: DeviceKind;
+  capability?: CapabilityId;
+  intent?: DeliverIntent;
+  /** The `route_decision.target` the call asked for. */
+  route?: string;
+}
+
+function queryString(params: object | undefined): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params ?? {})) {
+    if (v !== undefined && v !== null) q.set(k, String(v));
+  }
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
 
 export function newIdempotencyKey(): string {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
@@ -104,6 +134,10 @@ export class Dopl {
   };
   readonly actions: {
     get(actionId: string, opts?: RequestOptions): Promise<Action>;
+  };
+  readonly events: {
+    /** One page of the project's request log, newest first. Needs `analytics:read`. */
+    list(params?: EventListParams, opts?: RequestOptions): Promise<EventListResponse>;
   };
 
   constructor(options: DoplOptions) {
@@ -166,6 +200,9 @@ export class Dopl {
     };
     this.actions = {
       get: (actionId, opts) => request({ method: "GET", path: `/actions/${seg(actionId)}`, signal: opts?.signal }),
+    };
+    this.events = {
+      list: (params, opts) => request({ method: "GET", path: `/events${queryString(params)}`, signal: opts?.signal }),
     };
   }
 

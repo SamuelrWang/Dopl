@@ -71,13 +71,14 @@ const DELIVERY_ID = "4f7e2a10-6c1b-4d9e-8a35-0b2c7d9e1f42";
 
 interface EndpointSpec {
   slug: string;
-  group: "Connect" | "Context" | "Actions" | "Devices";
+  group: "Connect" | "Context" | "Actions" | "Devices" | "Events";
   title: string;
   description: string;
   method: HttpMethod;
   path: string;
   examplePath: string;
   pathParams: DocParam[];
+  query?: DocParam[];
   auth?: DocParam;
   headers?: DocParam[];
   body?: DocParam[];
@@ -104,6 +105,7 @@ function endpoint(e: EndpointSpec): DocPage {
       ...(e.notes ?? []).map((text): DocBlock => ({ type: "p", text })),
       { type: "params", title: "Authorizations", params: [e.auth ?? AUTH, ...(e.headers ?? [])] },
       ...(e.pathParams.length > 0 ? [{ type: "params" as const, title: "Path parameters", params: e.pathParams }] : []),
+      ...(e.query && e.query.length > 0 ? [{ type: "params" as const, title: "Query parameters", params: e.query }] : []),
       ...(e.body && e.body.length > 0 ? [{ type: "params" as const, title: "Body", params: e.body }] : []),
     ],
     aside: {
@@ -411,5 +413,60 @@ export const API_PAGES: DocPage[] = [
     ],
     status: "200",
     response: json(EXAMPLE_DEVICE),
+  }),
+  endpoint({
+    slug: "events",
+    group: "Events",
+    title: "List events",
+    description: "Your project's request log, newest first",
+    method: "GET",
+    path: "/events",
+    examplePath: "/events?limit=2&outcome=error",
+    pathParams: [],
+    query: [
+      { name: "cursor", type: "string", location: "query", description: "Opaque. The `next_cursor` of the previous page, passed back unchanged." },
+      { name: "limit", type: "integer", location: "query", description: "1 to 100. Default 50." },
+      { name: "since", type: "string", location: "query", description: "ISO date and time of the oldest event. Default 24 hours ago, at most 30 days ago." },
+      { name: "outcome", type: "string", location: "query", description: "`ok`, `error` or `denied`." },
+      { name: "device_kind", type: "string", location: "query", description: "Only calls that reached this kind of device." },
+      { name: "capability", type: "string", location: "query", description: "Only calls for this capability, for example `present.display`." },
+      { name: "intent", type: "string", location: "query", description: "`message`, `ask`, `notify` or `display`." },
+      { name: "route", type: "string", location: "query", description: "The routing target the call asked for: `auto`, a device kind or a device ID." },
+    ],
+    notes: [
+      "Every call your keys make is one event, and its `event_id` equals the call's `Request-Id` header. This route reads the calls of the key's own project and environment. Reading the log is not itself logged. Secret key, scope `analytics:read`. Limited to 60 requests a minute per key.",
+    ],
+    status: "200",
+    response: json({
+      data: [
+        {
+          event_id: "0b8f3c2e-5a41-4d7e-9c16-2f7a8e1d4b90",
+          ts: "2026-10-28T17:02:11.204518Z",
+          project_id: "8a1d4f2c-3b6e-4e90-a7c5-1d2e3f4a5b6c",
+          env: "test",
+          external_user_id: "usr_123",
+          connection_id: null,
+          device_id: DEVICE_ID,
+          device_kind: "glasses",
+          vendor: "even_realities",
+          model: "even_g2",
+          firmware: null,
+          adapter_version: "0.3.0",
+          capability: "present.display",
+          intent: "display",
+          route_decision: { target: "auto", reason: "only online device", candidates: [DEVICE_ID] },
+          profile_id: "glasses-default",
+          profile_version: 1,
+          risk_tier: "T1",
+          confirmation: { required: false, result: null },
+          outcome: "error",
+          error_code: "device_offline",
+          latency_ms: { api: 41, device_delivery: null, user_response: null },
+        },
+      ],
+      next_cursor: "MjAyNi0xMC0yOFQxNzowMjoxMS4yMDQ1MThafjBiOGYzYzJl",
+      has_more: true,
+    }),
+    error: errorExample("429", "rate_limit_error", "rate_limited", "Too many log reads for this key. Try again in a minute.", true),
   }),
 ];

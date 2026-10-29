@@ -29,6 +29,13 @@ describe("every method hits its openapi path and method", () => {
       "/devices/dev_1/actions/present.notify",
     ],
     ["actions.get", (d) => d.actions.get("act_1"), "GET", "/actions/act_1"],
+    ["events.list", (d) => d.events.list(), "GET", "/events"],
+    [
+      "events.list with params",
+      (d) => d.events.list({ cursor: "abc", limit: 10, outcome: "error", since: undefined }),
+      "GET",
+      "/events?cursor=abc&limit=10&outcome=error",
+    ],
   ];
 
   it.each(cases)("%s", async (_name, call, method, path) => {
@@ -171,6 +178,7 @@ describe("key safety", () => {
     ["devices.get", (d: Dopl) => d.devices.get("d")],
     ["devices.action", (d: Dopl) => d.devices.action("d", "present.notify")],
     ["actions.get", (d: Dopl) => d.actions.get("a")],
+    ["events.list", (d: Dopl) => d.events.list()],
     ["show", (d: Dopl) => d.show("u", { text: "x" })],
     ["notify", (d: Dopl) => d.notify("u", { text: "x" })],
     ["ask", (d: Dopl) => d.ask("u", { question: "q" })],

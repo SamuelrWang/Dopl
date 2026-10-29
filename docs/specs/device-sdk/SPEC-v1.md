@@ -448,3 +448,4 @@ P0 is needed for the first design partner. P1 is needed to sell broadly. P2 come
 
 ## Changelog
 - 2026-10-27 — Frozen v1. D1 no end-user Dopl accounts · D2 glasses + phone/desktop fallback, Home Assistant first non-glasses · D3 enforce limits only, never rewrite · D4 `/deliver` + `/actions`, show/ask/notify = SDK helpers · D5 pricing held, `cost_units` logged · D6 official SDKs only for paying customers, reverse-engineered = experimental flag.
+- 2026-10-28 — Additive, orchestrator ruling (Samuel's SDK split P3). One list envelope for every list route: `cursor` (opaque base64url) + `limit` (1-100, default 50) in, `{ data, next_cursor, has_more }` out (`device-contracts/lists.ts`). New `GET /events` (scope `analytics:read`): the project's C8 log as `PublicDeviceEvent`, the row minus `org_id`, `bytes_in`, `bytes_out`, `cost_units`; reads are not logged; rate limited per key. Spec revision `2026-10-28`; pinned API version stays `2026-10-27`.

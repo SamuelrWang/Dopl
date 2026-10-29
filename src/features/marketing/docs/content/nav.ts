@@ -100,6 +100,7 @@ export const DOC_SECTIONS: DocSection[] = [
         ],
       },
       { title: "Devices", links: [{ label: "Get a device", slug: "api-reference/devices" }] },
+      { title: "Events", links: [{ label: "List events", slug: "api-reference/events" }] },
     ],
   },
   {

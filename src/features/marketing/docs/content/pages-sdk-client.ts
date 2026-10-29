@@ -20,6 +20,7 @@ export const SDK_METHOD_ROWS: [method: string, route: string][] = [
   ["devices.action(deviceId, capability, args)", "`POST /devices/{device_id}/actions/{capability}`"],
   ["devices.get(deviceId)", "`GET /devices/{id}`"],
   ["actions.get(actionId)", "`GET /actions/{id}`"],
+  ["events.list({ cursor, limit, ...filters })", "`GET /events`"],
   ["show(externalUserId, { text, blocks })", "Deliver with the `display` intent"],
   ["notify(externalUserId, { text })", "Deliver with the `notify` intent"],
   ["ask(externalUserId, { question, options })", "Deliver with the `ask` intent, then poll the action for the answer"],
