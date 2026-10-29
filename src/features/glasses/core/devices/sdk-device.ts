@@ -15,6 +15,8 @@ export interface SdkGlassesDevice {
 /** A `dev_actions` row a lens answer or dismiss just settled (`lens-actions.ts › MovedLensAction`). */
 export interface SdkSettledAction {
   id: string;
+  project_id: string;
+  env: string;
   /** The caller's `Idempotency-Key`: the Dopl app's own SDK asks carry their channel link in it. */
   idempotency_key: string;
   status: string;
@@ -52,4 +54,9 @@ export interface SdkGlassesPort {
    * Absent = no migrated devices.
    */
   migratedDeviceIds?(userId: string): Promise<string[]>;
+  /**
+   * True when `projectId` is the Dopl app's own project (the internal org's "Dopl App") and `env` is
+   * `live`: only its actions may be bridged to a Dopl user's channel. Absent = never (fail closed).
+   */
+  isDoplAppProject?(projectId: string, env: string): Promise<boolean>;
 }

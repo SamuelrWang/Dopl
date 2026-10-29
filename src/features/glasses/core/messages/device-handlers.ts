@@ -179,9 +179,11 @@ export function createDeviceHandlers(input: DeviceHandlerDeps) {
     const outcome = await answerAsk({ store: port.store, now: deps.now }, deviceId, body);
     if (!outcome.ok || !outcome.message) return outcome;
     const settled = (await port.settled(deviceId, outcome.message)) ?? [];
-    if (owner && settled.length > 0 && deps.sdkAnswerLinked && (await deps.sdkAnswerLinked(owner, settled)) === "conflict") {
-      return { ...outcome, conflict: true };
-    }
+    if (!owner || settled.length === 0 || !deps.sdkAnswerLinked) return outcome;
+    // 🔒 Defense in depth: only the Dopl app's own live actions reach the owner's channel.
+    const ours: SdkSettledAction[] = [];
+    for (const a of settled) if (port.isDoplAppProject && (await port.isDoplAppProject(a.project_id, a.env))) ours.push(a);
+    if (ours.length > 0 && (await deps.sdkAnswerLinked(owner, ours)) === "conflict") return { ...outcome, conflict: true };
     return outcome;
   };
 

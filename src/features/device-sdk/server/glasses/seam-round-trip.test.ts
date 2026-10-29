@@ -112,6 +112,7 @@ async function world() {
     delivered: (id, ids) => markDelivered(lensActions, id, ids),
     settled: (id, row) => settle(lensActions, id, row),
     migratedDeviceIds: async (userId) => (userId === DOPL_USER ? [link.id] : []),
+    isDoplAppProject: async (projectId, env) => projectId === PROJECT && env === "live",
   };
   const bridged: Array<{ owner: string; settled: SdkSettledAction[] }> = [];
   const handlers = createDeviceHandlers({

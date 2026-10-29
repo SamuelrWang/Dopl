@@ -17,7 +17,7 @@ import type { GlassesMessage, GlassesStore } from "./types";
 const OWNER = "22222222-2222-4222-8222-222222222222";
 const BASE = "http://127.0.0.1:3100";
 
-function setup(opts: { migrated?: boolean; lookupFails?: boolean; linked?: "ok" | "conflict" } = {}) {
+function setup(opts: { migrated?: boolean; lookupFails?: boolean; linked?: "ok" | "conflict"; project?: string } = {}) {
   const prosumer = createFakeGlassesStore();
   const sdk = createFakeGlassesStore({ idBlock: "9000" });
   const dev = createFakeDeviceStore();
@@ -34,8 +34,10 @@ function setup(opts: { migrated?: boolean; lookupFails?: boolean; linked?: "ok" 
     settled: async (id, row) => {
       settled.push([id, row]);
       // The port reports the action it moved (the app's own ask carries its channel link in the key).
-      return row.kind === "ask" ? [{ id: `act-${row.id}`, idempotency_key: "dsk1.k", status: "done", result: { index: row.answer?.index ?? null } }] : [];
+      const action = { id: `act-${row.id}`, project_id: opts.project ?? "dopl-app", env: "live", idempotency_key: "dsk1.k", status: "done", result: { index: row.answer?.index ?? null } };
+      return row.kind === "ask" ? [action] : [];
     },
+    isDoplAppProject: async (projectId, env) => projectId === "dopl-app" && env === "live",
     migratedDeviceIds: vi.fn(async () => {
       if (opts.lookupFails) throw new Error("rpc down");
       return opts.migrated === false ? [] : deviceIds;
@@ -127,7 +129,7 @@ describe("migrated G2 (legacy token, sdk_delivery on)", () => {
     expect((await answer(w, g2.token, { id: ask.id, index: 0 })).status).toBe(200);
     expect(w.linked).toHaveLength(1);
     expect(w.linked[0][0]).toMatchObject({ id: g2.id, user_id: OWNER });
-    expect(w.linked[0][1]).toEqual([{ id: `act-${ask.id}`, idempotency_key: "dsk1.k", status: "done", result: { index: 0 } }]);
+    expect(w.linked[0][1]).toEqual([{ id: `act-${ask.id}`, project_id: "dopl-app", env: "live", idempotency_key: "dsk1.k", status: "done", result: { index: 0 } }]);
   });
 
   it("the channel decision was answered first: 409 like the prosumer tap; the SDK row and action stay answered", async () => {
@@ -138,6 +140,22 @@ describe("migrated G2 (legacy token, sdk_delivery on)", () => {
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ ok: false, error: "already answered" });
     expect(w.settled).toHaveLength(1);
+  });
+
+  it("🔒 an action of ANOTHER project (or a port that cannot tell) is never bridged; the answer still lands", async () => {
+    const w = setup({ project: "someone-elses" });
+    const g2 = await pairLegacy(w);
+    const ask = await sdkAsk(w, g2.id);
+    expect((await answer(w, g2.token, { id: ask.id, index: 0 })).status).toBe(200);
+    expect(w.settled).toHaveLength(1);
+    expect(w.linked).toEqual([]);
+
+    const blind = setup();
+    delete blind.port.isDoplAppProject;
+    const g2b = await pairLegacy(blind);
+    const askb = await sdkAsk(blind, g2b.id);
+    expect((await answer(blind, g2b.token, { id: askb.id, index: 0 })).status).toBe(200);
+    expect(blind.linked).toEqual([]);
   });
 
   it("nothing settled (a late hop), a dismiss, or a prosumer row: the bridge is not called", async () => {

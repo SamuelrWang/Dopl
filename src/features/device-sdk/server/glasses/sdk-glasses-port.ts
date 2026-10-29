@@ -101,7 +101,29 @@ export const sdkGlassesPort: SdkGlassesPort = {
   delivered: (deviceId, ids) => markDelivered(supabaseLensActions, deviceId, ids),
   settled: (deviceId, row) => settle(supabaseLensActions, deviceId, row),
   migratedDeviceIds: migratedDeviceIdsCached,
+  isDoplAppProject: isDoplAppProjectCached,
 };
+
+/** The internal org's "Dopl App" project (W0.1 seed, runbook step 6), live env only. Cached: it never moves. */
+const doplAppCache = new TtlCache<string, boolean>(5 * 60_000, 1_000);
+
+async function isDoplAppProjectCached(projectId: string, env: string): Promise<boolean> {
+  if (env !== "live") return false;
+  const now = Date.now();
+  const hit = doplAppCache.get(projectId, now);
+  if (hit !== undefined) return hit;
+  const project = must(await db().from("dev_projects").select("org_id, name").eq("id", projectId).maybeSingle(), "project lookup") as {
+    org_id: string;
+    name: string;
+  } | null;
+  let ours = false;
+  if (project?.name === "Dopl App") {
+    const org = must(await db().from("dev_orgs").select("internal").eq("id", project.org_id).maybeSingle(), "org lookup") as { internal: boolean } | null;
+    ours = org?.internal === true;
+  }
+  doplAppCache.set(projectId, ours, now);
+  return ours;
+}
 
 /**
  * Every inbox poll asks; the flag moves rarely. A failed lookup is not cached (it throws through).
