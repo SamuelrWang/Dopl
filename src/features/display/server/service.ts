@@ -23,6 +23,7 @@ import { normalizeDisplay } from "../core/normalize";
 import { checkTemplateSpec, cleanTemplateName, fillTemplate, templateSpecOf, templateVariables } from "../core/template";
 import {
   DISPLAY_ID_RE,
+  DISPLAY_METADATA_KEY,
   choiceOf,
   newDisplayId,
   type ChoiceBlock,
@@ -240,6 +241,7 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
   let sdkAsk: SdkAskTicket | null = null;
   /** The decision's envelope names the SDK ask whose lens answer may post to it (`sdk-ask-key.ts`). */
   let askKeyStamp: string | undefined;
+  let lensAsk: { question: string; options: string[]; key: string } | null = null;
   let glasses = input.target === "channel" ? "off" : sdkRefusal ? `skipped:sdk ${sdkRefusal}` : wantLens ? "shown" : devices.online ? "skipped:no choice" : "skipped:no online glasses";
   const prosumerPush = async () =>
     shortcut === "ask" && choice
@@ -251,21 +253,21 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
   if (wantLens && !lens.ok) glasses = `skipped:${(lens.errors[0] as { message?: string })?.message ?? "does not fit"}`;
   else if (wantLens && sdk) {
     plan = sdkPlanOf(deps, { blocks, layout, level: lens.level, choice, question: firstLine(blocks) ?? "", shortcut, explicitId: input.display_id !== undefined });
-    // An ask delivers and returns (no held function, gap #3); its key carries the decision's channel
-    // link, so the glasses' answer route posts the lens answer there. Every key fits the contract's 255.
-    const linked = decision && channel ? channel.id : null;
-    const key = plan.kind === "ask" ? sdkAskKey({ channelId: linked, displayId, nonce: newDisplayId() }) : `display-${displayId}-${newDisplayId()}`;
-    if (plan.kind === "none") [fallbackReason, row] = [plan.reason, await prosumerPush()];
-    else try {
-      if (plan.kind === "ask") {
-        sdkAsk = await sdk.startAsk({ question: plan.question, options: plan.options, idempotencyKey: key });
-        if (linked) askKeyStamp = key;
-      } else await sdk.screen({ blocks, idempotencyKey: key });
-    } catch (err) {
-      // 🔒 Gap #6: only a PROVEN non-delivery takes the prosumer path; anything else is one copy or none.
-      if (!(err instanceof SdkLensError)) throw err;
-      if (err.fallback) [fallbackReason, row] = [err.code, await prosumerPush()];
-      else glasses = `skipped:sdk ${err.code}`;
+    // An ask goes out AFTER the channel copy (below), so its decision exists when the lens answer posts
+    // there; its key carries that channel link (gap #3, review nit 3). Every key fits the contract's 255.
+    if (plan.kind === "ask") {
+      const linked = decision && channel ? channel.id : null;
+      lensAsk = { question: plan.question, options: plan.options, key: sdkAskKey({ channelId: linked, displayId, nonce: newDisplayId() }) };
+      if (linked) askKeyStamp = lensAsk.key;
+    } else if (plan.kind === "none") [fallbackReason, row] = [plan.reason, await prosumerPush()];
+    else {
+      try {
+        await sdk.screen({ blocks, idempotencyKey: `display-${displayId}-${newDisplayId()}` });
+      } catch (err) {
+        const e = sdkFailure(err);
+        if (e.fallback) [fallbackReason, row] = [e.code, await prosumerPush()];
+        else glasses = `skipped:sdk ${e.code}`;
+      }
     }
   } else if (wantLens) row = await prosumerPush();
 
@@ -274,6 +276,20 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
   const posted = resolved
     ? await postOrReplace(resolved.ctx, resolved.channel, input, { blocks: channelBlocksOf(blocks, decision), layout, displayId, waitUntil, row, decision, sdkAskKey: askKeyStamp })
     : null;
+  // ── THE SDK ASK (after the channel copy) ──
+  if (lensAsk && sdk) {
+    try {
+      sdkAsk = await sdk.startAsk({ question: lensAsk.question, options: lensAsk.options, idempotencyKey: lensAsk.key });
+    } catch (err) {
+      const e = sdkFailure(err);
+      if (!e.fallback) glasses = `skipped:sdk ${e.code}`;
+      else {
+        [fallbackReason, row] = [e.code, await prosumerPush()];
+        // The decision went out naming the SDK ask; it now links the prosumer card (a chat answer releases it).
+        if (row && posted && askKeyStamp) await relinkToRow(posted, ctx.userId, row, decision);
+      }
+    }
+  }
   if (row && posted && row.channel_message_id !== posted.id) await deps.store.linkChannelMessage(ctx.userId, row.id, posted.id);
   const path = !wantLens ? "none" : row ? (fallbackReason ? "prosumer_fallback" : "prosumer") : sdk ? "sdk" : "prosumer";
 
@@ -305,11 +321,24 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
     }),
   };
   if (!input.wait) return result;
-  const lensAsk = sdk && sdkAsk ? { read: sdk.askOutcome.bind(sdk, sdkAsk.deliveryId) } : null;
-  const held = await hold(deps, ctx.userId, { row, lensAsk, messageId: posted?.id ?? null, channelId: resolved?.channel.id ?? null, decision: !!decision, timeout, choice, signal });
+  const lensRead = sdk && sdkAsk ? { read: sdk.askOutcome.bind(sdk, sdkAsk.deliveryId) } : null;
+  const held = await hold(deps, ctx.userId, { row, lensAsk: lensRead, messageId: posted?.id ?? null, channelId: resolved?.channel.id ?? null, decision: !!decision, timeout, choice, signal });
   const lensGlasses = held.lensRefused ? { glasses: `skipped:sdk ${held.lensRefused}` } : {};
   delete held.lensRefused;
   return { ...result, ...lensGlasses, ...held, ...(held.answer?.by && { by_handle: await handleOf(held.answer.by) }) };
+}
+
+const sdkFailure = (err: unknown): SdkLensError => {
+  if (!(err instanceof SdkLensError)) throw err;
+  return err;
+};
+
+/** A just-posted decision that named an SDK ask now names the prosumer lens row instead (false = answered). */
+async function relinkToRow(posted: { id: string; body?: string; envelope?: DisplayEnvelopeV2 }, userId: string, row: GlassesMessage, decision: Decision) {
+  if (!posted.envelope || posted.body === undefined) return;
+  const envelope: DisplayEnvelopeV2 = { ...posted.envelope, glasses_message_id: row.id };
+  delete envelope.sdk_ask_key;
+  await replaceDisplay(posted.id, userId, posted.body, envelope, decision);
 }
 
 /** A member's first @handle (their display name or email slug), for the result line only. */
@@ -392,7 +421,8 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
     // Drops the decision index; `superseded_by` makes the answer route refuse it.
     await replaceDisplay(withdraw.id, ctx.userId, withdraw.body, { ...withdraw.envelope, superseded_by: message.id }, null);
   }
-  return { id: message.id, replaced, tags: tagsOf(message.metadata, handles) };
+  const envelope = (message.metadata as Record<string, DisplayEnvelopeV2 | undefined> | undefined)?.[DISPLAY_METADATA_KEY];
+  return { id: message.id, replaced, tags: tagsOf(message.metadata, handles), body, envelope };
 }
 
 function tagsOf(metadata: unknown, handles: string[]): string {

@@ -20,7 +20,7 @@ import { findMessageById } from "@/features/channels/server/repository-messages"
 import type { ChannelContext } from "@/features/channels/server/service-shared";
 import type { GlassesDeps } from "@/features/glasses/core/messages/service";
 import { createFakeGlassesStore, fakeClock } from "@/features/glasses/core/testing/fake-store";
-import { findByDisplayId, hasAnswerMessage } from "./repository";
+import { findByDisplayId, hasAnswerMessage, replaceDisplay } from "./repository";
 import { SdkLensError, type SdkAskOutcome, type SdkLens, type SdkUserLens } from "./sdk-lens";
 import { showDisplay, type ShowInput } from "./service";
 
@@ -36,6 +36,7 @@ function fakeSdk(o: { off?: boolean; forUserErr?: unknown; stateErr?: unknown; s
   const screens: unknown[] = [];
   const asks: AskArgs[] = [];
   const reads: string[] = [];
+  const postedBeforeAsk: number[] = [];
   let outcome: SdkAskOutcome | null = null;
   const user: SdkUserLens = {
     state: async () => {
@@ -49,6 +50,7 @@ function fakeSdk(o: { off?: boolean; forUserErr?: unknown; stateErr?: unknown; s
     },
     startAsk: async (a) => {
       asks.push(a);
+      postedBeforeAsk.push(vi.mocked(postMessage).mock.calls.length);
       if (o.askErr) throw o.askErr;
       return { deliveryId: "act-1", deviceId: "g2" };
     },
@@ -63,7 +65,7 @@ function fakeSdk(o: { off?: boolean; forUserErr?: unknown; stateErr?: unknown; s
       return o.off ? null : { lens: user, deviceIds: o.deviceIds ?? ["dev"] };
     },
   };
-  return { lens, screens, asks, reads, settle: (x: SdkAskOutcome) => void (outcome = x) };
+  return { lens, screens, asks, reads, postedBeforeAsk, settle: (x: SdkAskOutcome) => void (outcome = x) };
 }
 
 function setup(sdk: SdkLens, online = true) {
@@ -84,7 +86,10 @@ beforeEach(() => {
   vi.spyOn(console, "info").mockImplementation((m: string) => void logs.push(m));
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.mocked(requireMemberChannel).mockResolvedValue({ channel: { id: CHAN, name: "Lab" } } as never);
-  vi.mocked(postMessage).mockImplementation(async (_c, _ch, input) => ({ id: "m1", metadata: {}, body: input.body }) as never);
+  vi.mocked(postMessage).mockImplementation(
+    async (_c, _ch, input, opts) => ({ id: "m1", metadata: { display: { spec_version: 2, display_id: "d", blocks: [], ...opts?.display } }, body: input.body }) as never
+  );
+  vi.mocked(replaceDisplay).mockResolvedValue(true);
   vi.mocked(findByDisplayId).mockResolvedValue(null);
   vi.mocked(hasAnswerMessage).mockResolvedValue(false);
   vi.mocked(findMessageById).mockResolvedValue({ metadata: {} } as never);
@@ -187,6 +192,8 @@ describe("🔒 asks hold no function (gap #3)", () => {
     expect(s.asks).toEqual([{ question: "Ship?", options: ["Ship", "Wait"], idempotencyKey: expect.stringMatching(new RegExp(`^dsk1\\.${CHAN}\\.d-[0-9a-f]{8}\\.d-[0-9a-f]{8}$`)) }]);
     expect(s.asks[0].idempotencyKey.length).toBeLessThanOrEqual(255);
     expect(vi.mocked(postMessage).mock.calls[0][3]?.display).toMatchObject({ sdk_ask_key: s.asks[0].idempotencyKey });
+    // 🔒 Review nit 3: the decision is posted BEFORE the ask, so an instant lens answer finds it.
+    expect(s.postedBeforeAsk).toEqual([1]);
     // Nothing reads the ask afterwards: no hold, no background bridge.
     await flush();
     expect(s.reads).toEqual([]);
@@ -274,8 +281,13 @@ describe("🔒 ask transport failures (gap #6): a fallback only when nothing was
     expect(t.rows).toHaveLength(1);
     expect(r).toMatchObject({ glasses: "shown", glasses_message_id: t.rows[0].id });
     expect(t.rows[0].channel_message_id).toBe("m1");
-    expect(vi.mocked(postMessage).mock.calls[0][3]?.display).toMatchObject({ glasses_message_id: t.rows[0].id });
-    expect(vi.mocked(postMessage).mock.calls[0][3]?.display?.sdk_ask_key).toBeUndefined();
+    // Posted first naming the SDK ask; then re-linked to the prosumer card (a chat answer releases it).
+    expect(vi.mocked(postMessage).mock.calls[0][3]?.display?.sdk_ask_key).toBe(s.asks[0].idempotencyKey);
+    const [id, author, , envelope, escalation] = vi.mocked(replaceDisplay).mock.calls[0];
+    expect([id, author]).toEqual(["m1", USER]);
+    expect(envelope).toMatchObject({ glasses_message_id: t.rows[0].id });
+    expect(envelope).not.toHaveProperty("sdk_ask_key");
+    expect(escalation).toBeTruthy();
     expect(shownLog()).toMatchObject({ path: "prosumer_fallback", fallback_reason: "network_error" });
   });
 
@@ -298,6 +310,7 @@ describe("🔒 ask transport failures (gap #6): a fallback only when nothing was
       expect(r).toMatchObject({ glasses: `skipped:sdk ${err.code}`, message_id: "m1", decision: true });
       expect(r).not.toHaveProperty("glasses_message_id");
       expect(t.rows).toHaveLength(0);
+      expect(replaceDisplay).not.toHaveBeenCalled();
     }
   });
 
