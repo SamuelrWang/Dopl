@@ -26,6 +26,7 @@ import { touchApiKeyLastUsed, verifyApiKey, type ResolvedDeveloperKey } from "./
  * ⚠ PUBLISHABLE KEYS (`pk_…`) ARE REFUSED UNLESS THE ROUTE OPTS IN with `publishable: true`, and only a
  * route whose required scopes are `connect` alone may opt in (checked when the route is defined).
  * Every response carries `Request-Id` (equal to the call's `dev_events.event_id` when one is logged).
+ * The ONE exception to "exactly one row" is a route defined with `logEvent: false` (the log reader).
  * Separate from `withUserAuth` on purpose: no Dopl session, no OAuth token, no cookie is read here.
  */
 
@@ -49,6 +50,12 @@ export interface DeveloperKeyOptions {
   scopes: readonly ApiKeyScope[];
   /** Admit publishable keys. Only legal when `scopes` is exactly `["connect"]`. */
   publishable?: boolean;
+  /**
+   * `false` = this route writes NO `dev_events` row, ever (refusals included). Only for routes that
+   * READ the log back (`GET /v1/events`): a polling reader would otherwise flood the log it reads
+   * and its own usage. Every other route leaves this unset. Ruled 2026-10-28.
+   */
+  logEvent?: false;
 }
 
 type DeveloperKeyHandler = (
@@ -116,9 +123,9 @@ export function withDeveloperKey(handler: DeveloperKeyHandler, options: Develope
       },
     };
 
-    /** The one row for this call. Skipped when no project was resolved. Never throws. */
+    /** The one row for this call. Skipped when no project was resolved, or the route opted out. Never throws. */
     const record = (status: number, code: ErrorCode | null, bytesOut: number) => {
-      if (!resolved) return;
+      if (!resolved || options.logEvent === false) return;
       try {
         const { latency_ms, ...rest } = annotation;
         logDevEvent({

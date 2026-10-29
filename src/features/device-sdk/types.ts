@@ -42,6 +42,13 @@ export {
   DeviceActionRequestSchema,
   DisplayBlocksSchema,
   ProfileMatchSchema,
+  DELIVER_INTENTS,
+  // Lists + the public event (P3, 2026-10-28).
+  ListQuerySchema,
+  PublicDeviceEventSchema,
+  EventListResponseSchema,
+  PRIVATE_EVENT_FIELDS,
+  toPublicDeviceEvent,
 } from "@dopl/device-contracts";
 
 export type {
@@ -86,4 +93,7 @@ export type {
   ErrorBody,
   Posture,
   Urgency,
+  EventListResponse,
+  ListQuery,
+  PublicDeviceEvent,
 } from "@dopl/device-contracts";
