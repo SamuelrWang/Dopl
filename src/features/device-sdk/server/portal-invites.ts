@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import { HttpError } from "@/shared/lib/http-error";
 import { canAssignRole, canManageMembers, type AssignableRole } from "../portal/scope";
 import { listPortalOrgs } from "./portal";
-import { dbError, emailOf, memberRole, normalizeEmail, notFound, requireOrg } from "./portal-admin";
+import { dbError, emailOf, memberRole, normalizeEmail, notFound, refuseInternal, requireOrg } from "./portal-admin";
 
 /**
  * DEVELOPER ORG INVITES (P3, Plans/Dopl SDK Split › §6). Service role, server only.
@@ -15,6 +15,7 @@ import { dbError, emailOf, memberRole, normalizeEmail, notFound, requireOrg } fr
  * Reach and role rules are `portal-admin.ts`'s (the W1.3 fence; roles only go down).
  */
 
+/** Soft limit: count-then-insert, so concurrent invites can land a few over. */
 export const MAX_OPEN_INVITES_PER_ORG = 50;
 export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -78,6 +79,7 @@ export async function createInvite(
   const email = normalizeEmail(input.email);
   const org = await requireOrg(userId, orgId);
   if (!canManageMembers(org.role)) throw new HttpError(403, "FORBIDDEN", "Only an org owner or admin can invite");
+  refuseInternal(org.internal);
   if (typeof input.role !== "string" || !canAssignRole(org.role, input.role)) {
     throw new HttpError(403, "FORBIDDEN", "You cannot grant that role");
   }
@@ -157,6 +159,8 @@ export interface InviteForToken {
   id: string;
   orgId: string;
   orgName: string;
+  /** `dev_orgs.internal`: never joined through an invite (`portal-admin.ts › refuseInternal`). */
+  orgInternal: boolean;
   email: string;
   role: AssignableRole;
   state: InviteState;
@@ -184,7 +188,7 @@ export async function getInviteForToken(token: string, now: Date = new Date()): 
     revoked_at: string | null;
   } | null;
   if (!r) return null;
-  const org = await db.from("dev_orgs").select("id, name").eq("id", r.org_id).maybeSingle();
+  const org = await db.from("dev_orgs").select("id, name, internal").eq("id", r.org_id).maybeSingle();
   if (org.error) throw dbError("getInviteForToken", org.error);
   if (!org.data) return null;
   const state: InviteState = r.accepted_at
@@ -198,6 +202,7 @@ export async function getInviteForToken(token: string, now: Date = new Date()): 
     id: r.id,
     orgId: r.org_id,
     orgName: (org.data as { name: string }).name,
+    orgInternal: (org.data as { internal?: boolean | null }).internal === true,
     email: r.email,
     role: r.role,
     state,
@@ -220,8 +225,9 @@ export async function acceptInvite(userId: string, token: string, now: Date = ne
   }
   if (invite.state === "revoked") throw new HttpError(410, "INVITE_REVOKED", "This invite was revoked");
   if (invite.state === "expired") throw new HttpError(410, "INVITE_EXPIRED", "This invite has expired");
+  refuseInternal(invite.orgInternal);
 
-  const me = await emailOf(userId);
+  const me = await emailOf(userId, true);
   if (!me.email || !me.confirmed) {
     throw new HttpError(403, "EMAIL_UNCONFIRMED", "Confirm your account email before accepting an invite");
   }

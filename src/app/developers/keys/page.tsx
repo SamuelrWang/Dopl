@@ -35,7 +35,7 @@ export default async function KeysPage({ searchParams }: { searchParams: Promise
             ? { kind: "expiring", label: `Expires ${since(k.expires_at, now)}` }
             : { kind: "active" },
     }));
-    body = <KeysTable projectId={project.id} env={params.env} keys={keys} canManage={canManageKeys(project.role)} />;
+    body = <KeysTable projectId={project.id} env={params.env} keys={keys} canManage={canManageKeys(project.role)} internal={project.org.internal} />;
   }
 
   return (

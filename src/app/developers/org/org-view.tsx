@@ -62,6 +62,7 @@ export function OrgView({
   me,
   canManageProjects,
   canManageMembers,
+  canEditMembers,
   projects,
   members,
   invites,
@@ -71,6 +72,8 @@ export function OrgView({
   me: string;
   canManageProjects: boolean;
   canManageMembers: boolean;
+  /** False on an internal org: no role changes there (removing and leaving stay). */
+  canEditMembers: boolean;
   projects: Array<{ id: string; name: string; apiVersion: string }>;
   members: MemberRow[];
   invites: InviteRow[];
@@ -254,7 +257,7 @@ export function OrgView({
                   {m.userId === me && <span className="text-text-muted"> (you)</span>}
                 </td>
                 <td>
-                  {editable && m.role !== "owner" && options.some((o) => o.value === m.role) ? (
+                  {editable && canEditMembers && m.role !== "owner" && options.some((o) => o.value === m.role) ? (
                     <SelectMenu
                       variant="bare"
                       ariaLabel={`Role for ${m.email}`}

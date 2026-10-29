@@ -26,6 +26,10 @@ import { getKeyProject, listPortalOrgs, listPortalProjects } from "./portal";
  * Invites live in `portal-invites.ts`.
  */
 
+/**
+ * SOFT LIMITS: each is count-then-insert, not a database constraint, so a burst of concurrent
+ * requests can land a few over. They bound abuse and accidents; nothing relies on them holding.
+ */
 export const MAX_OWNED_ORGS = 5;
 export const MAX_PROJECTS_PER_ORG = 20;
 /** Live (not revoked, not expired) keys per project and env. */
@@ -49,6 +53,15 @@ export function normalizeEmail(value: unknown): string {
 }
 
 export const notFound = (what: string) => new HttpError(404, "NOT_FOUND", `${what} not found`);
+
+/**
+ * ⚠ AN INTERNAL ORG IS NEVER SELF-SERVE. "Dopl App" (`dev_orgs.internal`) logs every Dopl user's
+ * device traffic keyed by their user id, so who can read it, and which keys and projects it holds,
+ * is managed by hand. No invite, role change, new project, or key create/revoke goes through here.
+ */
+export function refuseInternal(internal: boolean): void {
+  if (internal) throw new HttpError(409, "INTERNAL_ORG", "This is an internal org. It is managed by hand.");
+}
 
 /** The caller's org with their role, or 404. */
 export async function requireOrg(userId: string, orgId: string): Promise<PortalOrg> {
@@ -107,6 +120,7 @@ export async function createProject(userId: string, orgId: string, input: { name
   const name = cleanName(input.name, "Project name");
   const org = await requireOrg(userId, orgId);
   if (!canManageKeys(org.role)) throw new HttpError(403, "FORBIDDEN", "Only an org owner or admin can create projects");
+  refuseInternal(org.internal);
   const db = supabaseAdmin();
   const existing = await db.from("dev_projects").select("id", { count: "exact", head: true }).eq("org_id", org.id);
   if (existing.error) throw dbError("createProject", existing.error);
@@ -129,12 +143,18 @@ export interface OrgMemberView {
   joinedAt: string | null;
 }
 
-export async function emailOf(userId: string): Promise<{ email: string | null; confirmed: boolean }> {
+/**
+ * The account's email and whether it is confirmed. `strict` (the invite accept) throws on a failed
+ * lookup, so an outage reads as a 5xx and never as "confirm your email"; a listing degrades to null.
+ */
+export async function emailOf(userId: string, strict = false): Promise<{ email: string | null; confirmed: boolean }> {
   try {
-    const { data } = await supabaseAdmin().auth.admin.getUserById(userId);
+    const { data, error } = await supabaseAdmin().auth.admin.getUserById(userId);
+    if (error && strict) throw new Error(`emailOf failed: ${error.message}`);
     const user = data?.user as { email?: string | null; email_confirmed_at?: string | null } | null | undefined;
     return { email: user?.email ?? null, confirmed: Boolean(user?.email_confirmed_at) };
-  } catch {
+  } catch (err) {
+    if (strict) throw err instanceof Error ? err : new Error(String(err));
     return { email: null, confirmed: false };
   }
 }
@@ -179,6 +199,7 @@ export async function changeMemberRole(
   role: unknown
 ): Promise<void> {
   const org = await requireOrg(userId, orgId);
+  refuseInternal(org.internal);
   if (targetUserId === org.ownerUserId) throw new HttpError(403, "FORBIDDEN", "The org owner's role cannot change");
   const current = await memberRole(org.id, targetUserId);
   if (!current) throw notFound("Member");
@@ -233,6 +254,7 @@ export async function createProjectKey(
   const kind = input.kind as ApiKeyKind;
   const project = await requireProject(userId, projectId);
   if (!canManageKeys(project.role)) throw new HttpError(403, "FORBIDDEN", "Only an org owner or admin can create keys");
+  refuseInternal(project.org.internal);
 
   const { data, error } = await supabaseAdmin()
     .from("dev_api_keys")
@@ -256,6 +278,7 @@ export async function revokeProjectKey(userId: string, keyId: string): Promise<v
   const project = key ? (await listPortalProjects(userId)).find((p) => p.id === key.projectId) : undefined;
   if (!key || !project) throw notFound("Key");
   if (!canManageKeys(project.role)) throw new HttpError(403, "FORBIDDEN", "Only an org owner or admin can revoke keys");
+  refuseInternal(project.org.internal);
   if (key.revokedAt) throw new HttpError(409, "KEY_REVOKED", "This key is already revoked");
   const revoked = await revokeApiKey({ projectId: project.id, keyId });
   if (!revoked) throw new HttpError(409, "KEY_REVOKED", "This key is already revoked");

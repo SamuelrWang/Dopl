@@ -251,3 +251,62 @@ describe("keys", () => {
     await expectHttp(revokeProjectKey(OWNER, minted.key.id), 409, "KEY_REVOKED");
   });
 });
+
+describe("🔒 internal orgs are never self-serve", () => {
+  let intOrg = "";
+  let intProject = "";
+  let intKey = "";
+  beforeEach(() => {
+    intOrg = seed("dev_orgs", { name: "Dopl", owner_user_id: OWNER, internal: true }).id as string;
+    intProject = seed("dev_projects", { org_id: intOrg, name: "Dopl App" }).id as string;
+    seed("dev_org_members", { org_id: intOrg, user_id: ADMIN, role: "admin" });
+    seed("dev_org_members", { org_id: intOrg, user_id: DEV, role: "developer" });
+    intKey = seed("dev_api_keys", {
+      project_id: intProject,
+      env: "live",
+      kind: "secret",
+      prefix: "sk_live_x",
+      key_hash: "c".repeat(64),
+      scopes: ["connect"],
+    }).id as string;
+  });
+
+  it("refuses invites, role changes, projects and key create/revoke with 409 INTERNAL_ORG", async () => {
+    for (const actor of [OWNER, ADMIN]) {
+      await expectHttp(createInvite(actor, intOrg, { email: "x@example.com", role: "developer" }), 409, "INTERNAL_ORG");
+      await expectHttp(createProject(actor, intOrg, { name: "x" }), 409, "INTERNAL_ORG");
+      await expectHttp(createProjectKey(actor, intProject, { env: "live", kind: "secret" }), 409, "INTERNAL_ORG");
+      await expectHttp(revokeProjectKey(actor, intKey), 409, "INTERNAL_ORG");
+    }
+    await expectHttp(changeMemberRole(OWNER, intOrg, DEV, "admin"), 409, "INTERNAL_ORG");
+    expect(rows("dev_org_invites")).toHaveLength(0);
+    expect(rows("dev_projects").filter((p) => p.org_id === intOrg)).toHaveLength(1);
+    expect(rows("dev_api_keys").find((k) => k.id === intKey)?.revoked_at).toBeNull();
+    expect(rows("dev_org_members").find((m) => m.org_id === intOrg && m.user_id === DEV)?.role).toBe("developer");
+  });
+
+  it("refuses accepting a hand-made invite into an internal org", async () => {
+    const token = "B".repeat(43);
+    seed("dev_org_invites", {
+      org_id: intOrg,
+      email: "stranger@example.com",
+      role: "developer",
+      token_hash: hashInviteToken(token),
+      expires_at: "2999-01-01T00:00:00.000Z",
+    });
+    await expectHttp(acceptInvite(STRANGER, token), 409, "INTERNAL_ORG");
+    expect(rows("dev_org_members").some((m) => m.user_id === STRANGER)).toBe(false);
+  });
+});
+
+describe("accept email lookup", () => {
+  it("a failed account lookup is an error, never 'confirm your email'", async () => {
+    const { token } = await createInvite(OWNER, orgId, { email: "gone@example.com", role: "developer" });
+    // STRANGER is not in fakePortal.users after this: the admin lookup answers an error.
+    fakePortal.users.delete(STRANGER);
+    const err = await acceptInvite(STRANGER, token).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as { status?: number }).status).toBeUndefined();
+    expect(String((err as Error).message)).toMatch(/emailOf failed/);
+  });
+});

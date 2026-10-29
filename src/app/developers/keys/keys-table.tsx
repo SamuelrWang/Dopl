@@ -58,11 +58,14 @@ export function KeysTable({
   env,
   keys,
   canManage,
+  internal = false,
 }: {
   projectId: string;
   env: "test" | "live";
   keys: KeyView[];
   canManage: boolean;
+  /** An internal org's keys are created and revoked by hand (`portal-admin.ts › refuseInternal`); Rotate stays. */
+  internal?: boolean;
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -127,7 +130,7 @@ export function KeysTable({
     <>
       <PageHeader
         title="API keys"
-        action={canManage ? <CreateButton onClick={() => setCreating(true)}>Create {env} key</CreateButton> : undefined}
+        action={canManage && !internal ? <CreateButton onClick={() => setCreating(true)}>Create {env} key</CreateButton> : undefined}
       />
 
       {revealed && (
@@ -167,7 +170,7 @@ export function KeysTable({
             {keys.map((k) => {
               const dead = k.status.kind === "revoked" || k.status.kind === "expired";
               const rotatable = canManage && k.status.kind === "active";
-              const revocable = canManage && !dead;
+              const revocable = canManage && !internal && !dead;
               return (
                 <tr key={k.id} className={cn(dead && "opacity-50")}>
                   <td className="whitespace-nowrap font-mono text-small">{k.masked}</td>
@@ -221,6 +224,7 @@ export function KeysTable({
           </Table>
         )}
         {!canManage && <p className={ov.note}>Only an org owner or admin can create, rotate or revoke keys.</p>}
+        {canManage && internal && <p className={ov.note}>Internal org. Keys are created and revoked by hand.</p>}
       </Card>
 
       <FormDialog

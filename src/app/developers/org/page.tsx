@@ -41,13 +41,15 @@ export default async function OrgPage({ searchParams }: { searchParams: Promise<
   return (
     <PortalFrame projects={projects} params={params} title="Organization">
       {org.internal && (
-        <EmptyState variant="outline" title="Internal org. Its traffic is never billed or counted as usage." />
+        <EmptyState variant="outline" title="Internal org. Never billed. Members, projects and keys are managed by hand." />
       )}
       <OrgView
         org={{ id: org.id, name: org.name, role: org.role }}
         me={userId}
-        canManageProjects={canManageKeys(org.role)}
-        canManageMembers={canManageMembers(org.role)}
+        // An internal org is managed by hand (`portal-admin.ts › refuseInternal`): no write controls.
+        canManageProjects={canManageKeys(org.role) && !org.internal}
+        canManageMembers={canManageMembers(org.role) && !org.internal}
+        canEditMembers={!org.internal}
         projects={projects.filter((p) => p.org.id === org.id).map((p) => ({ id: p.id, name: p.name, apiVersion: p.apiVersion }))}
         members={members.map((m) => ({
           userId: m.userId,
