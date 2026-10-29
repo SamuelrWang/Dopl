@@ -1,9 +1,11 @@
 /**
  * 🔒 W1.2 ASK ROUND TRIP (Plan §7.1, §10 "Ask round trip"): the display seam's SDK lens asks a
  * MIGRATED G2 through the real `@dopl/sdk` client → the real `/api/v1` deliver / actions route handlers
- * (developer-key auth, routing, policy, the even_g2 adapter and its dispatcher, the 200s ask hold) →
- * the device's SDK lens queue → the glasses' inbox and answer routes, authenticated by the device's
- * LEGACY prosumer token (the migrated device keeps it) → `dev_actions` settles → `ask` resolves.
+ * (developer-key auth, routing, policy, the even_g2 adapter and its dispatcher) → the device's SDK lens
+ * queue → the glasses' inbox and answer routes, authenticated by the device's LEGACY prosumer token
+ * (the migrated device keeps it) → `dev_actions` settles → the answer route hands the settled action,
+ * with the ask's channel-link key, to the app bridge → the ask's action reads answered.
+ * 🔒 Gap #3: `Prefer: respond-async` — the deliver returns BEFORE the wearer answers; nothing is held.
  *
  * Faked: the stores (memory), the developer-key table, the clock. Nothing else.
  */
@@ -20,9 +22,10 @@ import { Dopl } from "../../../../../packages/sdk/src/index";
 import { GET as contextGET } from "@/app/api/v1/users/[external_user_id]/context/route";
 import { POST as deliverPOST } from "@/app/api/v1/users/[external_user_id]/deliver/route";
 import { GET as actionGET } from "@/app/api/v1/actions/[id]/route";
-import { sdkUserLens } from "@/features/display/server/sdk-lens";
+import { parseSdkAskKey, sdkAskKey } from "@/features/display/server/sdk-ask-key";
+import { SDK_LENS_HEADERS, sdkUserLens } from "@/features/display/server/sdk-lens";
 import { hashCredential } from "@/features/glasses/core/devices/credentials";
-import type { SdkGlassesPort } from "@/features/glasses/core/devices/sdk-device";
+import type { SdkGlassesPort, SdkSettledAction } from "@/features/glasses/core/devices/sdk-device";
 import { createDeviceHandlers } from "@/features/glasses/core/messages/device-handlers";
 import type { GlassesMessage } from "@/features/glasses/core/messages/types";
 import { createFakeChannel } from "@/features/glasses/core/testing/fake-channel";
@@ -109,7 +112,9 @@ async function world() {
     delivered: (id, ids) => markDelivered(lensActions, id, ids),
     settled: (id, row) => settle(lensActions, id, row),
     migratedDeviceIds: async (userId) => (userId === DOPL_USER ? [link.id] : []),
+    isDoplAppProject: async (projectId, env) => projectId === PROJECT && env === "live",
   };
+  const bridged: Array<{ owner: string; settled: SdkSettledAction[] }> = [];
   const handlers = createDeviceHandlers({
     store: prosumerQueue.store,
     devices: prosumer.devices,
@@ -117,6 +122,10 @@ async function world() {
     linker: fakeLinker({}),
     allowPairStart: async () => true,
     sdk: port,
+    sdkAnswerLinked: async (owner, settled) => {
+      bridged.push({ owner: owner.user_id, settled });
+      return "ok";
+    },
     now: () => NOW,
     sleep: async (ms) => void (NOW += ms),
   });
@@ -126,8 +135,8 @@ async function world() {
       headers: { authorization: `Bearer ${LEGACY_TOKEN}`, "content-type": "application/json" },
       ...(body !== undefined && { body: JSON.stringify(body) }),
     });
-  const lens = sdkUserLens(new Dopl({ apiKey: key, baseUrl: "https://app.example/api/v1", fetch: inProcessFetch }), DOPL_USER);
-  return { store, sdkQueue, prosumerQueue, handlers, glasses, lens, link };
+  const lens = sdkUserLens(new Dopl({ apiKey: key, baseUrl: "https://app.example/api/v1", fetch: inProcessFetch, headers: { ...SDK_LENS_HEADERS } }), DOPL_USER);
+  return { store, sdkQueue, prosumerQueue, handlers, glasses, lens, link, bridged };
 }
 
 let logs: Array<Record<string, unknown>>;
@@ -145,34 +154,55 @@ beforeEach(async () => {
 });
 
 describe("W1.2 ask round trip over @dopl/sdk", () => {
-  it("🔒 the wearer's tap, through the legacy token, resolves the SDK ask; dev_actions settles done", async () => {
+  it("🔒 the ask returns at once (no hold); the wearer's tap settles it and reaches the app bridge with the channel link", async () => {
     const w = await world();
-    let inbox: GlassesMessage[] = [];
-    onHold = async () => {
-      const res = await w.handlers.inbox(w.glasses("/api/glasses/device/inbox?wait=0"));
-      expect(res.status).toBe(200);
-      inbox = ((await res.json()) as { messages: GlassesMessage[] }).messages;
-      const ask = inbox.find((m) => m.kind === "ask")!;
-      expect((await w.handlers.answer(w.glasses("/api/glasses/device/answer", { id: ask.id, index: 1 }))).status).toBe(200);
-    };
+    const CHAN = "55555555-5555-4555-8555-555555555555";
+    const key = sdkAskKey({ channelId: CHAN, displayId: "ship-1", nonce: "d-0000aaaa" });
+    let held = false;
+    onHold = async () => void (held = true);
+    const started = NOW;
 
-    const out = await w.lens.ask({ question: "Ship the build?", options: ["Ship", "Wait"], timeoutMs: 60_000, idempotencyKey: "rt-1" });
+    const ticket = await w.lens.startAsk({ question: "Ship the build?", options: ["Ship", "Wait"], idempotencyKey: key });
 
-    expect(inbox).toEqual([expect.objectContaining({ kind: "ask", payload: { question: "Ship the build?", options: ["Ship", "Wait"] }, status: "delivered" })]);
-    expect(out).toMatchObject({ status: "answered", index: 1, label: "Wait", deviceId: w.link.id });
-    expect(w.store.actions).toEqual([expect.objectContaining({ device_id: w.link.id, intent: "ask", capability: "ask.choice", status: "done", result: expect.objectContaining({ index: 1, label: "Wait" }) })]);
+    // Delivered and back with no server hold: no sleep ran, the clock did not move, the wearer has not answered.
+    expect(held).toBe(false);
+    expect(NOW).toBe(started);
+    expect(ticket).toEqual({ deliveryId: w.store.actions[0].id, deviceId: w.link.id });
+    expect(w.store.actions[0].status).toBe("queued");
+    expect(await w.lens.askOutcome(ticket.deliveryId)).toBeNull();
+
+    const { messages } = (await (await w.handlers.inbox(w.glasses("/api/glasses/device/inbox?wait=0"))).json()) as { messages: GlassesMessage[] };
+    expect(messages).toEqual([expect.objectContaining({ kind: "ask", payload: { question: "Ship the build?", options: ["Ship", "Wait"] }, status: "delivered" })]);
+    expect((await w.handlers.answer(w.glasses("/api/glasses/device/answer", { id: messages[0].id, index: 1 }))).status).toBe(200);
+
+    // The answer route handed the settled action to the bridge: the key names the decision's channel.
+    expect(w.bridged).toHaveLength(1);
+    expect(w.bridged[0].owner).toBe(DOPL_USER);
+    expect(w.bridged[0].settled).toEqual([expect.objectContaining({ id: ticket.deliveryId, idempotency_key: key, status: "done", result: expect.objectContaining({ index: 1, label: "Wait" }) })]);
+    expect(parseSdkAskKey(w.bridged[0].settled[0].idempotency_key)).toEqual({ channelId: CHAN, displayId: "ship-1" });
+
+    expect(await w.lens.askOutcome(ticket.deliveryId)).toEqual({ status: "answered", index: 1, label: "Wait", deviceId: w.link.id });
     // The prosumer queue was never written: the lens copy went over the SDK only.
     expect(w.prosumerQueue.rows).toEqual([]);
-    expect(logs).toContainEqual(expect.objectContaining({ evt: "sdk_lens", op: "ask", outcome: "answered", ms: expect.any(Number) }));
+    expect(logs).toContainEqual(expect.objectContaining({ evt: "sdk_lens", op: "ask", outcome: "ok", delivery_id: ticket.deliveryId }));
   });
 
-  it("a dismiss on the lens comes back as dismissed", async () => {
+  it("🔒 one copy: replaying the ask with the same key returns the first delivery, no second lens row", async () => {
     const w = await world();
-    onHold = async () => {
-      const { messages } = (await (await w.handlers.inbox(w.glasses("/api/glasses/device/inbox?wait=0"))).json()) as { messages: GlassesMessage[] };
-      expect((await w.handlers.dismiss(w.glasses("/api/glasses/device/dismiss", { id: messages[0].id }))).status).toBe(200);
-    };
-    expect(await w.lens.ask({ question: "Join?", options: ["Yes", "No"], timeoutMs: 60_000, idempotencyKey: "rt-2" })).toMatchObject({ status: "dismissed" });
+    const a = await w.lens.startAsk({ question: "Join?", options: ["Yes", "No"], idempotencyKey: "rt-dup" });
+    const b = await w.lens.startAsk({ question: "Join?", options: ["Yes", "No"], idempotencyKey: "rt-dup" });
+    expect(b.deliveryId).toBe(a.deliveryId);
+    expect(w.store.actions).toHaveLength(1);
+    expect(w.sdkQueue.rows).toHaveLength(1);
+  });
+
+  it("a dismiss on the lens reads back as dismissed", async () => {
+    const w = await world();
+    const ticket = await w.lens.startAsk({ question: "Join?", options: ["Yes", "No"], idempotencyKey: "rt-2" });
+    const { messages } = (await (await w.handlers.inbox(w.glasses("/api/glasses/device/inbox?wait=0"))).json()) as { messages: GlassesMessage[] };
+    expect((await w.handlers.dismiss(w.glasses("/api/glasses/device/dismiss", { id: messages[0].id }))).status).toBe(200);
+    expect(await w.lens.askOutcome(ticket.deliveryId)).toEqual({ status: "dismissed", deviceId: w.link.id });
+    expect(w.bridged).toEqual([]);
   });
 
   it("presence and a status screen over the same path; the screen lands on the legacy-token inbox", async () => {

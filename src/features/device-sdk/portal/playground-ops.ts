@@ -149,7 +149,17 @@ export const PLAYGROUND_OPS: readonly PlaygroundOp[] = [
  * Spec operations deliberately absent, with why. Empty today; an operation that must not run from
  * a browser-driven form (for example one that mints or reveals a secret) goes here.
  */
-export const NOT_IN_PLAYGROUND: Readonly<Record<string, string>> = {};
+export const NOT_IN_PLAYGROUND: Readonly<Record<string, string>> = {
+  createWebhookEndpoint: "Answers the endpoint's signing secret; the playground never shows secrets.",
+  rotateWebhookSecret: "Answers a new signing secret; the playground never shows secrets.",
+  updateWebhookEndpoint: "Changes live webhook configuration; done from your server, read on the Webhooks page.",
+  deleteWebhookEndpoint: "Deletes an endpoint and its delivery log; done from your server.",
+  replayWebhookDelivery: "Sends a real outbound POST to your endpoint; done from your server or the API.",
+  listWebhookEndpoints: "Read on the portal's Webhooks page.",
+  getWebhookEndpoint: "Read on the portal's Webhooks page.",
+  listWebhookDeliveries: "Read on the portal's Webhooks page.",
+  getWebhookDelivery: "Read on the portal's Webhooks page.",
+};
 
 const BY_ID = new Map(PLAYGROUND_OPS.map((op) => [op.id, op]));
 

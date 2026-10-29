@@ -24,6 +24,12 @@ import type {
   DeliverIntent,
   EventListResponse,
   EventOutcome,
+  ListResponse,
+  WebhookDelivery,
+  WebhookEndpoint,
+  WebhookEndpointCreateRequest,
+  WebhookEndpointUpdateRequest,
+  WebhookEndpointWithSecret,
 } from "@dopl/device-contracts";
 
 import { DOC_BASE, DoplError } from "./errors.js";
@@ -63,6 +69,15 @@ export const ROUTES = {
   "devices.get": { method: "GET", path: "/devices/{id}" },
   "actions.get": { method: "GET", path: "/actions/{id}" },
   "events.list": { method: "GET", path: "/events" },
+  "webhookEndpoints.create": { method: "POST", path: "/webhook_endpoints" },
+  "webhookEndpoints.list": { method: "GET", path: "/webhook_endpoints" },
+  "webhookEndpoints.get": { method: "GET", path: "/webhook_endpoints/{id}" },
+  "webhookEndpoints.update": { method: "PATCH", path: "/webhook_endpoints/{id}" },
+  "webhookEndpoints.delete": { method: "DELETE", path: "/webhook_endpoints/{id}" },
+  "webhookEndpoints.rotateSecret": { method: "POST", path: "/webhook_endpoints/{id}/rotate_secret" },
+  "webhookEndpoints.listDeliveries": { method: "GET", path: "/webhook_endpoints/{id}/deliveries" },
+  "webhookDeliveries.get": { method: "GET", path: "/webhook_deliveries/{id}" },
+  "webhookDeliveries.replay": { method: "POST", path: "/webhook_deliveries/{id}/replay" },
 } as const;
 
 /** `events.list` query: the shared list params plus the log filters (openapi `listEvents`). */
@@ -79,6 +94,12 @@ export interface EventListParams {
   intent?: DeliverIntent;
   /** The `route_decision.target` the call asked for. */
   route?: string;
+}
+
+/** Shared list query (openapi `ListCursor` / `ListLimit`). */
+export interface ListParams {
+  cursor?: string;
+  limit?: number;
 }
 
 function queryString(params: object | undefined): string {
@@ -138,6 +159,20 @@ export class Dopl {
   readonly events: {
     /** One page of the project's request log, newest first. Needs `analytics:read`. */
     list(params?: EventListParams, opts?: RequestOptions): Promise<EventListResponse>;
+  };
+  /** C8 webhook endpoints. The signing secret is returned only by `create` and `rotateSecret`. */
+  readonly webhookEndpoints: {
+    create(body: WebhookEndpointCreateRequest, opts?: RequestOptions): Promise<WebhookEndpointWithSecret>;
+    list(params?: ListParams, opts?: RequestOptions): Promise<ListResponse<WebhookEndpoint>>;
+    get(endpointId: string, opts?: RequestOptions): Promise<WebhookEndpoint>;
+    update(endpointId: string, body: WebhookEndpointUpdateRequest, opts?: RequestOptions): Promise<WebhookEndpoint>;
+    delete(endpointId: string, opts?: RequestOptions): Promise<{ id: string; deleted: true }>;
+    rotateSecret(endpointId: string, body?: { overlap_seconds?: number }, opts?: RequestOptions): Promise<WebhookEndpointWithSecret>;
+    listDeliveries(endpointId: string, params?: ListParams, opts?: RequestOptions): Promise<ListResponse<WebhookDelivery>>;
+  };
+  readonly webhookDeliveries: {
+    get(deliveryId: string, opts?: RequestOptions): Promise<WebhookDelivery>;
+    replay(deliveryId: string, opts?: RequestOptions): Promise<WebhookDelivery>;
   };
 
   constructor(options: DoplOptions) {
@@ -203,6 +238,29 @@ export class Dopl {
     };
     this.events = {
       list: (params, opts) => request({ method: "GET", path: `/events${queryString(params)}`, signal: opts?.signal }),
+    };
+    this.webhookEndpoints = {
+      create: (body, opts) =>
+        request({ method: "POST", path: "/webhook_endpoints", body, idempotencyKey: opts?.idempotencyKey, signal: opts?.signal }),
+      list: (params, opts) => request({ method: "GET", path: `/webhook_endpoints${queryString(params)}`, signal: opts?.signal }),
+      get: (id, opts) => request({ method: "GET", path: `/webhook_endpoints/${seg(id)}`, signal: opts?.signal }),
+      update: (id, body, opts) => request({ method: "PATCH", path: `/webhook_endpoints/${seg(id)}`, body, signal: opts?.signal }),
+      delete: (id, opts) => request({ method: "DELETE", path: `/webhook_endpoints/${seg(id)}`, signal: opts?.signal }),
+      rotateSecret: (id, body, opts) =>
+        request({
+          method: "POST",
+          path: `/webhook_endpoints/${seg(id)}/rotate_secret`,
+          body: body ?? {},
+          idempotencyKey: opts?.idempotencyKey,
+          signal: opts?.signal,
+        }),
+      listDeliveries: (id, params, opts) =>
+        request({ method: "GET", path: `/webhook_endpoints/${seg(id)}/deliveries${queryString(params)}`, signal: opts?.signal }),
+    };
+    this.webhookDeliveries = {
+      get: (id, opts) => request({ method: "GET", path: `/webhook_deliveries/${seg(id)}`, signal: opts?.signal }),
+      replay: (id, opts) =>
+        request({ method: "POST", path: `/webhook_deliveries/${seg(id)}/replay`, idempotencyKey: opts?.idempotencyKey, signal: opts?.signal }),
     };
   }
 

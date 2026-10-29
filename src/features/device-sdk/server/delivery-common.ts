@@ -25,7 +25,15 @@ export interface DeliveryDeps {
 
 /** A service answer the route turns into a response, plus what goes on the event row. */
 export type ServiceResult =
-  | { ok: true; status: number; body: Record<string, unknown>; decision: RouteDecision; event: DevEventAnnotation }
+  | {
+      ok: true;
+      status: number;
+      body: Record<string, unknown>;
+      decision: RouteDecision;
+      event: DevEventAnnotation;
+      /** `Prefer: respond-async` was honoured: an open `ask.*` returned without its hold (RFC 7240 `Preference-Applied`). */
+      respondedAsync?: true;
+    }
   | { ok: false; code: ErrorCode; message: string; decision: RouteDecision; event: DevEventAnnotation; status?: number; body?: Record<string, unknown> };
 
 export const nowOf = (d: DeliveryDeps) => (d.now ?? Date.now)();

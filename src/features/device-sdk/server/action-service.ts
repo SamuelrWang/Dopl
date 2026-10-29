@@ -33,6 +33,8 @@ import type { DevEventAnnotation } from "./with-developer-key";
  * answer lands on. The glasses MCP hold (`display/server/service.ts › hold`) is NOT reused: it is keyed
  * to a Dopl ACCOUNT's lens queue and channel stamps, and SDK end users have no Dopl account (D1).
  * Past the hold the response says `delivered`/`queued` and the caller polls `GET /v1/actions/{id}`.
+ * `Prefer: respond-async` (`delivery-routes.ts › prefersRespondAsync`) skips the hold: the 202 comes
+ * back at once and no function is held for the wearer.
  */
 
 const DEFAULT_ASK_POLL_MS = 1000;
@@ -123,7 +125,9 @@ export async function deviceAction(
   scope: Scope,
   deviceId: string,
   capability: CapabilityId,
-  req: DeviceActionRequest
+  req: DeviceActionRequest,
+  /** `hold: false` (`Prefer: respond-async`): an `ask.*` returns at once, unanswered; no 200s hold. */
+  opts: { hold?: boolean } = {}
 ): Promise<ServiceResult> {
   const decision: RouteDecision = { target: deviceId, reason: "explicit device", candidates: [deviceId] };
   const event: DevEventAnnotation = { device_id: deviceId, capability };
@@ -205,9 +209,10 @@ export async function deviceAction(
     return { ok: false, code: res.error.code, message: res.error.message, decision, event: { ...evDone, latency_ms: latency } };
   }
   await deps.store.updateAction(scope, id, { status: res.status, result: res.result });
-  if (isAsk(capability) && (res.status === "queued" || res.status === "delivered")) res = await holdAndSettle(deps, scope, id, res);
+  const open = isAsk(capability) && (res.status === "queued" || res.status === "delivered");
+  if (open && opts.hold !== false) res = await holdAndSettle(deps, scope, id, res);
   const out = await accept(res.status, res.result);
-  return { ...out, event: { ...out.event, latency_ms: latency } };
+  return { ...out, event: { ...out.event, latency_ms: latency }, ...(open && opts.hold === false && { respondedAsync: true as const }) };
 }
 
 function refusal(code: ServiceResultCode, message: string, decision: RouteDecision, event: DevEventAnnotation): ServiceResult {

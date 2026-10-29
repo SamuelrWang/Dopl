@@ -12,7 +12,7 @@ export const DEFAULT_BASE_URL = "https://www.usedopl.com/api/v1";
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
 export interface RequestSpec {
-  method: "GET" | "POST" | "DELETE";
+  method: "GET" | "POST" | "PATCH" | "DELETE";
   /** Path below the base URL, already encoded, starting with `/`. */
   path: string;
   body?: unknown;

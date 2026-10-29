@@ -9,6 +9,7 @@
  */
 import type { GlassesMessage } from "@/features/glasses/core/messages/types";
 import type { ActionStatus } from "../../types";
+import type { StoredAction } from "../delivery-store";
 import type { MemoryDeliveryStore } from "../delivery-store-memory";
 
 export interface LensActionPatch {
@@ -17,9 +18,16 @@ export interface LensActionPatch {
   result?: Record<string, unknown>;
 }
 
-/** Moves the `dev_actions` rows of this device whose `result.lens_message_id` is in `lensMessageIds`. */
+/** A `dev_actions` row a move just settled, as stored AFTER the move (tenant, key, status, result). */
+export type MovedLensAction = StoredAction;
+
+/**
+ * Moves the `dev_actions` rows of this device whose `result.lens_message_id` is in `lensMessageIds`,
+ * and returns the rows it moved (after the move). A row whose status was not in `from` is not moved
+ * and not returned, so a late hop reports nothing.
+ */
 export interface LensActionStore {
-  move(deviceId: string, lensMessageIds: string[], from: ActionStatus[], patch: LensActionPatch): Promise<void>;
+  move(deviceId: string, lensMessageIds: string[], from: ActionStatus[], patch: LensActionPatch): Promise<MovedLensAction[]>;
 }
 
 const OPEN: ActionStatus[] = ["queued", "delivered"];
@@ -43,15 +51,17 @@ export async function markDelivered(store: LensActionStore, deviceId: string, le
   if (lensMessageIds.length > 0) await store.move(deviceId, lensMessageIds, ["queued"], { status: "delivered" });
 }
 
-export async function settle(store: LensActionStore, deviceId: string, row: GlassesMessage): Promise<void> {
+/** Settles the action(s) a lens row serves; returns the ones this call moved (none for a late hop). */
+export async function settle(store: LensActionStore, deviceId: string, row: GlassesMessage): Promise<MovedLensAction[]> {
   const patch = settlementFor(row);
-  if (patch) await store.move(deviceId, [row.id], OPEN, patch);
+  return patch ? store.move(deviceId, [row.id], OPEN, patch) : [];
 }
 
 /** The {@link LensActionStore} over the in-memory delivery store (suites). */
 export function memoryLensActions(store: MemoryDeliveryStore): LensActionStore {
   return {
     async move(deviceId, ids, from, patch) {
+      const moved: MovedLensAction[] = [];
       for (const a of store.actions) {
         const lens = a.result?.lens_message_id;
         if (a.device_id !== deviceId || typeof lens !== "string" || !ids.includes(lens) || !from.includes(a.status)) continue;
@@ -59,7 +69,9 @@ export function memoryLensActions(store: MemoryDeliveryStore): LensActionStore {
         if (patch.result) a.result = { ...(a.result ?? {}), ...patch.result };
         a.response = withStatus(a.response, patch.status);
         a.updated_at = new Date(store.now()).toISOString();
+        moved.push({ ...a });
       }
+      return moved;
     },
   };
 }

@@ -10,7 +10,7 @@ vi.mock("@/features/device-sdk/server/sdk-delivery-flag", () => ({ sdkDeliveryFo
 
 import { Dopl, DoplError } from "@dopl/sdk";
 import { GlassesValidationError } from "@/features/glasses/core/validation";
-import { classify, createSdkLens, sdkUserLens, SdkLensError, toSdkBlocks } from "./sdk-lens";
+import { askOutcomeOf, classify, createSdkLens, isPreSendFailure, neverLeft, preSendAwareFetch, SDK_LENS_HEADERS, sdkUserLens, SdkLensError, toSdkBlocks } from "./sdk-lens";
 import { sdkPlanOf } from "./sdk-seam";
 
 const KEY = "sk_test_EXAMPLE0000000000000000";
@@ -42,15 +42,32 @@ beforeEach(() => {
 describe("classify", () => {
   const de = (status: number | null, code: string, type = "invalid_request_error") =>
     new DoplError({ type: type as never, code: code as never, message: "m", retryable: false, doc_url: "d", status });
-  it("unavailable (fallback) vs refusal", () => {
-    expect(classify(de(null, "network_error", "api_error"))).toMatchObject({ code: "network_error", fallback: true });
-    expect(classify(de(503, "unexpected_response", "api_error"))).toMatchObject({ fallback: true });
-    expect(classify(de(401, "unauthenticated", "authentication_error"))).toMatchObject({ fallback: true });
-    expect(classify(new TypeError("boom"))).toMatchObject({ code: "error", fallback: true });
-    expect(classify(de(409, "device_offline", "device_error"))).toMatchObject({ code: "device_offline", fallback: false });
-    expect(classify(de(400, "invalid_request"))).toMatchObject({ fallback: false });
-    // Our own timeout: the call may have landed, so never a second copy.
-    expect(classify(de(null, "network_error", "api_error"), true)).toMatchObject({ code: "timeout", fallback: false });
+  it("🔒 fallback only on PROVEN non-delivery; may-have-landed is unconfirmed; an SDK no is a refusal", () => {
+    // Proven: the connection never opened, or the key was refused before any write.
+    expect(classify(de(null, "network_error", "api_error"), { preSend: true })).toMatchObject({ code: "network_error", fallback: true, unconfirmed: false });
+    expect(classify(de(401, "unauthenticated", "authentication_error"))).toMatchObject({ fallback: true, unconfirmed: false });
+    expect(classify(de(403, "insufficient_scope", "permission_error"))).toMatchObject({ fallback: true });
+    // May have landed: never the prosumer path.
+    expect(classify(de(null, "network_error", "api_error"))).toMatchObject({ code: "network_error", fallback: false, unconfirmed: true });
+    expect(classify(de(503, "unexpected_response", "api_error"))).toMatchObject({ fallback: false, unconfirmed: true });
+    expect(classify(de(202, "unexpected_response", "api_error"))).toMatchObject({ fallback: false, unconfirmed: true });
+    expect(classify(new TypeError("boom"))).toMatchObject({ code: "error", fallback: false, unconfirmed: true });
+    expect(classify(de(null, "network_error", "api_error"), { timedOut: true, preSend: true })).toMatchObject({ code: "timeout", fallback: false, unconfirmed: true });
+    // Refusals.
+    expect(classify(de(409, "device_offline", "device_error"))).toMatchObject({ code: "device_offline", fallback: false, unconfirmed: false });
+    expect(classify(de(400, "invalid_request"))).toMatchObject({ fallback: false, unconfirmed: false });
+  });
+
+  it("isPreSendFailure: connection-phase codes through the cause chain; a reset is not one", () => {
+    const fetchFailed = (cause: unknown) => Object.assign(new TypeError("fetch failed"), { cause });
+    expect(isPreSendFailure(fetchFailed({ code: "ECONNREFUSED" }))).toBe(true);
+    expect(isPreSendFailure(fetchFailed({ code: "ENOTFOUND" }))).toBe(true);
+    expect(isPreSendFailure(fetchFailed({ code: "UND_ERR_CONNECT_TIMEOUT" }))).toBe(true);
+    expect(isPreSendFailure(fetchFailed({ errors: [{ code: "ECONNREFUSED" }, { code: "ENETUNREACH" }] }))).toBe(true);
+    expect(isPreSendFailure(fetchFailed({ errors: [{ code: "ECONNREFUSED" }, { code: "ECONNRESET" }] }))).toBe(false);
+    expect(isPreSendFailure(fetchFailed({ code: "ECONNRESET" }))).toBe(false);
+    expect(isPreSendFailure(fetchFailed({ code: "UND_ERR_SOCKET" }))).toBe(false);
+    expect(isPreSendFailure(new TypeError("fetch failed"))).toBe(false);
   });
 });
 
@@ -91,20 +108,168 @@ describe("sdkUserLens", () => {
     expect(logs[0]).toMatchObject({ evt: "sdk_lens", op: "show", outcome: "ok", delivery_id: "dl1" });
   });
 
-  it("ask: answered, dismissed and refused outcomes; never rejects", async () => {
-    const deliver = () => ok({ delivery_id: "dl1", routed_to: { device_id: "g2", kind: "glasses", reason: "r" }, status: "done" }, 202);
-    const action = (result: unknown) => () => ok({ id: "dl1", status: "done", result, error: null });
-    const run = (result: unknown) =>
-      sdkUserLens(client({ [`POST /users/${USER}/deliver`]: deliver, ["GET /actions/dl1"]: action(result) }).dopl, USER).ask({ question: "Q?", options: ["A", "B"], timeoutMs: 5_000, idempotencyKey: "k" });
-    expect(await run({ index: 1, label: "B", lens_message_id: "x" })).toMatchObject({ status: "answered", index: 1, label: "B", deviceId: "g2" });
-    expect(await run({ dismissed: true, index: null, label: null })).toMatchObject({ status: "dismissed", deviceId: "g2" });
+  it("startAsk: one deliver, intent ask to the glasses, returns at once with the action id", async () => {
+    let body: Record<string, unknown> = {};
+    const routes = {
+      [`POST /users/${USER}/deliver`]: () => ok({ delivery_id: "dl1", routed_to: { device_id: "g2", kind: "glasses", reason: "r" }, status: "delivered" }, 202),
+    };
+    const dopl = new Dopl({
+      apiKey: KEY,
+      baseUrl: "https://app.example/api/v1",
+      fetch: async (_u, init) => {
+        body = JSON.parse(String(init.body));
+        return routes[`POST /users/${USER}/deliver`]();
+      },
+    });
+    expect(await sdkUserLens(dopl, USER).startAsk({ question: "Q?", options: ["A", "B"], idempotencyKey: "k" })).toEqual({ deliveryId: "dl1", deviceId: "g2" });
+    expect(body).toMatchObject({ intent: "ask", target: "glasses", content: { text: "Q?", options: [{ label: "A" }, { label: "B" }] }, idempotency_key: "k" });
+    expect(logs.map((l) => [l.op, l.outcome])).toEqual([["ask", "ok"]]);
+  });
+
+  it("startAsk: an SDK no is a refusal; accepted-but-not-shown (failed, needs_confirmation) too", async () => {
     const offline = sdkUserLens(client({ [`POST /users/${USER}/deliver`]: () => err(409, "device_offline", "device_error") }).dopl, USER);
-    expect(await offline.ask({ question: "Q?", options: ["A", "B"], timeoutMs: 5_000, idempotencyKey: "k" })).toMatchObject({ status: "refused", code: "device_offline" });
-    expect(logs.filter((l) => l.op === "ask").map((l) => l.outcome)).toEqual(["answered", "dismissed", "device_offline"]);
+    await expect(offline.startAsk({ question: "Q?", options: ["A", "B"], idempotencyKey: "k" })).rejects.toMatchObject({ code: "device_offline", fallback: false, unconfirmed: false });
+    for (const status of ["failed", "needs_confirmation"]) {
+      const c = client({ [`POST /users/${USER}/deliver`]: () => ok({ delivery_id: "dl1", routed_to: { device_id: "g2", kind: "glasses", reason: "r" }, status }, 202) });
+      await expect(sdkUserLens(c.dopl, USER).startAsk({ question: "Q?", options: ["A", "B"], idempotencyKey: "k" })).rejects.toMatchObject({ code: status, fallback: false });
+    }
+  });
+
+  it("askOutcome: answered / dismissed / failed; null while open or when the read fails", async () => {
+    const action = (status: string, result: unknown, error: unknown = null) => () => ok({ action_id: "dl1", device_id: "g2", status, result, error });
+    const read = (r: () => Response) => sdkUserLens(client({ ["GET /actions/dl1"]: r }).dopl, USER).askOutcome("dl1");
+    expect(await read(action("done", { index: 1, label: "B", lens_message_id: "x" }))).toEqual({ status: "answered", index: 1, label: "B", deviceId: "g2" });
+    expect(await read(action("done", { dismissed: true, index: null, label: null }))).toEqual({ status: "dismissed", deviceId: "g2" });
+    expect(await read(action("failed", null, { code: "device_offline" }))).toEqual({ status: "refused", code: "device_offline" });
+    expect(await read(action("delivered", { lens_message_id: "x" }))).toBeNull();
+    expect(await sdkUserLens(client({}).dopl, USER).askOutcome("dl1")).toBeNull();
+    expect(askOutcomeOf({ status: "done", result: { index: "x" }, error: null, device_id: "g2" })).toEqual({ status: "refused", code: "unexpected_answer" });
+  });
+});
+
+describe("🔒 preSendAwareFetch under a retrying SDK (W2.2)", () => {
+  const refused = () => Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNREFUSED" } });
+  const reset = () => Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNRESET" } });
+  const twice = async (first: () => Promise<Response>, second: () => Promise<Response>) => {
+    const steps = [first, second];
+    const f = preSendAwareFetch(() => steps.shift()!());
+    const signal = new AbortController().signal;
+    // A retrying SDK fetches twice under ONE call's signal.
+    for (let i = 0; i < 2; i++) await f("u", { signal }).catch(() => undefined);
+    return neverLeft(signal);
+  };
+
+  it("only connect failures, every time: proven never left", async () => {
+    expect(await twice(() => Promise.reject(refused()), () => Promise.reject(refused()))).toBe(true);
+  });
+
+  it("a reset, then a connect refusal on the retry: NOT proven (the first may have landed)", async () => {
+    expect(await twice(() => Promise.reject(reset()), () => Promise.reject(refused()))).toBe(false);
+  });
+
+  it("a response, then a connect refusal on the retry: NOT proven", async () => {
+    expect(await twice(async () => new Response("{}", { status: 503 }), () => Promise.reject(refused()))).toBe(false);
+  });
+});
+
+describe("🔒 at most one lens copy (gap #6): one same-key replay when the outcome is unknown", () => {
+  const delivered = () => ok({ delivery_id: "dl1", routed_to: { device_id: "g2", kind: "glasses", reason: "r" }, status: "delivered" }, 202);
+  function scripted(...steps: Array<() => Response>) {
+    const seen: Array<{ key: string | null; body: string }> = [];
+    const dopl = new Dopl({
+      apiKey: KEY,
+      baseUrl: "https://app.example/api/v1",
+      fetch: async (_u, init) => {
+        seen.push({ key: new Headers(init.headers).get("idempotency-key"), body: String(init.body) });
+        const step = steps.shift();
+        if (!step) throw new Error("no more steps");
+        return step();
+      },
+    });
+    return { lens: sdkUserLens(dopl, USER), seen };
+  }
+  const reset = () => {
+    throw Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNRESET" } });
+  };
+  const ask = { question: "Q?", options: ["A", "B"], idempotencyKey: "k-1" };
+
+  it("5xx then the replay lands: one delivery, same key and body both times", async () => {
+    const s = scripted(() => err(503, "service_unavailable", "api_error"), delivered);
+    expect(await s.lens.startAsk(ask)).toMatchObject({ deliveryId: "dl1" });
+    expect(s.seen).toHaveLength(2);
+    expect(s.seen[0]).toEqual(s.seen[1]);
+    expect(s.seen[0].key).toBe("k-1");
+    expect(logs.map((l) => [l.op, l.outcome])).toEqual([["ask", "service_unavailable"], ["ask_replay", "ok"]]);
+  });
+
+  it("a connection lost mid-call, then a refusal on replay: that refusal", async () => {
+    const s = scripted(reset, () => err(409, "device_offline", "device_error"));
+    await expect(s.lens.startAsk(ask)).rejects.toMatchObject({ code: "device_offline", fallback: false });
+  });
+
+  it("still unknown after the replay (or the replay proven unsent): `unconfirmed`, never the prosumer path", async () => {
+    await expect(scripted(reset, reset).lens.startAsk(ask)).rejects.toMatchObject({ code: "unconfirmed", fallback: false, unconfirmed: false });
+    await expect(scripted(() => err(500, "internal", "api_error"), () => err(401, "unauthenticated", "authentication_error")).lens.startAsk(ask)).rejects.toMatchObject({
+      code: "unconfirmed",
+      fallback: false,
+    });
+  });
+
+  it("a refusal or a proven non-delivery is NOT replayed", async () => {
+    const refused = scripted(() => err(429, "rate_limited", "rate_limit_error"), delivered);
+    await expect(refused.lens.startAsk(ask)).rejects.toMatchObject({ code: "rate_limited" });
+    expect(refused.seen).toHaveLength(1);
+    const keyOff = scripted(() => err(401, "unauthenticated", "authentication_error"), delivered);
+    await expect(keyOff.lens.startAsk(ask)).rejects.toMatchObject({ fallback: true });
+    expect(keyOff.seen).toHaveLength(1);
+  });
+
+  it("screens follow the same rule", async () => {
+    const s = scripted(() => err(502, "bad_gateway", "api_error"), delivered);
+    await s.lens.screen({ blocks: [{ id: "h", type: "heading", text: "Hi" } as never], idempotencyKey: "k-2" });
+    expect(s.seen.map((x) => x.key)).toEqual(["k-2", "k-2"]);
+    await expect(scripted(reset, reset).lens.screen({ blocks: [{ id: "h", type: "heading", text: "Hi" } as never], idempotencyKey: "k-3" })).rejects.toMatchObject({ code: "unconfirmed", fallback: false });
+  });
+
+  it("a read is never replayed: unknown = unavailable (it delivered nothing)", async () => {
+    const s = scripted(() => err(503, "service_unavailable", "api_error"));
+    await expect(s.lens.state()).rejects.toMatchObject({ fallback: true });
+    expect(s.seen).toHaveLength(1);
   });
 });
 
 describe("createSdkLens", () => {
+  it("🔒 every call asks for respond-async (no ask hold), and a connection that never opened is a proven fallback", async () => {
+    sdkDeliveryFor.mockResolvedValue({ on: true, deviceIds: ["g2"] });
+    const prefer: Array<string | null> = [];
+    const answered = createSdkLens({
+      key: KEY,
+      baseUrl: "https://app.example/api/v1",
+      fetch: async (_u, init) => {
+        prefer.push(new Headers(init.headers).get("prefer"));
+        return ok({ delivery_id: "dl1", routed_to: { device_id: "g2", kind: "glasses", reason: "r" }, status: "delivered" }, 202);
+      },
+    });
+    await (await answered.forUser(USER))!.lens.startAsk({ question: "Q?", options: ["A", "B"], idempotencyKey: "k" });
+    expect(prefer).toEqual([SDK_LENS_HEADERS.Prefer]);
+
+    let calls = 0;
+    const refused = createSdkLens({
+      key: KEY,
+      baseUrl: "https://app.example/api/v1",
+      fetch: async () => {
+        calls++;
+        throw Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNREFUSED" } });
+      },
+    });
+    await expect((await refused.forUser(USER))!.lens.startAsk({ question: "Q?", options: ["A", "B"], idempotencyKey: "k" })).rejects.toMatchObject({
+      code: "network_error",
+      fallback: true,
+    });
+    expect(calls).toBe(1);
+    sdkDeliveryFor.mockReset();
+  });
+
   it("flag off → null; flag on without a key, or a failed lookup → unavailable (prosumer path)", async () => {
     sdkDeliveryFor.mockResolvedValueOnce({ on: false, deviceIds: [] });
     expect(await createSdkLens({ key: KEY }).forUser(USER)).toBeNull();

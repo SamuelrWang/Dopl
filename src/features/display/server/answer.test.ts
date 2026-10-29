@@ -13,7 +13,7 @@ vi.mock("@/features/channels/server/repository-messages", () => ({ findMessageBy
 vi.mock("@/features/glasses/core/messages/inbox", () => ({ answerAsk: vi.fn() }));
 vi.mock("@/features/glasses/core/messages/repository", () => ({ glassesRepository: { transition: vi.fn() } }));
 vi.mock("@/features/glasses/core/channel-context", () => ({ operatorChannelContext: vi.fn() }));
-vi.mock("./repository", () => ({ stampAnswer: vi.fn(), findMessageRow: vi.fn() }));
+vi.mock("./repository", () => ({ stampAnswer: vi.fn(), findMessageRow: vi.fn(), findByDisplayId: vi.fn() }));
 
 import { postMessage } from "@/features/channels/server/service";
 import { requireMemberChannel, type ChannelContext } from "@/features/channels/server/service-shared";
@@ -22,8 +22,9 @@ import { EscalationAlreadyAnsweredError } from "@/features/channels/server/error
 import { answerAsk } from "@/features/glasses/core/messages/inbox";
 import { glassesRepository } from "@/features/glasses/core/messages/repository";
 import { operatorChannelContext } from "@/features/glasses/core/channel-context";
-import { findMessageRow, stampAnswer } from "./repository";
-import { answerDisplay, answerFromLens } from "./answer";
+import { findByDisplayId, findMessageRow, stampAnswer } from "./repository";
+import { answerDisplay, answerFromLens, answerFromSdkLens } from "./answer";
+import { parseSdkAskKey, sdkAskKey } from "./sdk-ask-key";
 import { onAnswerInserted } from "./answer-stamp";
 
 const OWNER = "11111111-1111-4111-8111-111111111111";
@@ -159,5 +160,61 @@ describe("answerFromLens (§5.3 lens tap)", () => {
       at: "t2",
       block_id: "c",
     });
+  });
+});
+
+describe("answerFromSdkLens (W1.2 gap #3: the SDK lens answer, on the glasses' answer route)", () => {
+  const CHAN = "55555555-5555-4555-8555-555555555555";
+  const KEY = sdkAskKey({ channelId: CHAN, displayId: "ship-1", nonce: "d-abcd1234" });
+  const source = { kind: "glasses" } as never;
+  const done = (o: Record<string, unknown> = {}) => ({ id: "act-1", idempotency_key: KEY, status: "done", result: { index: 1, label: "Wait" }, ...o });
+  const decision = (sdk_ask_key: string | undefined = KEY) => ({ ...row({ display: { ...V2, sdk_ask_key }, escalation: ESCALATION }), workspace_id: "ws", channel_id: CHAN });
+
+  beforeEach(() => {
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    vi.mocked(operatorChannelContext).mockResolvedValue(ctx());
+    vi.mocked(findByDisplayId).mockResolvedValue(decision() as never);
+    vi.mocked(findMessageRow).mockResolvedValue(decision() as never);
+    vi.mocked(findMessageById).mockResolvedValue(decision() as never);
+  });
+
+  it("the key round-trips; another caller's key is not ours", () => {
+    expect(parseSdkAskKey(KEY)).toEqual({ channelId: CHAN, displayId: "ship-1" });
+    expect(sdkAskKey({ channelId: null, displayId: "x", nonce: "n" })).toBe("display-x-n");
+    expect(parseSdkAskKey("display-x-n")).toBeNull();
+    expect(parseSdkAskKey("dsk1.not-a-uuid.n.x")).toBeNull();
+    expect(parseSdkAskKey(`dsk1.${CHAN}.n.bad id`)).toBeNull();
+    expect(KEY.length).toBeLessThanOrEqual(255);
+    expect(sdkAskKey({ channelId: CHAN, displayId: "x".repeat(64), nonce: "d-abcd1234" }).length).toBeLessThanOrEqual(255);
+  });
+
+  it("posts the lens answer to the decision the key names, as the owner from glasses", async () => {
+    expect(await answerFromSdkLens(OWNER, [done()], source)).toBe("ok");
+    expect(findByDisplayId).toHaveBeenCalledWith(CHAN, "ship-1", OWNER);
+    expect(vi.mocked(postMessage).mock.calls[0][2]).toMatchObject({ escalationAnswer: { escalationMessageId: MSG, optionIndex: 1 } });
+  });
+
+  it("already answered in the channel: conflict (the route answers 409)", async () => {
+    vi.mocked(postMessage).mockRejectedValueOnce(new EscalationAlreadyAnsweredError(MSG));
+    expect(await answerFromSdkLens(OWNER, [done()], source)).toBe("conflict");
+  });
+
+  it("🔒 posts nothing for: a dismiss, an unsettled or failed action, a foreign key, or a decision since replaced by another ask", async () => {
+    expect(await answerFromSdkLens(OWNER, [done({ result: { dismissed: true, index: null, label: null } })], source)).toBe("ok");
+    expect(await answerFromSdkLens(OWNER, [done({ status: "failed" })], source)).toBe("ok");
+    expect(await answerFromSdkLens(OWNER, [done({ idempotency_key: "someone-else-1" })], source)).toBe("ok");
+    vi.mocked(findByDisplayId).mockResolvedValueOnce(decision("dsk1.older") as never);
+    expect(await answerFromSdkLens(OWNER, [done()], source)).toBe("ok");
+    vi.mocked(findByDisplayId).mockResolvedValueOnce(null);
+    expect(await answerFromSdkLens(OWNER, [done()], source)).toBe("ok");
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  it("never throws: a failed lookup is logged and the lens answer stands", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(findByDisplayId).mockRejectedValueOnce(new Error("db down"));
+    expect(await answerFromSdkLens(OWNER, [done()], source)).toBe("ok");
+    expect(err).toHaveBeenCalledWith("[display] sdk lens answer bridge failed", expect.any(Error));
+    err.mockRestore();
   });
 });

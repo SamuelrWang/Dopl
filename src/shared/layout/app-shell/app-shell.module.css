@@ -146,14 +146,6 @@
   overflow: hidden;
 }
 
-/* ⚠ NO SIDEBAR BESIDE IT (R-13, 2026-09-17): `.pageCard`'s zero left margin was
-   the sidebar's own 12px padding standing in for it, so the card takes that
-   inset back when the nav is gone. Attribute-selected because both class
-   expressions are byte-shared with the shell ghost. */
-.panel[data-no-nav] .pageCard {
-  margin-left: 12px;
-}
-
 /* ⚠ THE PAGE'S OWN `.page-float` COLLAPSES INSIDE THE CARD, and this is the
    seam the restructure turned on. Sixteen surfaces across two trees compose
    `.page-float` to mean "THE full-page surface" — every workspace page, its
@@ -302,8 +294,7 @@
    restates none of them — the whole reason it wears these classes at all.
    ⚠ `border-color`, NOT `border: none`: the border box stays, so the blocks
    inside sit exactly where the real pill's and card's content sits.
-   ⚠ ATTRIBUTE-SCOPED, the `.panel[data-no-nav] .pageCard` idiom above.
-   `data-skeleton` is set by `apps/desktop-ui/src/components/skeletons/shell-skeleton.tsx`
+   ⚠ ATTRIBUTE-SCOPED: `data-skeleton` is set by `apps/desktop-ui/src/components/skeletons/shell-skeleton.tsx`
    and by nothing else, so the LOADED sidebar is untouched — and it is an
    attribute rather than a second class because the ghost's class expressions are
    byte-shared with `app-shell.tsx` and pinned in `frame-skeletons.test.tsx`. */

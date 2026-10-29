@@ -1,15 +1,12 @@
 import "server-only";
-import { after } from "next/server";
-import { glassesMessageSource } from "@/features/channels/server/message-source-stamp";
 import { platformOf, type GlassesDeps } from "@/features/glasses/core/messages/service";
 import { GLASSES_LIMITS as GL, cleanField, cleanList } from "@/features/glasses/core/validation";
-import { EVEN_G2_INFO } from "@/features/glasses/platforms/even-g2/info";
-import type { ChoiceBlock, DisplayAnswerStamp, DisplayBlock, DisplayLayout, Positioned } from "../core/types";
-import { answerDecisionFromLens } from "./answer";
-import { createSdkLens, SdkLensError, type SdkAskOutcome, type SdkLens, type SdkUserLens } from "./sdk-lens";
+import type { ChoiceBlock, DisplayBlock, DisplayLayout, Positioned } from "../core/types";
+import { createSdkLens, SdkLensError, type SdkLens, type SdkUserLens } from "./sdk-lens";
 
 /**
- * The display seam's SDK half (W1.2): WHICH lens copies the SDK carries, and the lens-answer bridge.
+ * The display seam's SDK half (W1.2): WHICH lens copies the SDK carries. The lens answer to an SDK ask
+ * is bridged on the glasses' answer route (`answer.ts › answerFromSdkLens`, gap #3), not here.
  *
  * 🔒 FAITHFUL OR NOT AT ALL. The SDK path takes a lens copy only when the frozen contract can carry it
  * unchanged: a stack (no absolute layout) that fits the G2 at degradation level 0 (the SDK's even_g2
@@ -87,36 +84,4 @@ export async function sdkLensFor(deps: ShowDeps, userId: string): Promise<{ lens
   const links = await deps.devices.listDevices(userId);
   if (links.some((d) => !sel.deviceIds.includes(d.id))) return { lens: null, unavailable: "unmigrated device" };
   return { lens: sel.lens };
-}
-
-export interface LensAnswer {
-  outcome: SdkAskOutcome;
-  /** The decision's answer stamp, when the lens answer was posted to the channel. */
-  stamp?: DisplayAnswerStamp;
-}
-
-/**
- * The SDK ask's outcome, BRIDGED: a lens answer to a channel decision posts there as the owner, from
- * glasses (the prosumer `answerLinked` does the same for a lens tap). A decision already answered in
- * the channel keeps that answer; the lens answer is dropped (logged).
- */
-export function bridgeLensAnswer(ask: Promise<SdkAskOutcome>, a: { userId: string; messageId: string | null; decision: boolean }): Promise<LensAnswer> {
-  return ask.then(async (outcome) => {
-    if (outcome.status !== "answered" || !a.messageId || !a.decision) return { outcome };
-    const source = glassesMessageSource({ id: outcome.deviceId ?? "", name: "", platform: EVEN_G2_INFO.id });
-    const posted = await answerDecisionFromLens(a.userId, a.messageId, outcome.index, source);
-    console.info("[display] " + JSON.stringify({ evt: "sdk_lens", op: "bridge", outcome: posted.result, answer_ms: outcome.ms }));
-    return posted.result === "ok" ? { outcome, stamp: posted.answer } : { outcome };
-  });
-}
-
-/** Keep a lens-answer bridge running past the response (`after`), or detached where there is no request. */
-export function keepAlive(p: Promise<unknown>): void {
-  const run = () => p.catch((err) => console.error("[display] sdk lens bridge failed", err));
-  try {
-    after(run);
-  } catch {
-    // `after()` throws outside a request scope (scripts, tests).
-    void run();
-  }
 }

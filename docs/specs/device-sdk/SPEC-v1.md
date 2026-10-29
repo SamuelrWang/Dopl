@@ -168,7 +168,8 @@ POST /v1/users/{external_user_id}/deliver
 POST /v1/devices/{device_id}/actions/{capability}  { args, idempotency_key }
   → { action_id, status: queued | delivered | done | failed | needs_confirmation }
 GET  /v1/actions/{id}        # poll
-# The result also arrives on the action.completed webhook. ask.* actions hold for up to 200s, like glasses_ask today.
+# The result also arrives on the action.completed webhook. ask.* actions hold for up to 200s, like glasses_ask today,
+# unless the request sends `Prefer: respond-async` (202 at once; read GET /v1/actions/{id} or the webhook).
 ```
 
 **Common rules:**
@@ -449,3 +450,4 @@ P0 is needed for the first design partner. P1 is needed to sell broadly. P2 come
 ## Changelog
 - 2026-10-27 — Frozen v1. D1 no end-user Dopl accounts · D2 glasses + phone/desktop fallback, Home Assistant first non-glasses · D3 enforce limits only, never rewrite · D4 `/deliver` + `/actions`, show/ask/notify = SDK helpers · D5 pricing held, `cost_units` logged · D6 official SDKs only for paying customers, reverse-engineered = experimental flag.
 - 2026-10-28 — Additive, orchestrator ruling (Samuel's SDK split P3). One list envelope for every list route: `cursor` (opaque base64url) + `limit` (1-100, default 50) in, `{ data, next_cursor, has_more }` out (`device-contracts/lists.ts`). New `GET /events` (scope `analytics:read`): the project's C8 log as `PublicDeviceEvent`, the row minus `org_id`, `bytes_in`, `bytes_out`, `cost_units`; reads are not logged; rate limited per key. Spec revision `2026-10-28`; pinned API version stays `2026-10-27`.
+- 2026-10-28 — Additive (Samuel ruling via orchestrator, main room seq 5604): `Prefer: respond-async` (RFC 7240) on `POST /v1/users/{id}/deliver` and `POST /v1/devices/{id}/actions/{capability}` skips the `ask.*` hold; the 202 returns at once with `Preference-Applied: respond-async`. Without the header, unchanged.

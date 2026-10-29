@@ -5,7 +5,9 @@ import {
   LOG_WINDOW_MS,
   logCursor,
   parseLogCursor,
+  ROLE_RANK,
   type LogFilters,
+  type PortalOrg,
   type PortalProject,
   type PortalRole,
 } from "../portal/scope";
@@ -24,7 +26,6 @@ import type { DevApiKeyRow } from "./keys";
  */
 
 const ROLES: readonly PortalRole[] = ["owner", "admin", "developer"];
-const RANK: Record<PortalRole, number> = { owner: 3, admin: 2, developer: 1 };
 
 const KEY_COLUMNS =
   "id, project_id, env, kind, prefix, scopes, created_at, last_used_at, revoked_at, expires_at";
@@ -32,8 +33,12 @@ const KEY_COLUMNS =
 /** Log page size. One more row is fetched to know whether an older page exists. */
 export const LOG_PAGE_SIZE = 50;
 
-/** The projects `userId` can see: orgs they own, plus orgs they are a member of. */
-export async function listPortalProjects(userId: string): Promise<PortalProject[]> {
+/**
+ * The ONE place a user id becomes org reach: orgs they own (`owner_user_id`, read as `owner`) plus
+ * orgs they are a member of (`dev_org_members.role`), keeping the strongest role. An unknown role
+ * string grants nothing.
+ */
+async function resolveOrgRoles(userId: string): Promise<Map<string, PortalRole>> {
   const db = supabaseAdmin();
   const [owned, memberships] = await Promise.all([
     db.from("dev_orgs").select("id").eq("owner_user_id", userId),
@@ -45,12 +50,38 @@ export async function listPortalProjects(userId: string): Promise<PortalProject[
   const roleByOrg = new Map<string, PortalRole>();
   const grant = (orgId: string, role: PortalRole) => {
     const had = roleByOrg.get(orgId);
-    if (!had || RANK[role] > RANK[had]) roleByOrg.set(orgId, role);
+    if (!had || ROLE_RANK[role] > ROLE_RANK[had]) roleByOrg.set(orgId, role);
   };
   for (const o of (owned.data ?? []) as Array<{ id: string }>) grant(o.id, "owner");
   for (const m of (memberships.data ?? []) as Array<{ org_id: string; role: string }>) {
     if ((ROLES as readonly string[]).includes(m.role)) grant(m.org_id, m.role as PortalRole);
   }
+  return roleByOrg;
+}
+
+/** The orgs `userId` can see, with their role, even an org that has no project yet. */
+export async function listPortalOrgs(userId: string): Promise<PortalOrg[]> {
+  const roleByOrg = await resolveOrgRoles(userId);
+  const orgIds = [...roleByOrg.keys()];
+  if (orgIds.length === 0) return [];
+  const { data, error } = await supabaseAdmin()
+    .from("dev_orgs")
+    .select("id, name, internal, owner_user_id")
+    .in("id", orgIds);
+  if (error) throw new Error(`listPortalOrgs failed: ${error.message}`);
+  const out: PortalOrg[] = [];
+  for (const o of (data ?? []) as Array<{ id: string; name: string; internal: boolean | null; owner_user_id: string }>) {
+    const role = roleByOrg.get(o.id);
+    if (!role) continue;
+    out.push({ id: o.id, name: o.name, internal: o.internal === true, ownerUserId: o.owner_user_id, role });
+  }
+  return out.sort((a, b) => Number(a.internal) - Number(b.internal) || a.name.localeCompare(b.name));
+}
+
+/** The projects `userId` can see: orgs they own, plus orgs they are a member of. */
+export async function listPortalProjects(userId: string): Promise<PortalProject[]> {
+  const db = supabaseAdmin();
+  const roleByOrg = await resolveOrgRoles(userId);
   const orgIds = [...roleByOrg.keys()];
   if (orgIds.length === 0) return [];
 

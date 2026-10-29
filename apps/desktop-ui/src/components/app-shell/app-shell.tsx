@@ -22,6 +22,7 @@ import { ShellChromeSkeleton } from "#/components/skeletons/shell-skeleton";
 import { sectionSkeleton } from "#/components/skeletons/section-skeleton";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
 import { SettingsModal, type SettingsSection } from "#/components/settings-modal";
+import { homeChannelPath, readThreadSelection } from "#/pages/home/home-intent";
 import { AccountRail, HOME_PATH } from "./account-rail";
 import { RouterLink } from "./router-link";
 import { useWorkspaceRoute } from "./use-workspace-route";
@@ -69,23 +70,38 @@ export function AppShellLayout() {
   // /home; a typed or stale `/{personal-segment}` URL — or a cold launch that
   // slipped past `pages/boot` — otherwise paints a workspace overview titled
   // "Home" with no rail icon lit (Samuel's "ghost overview page"). ⚠ `link`
-  // containers are fenced by the redirect BELOW, not here: they land on the
-  // container's own channel record rather than on /home (R-01(a)).
+  // containers are fenced by the redirect BELOW, which carries the channel.
   useEffect(() => {
     if (workspace?.kind !== "home") return;
     navigate(HOME_PATH, { replace: true });
   }, [workspace?.kind, navigate]);
 
   /**
-   * 🔒 A MEMBER OF A HOME-CHANNEL CONTAINER AT A WORKSPACE URL GOES TO THEIR
-   * CHANNEL (Samuel's rulings: ASK-2 option b, 2026-08-30, for the GUEST; R-01
-   * option (a), 2026-09-17, for every other member of the same container).
+   * 🔒 NOBODY IN A HOME-CHANNEL CONTAINER GETS THE SHELL: ANY URL UNDER ITS
+   * SEGMENT LANDS ON /home WITH THAT CHANNEL SELECTED (2026-10-29, Samuel: "Yes,
+   * fix it"). The container's channel opened as a WORKSPACE channels page — its
+   * Assistant/Drafts/Saved sidebar, "No channels yet", no rail icon lit (the rail
+   * drops `link` containers) — which Samuel read as "an actual workspace". /home
+   * has its own channel page since 2026-10-26, so it is the one destination.
    *
-   * ⚠ ONE REDIRECT, WIDENED — not a second branch. A `kind='link'` container is
-   * a RELATIONSHIP: nobody in one has a Members console, Skills, Chats or a
-   * Settings page carrying an owner delete, whatever their ROLE says. Fencing on
-   * `role === "guest"` admitted its member, admin and owner through the one door
-   * the guest was kept out of.
+   * ⚠ EVERY ROLE, THE GUEST INCLUDED. A `kind='link'` container is a
+   * RELATIONSHIP, so its owner, admin, member, viewer and guest alike have no
+   * Members console, Skills, Chats or Settings here (R-01(a), 2026-09-17), and
+   * /home serves a guest: its rows are `GET /api/channels?scope=account`
+   * (`withUserAuth`, fenced by the caller's own channel memberships, guest rows
+   * included) and the page draws a guest's narrower controls (F-343).
+   * ⚠ THE TARGET NEEDS NO READ: /home addresses the row by CONTAINER id
+   * (`home-rows.ts › channelRowId`), and `?thread=`/`?seq=` ride across into the
+   * jump /home already uses (`pages/home/home-intent.ts`). A container missing
+   * from /home's rows falls back to its first row, so an empty or failed read
+   * still lands on /home.
+   *
+   * ⚠ A GUEST OF A STANDARD WORKSPACE STILL GOES TO THEIR CHANNEL ON THIS
+   * WORKSPACE'S ROUTE (ASK-2 option b, 2026-08-30): `GET /api/channels?scope=account`
+   * matched on `workspaceId` (the SAME container, not merely a channel; the one
+   * account cache entry since R-26), and NO CHANNEL ⇒ `/home`, a FAILED read too
+   * — `/home` asserts nothing, where "you have no channel" on a workspace URL
+   * would be a lie (INVARIANTS §11).
    *
    * ⚠ THE FLOOR IS NOT THE FIX AND MUST NOT BECOME ONE. `segment.ts ›
    * BOOT_MIN_ROLE` stays `"guest"`: the two pop-out windows live OUTSIDE this
@@ -93,33 +109,18 @@ export function AppShellLayout() {
    * "Workspace not found" in a guest's popped-out thread. The floor says WHO
    * MAY ASK; this says WHERE THEY LAND.
    *
-   * ⚠ THE CONTAINER HAS EXACTLY ONE CHANNEL, resolved the way the guest WEB lane
-   * resolves it: `GET /api/channels?scope=account` (`withUserAuth`, no
-   * `X-Workspace-Id`, fenced by the caller's own membership rows — so a guest may
-   * ask it and a container they do not belong to is not in the answer), matched on
-   * `workspaceId`, which is what makes it the SAME container and not merely a
-   * channel. ⚠ **IT WAS `GET /api/home/channels` UNTIL R-26 (2026-09-17)**; this
-   * read shares the ONE account cache entry rather than minting a second.
-   * ⚠ **NO `container.kind` FILTER HERE, AND THAT IS NOT AN ESCAPE FROM G3** — this
-   * addresses ONE container BY ID, a stricter fence than any kind test.
-   *
-   * ⚠ NO CHANNEL ⇒ `/home`, and a FAILED read lands there too. Not
-   * UNKNOWN-rendered-as-EMPTY (INVARIANTS §11): `/home` asserts nothing, and
-   * claiming "you have no channel" ON a workspace URL is what would be a lie.
    * ⚠ ORDERED BEHIND THE CANONICAL REDIRECT above, and `home` is excluded
    * because the effect above already owns it: any two of these firing in one
    * tick would race two `replace`s over one history entry.
-   *
-   * ⚠ POSITIVE KIND CHECK (INVARIANTS §4A, F-295), as `home/components/channels/home-rows.ts`
-   * already spells it: `=== "link"`, so a kind added to the union later is
-   * EXCLUDED rather than bounced out of the shell (2026-09-17).
+   * ⚠ POSITIVE KIND CHECK (INVARIANTS §4A, F-295): `=== "link"`, so a kind added
+   * to the union later is EXCLUDED rather than bounced out of the shell.
    */
   const isContainerMember = !!workspace && workspace.kind === "link";
-  const leavesShell = role === "guest" || isContainerMember;
-  const containerChannelId = useApiQuery<ChannelListPayload, string | null>(
+  const isWorkspaceGuest = role === "guest" && !!workspace && !isContainerMember;
+  const guestChannelId = useApiQuery<ChannelListPayload, string | null>(
     channelsPath(),
     {
-      enabled: leavesShell,
+      enabled: isWorkspaceGuest,
       // ⚠ **THE SCOPE IS ALWAYS SENT** — it is what picks the route's handler,
       // and it is also this read's cache identity (`use-channels.ts`), so the
       // shell shares the one account entry rather than minting a second.
@@ -132,16 +133,21 @@ export function AppShellLayout() {
         null,
     }
   );
-  const containerSettled = leavesShell && !containerChannelId.isPending;
-  const containerTarget = containerSettled
-    ? containerChannelId.data
-      ? `/${segment}/channels/${containerChannelId.data}`
-      : HOME_PATH
-    : null;
+  const guestTarget =
+    isWorkspaceGuest && !guestChannelId.isPending
+      ? guestChannelId.data
+        ? `/${segment}/channels/${guestChannelId.data}`
+        : HOME_PATH
+      : null;
+  const containerTarget = isContainerMember
+    ? homeIntentFor(workspace.id, location.search)
+    : guestTarget;
   /** ⚠ ONE DERIVATION, READ TWICE — the effect navigates on it, the loading
-   *  gate below holds the ghost on it. A target of `null` (read in flight)
-   *  counts: the destination is unknown, the departure is not. */
-  const awaitingRedirect = leavesShell && location.pathname !== containerTarget;
+   *  gate below holds the ghost on it. A container member is ALWAYS leaving
+   *  (their target is off the shell); a guest's `null` target (read in flight)
+   *  counts too: the destination is unknown, the departure is not. */
+  const awaitingRedirect =
+    isContainerMember || (isWorkspaceGuest && location.pathname !== guestTarget);
   useEffect(() => {
     if (needsRedirect || !segment || !awaitingRedirect || containerTarget === null) return;
     navigate(containerTarget, { replace: true });
@@ -177,10 +183,10 @@ export function AppShellLayout() {
   // off `workspace`, which is the value this gate is waiting for. A publicId
   // survives a slug rename, so a stale segment still lights the right tile.
   // ⚠ AND IT COVERS THE REDIRECT WINDOW TOO (added 2026-09-17, wave 5 review).
-  // A member who is leaving is known a round trip before the DESTINATION is, and
-  // the navigate is an effect — so `<Outlet/>` rendered here mounts the very page
-  // the redirect exists to refuse. Measured: `/members` mounted, ran its own
-  // reads and 403'd them, for every container member on every cold load.
+  // The navigate is an effect (and a guest's destination a round trip away), so
+  // `<Outlet/>` rendered here mounts the very page the redirect exists to refuse.
+  // Measured: `/members` mounted, ran its own reads and 403'd them, for every
+  // container member on every cold load. A container member never passes it.
   if (isPending || awaitingRedirect) {
     const routed = location.pathname.split("/").filter(Boolean)[0] ?? "";
     return (
@@ -243,37 +249,25 @@ export function AppShellLayout() {
               composed here rather than restated, so the panel /home wears and
               the panel this wears are one recipe. `styles.panel` adds layout
               only; see `app-shell.module.css`'s header for the level table. */}
-          {/* ⚠ An ATTRIBUTE, not a second class: the panel's and the card's
-              class expressions are byte-shared with the shell ghost
-              (`skeletons/frame-skeletons.test.tsx`). */}
-          <div
-            className={cn("page-float", styles.panel)}
-            data-no-nav={isContainerMember ? "" : undefined}
-          >
-            {/* 🔒 R-13 (Samuel, 2026-09-17): the container member gets NO nav,
-                DELETED rather than hidden — every row, the switcher and the gear
-                pointed at pages the redirect bounces. Same fence as the
-                redirect, asked once. */}
-            {isContainerMember ? null : (
-              <AppSidebarCore
-                workspaceSegment={segment}
-                activeSection={activeSectionFromPath(location.pathname)}
-                onOpenSettings={openSettings}
-                Link={RouterLink}
-                brand={
-                  <WorkspaceSwitcherCore
-                    workspaceSegment={segment}
-                    workspacePublicId={workspace.publicId}
-                    workspaceName={workspace.name}
-                    workspaces={workspaces}
-                    isLoading={workspacesQuery.isPending}
-                    onNavigate={(path) => navigate(path)}
-                    onOpenSettings={openSettings}
-                    onCreateWorkspace={() => setCreateWsOpen(true)}
-                  />
-                }
-              />
-            )}
+          <div className={cn("page-float", styles.panel)}>
+            <AppSidebarCore
+              workspaceSegment={segment}
+              activeSection={activeSectionFromPath(location.pathname)}
+              onOpenSettings={openSettings}
+              Link={RouterLink}
+              brand={
+                <WorkspaceSwitcherCore
+                  workspaceSegment={segment}
+                  workspacePublicId={workspace.publicId}
+                  workspaceName={workspace.name}
+                  workspaces={workspaces}
+                  isLoading={workspacesQuery.isPending}
+                  onNavigate={(path) => navigate(path)}
+                  onOpenSettings={openSettings}
+                  onCreateWorkspace={() => setCreateWsOpen(true)}
+                />
+              }
+            />
             {/* ⚠ Required: without it useMyAccessContext no-ops and every
                 teams-mode gate resolves to a FALSE edit affordance. */}
             <MyAccessProvider workspaceSegment={segment}>
@@ -327,4 +321,11 @@ const selectWorkspaces = (body: { workspaces?: WorkspaceLike[] }) =>
 export function canonicalPath(pathname: string, canonical: string): string {
   const rest = pathname.split("/").filter(Boolean).slice(1);
   return `/${[canonical, ...rest].join("/")}`;
+}
+
+/** A container member's destination: /home on that container's row, carrying the
+ *  `?thread=`/`?seq=` the workspace URL was opened with (`pages/home/home-intent.ts`). */
+function homeIntentFor(workspaceId: string, search: string): string {
+  const { threadId, seq } = readThreadSelection(new URLSearchParams(search));
+  return homeChannelPath(workspaceId, threadId, seq);
 }

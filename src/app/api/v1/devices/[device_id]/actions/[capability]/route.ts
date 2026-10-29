@@ -1,10 +1,10 @@
 import { withDeveloperKey } from "@/features/device-sdk/server/with-developer-key";
 import { deviceAction } from "@/features/device-sdk/server/action-service";
-import { deliveryDeps, headerKeyMismatch, parseBody, refuseBody, respond } from "@/features/device-sdk/server/delivery-routes";
+import { deliveryDeps, headerKeyMismatch, parseBody, prefersRespondAsync, refuseBody, respond } from "@/features/device-sdk/server/delivery-routes";
 import { CapabilityIdSchema, DeviceActionRequestSchema } from "@/features/device-sdk/types";
 
 export const dynamic = "force-dynamic";
-/** `ask.*` holds up to 200s (ASK_HOLD_MAX_S) for the answer. */
+/** `ask.*` holds up to 200s (ASK_HOLD_MAX_S) for the answer, unless `Prefer: respond-async`. */
 export const maxDuration = 300;
 
 /**
@@ -23,7 +23,8 @@ export const POST = withDeveloperKey(
     if (headerKeyMismatch(request, body.data.idempotency_key)) {
       return refuseBody(ctx, deviceId, "The Idempotency-Key header and body idempotency_key differ.", { capability: cap.data });
     }
-    return respond(ctx, await deviceAction(deliveryDeps(), { projectId: ctx.projectId, env: ctx.env }, deviceId, cap.data, body.data));
+    const result = await deviceAction(deliveryDeps(), { projectId: ctx.projectId, env: ctx.env }, deviceId, cap.data, body.data, { hold: !prefersRespondAsync(request) });
+    return respond(ctx, result);
   },
   { scopes: ["actions:write"] }
 );

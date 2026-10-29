@@ -4,9 +4,12 @@ import { EVEN_G2_INFO } from "@/features/glasses/platforms/even-g2/info";
 import { TtlCache } from "@/features/glasses/core/ttl-cache";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { ActionStatus } from "../../types";
+import { ACTION_COLS } from "../delivery-store-supabase";
 import { sdkDeliveryFor } from "../sdk-delivery-flag";
-import { markDelivered, settle, withStatus, type LensActionStore } from "./lens-actions";
+import { markDelivered, settle, withStatus, type LensActionStore, type MovedLensAction } from "./lens-actions";
 import { sdkGlassesStore } from "./sdk-glasses-store";
+import { connectStore } from "../connect/store";
+import { emitActionSettled } from "../webhooks/action-events";
 
 /**
  * {@link SdkGlassesPort} over the service role (A8): the glasses device routes
@@ -25,7 +28,11 @@ function must<T>(res: { data: T; error: { message: string } | null }, op: string
   return res.data;
 }
 
-/** `dev_actions` rows moved by their `result.lens_message_id` (conditional on status: never regress). */
+/**
+ * `dev_actions` rows moved by their `result.lens_message_id` (conditional on status: never regress).
+ * Returns each row this call moved, as stored after the move (`ACTION_COLS`); a row another hop moved
+ * first matches no update and is not returned.
+ */
 export const supabaseLensActions: LensActionStore = {
   async move(deviceId, ids, from, patch) {
     const rows = must(
@@ -37,6 +44,7 @@ export const supabaseLensActions: LensActionStore = {
         .in("status", from),
       "lens action read"
     ) as Array<{ id: string; status: ActionStatus; result: Record<string, unknown> | null; response: Record<string, unknown> }> | null;
+    const moved: MovedLensAction[] = [];
     for (const r of rows ?? []) {
       const update: Record<string, unknown> = {
         status: patch.status,
@@ -44,8 +52,13 @@ export const supabaseLensActions: LensActionStore = {
         updated_at: new Date().toISOString(),
       };
       if (patch.result) update.result = { ...(r.result ?? {}), ...patch.result };
-      must(await db().from("dev_actions").update(update).eq("id", r.id).eq("device_id", deviceId).in("status", from), "lens action update");
+      const hit = must(
+        await db().from("dev_actions").update(update).eq("id", r.id).eq("device_id", deviceId).in("status", from).select(ACTION_COLS),
+        "lens action update"
+      ) as MovedLensAction[] | null;
+      moved.push(...(hit ?? []));
     }
+    return moved;
   },
 };
 
@@ -88,9 +101,36 @@ export const sdkGlassesPort: SdkGlassesPort = {
   },
 
   delivered: (deviceId, ids) => markDelivered(supabaseLensActions, deviceId, ids),
-  settled: (deviceId, row) => settle(supabaseLensActions, deviceId, row),
+  async settled(deviceId, row) {
+    const moved = await settle(supabaseLensActions, deviceId, row);
+    // C8: an answered / dismissed ask is `action.completed` for the developer (ruled 2026-10-28).
+    await emitActionSettled(connectStore, moved);
+    return moved;
+  },
   migratedDeviceIds: migratedDeviceIdsCached,
+  isDoplAppProject: isDoplAppProjectCached,
 };
+
+/** The internal org's "Dopl App" project (W0.1 seed, runbook step 6), live env only. Cached: it never moves. */
+const doplAppCache = new TtlCache<string, boolean>(5 * 60_000, 1_000);
+
+async function isDoplAppProjectCached(projectId: string, env: string): Promise<boolean> {
+  if (env !== "live") return false;
+  const now = Date.now();
+  const hit = doplAppCache.get(projectId, now);
+  if (hit !== undefined) return hit;
+  const project = must(await db().from("dev_projects").select("org_id, name").eq("id", projectId).maybeSingle(), "project lookup") as {
+    org_id: string;
+    name: string;
+  } | null;
+  let ours = false;
+  if (project?.name === "Dopl App") {
+    const org = must(await db().from("dev_orgs").select("internal").eq("id", project.org_id).maybeSingle(), "org lookup") as { internal: boolean } | null;
+    ours = org?.internal === true;
+  }
+  doplAppCache.set(projectId, ours, now);
+  return ours;
+}
 
 /**
  * Every inbox poll asks; the flag moves rarely. A failed lookup is not cached (it throws through).

@@ -121,6 +121,8 @@ export interface DisplayEnvelopeV2 {
   wait_until?: string;
   /** The linked lens row. */
   glasses_message_id?: string;
+  /** The SDK lens ask this decision went out as (`sdk-ask-key.ts`), so its lens answer can post here. */
+  sdk_ask_key?: string;
   answer?: DisplayAnswerStamp | null;
   origin?: DisplayOrigin;
   /** The message that replaced this decision without its choice. Closed: no answer, no decision index. */

@@ -9,7 +9,7 @@ import type { DeliveryStore, DeviceRow, NewAction, Scope, StoredAction } from ".
  */
 
 const DEVICE_COLS = "id, kind, vendor, model, firmware, adapter_id, adapter_version, end_user_id, last_seen";
-const ACTION_COLS =
+export const ACTION_COLS =
   "id, project_id, env, end_user_id, device_id, source, capability, intent, status, idempotency_key, request_hash, http_status, response, result, error, route_decision, created_at, updated_at";
 /** Postgres unique_violation. */
 const UNIQUE_VIOLATION = "23505";

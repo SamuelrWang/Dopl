@@ -12,7 +12,6 @@ vi.mock("@/features/channels/server/service-shared", () => ({ requireMemberChann
 vi.mock("@/features/channels/server/repository-messages", () => ({ findMessageById: vi.fn() }));
 vi.mock("@/features/channels/server/repository-workspace", () => ({ fetchProfiles: vi.fn(async () => []) }));
 vi.mock("./repository", () => ({ findByDisplayId: vi.fn(), hasAnswerMessage: vi.fn(), replaceDisplay: vi.fn(), channelWorkspaceOf: vi.fn() }));
-vi.mock("./answer", () => ({ answerDecisionFromLens: vi.fn() }));
 vi.mock("@/features/workspaces/server/service", () => ({ resolveActiveWorkspace: vi.fn() }));
 
 import { postMessage } from "@/features/channels/server/service";
@@ -21,8 +20,7 @@ import { findMessageById } from "@/features/channels/server/repository-messages"
 import type { ChannelContext } from "@/features/channels/server/service-shared";
 import type { GlassesDeps } from "@/features/glasses/core/messages/service";
 import { createFakeGlassesStore, fakeClock } from "@/features/glasses/core/testing/fake-store";
-import { answerDecisionFromLens } from "./answer";
-import { findByDisplayId, hasAnswerMessage } from "./repository";
+import { findByDisplayId, hasAnswerMessage, replaceDisplay } from "./repository";
 import { SdkLensError, type SdkAskOutcome, type SdkLens, type SdkUserLens } from "./sdk-lens";
 import { showDisplay, type ShowInput } from "./service";
 
@@ -32,12 +30,14 @@ const ctx = { userId: USER, workspaceId: "ws", source: "agent", sessionId: `${CH
 const CHOICE = [{ type: "heading", text: "Ship?" }, { type: "choice", options: [{ label: "Ship", recommended: true }, { label: "Wait" }] }];
 const STATUS = [{ type: "heading", text: "Deploy" }, { type: "progress", value: 0.6, label: "Build" }];
 
-type AskArgs = Parameters<SdkUserLens["ask"]>[0];
+type AskArgs = Parameters<SdkUserLens["startAsk"]>[0];
 
-function fakeSdk(o: { off?: boolean; forUserErr?: unknown; stateErr?: unknown; screenErr?: unknown; online?: boolean; deviceIds?: string[] } = {}) {
+function fakeSdk(o: { off?: boolean; forUserErr?: unknown; stateErr?: unknown; screenErr?: unknown; askErr?: unknown; online?: boolean; deviceIds?: string[] } = {}) {
   const screens: unknown[] = [];
   const asks: AskArgs[] = [];
-  let settle: ((x: SdkAskOutcome) => void) | null = null;
+  const reads: string[] = [];
+  const postedBeforeAsk: number[] = [];
+  let outcome: SdkAskOutcome | null = null;
   const user: SdkUserLens = {
     state: async () => {
       if (o.stateErr) throw o.stateErr;
@@ -48,12 +48,15 @@ function fakeSdk(o: { off?: boolean; forUserErr?: unknown; stateErr?: unknown; s
       if (o.screenErr) throw o.screenErr;
       return { delivery_id: "dl1", routed_to: { device_id: "g2", kind: "glasses", reason: "x" }, status: "queued" } as never;
     },
-    ask: (a) => {
+    startAsk: async (a) => {
       asks.push(a);
-      return new Promise<SdkAskOutcome>((res) => {
-        settle = res;
-        a.signal?.addEventListener("abort", () => res({ status: "aborted", ms: 0 }));
-      });
+      postedBeforeAsk.push(vi.mocked(postMessage).mock.calls.length);
+      if (o.askErr) throw o.askErr;
+      return { deliveryId: "act-1", deviceId: "g2" };
+    },
+    askOutcome: async (id) => {
+      reads.push(id);
+      return outcome;
     },
   };
   const lens: SdkLens = {
@@ -62,7 +65,7 @@ function fakeSdk(o: { off?: boolean; forUserErr?: unknown; stateErr?: unknown; s
       return o.off ? null : { lens: user, deviceIds: o.deviceIds ?? ["dev"] };
     },
   };
-  return { lens, screens, asks, settle: (x: SdkAskOutcome) => settle?.(x) };
+  return { lens, screens, asks, reads, postedBeforeAsk, settle: (x: SdkAskOutcome) => void (outcome = x) };
 }
 
 function setup(sdk: SdkLens, online = true) {
@@ -83,7 +86,10 @@ beforeEach(() => {
   vi.spyOn(console, "info").mockImplementation((m: string) => void logs.push(m));
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.mocked(requireMemberChannel).mockResolvedValue({ channel: { id: CHAN, name: "Lab" } } as never);
-  vi.mocked(postMessage).mockImplementation(async (_c, _ch, input) => ({ id: "m1", metadata: {}, body: input.body }) as never);
+  vi.mocked(postMessage).mockImplementation(
+    async (_c, _ch, input, opts) => ({ id: "m1", metadata: { display: { spec_version: 2, display_id: "d", blocks: [], ...opts?.display } }, body: input.body }) as never
+  );
+  vi.mocked(replaceDisplay).mockResolvedValue(true);
   vi.mocked(findByDisplayId).mockResolvedValue(null);
   vi.mocked(hasAnswerMessage).mockResolvedValue(false);
   vi.mocked(findMessageById).mockResolvedValue({ metadata: {} } as never);
@@ -177,36 +183,58 @@ describe("failure classes", () => {
   });
 });
 
-describe("asks and the answer bridge", () => {
-  it("a decision is an SDK ask card; without wait the lens answer still posts to the channel decision", async () => {
-    vi.mocked(answerDecisionFromLens).mockResolvedValue({ result: "ok" });
+describe("🔒 asks hold no function (gap #3)", () => {
+  it("a decision is an SDK ask card, delivered and returned at once; its key and envelope carry the channel link", async () => {
     const s = fakeSdk();
     const t = setup(s.lens);
     const r = await showDisplay(ctx, { blocks: CHOICE }, undefined, t.deps);
-    expect(r).toMatchObject({ glasses: "shown", decision: true, message_id: "m1" });
-    expect(s.asks[0]).toMatchObject({ question: "Ship?", options: ["Ship", "Wait"], timeoutMs: 120_000 });
-    s.settle({ status: "answered", index: 1, label: "Wait", deviceId: "g2", ms: 900 });
+    expect(r).toMatchObject({ glasses: "shown", decision: true, message_id: "m1", glasses_message_id: "act-1" });
+    expect(s.asks).toEqual([{ question: "Ship?", options: ["Ship", "Wait"], idempotencyKey: expect.stringMatching(new RegExp(`^dsk1\\.${CHAN}\\.d-[0-9a-f]{8}\\.d-[0-9a-f]{8}$`)) }]);
+    expect(s.asks[0].idempotencyKey.length).toBeLessThanOrEqual(255);
+    expect(vi.mocked(postMessage).mock.calls[0][3]?.display).toMatchObject({ sdk_ask_key: s.asks[0].idempotencyKey });
+    // 🔒 Review nit 3: the decision is posted BEFORE the ask, so an instant lens answer finds it.
+    expect(s.postedBeforeAsk).toEqual([1]);
+    // Nothing reads the ask afterwards: no hold, no background bridge.
     await flush();
-    expect(answerDecisionFromLens).toHaveBeenCalledWith(USER, "m1", 1, expect.objectContaining({ kind: "glasses", device_id: "g2", platform: "even_g2" }));
+    expect(s.reads).toEqual([]);
+    expect(t.rows).toHaveLength(0);
+    expect(shownLog()).toMatchObject({ path: "sdk" });
   });
 
-  it("wait: the lens answer returns through the bridge's stamp", async () => {
-    const stamp = { block_id: "b2", index: 0, choice: "Ship", at: "t", via: "glasses", by: USER, message_id: "a1" };
-    vi.mocked(answerDecisionFromLens).mockResolvedValue({ result: "ok", answer: stamp });
+  it("an ask with no channel decision carries no link (glasses only)", async () => {
     const s = fakeSdk();
     const t = setup(s.lens);
-    t.clock.onSleep(() => s.settle({ status: "answered", index: 0, label: "Ship", deviceId: "g2", ms: 3 }));
-    expect(await showDisplay(ctx, { blocks: CHOICE, wait: true }, undefined, t.deps)).toMatchObject({ status: "answered", answer: stamp });
+    const lone = { ...ctx, sessionId: undefined } as unknown as ChannelContext;
+    await showDisplay(lone, { blocks: CHOICE, target: "glasses" }, undefined, t.deps);
+    expect(s.asks[0].idempotencyKey).toMatch(/^display-/);
   });
 
-  it("wait: an answer in the channel first wins and stops the SDK ask", async () => {
+  it("wait: the lens answer's channel stamp (posted by the answer route) is the result", async () => {
+    const stamp = { block_id: "b2", index: 0, choice: "Ship", at: "t", via: "glasses", by: USER, message_id: "a1" };
+    const s = fakeSdk();
+    const t = setup(s.lens);
+    let passes = 0;
+    t.clock.onSleep(() => {
+      if (++passes === 1) s.settle({ status: "answered", index: 0, label: "Ship", deviceId: "g2" });
+      if (passes === 2) vi.mocked(findMessageById).mockResolvedValue({ metadata: { display: { spec_version: 2, display_id: "d", blocks: CHOICE, answer: stamp } } } as never);
+    });
+    expect(await showDisplay(ctx, { blocks: CHOICE, wait: true }, undefined, t.deps)).toMatchObject({ status: "answered", answer: stamp });
+    expect(s.reads).toEqual(["act-1"]);
+  });
+
+  it("wait: a lens answer whose stamp never lands still returns, from the lens, after the grace passes", async () => {
+    const s = fakeSdk();
+    const t = setup(s.lens);
+    s.settle({ status: "answered", index: 1, label: "Wait", deviceId: "g2" });
+    expect(await showDisplay(ctx, { blocks: CHOICE, wait: true }, undefined, t.deps)).toMatchObject({ status: "answered", answer: { index: 1, choice: "Wait", via: "glasses" } });
+  });
+
+  it("wait: an answer in the channel first wins", async () => {
     const s = fakeSdk();
     const t = setup(s.lens);
     const answer = { block_id: "b2", index: 1, choice: "Wait", at: "t", via: "web" };
     vi.mocked(findMessageById).mockResolvedValue({ metadata: { display: { spec_version: 2, display_id: "d", blocks: CHOICE, answer } } } as never);
     expect(await showDisplay(ctx, { blocks: CHOICE, wait: true }, undefined, t.deps)).toMatchObject({ status: "answered", answer });
-    expect(s.asks[0].signal?.aborted).toBe(true);
-    expect(answerDecisionFromLens).not.toHaveBeenCalled();
   });
 
   it("glasses_ask: same validation as the prosumer card; a dismiss and a refusal come back as such", async () => {
@@ -222,11 +250,11 @@ describe("asks and the answer bridge", () => {
     await expect(showDisplay(ctx, ask("x".repeat(200)), undefined, t.deps)).rejects.toThrow(/question is 200 bytes; max 120/);
 
     const lone = { ...ctx, sessionId: undefined } as unknown as ChannelContext;
-    t.clock.onSleep(() => s.settle({ status: "dismissed", deviceId: "g2", ms: 1 }));
-    expect(await showDisplay(lone, ask("Join?"), undefined, t.deps)).toMatchObject({ status: "dismissed", answer: null });
+    s.settle({ status: "dismissed", deviceId: "g2" });
+    expect(await showDisplay(lone, ask("Join?"), undefined, t.deps)).toMatchObject({ status: "dismissed", answer: null, glasses_message_id: "act-1" });
 
     const r = setup(s.lens);
-    r.clock.onSleep(() => s.settle({ status: "refused", code: "device_offline", ms: 1 }));
+    s.settle({ status: "refused", code: "device_offline" });
     expect(await showDisplay(lone, ask("Join?"), undefined, r.deps)).toMatchObject({ status: "timeout", glasses: "skipped:sdk device_offline" });
   });
 
@@ -242,6 +270,59 @@ describe("asks and the answer bridge", () => {
       timeout_sec: 3_600,
     };
     expect(await showDisplay(lone, input, undefined, t.deps)).toMatchObject({ status: "timeout" });
-    expect(s.asks[0].signal?.aborted).toBe(true);
+  });
+});
+
+describe("🔒 ask transport failures (gap #6): a fallback only when nothing was delivered, never a second copy", () => {
+  it("proven non-delivery: the prosumer ask card, linked to the decision like any prosumer row", async () => {
+    const s = fakeSdk({ askErr: new SdkLensError("network_error", true) });
+    const t = setup(s.lens);
+    const r = await showDisplay(ctx, { blocks: CHOICE }, undefined, t.deps);
+    expect(t.rows).toHaveLength(1);
+    expect(r).toMatchObject({ glasses: "shown", glasses_message_id: t.rows[0].id });
+    expect(t.rows[0].channel_message_id).toBe("m1");
+    // Posted first naming the SDK ask; then re-linked to the prosumer card (a chat answer releases it).
+    expect(vi.mocked(postMessage).mock.calls[0][3]?.display?.sdk_ask_key).toBe(s.asks[0].idempotencyKey);
+    const [id, author, , envelope, escalation] = vi.mocked(replaceDisplay).mock.calls[0];
+    expect([id, author]).toEqual(["m1", USER]);
+    expect(envelope).toMatchObject({ glasses_message_id: t.rows[0].id });
+    expect(envelope).not.toHaveProperty("sdk_ask_key");
+    expect(escalation).toBeTruthy();
+    expect(shownLog()).toMatchObject({ path: "prosumer_fallback", fallback_reason: "network_error" });
+  });
+
+  it("proven non-delivery of a glasses_ask: the prosumer ask, whose answer the hold reads", async () => {
+    const s = fakeSdk({ askErr: new SdkLensError("unauthenticated", true) });
+    const t = setup(s.lens);
+    const lone = { ...ctx, sessionId: undefined } as unknown as ChannelContext;
+    t.clock.onSleep(() => void (t.rows[0] && Object.assign(t.rows[0], { status: "answered", answer: { index: 1, choice: "No", at: "t" } })));
+    const r = await showDisplay(lone, { target: "glasses", shortcut: "ask", blocks: [{ type: "text", content: "Join?" }, { type: "choice", options: [{ label: "Yes" }, { label: "No" }] }], wait: true }, undefined, t.deps);
+    expect(t.rows).toHaveLength(1);
+    expect(t.rows[0].kind).toBe("ask");
+    expect(r).toMatchObject({ status: "answered", answer: { index: 1, choice: "No" } });
+  });
+
+  it("unconfirmed (it may be on the lens) or refused: reported, NO prosumer copy, the channel copy still posts", async () => {
+    for (const err of [new SdkLensError("unconfirmed", false), new SdkLensError("device_offline", false)]) {
+      const s = fakeSdk({ askErr: err });
+      const t = setup(s.lens);
+      const r = await showDisplay(ctx, { blocks: CHOICE }, undefined, t.deps);
+      expect(r).toMatchObject({ glasses: `skipped:sdk ${err.code}`, message_id: "m1", decision: true });
+      expect(r).not.toHaveProperty("glasses_message_id");
+      expect(t.rows).toHaveLength(0);
+      expect(replaceDisplay).not.toHaveBeenCalled();
+    }
+  });
+
+  it("wait after an unconfirmed ask: the channel decision still answers the hold; the lens is never read", async () => {
+    const s = fakeSdk({ askErr: new SdkLensError("unconfirmed", false) });
+    const t = setup(s.lens);
+    const answer = { block_id: "b2", index: 0, choice: "Ship", at: "t", via: "web" };
+    t.clock.onSleep(() => {
+      vi.mocked(findMessageById).mockResolvedValue({ metadata: { display: { spec_version: 2, display_id: "d", blocks: CHOICE, answer } } } as never);
+    });
+    expect(await showDisplay(ctx, { blocks: CHOICE, wait: true }, undefined, t.deps)).toMatchObject({ status: "answered", answer, glasses: "skipped:sdk unconfirmed" });
+    expect(s.reads).toEqual([]);
+    expect(t.rows).toHaveLength(0);
   });
 });

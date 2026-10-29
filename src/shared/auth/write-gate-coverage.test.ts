@@ -113,6 +113,14 @@ const EXEMPT: Record<string, string> = {
     "Device SDK — developer secret key via withDeveloperKey, scope `actions:write`.",
   "v1/test/reset/route.ts":
     "Device SDK — developer sk_test_ key via withDeveloperKey, scopes `connect` + `actions:write`; test env of the calling project only.",
+  "v1/webhook_endpoints/route.ts":
+    "Device SDK — developer secret key via withDeveloperKey (any secret key, publishable refused); create a webhook endpoint (C8).",
+  "v1/webhook_endpoints/[id]/route.ts":
+    "Device SDK — developer secret key via withDeveloperKey; update / delete a webhook endpoint of the key's project + env (C8).",
+  "v1/webhook_endpoints/[id]/rotate_secret/route.ts":
+    "Device SDK — developer secret key via withDeveloperKey; rotate a webhook signing secret (C8).",
+  "v1/webhook_deliveries/[id]/replay/route.ts":
+    "Device SDK — developer secret key via withDeveloperKey; replay a webhook delivery of the key's project + env (C8).",
   "connect/[token]/[step]/route.ts":
     "Device SDK hosted Connect page steps — authenticated by the connect token in the path (sha256-matched); the end user has no Dopl account (D1). Per-IP rate-limited.",
 };
@@ -244,6 +252,17 @@ describe("H-3 write-gate coverage", () => {
         // POST runs one real `/v1` call (deliver, revoke a connection, create a Connect session)
         // with a pasted test key (P3 playground). A person's tool: an agent token never drives it.
         "developers/playground/route.ts",
+        // The P3 self-serve portal (portal-http.ts): DELETE revokes a key, POST mints one, the
+        // rest create orgs/projects and grant or remove org membership (which manages keys).
+        // An agent token must never mint, kill, or widen who can mint.
+        "developers/keys/[keyId]/route.ts",
+        "developers/projects/[projectId]/keys/route.ts",
+        "developers/orgs/route.ts",
+        "developers/orgs/[orgId]/projects/route.ts",
+        "developers/orgs/[orgId]/invites/route.ts",
+        "developers/orgs/[orgId]/members/[memberId]/route.ts",
+        "developers/invites/[inviteId]/route.ts",
+        "developers/invites/accept/route.ts",
         // Cancel writes on our own route (no Stripe-hosted click-through).
         "billing/cancel/route.ts",
         // POST switches a live personal subscription Pro ⇄ Max in place

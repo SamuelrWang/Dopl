@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/device-sdk-events-prune",
       "schedule": "15 9 * * *"
+    },
+    {
+      "path": "/api/cron/device-sdk-webhooks-send",
+      "schedule": "* * * * *"
     }
   ]
 }

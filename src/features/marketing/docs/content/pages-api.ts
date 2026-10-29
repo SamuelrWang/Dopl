@@ -2,6 +2,7 @@ import { API, curl, DEVICE_ID, EXAMPLE_DEVICE, json } from "./shared";
 import REFERENCE from "./openapi-reference.generated.json";
 import type { RefOperation, RefParam } from "./openapi-reference";
 import type { DocBlock, DocPage, DocParam } from "./types";
+import { WEBHOOK_ENDPOINTS } from "./pages-api-webhooks";
 
 /**
  * The API Reference tab. ⚠ STRUCTURE IS GENERATED: method, path, auth, every parameter and body
@@ -58,6 +59,7 @@ const GROUP: Record<string, string> = {
   actions: "Actions",
   devices: "Devices",
   events: "Events",
+  webhooks: "Webhooks",
 };
 
 export interface EndpointSpec {
@@ -257,7 +259,7 @@ export const ENDPOINTS: EndpointSpec[] = [
     description: "Deliver content by intent and let Dopl route it to one of the user's devices",
     examplePath: "/users/usr_123/deliver",
     notes: [
-      "Dopl routes the request, checks the grant and the tier, and enforces the device's limits without rewriting the content. `routed_to` says which device and why. An `ask` holds up to 200 seconds for the answer; read it with [Get an action](/docs/api-reference/actions) and the `delivery_id`. With `overflow: \"callback\"` and content over the limits, nothing is delivered, `status` is `failed` and the response adds `overflow_callback`. Secret key, scope `actions:write`.",
+      "Dopl routes the request, checks the grant and the tier, and enforces the device's limits without rewriting the content. `routed_to` says which device and why. An `ask` holds up to 200 seconds for the answer (send `Prefer: respond-async` to skip the hold); read it with [Get an action](/docs/api-reference/actions) and the `delivery_id`. With `overflow: \"callback\"` and content over the limits, nothing is delivered, `status` is `failed` and the response adds `overflow_callback`. Secret key, scope `actions:write`.",
     ],
     describe: {
       external_user_id: EXTERNAL_USER_ID,
@@ -285,7 +287,7 @@ export const ENDPOINTS: EndpointSpec[] = [
     description: "Run one capability on one device",
     examplePath: `/devices/${DEVICE_ID}/actions/present.notify`,
     notes: [
-      "The device must be online, publish the capability and allow it under its profile, and the user's grant must cover it. `ask.*` actions hold up to 200 seconds for the answer. T4 capabilities fail with `confirmation_denied` by default; when the profile sets a confirmation mode they return `needs_confirmation` and do not run. Secret key, scope `actions:write`.",
+      "The device must be online, publish the capability and allow it under its profile, and the user's grant must cover it. `ask.*` actions hold up to 200 seconds for the answer, unless you send `Prefer: respond-async`. T4 capabilities fail with `confirmation_denied` by default; when the profile sets a confirmation mode they return `needs_confirmation` and do not run. Secret key, scope `actions:write`.",
     ],
     describe: {
       device_id: "The device to act on.",
@@ -380,6 +382,7 @@ export const ENDPOINTS: EndpointSpec[] = [
     }),
     error: errorExample("429", "rate_limit_error", "rate_limited", "Too many log reads for this key. Try again in a minute.", true),
   },
+  ...WEBHOOK_ENDPOINTS,
 ];
 
 export const API_PAGES: DocPage[] = [
@@ -406,7 +409,7 @@ export const API_PAGES: DocPage[] = [
       ),
       { type: "h2", text: "Asynchronous actions" },
       p(
-        "Deliver and device actions answer `202` with a status: `queued`, `delivered`, `done`, `failed` or `needs_confirmation`. A question holds the request for up to 200 seconds while the user answers. If it is not answered by then, the status is still `delivered` or `queued`, and you read the answer later with [Get an action](/docs/api-reference/actions), passing the `delivery_id` or `action_id`."
+        "Deliver and device actions answer `202` with a status: `queued`, `delivered`, `done`, `failed` or `needs_confirmation`. A question holds the request for up to 200 seconds while the user answers, unless you send `Prefer: respond-async`, which answers at once. If it is not answered by then, the status is still `delivered` or `queued`, and you read the answer later with [Get an action](/docs/api-reference/actions), passing the `delivery_id` or `action_id`."
       ),
       { type: "h2", text: "Request IDs" },
       p("Every response carries a `Request-Id` header, which is the ID of the event Dopl recorded for the call."),

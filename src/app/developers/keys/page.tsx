@@ -8,7 +8,7 @@ import { loadPortal } from "../_lib/load-portal";
 import { maskedKey, since } from "../_lib/format";
 import { KeysTable, type KeyView } from "./keys-table";
 
-/** `/developers/keys` — the selected project's keys for one env: masked, last used, rotate. */
+/** `/developers/keys` — the selected project's keys for one env: masked, last used; create, rotate, revoke. */
 export default async function KeysPage({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
   const { projects, params, now } = await loadPortal(searchParams, "/developers/keys");
   const project = projects.find((p) => p.id === params.project) ?? null;
@@ -35,12 +35,13 @@ export default async function KeysPage({ searchParams }: { searchParams: Promise
             ? { kind: "expiring", label: `Expires ${since(k.expires_at, now)}` }
             : { kind: "active" },
     }));
-    body = <KeysTable env={params.env} keys={keys} canRotate={canManageKeys(project.role)} />;
+    body = <KeysTable projectId={project.id} env={params.env} keys={keys} canManage={canManageKeys(project.role)} internal={project.org.internal} />;
   }
 
   return (
     <PortalFrame projects={projects} params={params} title="API keys">
-      <PageHeader title="API keys" />
+      {/* With a project, the table owns the header (its Create key button is client state). */}
+      {!project && <PageHeader title="API keys" />}
       {body}
     </PortalFrame>
   );

@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { ConnectSessionRow, ConnectStore, ConnectionRow, DeviceRow } from "./store-types";
+import { kickWebhookSender } from "../webhooks/runtime";
 
 /**
  * Service-role access to `connect_sessions`, `connections`, `devices` (SDK rows), `dev_end_users`
@@ -181,5 +182,7 @@ export const connectStore: ConnectStore = {
   async insertOutbox(row) {
     const { error } = await db().from("dev_webhook_outbox").insert(row);
     if (error) fail("insertOutbox", error);
+    // First attempt right after this response; the per-minute cron covers a missed kick.
+    kickWebhookSender();
   },
 };

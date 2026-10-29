@@ -12,6 +12,17 @@ export interface SdkGlassesDevice {
   env: string;
 }
 
+/** A `dev_actions` row a lens answer or dismiss just settled (`lens-actions.ts › MovedLensAction`). */
+export interface SdkSettledAction {
+  id: string;
+  project_id: string;
+  env: string;
+  /** The caller's `Idempotency-Key`: the Dopl app's own SDK asks carry their channel link in it. */
+  idempotency_key: string;
+  status: string;
+  result: Record<string, unknown> | null;
+}
+
 /**
  * Everything the device routes need for an SDK G2 (A8). Implemented over the service role in
  * `device-sdk/server/glasses/sdk-glasses-port.ts`. Absent = prosumer-only: every prosumer caller and
@@ -31,8 +42,11 @@ export interface SdkGlassesPort {
   revokeToken(deviceId: string, now: string): Promise<void>;
   /** Lens rows the inbox just handed to the glasses (pending → delivered). */
   delivered(deviceId: string, messageIds: string[]): Promise<void>;
-  /** A lens row was answered or dismissed: settle the `dev_actions` row it serves. */
-  settled(deviceId: string, row: GlassesMessage): Promise<void>;
+  /**
+   * A lens row was answered or dismissed: settle the `dev_actions` row it serves. Returns the actions
+   * THIS call moved (none when another hop settled them first); `void` from older fakes reads as none.
+   */
+  settled(deviceId: string, row: GlassesMessage): Promise<SdkSettledAction[] | void>;
   /**
    * W1.2 dogfood window (Plan §8): the ids of this Dopl user's prosumer glasses that were MIGRATED to
    * SDK rows (same id, `sdk_delivery` on). Such a device still signs in with its legacy token, so the
@@ -40,4 +54,9 @@ export interface SdkGlassesPort {
    * Absent = no migrated devices.
    */
   migratedDeviceIds?(userId: string): Promise<string[]>;
+  /**
+   * True when `projectId` is the Dopl app's own project (the internal org's "Dopl App") and `env` is
+   * `live`: only its actions may be bridged to a Dopl user's channel. Absent = never (fail closed).
+   */
+  isDoplAppProject?(projectId: string, env: string): Promise<boolean>;
 }
