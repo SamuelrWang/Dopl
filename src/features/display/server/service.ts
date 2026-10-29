@@ -35,8 +35,9 @@ import {
 } from "../core/types";
 import { compileForLens, isReservedLensId, lensState, pushAsk, pushScreen } from "./lens";
 import { channelWorkspaceOf, findByDisplayId, hasAnswerMessage, replaceDisplay } from "./repository";
-import { SdkLensError, type LensDevices } from "./sdk-lens";
-import { bridgeLensAnswer, keepAlive, productionSdkLens, sdkLensFor, sdkPlanOf, type LensAnswer, type SdkPlan, type ShowDeps } from "./sdk-seam";
+import { sdkAskKey } from "./sdk-ask-key";
+import { SdkLensError, type LensDevices, type SdkAskOutcome, type SdkAskTicket } from "./sdk-lens";
+import { productionSdkLens, sdkLensFor, sdkPlanOf, type SdkPlan, type ShowDeps } from "./sdk-seam";
 
 /**
  * **`showDisplay` — THE ONE DOOR** (`POST /api/displays`; spec §4) for `dopl_show` and every
@@ -47,6 +48,8 @@ import { bridgeLensAnswer, keepAlive, productionSdkLens, sdkLensFor, sdkPlanOf, 
 
 const HOLD_GRACE_MS = 5_000;
 const POLL_MS = 2_000;
+/** Passes a held SDK lens answer waits for its channel stamp (the answer route posts it, gap #3). */
+const LENS_STAMP_PASSES = 2;
 
 export const ShowInputSchema = z
   .object({
@@ -82,6 +85,7 @@ export interface ShowResult {
   channel_name?: string;
   /** "shown" | "skipped:<reason>" | "off" */
   glasses: string;
+  /** The lens row; for an SDK lens ask (W1.2), its action id (`GET /v1/actions/{id}`, `glasses_get_answer`). */
   glasses_message_id?: string;
   replaced?: "in-place" | "new";
   /** Why a same-id display became a new message: it was answered, or it gained/lost its choice. */
@@ -233,7 +237,9 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
 
   // ── THE LENS COPY (the caller's own glasses) ──
   let row: GlassesMessage | null = null;
-  let sdkAsk: { run: Promise<LensAnswer>; stop: AbortController } | null = null;
+  let sdkAsk: SdkAskTicket | null = null;
+  /** The decision's envelope names the SDK ask whose lens answer may post to it (`sdk-ask-key.ts`). */
+  let askKeyStamp: string | undefined;
   let glasses = input.target === "channel" ? "off" : sdkRefusal ? `skipped:sdk ${sdkRefusal}` : wantLens ? "shown" : devices.online ? "skipped:no choice" : "skipped:no online glasses";
   const prosumerPush = async () =>
     shortcut === "ask" && choice
@@ -245,32 +251,30 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
   if (wantLens && !lens.ok) glasses = `skipped:${(lens.errors[0] as { message?: string })?.message ?? "does not fit"}`;
   else if (wantLens && sdk) {
     plan = sdkPlanOf(deps, { blocks, layout, level: lens.level, choice, question: firstLine(blocks) ?? "", shortcut, explicitId: input.display_id !== undefined });
-    // ≤ 8 + 64 + 1 + 64 chars, inside the contract's 255.
-    const key = `display-${displayId}-${newDisplayId()}`;
-    if (plan.kind === "ask") {
-      const stop = new AbortController();
-      const timeoutMs = Math.min(timeout, ASK_HOLD_CAP_SEC) * 1000;
-      sdkAsk = { stop, run: sdk.ask({ question: plan.question, options: plan.options, timeoutMs, idempotencyKey: key, signal: stop.signal }).then((outcome) => ({ outcome })) };
-    } else if (plan.kind === "screen") {
-      try {
-        await sdk.screen({ blocks, idempotencyKey: key });
-      } catch (err) {
-        if (!(err instanceof SdkLensError)) throw err;
-        if (err.fallback) [fallbackReason, row] = [err.code, await prosumerPush()];
-        else glasses = `skipped:sdk ${err.code}`;
-      }
-    } else [fallbackReason, row] = [plan.reason, await prosumerPush()];
+    // An ask delivers and returns (no held function, gap #3); its key carries the decision's channel
+    // link, so the glasses' answer route posts the lens answer there. Every key fits the contract's 255.
+    const linked = decision && channel ? channel.id : null;
+    const key = plan.kind === "ask" ? sdkAskKey({ channelId: linked, displayId, nonce: newDisplayId() }) : `display-${displayId}-${newDisplayId()}`;
+    if (plan.kind === "none") [fallbackReason, row] = [plan.reason, await prosumerPush()];
+    else try {
+      if (plan.kind === "ask") {
+        sdkAsk = await sdk.startAsk({ question: plan.question, options: plan.options, idempotencyKey: key });
+        if (linked) askKeyStamp = key;
+      } else await sdk.screen({ blocks, idempotencyKey: key });
+    } catch (err) {
+      // 🔒 Gap #6: only a PROVEN non-delivery takes the prosumer path; anything else is one copy or none.
+      if (!(err instanceof SdkLensError)) throw err;
+      if (err.fallback) [fallbackReason, row] = [err.code, await prosumerPush()];
+      else glasses = `skipped:sdk ${err.code}`;
+    }
   } else if (wantLens) row = await prosumerPush();
 
   // ── THE CHANNEL COPY ──
   const waitUntil = input.wait ? iso(nowOf(deps) + Math.min(timeout, ASK_HOLD_CAP_SEC) * 1000) : undefined;
   const posted = resolved
-    ? await postOrReplace(resolved.ctx, resolved.channel, input, { blocks: channelBlocksOf(blocks, decision), layout, displayId, waitUntil, row, decision })
+    ? await postOrReplace(resolved.ctx, resolved.channel, input, { blocks: channelBlocksOf(blocks, decision), layout, displayId, waitUntil, row, decision, sdkAskKey: askKeyStamp })
     : null;
   if (row && posted && row.channel_message_id !== posted.id) await deps.store.linkChannelMessage(ctx.userId, row.id, posted.id);
-  // A lens answer to the SDK ask posts to the channel decision (the bridge); held here, else kept alive.
-  const lensAnswer = sdkAsk && { ...sdkAsk, run: bridgeLensAnswer(sdkAsk.run.then((a) => a.outcome), { userId: ctx.userId, messageId: posted?.id ?? null, decision: !!decision }) };
-  if (lensAnswer && !input.wait) keepAlive(lensAnswer.run);
   const path = !wantLens ? "none" : row ? (fallbackReason ? "prosumer_fallback" : "prosumer") : sdk ? "sdk" : "prosumer";
 
   console.info(
@@ -290,6 +294,7 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
     glasses,
     // Lens-row status is for glasses shortcuts only; `dopl_show` reads `status` as a hold's outcome.
     ...(row && { glasses_message_id: row.id, ...(shortcut && { status: row.status }) }),
+    ...(sdkAsk && { glasses_message_id: sdkAsk.deliveryId }),
     ...(posted && resolved && {
       message_id: posted.id,
       channel_id: resolved.channel.id,
@@ -300,7 +305,8 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
     }),
   };
   if (!input.wait) return result;
-  const held = await hold(deps, ctx.userId, { row, lensAnswer, messageId: posted?.id ?? null, channelId: resolved?.channel.id ?? null, timeout, choice, signal });
+  const lensAsk = sdk && sdkAsk ? { read: sdk.askOutcome.bind(sdk, sdkAsk.deliveryId) } : null;
+  const held = await hold(deps, ctx.userId, { row, lensAsk, messageId: posted?.id ?? null, channelId: resolved?.channel.id ?? null, decision: !!decision, timeout, choice, signal });
   const lensGlasses = held.lensRefused ? { glasses: `skipped:sdk ${held.lensRefused}` } : {};
   delete held.lensRefused;
   return { ...result, ...lensGlasses, ...held, ...(held.answer?.by && { by_handle: await handleOf(held.answer.by) }) };
@@ -325,6 +331,8 @@ interface PostArgs {
   row: GlassesMessage | null;
   /** The decision index a choice display posts with, else `null` (a status). */
   decision: Decision;
+  /** The SDK lens ask this decision went out as (`sdk-ask-key.ts`). */
+  sdkAskKey?: string;
 }
 
 /** Replace-by-id when this author already showed `display_id` here and it is unanswered (§3.5); else post. */
@@ -332,7 +340,7 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
   const handles = (input.mention ?? "").split(/[\s,]+/).filter(Boolean).map((h) => (h.startsWith("@") ? h : `@${h}`));
   const body = [handles.join(" "), displayFallback(a.blocks)].filter(Boolean).join("\n");
   const origin: DisplayOrigin = input.origin ?? "dopl_show";
-  const stamp = { display_id: a.displayId, wait_until: a.waitUntil, glasses_message_id: a.row?.id, origin };
+  const stamp = { display_id: a.displayId, wait_until: a.waitUntil, glasses_message_id: a.row?.id, sdk_ask_key: a.sdkAskKey, origin };
   let replaced: { replaced: "new"; replaced_reason: "answered" | "choice changed" } | undefined;
   let withdraw: { id: string; body: string; envelope: DisplayEnvelopeV2 } | null = null;
   if (input.display_id) {
@@ -350,6 +358,7 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
           ...(a.layout === "absolute" && { layout: "absolute" as const }),
           ...(a.waitUntil && { wait_until: a.waitUntil }),
           ...(a.row && { glasses_message_id: a.row.id }),
+          ...(a.sdkAskKey && { sdk_ask_key: a.sdkAskKey }),
           origin,
         };
         if (await replaceDisplay(prior.id, ctx.userId, body, envelope, a.decision)) {
@@ -396,10 +405,12 @@ async function hold(
   userId: string,
   h: {
     row: GlassesMessage | null;
-    /** The SDK lens ask (W1.2), bridged: it settles on the wearer's answer, a dismiss, a refusal or its timeout. */
-    lensAnswer: { run: Promise<LensAnswer>; stop: AbortController } | null;
+    /** The SDK lens ask (W1.2): one read per pass of its action; null while open. Nothing is held for it. */
+    lensAsk: { read: () => Promise<SdkAskOutcome | null> } | null;
     messageId: string | null;
     channelId: string | null;
+    /** The channel copy is a decision: a lens answer posts there (`answer.ts › answerFromSdkLens`). */
+    decision: boolean;
     timeout: number;
     choice: ChoiceBlock | null;
     signal?: AbortSignal;
@@ -408,31 +419,35 @@ async function hold(
   const sleep = sleepOf(deps);
   const start = nowOf(deps);
   const holdMs = Math.min(h.timeout, ASK_HOLD_CAP_SEC) * 1000 + HOLD_GRACE_MS;
-  let lens: LensAnswer | null = null;
-  void h.lensAnswer?.run.then((a) => void (lens = a));
-  const done = <T,>(r: T): T => (h.lensAnswer?.stop.abort(), r);
+  let lensOpen = !!h.lensAsk;
+  let lensAnswer: Extract<SdkAskOutcome, { status: "answered" }> | null = null;
+  let stampWaits = 0;
   let lensRefused: string | undefined;
+  const fromLens = (a: NonNullable<typeof lensAnswer>): Pick<ShowResult, "status" | "answer"> => ({
+    status: "answered",
+    answer: { block_id: h.choice?.id ?? "", index: a.index, choice: h.choice?.options[a.index]?.label ?? a.label, at: iso(nowOf(deps)), via: "glasses" },
+  });
   while (nowOf(deps) - start < holdMs && !h.signal?.aborted) {
     await sleep(POLL_MS);
     // The channel stamp wins.
-    const [msg, cur] = await Promise.all([
+    const [msg, cur, lens] = await Promise.all([
       h.messageId && h.channelId ? findMessageById(h.channelId, h.messageId) : null,
       h.row ? deps.store.get(userId, h.row.id) : null,
+      lensOpen && h.lensAsk ? h.lensAsk.read() : null,
     ]);
     const answer = msg && displayOf(msg.metadata as Record<string, unknown>)?.answer;
-    if (answer) return done({ status: "answered", answer });
-    const seen = lens as LensAnswer | null;
-    if (seen) {
-      const o = seen.outcome;
-      if (o.status === "answered") {
-        const option = h.choice?.options[o.index];
-        const stamp = seen.stamp ?? { block_id: h.choice?.id ?? "", index: o.index, choice: option?.label ?? o.label, at: iso(nowOf(deps)), via: "glasses" };
-        return { status: "answered", answer: stamp };
-      }
-      if (o.status === "dismissed") return { status: "dismissed", answer: null };
-      if (o.status === "refused") lensRefused = o.code;
-      // Refused or timed out on the lens: the channel copy can still be answered until the hold ends.
-      if (!h.messageId) return { status: "timeout", answer: null, ...(lensRefused && { lensRefused }) };
+    if (answer) return { status: "answered", answer };
+    if (lens?.status === "answered") [lensOpen, lensAnswer] = [false, lens];
+    if (lensAnswer) {
+      // The answer route is posting it to the decision; that stamp names who and when, so let it land.
+      if (h.decision && h.messageId && stampWaits++ < LENS_STAMP_PASSES) continue;
+      return fromLens(lensAnswer);
+    }
+    if (lens?.status === "dismissed") return { status: "dismissed", answer: null };
+    if (lens?.status === "refused") {
+      // Refused on the lens: the channel copy can still be answered until the hold ends.
+      [lensOpen, lensRefused] = [false, lens.code];
+      if (!h.messageId) return { status: "timeout", answer: null, lensRefused };
     }
     if (h.row) {
       if (cur?.status === "answered" && cur.answer) {
@@ -446,7 +461,8 @@ async function hold(
       if (cur?.status === "expired" && !h.messageId) return { status: "timeout", answer: null };
     }
   }
+  if (lensAnswer) return fromLens(lensAnswer);
   // Only a prosumer lens row can be read later (`glasses_get_answer`); an SDK ask past its hold is over.
   const pending = h.timeout > ASK_HOLD_CAP_SEC && !h.signal?.aborted && !!h.row;
-  return done({ status: pending ? "pending" : "timeout", answer: null, ...(lensRefused && { lensRefused }) });
+  return { status: pending ? "pending" : "timeout", answer: null, ...(lensRefused && { lensRefused }) };
 }
