@@ -244,6 +244,17 @@ describe("H-3 write-gate coverage", () => {
         // POST runs one real `/v1` call (deliver, revoke a connection, create a Connect session)
         // with a pasted test key (P3 playground). A person's tool: an agent token never drives it.
         "developers/playground/route.ts",
+        // The P3 self-serve portal (portal-http.ts): DELETE revokes a key, POST mints one, the
+        // rest create orgs/projects and grant or remove org membership (which manages keys).
+        // An agent token must never mint, kill, or widen who can mint.
+        "developers/keys/[keyId]/route.ts",
+        "developers/projects/[projectId]/keys/route.ts",
+        "developers/orgs/route.ts",
+        "developers/orgs/[orgId]/projects/route.ts",
+        "developers/orgs/[orgId]/invites/route.ts",
+        "developers/orgs/[orgId]/members/[memberId]/route.ts",
+        "developers/invites/[inviteId]/route.ts",
+        "developers/invites/accept/route.ts",
         // Cancel writes on our own route (no Stripe-hosted click-through).
         "billing/cancel/route.ts",
         // POST switches a live personal subscription Pro ⇄ Max in place
