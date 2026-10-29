@@ -28,9 +28,45 @@ export interface PortalProject {
   role: PortalRole;
 }
 
-/** Who may rotate keys. A `developer` member reads only. */
+/** One org the signed-in developer can see, even one with no project yet. */
+export interface PortalOrg {
+  id: string;
+  name: string;
+  internal: boolean;
+  /** `dev_orgs.owner_user_id`: the one owner, never removable, never re-roled. */
+  ownerUserId: string;
+  role: PortalRole;
+}
+
+export const ROLE_RANK: Record<PortalRole, number> = { owner: 3, admin: 2, developer: 1 };
+
+/** Roles an invite or a role change may grant. `owner` is `dev_orgs.owner_user_id` alone. */
+export const ASSIGNABLE_ROLES = ["admin", "developer"] as const;
+export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
+
+export const ROLE_LABEL: Record<PortalRole, string> = { owner: "Owner", admin: "Admin", developer: "Developer" };
+
+/** Who may create, rotate and revoke keys, and create projects. A `developer` member reads only. */
 export function canManageKeys(role: PortalRole): boolean {
   return role === "owner" || role === "admin";
+}
+
+/** Who may invite people and see the open invites. */
+export function canManageMembers(role: PortalRole): boolean {
+  return role === "owner" || role === "admin";
+}
+
+/**
+ * May `actor` grant `role` (by invite or role change)? Only a role strictly BELOW their own: an
+ * owner grants admin or developer, an admin grants developer. Nobody grants owner.
+ */
+export function canAssignRole(actor: PortalRole, role: string): role is AssignableRole {
+  return (ASSIGNABLE_ROLES as readonly string[]).includes(role) && ROLE_RANK[role as AssignableRole] < ROLE_RANK[actor];
+}
+
+/** May `actor` change or remove a member holding `target`? Only one ranked strictly below them. */
+export function canActOn(actor: PortalRole, target: PortalRole): boolean {
+  return ROLE_RANK[target] < ROLE_RANK[actor];
 }
 
 export const LOG_WINDOWS = ["1h", "24h", "7d", "30d"] as const;
