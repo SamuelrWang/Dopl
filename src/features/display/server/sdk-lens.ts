@@ -167,3 +167,92 @@ export function createSdkLens(env: { key?: string; baseUrl?: string } = {}): Sdk
     },
   };
 }
+
+// ── Lens NOTICES over the SDK (W1.2 Gaps #1) ─────────────────────────────────────────────────────
+
+/** One SDK call's result as the glasses tools read it: no throw crosses into `glasses/core`. */
+export type SdkNoticeResult<T> = { ok: true; value: T } | { ok: false; code: string; fallback: boolean };
+
+/** An SDK action as `glasses_get_answer` reads it. */
+export interface SdkNoticeAction {
+  id: string;
+  device_id: string;
+  capability: string;
+  status: string;
+  result: Record<string, unknown> | null;
+  updated_at: string;
+}
+
+/**
+ * One user's lens NOTICES over the SDK: `glasses_notify` (`present.notify` on ONE device, so the title
+ * rides along; `deliver` carries only text) and `glasses_get_answer` for an SDK action id.
+ * Structurally the `GlassesSdkUser` port of `glasses/core/messages/service.ts`.
+ */
+export interface SdkUserNotices {
+  deviceIds: string[];
+  notify(a: { deviceId: string; title: string; body: string; idempotencyKey: string }): Promise<SdkNoticeResult<{ id: string; status: string }>>;
+  /** The action, or `not_found` when it is unknown OR on a device that is not one of {@link deviceIds}. */
+  action(id: string): Promise<SdkNoticeResult<SdkNoticeAction>>;
+}
+
+const settle = async <T>(p: Promise<T>): Promise<SdkNoticeResult<T>> => {
+  try {
+    return { ok: true, value: await p };
+  } catch (err) {
+    const e = err instanceof SdkLensError ? err : classify(err);
+    return { ok: false, code: e.code, fallback: e.fallback };
+  }
+};
+
+/** Notices for one user over a ready client. Exported for the suites. */
+export function sdkUserNotices(dopl: Dopl, userId: string, deviceIds: string[]): SdkUserNotices {
+  return {
+    deviceIds,
+    notify({ deviceId, title, body, idempotencyKey }) {
+      return settle(
+        timed(
+          "notify",
+          (signal) => dopl.devices.action(deviceId, "present.notify", { title, body }, { idempotencyKey, signal }),
+          (r) => ({ action_id: r.action_id, status: r.status }),
+        ).then((r) => ({ id: r.action_id, status: r.status })),
+      );
+    },
+    async action(id) {
+      const r = await settle(timed("action", (signal) => dopl.actions.get(id, { signal }), (a) => ({ status: a.status })));
+      if (!r.ok) return r;
+      // 🔒 The Dopl App project holds EVERY user's actions; an id on another user's device is unknown here.
+      if (!deviceIds.includes(r.value.device_id)) return { ok: false, code: "not_found", fallback: false };
+      const a = r.value;
+      return { ok: true, value: { id: a.action_id, device_id: a.device_id, capability: a.capability, status: a.status, result: a.result, updated_at: a.updated_at } };
+    },
+  };
+}
+
+/** Production notices: the same flag and key as {@link createSdkLens}. Null = flag off. Throws {@link SdkLensError} (fallback). */
+export function createSdkNotices(env: { key?: string; baseUrl?: string } = {}): { forUser(userId: string): Promise<SdkUserNotices | null> } {
+  let client: Dopl | null = null;
+  return {
+    async forUser(userId) {
+      let state: { on: boolean; deviceIds: string[] };
+      try {
+        state = await sdkDeliveryFor(userId);
+      } catch (err) {
+        console.error("[display] sdk_delivery lookup failed; prosumer notice path", err);
+        throw new SdkLensError("flag_lookup_failed", true);
+      }
+      if (!state.on) return null;
+      const key = env.key ?? process.env.DOPL_APP_SDK_KEY;
+      if (!key) {
+        if (!warnedNoKey) console.error("[display] sdk_delivery is on but DOPL_APP_SDK_KEY is not set; prosumer notice path");
+        warnedNoKey = true;
+        throw new SdkLensError("no_key", true);
+      }
+      const baseUrl = env.baseUrl ?? process.env.DOPL_APP_SDK_BASE_URL;
+      client ??= new Dopl({ apiKey: key, ...(baseUrl && { baseUrl }) });
+      return sdkUserNotices(client, userId, state.deviceIds);
+    },
+  };
+}
+
+/** Production: the glasses tools' notice port (`glasses/core/mcp/exposure.ts`). */
+export const productionSdkNotices = createSdkNotices();
