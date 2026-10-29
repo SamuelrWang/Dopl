@@ -24,7 +24,8 @@ interface FakeEndpoint extends EndpointRow {
 }
 
 export function fakeWebhookStore(opts: { apiVersion?: string } = {}) {
-  const clock = { now: new Date("2026-10-28T12:00:00Z") };
+  // Starts at the real now: the API maps rows against wall-clock time (rotation overlap).
+  const clock = { now: new Date() };
   const outbox: FakeOutbox[] = [];
   const endpoints: FakeEndpoint[] = [];
   const deliveries: Array<DeliveryRow & { locked_until: string | null }> = [];

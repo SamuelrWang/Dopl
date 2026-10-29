@@ -49,6 +49,12 @@ export {
   EventListResponseSchema,
   PRIVATE_EVENT_FIELDS,
   toPublicDeviceEvent,
+  // Webhook endpoints / deliveries (P3).
+  LIST_LIMIT_DEFAULT,
+  WEBHOOK_MAX_ATTEMPTS,
+  WebhookEndpointCreateRequestSchema,
+  WebhookEndpointUpdateRequestSchema,
+  WebhookSecretRotateRequestSchema,
 } from "@dopl/device-contracts";
 
 export type {
@@ -96,4 +102,9 @@ export type {
   EventListResponse,
   ListQuery,
   PublicDeviceEvent,
+  ListResponse,
+  WebhookAttempt,
+  WebhookDelivery,
+  WebhookEndpoint,
+  WebhookEndpointWithSecret,
 } from "@dopl/device-contracts";

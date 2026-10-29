@@ -1,5 +1,7 @@
 import "server-only";
 import { after } from "next/server";
+import { devSdkError } from "../errors";
+import { WebhookApiError, type WebhookApiDeps } from "./api";
 import { runWebhookSender, type SenderReport } from "./sender";
 import { supabaseWebhookStore } from "./store-supabase";
 import { httpsTransport } from "./transport";
@@ -37,5 +39,18 @@ export function kickWebhookSender(): void {
     });
   } catch {
     // No request scope.
+  }
+}
+
+/** Production deps for the endpoint API routes. */
+export const webhookApiDeps: WebhookApiDeps = { store: supabaseWebhookStore };
+
+/** Run an endpoint-API operation; a {@link WebhookApiError} becomes the C10 error response. */
+export async function answerWebhooks(run: () => Promise<Response>): Promise<Response> {
+  try {
+    return await run();
+  } catch (err) {
+    if (err instanceof WebhookApiError) return devSdkError(err.code, err.message);
+    throw err;
   }
 }
