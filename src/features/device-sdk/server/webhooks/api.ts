@@ -104,15 +104,19 @@ export function toDelivery(d: DeliveryRow, attempts?: AttemptRow[]): WebhookDeli
   };
 }
 
-// ── list cursors: opaque base64url of `<created_at ISO>|<uuid>` ──
+// ── list cursors: opaque base64url of `<created_at as Postgres wrote it>|<uuid>` ──
+// ⚠ The timestamp is kept VERBATIM (microseconds included): every delivery of one fan-out shares one
+// `now()`, so rounding to milliseconds would make a page boundary inside a batch skip rows.
+const PG_TIMESTAMP = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}(:?\d{2})?)$/;
+
 export function encodeCursor(p: ListPosition): string {
-  return Buffer.from(`${new Date(p.createdAt).toISOString()}|${p.id}`, "utf8").toString("base64url");
+  return Buffer.from(`${p.createdAt}|${p.id}`, "utf8").toString("base64url");
 }
 
 export function decodeCursor(raw: string): ListPosition {
   const text = Buffer.from(raw, "base64url").toString("utf8");
   const [createdAt, id, extra] = text.split("|");
-  if (extra !== undefined || !createdAt || !id || !UUID.test(id) || Number.isNaN(Date.parse(createdAt)) || new Date(createdAt).toISOString() !== createdAt) {
+  if (extra !== undefined || !createdAt || !id || !UUID.test(id) || !PG_TIMESTAMP.test(createdAt)) {
     throw new WebhookApiError("invalid_request", "cursor: not a cursor this list returned");
   }
   return { createdAt, id };
@@ -225,6 +229,6 @@ export async function replayDelivery(deps: WebhookApiDeps, t: Tenant, id: string
     throw new WebhookApiError("invalid_request", "The delivery's endpoint is disabled. Enable it before replaying.");
   }
   const row = await deps.store.replay(t, key);
-  if (!row) throw notFound("webhook delivery");
+  if (!row) throw new WebhookApiError("invalid_request", "The delivery is being sent right now. Try again in a minute.");
   return toDelivery(row);
 }

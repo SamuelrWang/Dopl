@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Environment, WebhookEventName } from "../../types";
-import type { AttemptRow, DeliveryRow, EndpointRow, ListPosition, Tenant, WebhookStore } from "./store-types";
+import type { AttemptRow, ClaimedDelivery, DeliveryRow, EndpointRow, ListPosition, Tenant, WebhookStore } from "./store-types";
 
 /**
  * In-memory {@link WebhookStore} for tests. Mirrors the SQL RPCs' semantics
@@ -16,6 +16,7 @@ export interface FakeOutbox {
   event_type: WebhookEventName;
   payload: Record<string, unknown>;
   status: "pending" | "delivered" | "failed";
+  created_at: string;
 }
 
 interface FakeEndpoint extends EndpointRow {
@@ -28,7 +29,8 @@ export function fakeWebhookStore(opts: { apiVersion?: string } = {}) {
   const clock = { now: new Date() };
   const outbox: FakeOutbox[] = [];
   const endpoints: FakeEndpoint[] = [];
-  const deliveries: Array<DeliveryRow & { locked_until: string | null }> = [];
+  type Row = DeliveryRow & { locked_until: string | null; claim_token: string | null };
+  const deliveries: Row[] = [];
   const attempts: AttemptRow[] = [];
   const iso = () => clock.now.toISOString();
   const tick = () => {
@@ -43,9 +45,10 @@ export function fakeWebhookStore(opts: { apiVersion?: string } = {}) {
     delete row.previous_secret;
     return row as EndpointRow;
   };
-  const strip2 = (d: DeliveryRow & { locked_until: string | null }): DeliveryRow => {
-    const row: Partial<typeof d> = { ...d };
+  const strip2 = (d: Row): DeliveryRow => {
+    const row: Partial<Row> = { ...d };
     delete row.locked_until;
+    delete row.claim_token;
     return row as DeliveryRow;
   };
   const owns = (t: Tenant, r: { project_id: string; env: Environment }) => r.project_id === t.projectId && r.env === t.env;
@@ -60,6 +63,7 @@ export function fakeWebhookStore(opts: { apiVersion?: string } = {}) {
       for (const o of picked) {
         for (const e of endpoints) {
           if (e.project_id !== o.project_id || e.env !== o.env || e.disabled_at) continue;
+          if (e.created_at > o.created_at) continue;
           if (e.enabled_events && !e.enabled_events.includes(o.event_type)) continue;
           if (deliveries.some((d) => d.outbox_id === o.id && d.endpoint_id === e.id)) continue;
           const at = tick();
@@ -79,6 +83,7 @@ export function fakeWebhookStore(opts: { apiVersion?: string } = {}) {
             created_at: at,
             updated_at: at,
             locked_until: null,
+            claim_token: null,
           });
         }
         if (!("api_version" in o.payload)) o.payload = { ...o.payload, api_version: opts.apiVersion ?? "2026-10-27" };
@@ -94,8 +99,11 @@ export function fakeWebhookStore(opts: { apiVersion?: string } = {}) {
         .filter((d) => !d.locked_until || Date.parse(d.locked_until) < now)
         .sort((a, b) => a.next_attempt_at.localeCompare(b.next_attempt_at))
         .slice(0, limit);
-      for (const d of due) d.locked_until = new Date(now + leaseSeconds * 1000).toISOString();
-      return due.map(strip2);
+      for (const d of due) {
+        d.locked_until = new Date(now + leaseSeconds * 1000).toISOString();
+        d.claim_token = randomUUID();
+      }
+      return due.map((d): ClaimedDelivery => ({ ...strip2(d), claim_token: d.claim_token as string }));
     },
 
     async payloads(ids) {
@@ -125,9 +133,21 @@ export function fakeWebhookStore(opts: { apiVersion?: string } = {}) {
       );
     },
 
-    async recordAttempt(id, o) {
+    async pruneExpiredSecrets() {
+      let n = 0;
+      for (const e of endpoints) {
+        if (e.previous_secret_expires_at && Date.parse(e.previous_secret_expires_at) <= clock.now.getTime()) {
+          e.previous_secret = null;
+          e.previous_secret_expires_at = null;
+          n++;
+        }
+      }
+      return n;
+    },
+
+    async recordAttempt(id, claimToken, o) {
       const d = deliveries.find((x) => x.id === id);
-      if (!d) return null;
+      if (!d || d.status !== "pending" || d.claim_token !== claimToken) return null;
       const n = Math.max(0, ...attempts.filter((a) => a.delivery_id === id).map((a) => a.attempt)) + 1;
       const at = tick();
       attempts.push({
@@ -145,6 +165,7 @@ export function fakeWebhookStore(opts: { apiVersion?: string } = {}) {
       if (!o.success && o.nextAttemptAt) d.next_attempt_at = o.nextAttemptAt.toISOString();
       if (o.success) d.delivered_at = at;
       d.locked_until = null;
+      d.claim_token = null;
       d.last_status_code = o.statusCode;
       d.last_error = o.error?.slice(0, 500) ?? null;
       d.updated_at = at;
@@ -231,7 +252,9 @@ export function fakeWebhookStore(opts: { apiVersion?: string } = {}) {
     async replay(t, id) {
       const d = deliveries.find((x) => x.id === id && owns(t, x));
       if (!d) return null;
-      Object.assign(d, { status: "pending", attempts: 0, next_attempt_at: iso(), locked_until: null, updated_at: tick() });
+      const leased = d.status === "pending" && d.locked_until !== null && Date.parse(d.locked_until) >= clock.now.getTime();
+      if (leased) return null;
+      Object.assign(d, { status: "pending", attempts: 0, next_attempt_at: iso(), locked_until: null, claim_token: null, updated_at: tick() });
       return strip2(d);
     },
   };
@@ -245,6 +268,7 @@ export function fakeWebhookStore(opts: { apiVersion?: string } = {}) {
       event_type: type,
       payload: { id: `evt_${id}`, type, timestamp: iso(), livemode: t.env === "live", data },
       status: "pending",
+      created_at: tick(),
     };
     outbox.push(row);
     return row;

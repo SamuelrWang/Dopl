@@ -25,10 +25,10 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("GET /api/cron/device-sdk-webhooks-send", () => {
   it("runs the sender within the cron budget and reports", async () => {
-    vi.mocked(runWebhookSenderNow).mockResolvedValue({ fannedOut: 2, attempted: 3, delivered: 2, retrying: 1, deadLettered: 0 });
+    vi.mocked(runWebhookSenderNow).mockResolvedValue({ fannedOut: 2, attempted: 3, delivered: 2, retrying: 1, deadLettered: 0, errored: 0 });
     const res = await GET(request());
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, fannedOut: 2, attempted: 3, delivered: 2, retrying: 1, deadLettered: 0 });
+    expect(await res.json()).toEqual({ ok: true, fannedOut: 2, attempted: 3, delivered: 2, retrying: 1, deadLettered: 0, errored: 0 });
     expect(runWebhookSenderNow).toHaveBeenCalledWith(40_000);
   });
 

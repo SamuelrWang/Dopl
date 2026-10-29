@@ -6,6 +6,7 @@ describe("webhook URL guard", () => {
     "127.0.0.1", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1", "169.254.169.254", "100.64.0.1",
     "0.0.0.0", "224.0.0.1", "255.255.255.255", "::1", "::", "fe80::1", "fd00:ec2::254", "fc00::1",
     "::ffff:127.0.0.1", "::ffff:169.254.169.254", "64:ff9b::7f00:1", "not-an-ip",
+    "::7f00:1", "::a9fe:a9fe", "::ffff:0:7f00:1", "fec0::1",
   ])("🔒 blocks %s", (ip) => {
     expect(isBlockedAddress(ip)).toBe(true);
   });
@@ -25,6 +26,10 @@ describe("webhook URL guard", () => {
     ["https://[::1]/hook", "private"],
     ["https://169.254.169.254/latest", "private"],
     ["https://localhost/hook", "private"],
+    ["https://localhost./hook", "private"],
+    ["https://[::127.0.0.1]/hook", "private"],
+    ["https://example.com:22/hook", "port"],
+    ["https://example.com:8080/hook", "port"],
     ["https://api.internal/hook", "private"],
     ["not a url", "valid URL"],
     ["", "characters"],
@@ -34,11 +39,12 @@ describe("webhook URL guard", () => {
     if (!r.ok) expect(r.reason).toContain(reason);
   });
 
-  it("accepts a public https URL and normalizes it", () => {
+  it("accepts a public https URL on 443 or 8443 and normalizes it", () => {
     expect(parseEndpointUrl("https://Example.com:8443/hooks/dopl?x=1")).toEqual({
       ok: true,
       url: "https://example.com:8443/hooks/dopl?x=1",
     });
+    expect(parseEndpointUrl("https://example.com:443/h")).toEqual({ ok: true, url: "https://example.com/h" });
   });
 
   it("🔒 register-time check refuses a host that resolves to a private address (any of them)", async () => {

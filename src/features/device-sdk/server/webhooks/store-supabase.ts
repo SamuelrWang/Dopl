@@ -73,10 +73,16 @@ export const supabaseWebhookStore: WebhookStore = {
     return (data as number | null) ?? 0;
   },
 
+  async pruneExpiredSecrets() {
+    const { data, error } = await db().rpc("dev_webhook_prune_expired_secrets");
+    if (error) fail("pruneExpiredSecrets", error);
+    return (data as number | null) ?? 0;
+  },
+
   async claim(limit, leaseSeconds) {
     const { data, error } = await db().rpc("dev_webhook_claim", { p_limit: limit, p_lease_seconds: leaseSeconds });
     if (error) fail("claim", error);
-    return ((data ?? []) as Record<string, unknown>[]).map(pickDelivery);
+    return ((data ?? []) as Record<string, unknown>[]).map((r) => ({ ...pickDelivery(r), claim_token: r.claim_token as string }));
   },
 
   async payloads(outboxIds) {
@@ -106,9 +112,10 @@ export const supabaseWebhookStore: WebhookStore = {
     return out;
   },
 
-  async recordAttempt(deliveryId, o) {
+  async recordAttempt(deliveryId, claimToken, o) {
     const { data, error } = await db().rpc("dev_webhook_record_attempt", {
       p_delivery_id: deliveryId,
+      p_claim_token: claimToken,
       p_status_code: o.statusCode,
       p_error: o.error,
       p_duration_ms: Math.max(0, Math.round(o.durationMs)),

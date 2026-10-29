@@ -170,7 +170,8 @@ describe("webhook endpoint routes", () => {
     f.enqueue({ projectId: P, env: "test" }, "connection.created");
     await f.store.fanOut(10);
     const d = f.deliveries[0];
-    await f.store.recordAttempt(d.id, { statusCode: 500, error: "HTTP 500", durationMs: 9, responseBody: "oops", success: false, nextAttemptAt: null });
+    const [claimed] = await f.store.claim(10, 60);
+    await f.store.recordAttempt(d.id, claimed.claim_token, { statusCode: 500, error: "HTTP 500", durationMs: 9, responseBody: "oops", success: false, nextAttemptAt: null });
 
     const list = listResponseSchema(WebhookDeliverySchema).parse(
       await (await listDeliveries(req(`/api/v1/webhook_endpoints/${id}/deliveries`, sk), ctx({ id }))).json()

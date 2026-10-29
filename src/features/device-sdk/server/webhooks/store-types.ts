@@ -39,6 +39,9 @@ export interface DeliveryRow {
   updated_at: string;
 }
 
+/** A delivery leased to one sender run; `claim_token` must be passed back to record its attempt. */
+export type ClaimedDelivery = DeliveryRow & { claim_token: string };
+
 export interface AttemptRow {
   id: string;
   delivery_id: string;
@@ -82,13 +85,19 @@ export interface WebhookStore {
   // ── sender ──
   /** Fan pending outbox events out to matching endpoints; returns events fanned out. */
   fanOut(limit: number): Promise<number>;
+  /** Drop rotated-out secrets whose overlap ended; returns how many. */
+  pruneExpiredSecrets(): Promise<number>;
   /** Lease due deliveries to this run. */
-  claim(limit: number, leaseSeconds: number): Promise<DeliveryRow[]>;
+  claim(limit: number, leaseSeconds: number): Promise<ClaimedDelivery[]>;
   /** The webhook bodies of these outbox rows, keyed by outbox id. */
   payloads(outboxIds: readonly string[]): Promise<Map<string, Record<string, unknown>>>;
   endpointsById(ids: readonly string[]): Promise<Map<string, EndpointRow>>;
   secretsFor(endpointIds: readonly string[]): Promise<Map<string, EndpointSecrets>>;
-  recordAttempt(deliveryId: string, outcome: AttemptOutcome): Promise<DeliveryRow | null>;
+  /**
+   * Record one attempt. Lands only if the delivery is still `pending` under this claim token;
+   * otherwise writes nothing and answers null (stale sender, or replayed meanwhile).
+   */
+  recordAttempt(deliveryId: string, claimToken: string, outcome: AttemptOutcome): Promise<DeliveryRow | null>;
 
   // ── endpoint API ──
   createEndpoint(
@@ -107,5 +116,6 @@ export interface WebhookStore {
   listDeliveries(t: Tenant, endpointId: string, after: ListPosition | null, limit: number): Promise<DeliveryRow[]>;
   getDelivery(t: Tenant, id: string): Promise<DeliveryRow | null>;
   attemptsFor(deliveryIds: readonly string[]): Promise<AttemptRow[]>;
+  /** Null when no such delivery OR it is being sent right now (live lease). */
   replay(t: Tenant, id: string): Promise<DeliveryRow | null>;
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { unwrap } from "./__fixtures__/dopl-sdk-webhooks";
 import { fakeWebhookStore } from "./fake-store";
 import { RETRY_DELAYS_S, WEBHOOK_MAX_ATTEMPTS } from "./retry";
@@ -76,7 +76,7 @@ describe("webhook sender", () => {
     expect(f.deliveries[0]).toMatchObject({ status: "failed", attempts: WEBHOOK_MAX_ATTEMPTS });
     expect(f.attempts).toHaveLength(WEBHOOK_MAX_ATTEMPTS);
     expect(f.attempts.find((a) => a.attempt === 2)).toMatchObject({ status_code: null, error: "connect ECONNREFUSED" });
-    expect(f.attempts.find((a) => a.attempt === 3)).toMatchObject({ status_code: 302, error: "HTTP 302" });
+    expect(f.attempts.find((a) => a.attempt === 3)).toMatchObject({ status_code: 302, error: "http_302" });
 
     // Dead-lettered: never sent again.
     advance(f, 7 * 24 * 3600);
@@ -126,7 +126,7 @@ describe("webhook sender", () => {
     await run();
     expect(calls).toHaveLength(0);
     expect(f.deliveries[0]).toMatchObject({ status: "failed" });
-    expect(f.attempts[0].error).toBe("not sent: endpoint disabled");
+    expect(f.attempts[0].error).toBe("not_sent: endpoint_disabled");
   });
 
   it("✅ rotation overlap signs with both secrets; after it ends only the new one", async () => {
@@ -159,12 +159,90 @@ describe("webhook sender", () => {
   });
 });
 
+describe("webhook sender: review fixes", () => {
+  it("🔒 a poison response (NUL byte) is stripped; a delivery that throws never stops the others", async () => {
+    const f = fakeWebhookStore();
+    const s1 = generateWebhookSecret();
+    await f.store.createEndpoint(T, { url: "https://a.example.com/x", description: null, enabledEvents: null, secret: s1 });
+    await f.store.createEndpoint(T, { url: "https://b.example.com/x", description: null, enabledEvents: null, secret: s1 });
+    f.enqueue(T, "connection.created");
+    const transport: Transport = async (req) => {
+      if (req.url.startsWith("https://a.")) return { statusCode: 500, error: null, responseBody: "bad\u0000body", durationMs: 1 };
+      return { statusCode: 200, error: null, responseBody: "ok", durationMs: 1 };
+    };
+    // Wrap the store so the record for b throws once (a DB hiccup).
+    const real = f.store.recordAttempt.bind(f.store);
+    let thrown = false;
+    const store = {
+      ...f.store,
+      recordAttempt: async (...a: Parameters<typeof real>) => {
+        const d = f.deliveries.find((x) => x.id === a[0]);
+        if (!thrown && d?.endpoint_id === f.endpoints[1].id) {
+          thrown = true;
+          throw new Error("db down");
+        }
+        return real(...a);
+      },
+    };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const report = await runWebhookSender({ store, transport, now: () => f.clock.now, random: () => 0.5 }, { budgetMs: 5_000 });
+    warn.mockRestore();
+    expect(report).toMatchObject({ attempted: 1, retrying: 1, errored: 1 });
+    expect(f.attempts).toHaveLength(1);
+    expect(f.attempts[0].response_body).toBe("badbody");
+  });
+
+  it("🔒 a stale record (wrong claim token, or after a replay) writes nothing", async () => {
+    const { f } = await setup();
+    f.enqueue(T, "connection.created");
+    await f.store.fanOut(10);
+    const [c] = await f.store.claim(10, 60);
+    const ok = { statusCode: 200, error: null, durationMs: 1, responseBody: null, success: true, nextAttemptAt: null };
+    expect(await f.store.recordAttempt(c.id, "00000000-0000-4000-8000-000000000000", ok)).toBeNull();
+    expect(await f.store.recordAttempt(c.id, c.claim_token, ok)).toMatchObject({ status: "delivered" });
+    // A second record with the same (now spent) token lands nowhere.
+    expect(await f.store.recordAttempt(c.id, c.claim_token, { ...ok, success: false, statusCode: 500 })).toBeNull();
+    expect(f.deliveries[0].status).toBe("delivered");
+    expect(f.attempts).toHaveLength(1);
+  });
+
+  it("🔒 replay is refused while a live lease is held (no parallel double send)", async () => {
+    const { f } = await setup();
+    f.enqueue(T, "connection.created");
+    await f.store.fanOut(10);
+    const [c] = await f.store.claim(10, 60);
+    expect(await f.store.replay(T, c.id)).toBeNull();
+    advance(f, 61);
+    expect(await f.store.replay(T, c.id)).toMatchObject({ status: "pending", attempts: 0 });
+    // The first sender's late record is now stale.
+    const ok = { statusCode: 200, error: null, durationMs: 1, responseBody: null, success: true, nextAttemptAt: null };
+    expect(await f.store.recordAttempt(c.id, c.claim_token, ok)).toBeNull();
+  });
+
+  it("an endpoint registered after an event never receives it", async () => {
+    const f = fakeWebhookStore();
+    f.enqueue(T, "connection.created");
+    await f.store.createEndpoint(T, { url: "https://late.example.com/x", description: null, enabledEvents: null, secret: generateWebhookSecret() });
+    await f.store.fanOut(10);
+    expect(f.deliveries).toHaveLength(0);
+  });
+
+  it("each run prunes rotated-out secrets whose overlap ended", async () => {
+    const { f, ep, run } = await setup([200]);
+    await f.store.rotateSecret(T, ep.id, generateWebhookSecret(), 60);
+    advance(f, 61);
+    await run();
+    expect(f.endpoints[0]).toMatchObject({ previous_secret: null, previous_secret_expires_at: null });
+  });
+});
+
 describe("https transport (no outbound calls)", () => {
   it("🔒 refuses http and private hosts before connecting", async () => {
     const http = await httpsTransport({ url: "http://example.com/x", headers: {}, body: "{}" });
-    expect(http).toMatchObject({ statusCode: null, error: "refused: url must use https" });
+    expect(http).toMatchObject({ statusCode: null, error: "url_refused" });
     const local = await httpsTransport({ url: "https://127.0.0.1/x", headers: {}, body: "{}" });
-    expect(local.statusCode).toBeNull();
-    expect(local.error).toContain("private");
+    expect(local).toMatchObject({ statusCode: null, error: "url_refused" });
+    const port = await httpsTransport({ url: "https://example.com:22/x", headers: {}, body: "{}" });
+    expect(port).toMatchObject({ statusCode: null, error: "url_refused" });
   });
 });

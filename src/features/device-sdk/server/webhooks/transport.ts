@@ -1,9 +1,13 @@
 import { request as httpsRequest } from "node:https";
-import { guardedLookup, parseEndpointUrl } from "./url-guard";
+import { BlockedAddressError, guardedLookup, parseEndpointUrl } from "./url-guard";
 
 /**
  * One webhook POST. Never throws: every failure is a {@link TransportResult} with `statusCode: null`
- * and an `error`. Rules (ruled): https only, connect only to addresses `guardedLookup` approved,
+ * and an `error` that is ONE OF {@link CONNECT_ERROR_CLASSES}, never the raw socket / TLS / DNS text
+ * (ruled 2026-10-28: raw connection errors would turn the attempt log into a port and service
+ * scanner). Only a real HTTP answer carries detail: its status and the first 1 KiB of its body.
+ *
+ * Rules (ruled): https on port 443 or 8443 only, connect only to addresses `guardedLookup` approved,
  * redirects NOT followed (a 3xx is a failure), {@link WEBHOOK_TIMEOUT_MS} for the whole exchange,
  * at most {@link RESPONSE_BODY_CAP} bytes of the response read (the socket is dropped after that).
  */
@@ -11,6 +15,40 @@ import { guardedLookup, parseEndpointUrl } from "./url-guard";
 export const WEBHOOK_TIMEOUT_MS = 15_000;
 export const RESPONSE_BODY_CAP = 1024;
 export const WEBHOOK_USER_AGENT = "Dopl-Webhooks/1";
+
+/** What a connection-phase failure is reported as. */
+export const CONNECT_ERROR_CLASSES = [
+  "dns_failed",
+  "connect_refused",
+  "tls_failed",
+  "timeout",
+  "address_blocked",
+  "url_refused",
+  "connect_failed",
+] as const;
+export type ConnectErrorClass = (typeof CONNECT_ERROR_CLASSES)[number];
+
+const DNS_CODES = new Set(["ENOTFOUND", "EAI_AGAIN", "EAI_FAIL", "ENODATA", "ESERVFAIL", "ENONAME"]);
+const REFUSED_CODES = new Set(["ECONNREFUSED", "ECONNRESET", "EHOSTUNREACH", "ENETUNREACH", "EPIPE"]);
+
+class TimeoutError extends Error {}
+
+/** The class of a connection-phase error. Anything unrecognised is `connect_failed`. */
+export function classifyError(err: unknown): ConnectErrorClass {
+  if (err instanceof BlockedAddressError) return "address_blocked";
+  if (err instanceof TimeoutError) return "timeout";
+  const code = typeof err === "object" && err !== null ? String((err as { code?: unknown }).code ?? "") : "";
+  if (code === "ETIMEDOUT" || code === "ESOCKETTIMEDOUT") return "timeout";
+  if (DNS_CODES.has(code)) return "dns_failed";
+  if (REFUSED_CODES.has(code)) return "connect_refused";
+  if (code.startsWith("ERR_TLS") || code.startsWith("ERR_SSL") || code.includes("CERT") || code === "EPROTO" || code.includes("SIGNATURE")) {
+    return "tls_failed";
+  }
+  return "connect_failed";
+}
+
+/** Postgres text cannot hold NUL; a response body with one must never fail the attempt record. */
+export const stripNul = (s: string): string => s.replace(/\u0000/g, "");
 
 export interface TransportRequest {
   url: string;
@@ -39,7 +77,7 @@ export const httpsTransport: Transport = (req) =>
 
     // Re-check the stored URL: rows written before a guard change must not bypass it.
     const parsed = parseEndpointUrl(req.url);
-    if (!parsed.ok) return done({ statusCode: null, error: `refused: ${parsed.reason}`, responseBody: null });
+    if (!parsed.ok) return done({ statusCode: null, error: "url_refused", responseBody: null });
 
     const body = Buffer.from(req.body, "utf8");
     let r: ReturnType<typeof httpsRequest>;
@@ -56,24 +94,24 @@ export const httpsTransport: Transport = (req) =>
         timeout: WEBHOOK_TIMEOUT_MS,
       });
     } catch (err) {
-      return done({ statusCode: null, error: errorText(err), responseBody: null });
+      return done({ statusCode: null, error: classifyError(err), responseBody: null });
     }
 
     const deadline = setTimeout(() => {
-      r.destroy(new Error(`timed out after ${WEBHOOK_TIMEOUT_MS}ms`));
+      r.destroy(new TimeoutError());
     }, WEBHOOK_TIMEOUT_MS);
 
-    r.on("timeout", () => r.destroy(new Error(`timed out after ${WEBHOOK_TIMEOUT_MS}ms`)));
+    r.on("timeout", () => r.destroy(new TimeoutError()));
     r.on("error", (err) => {
       clearTimeout(deadline);
-      done({ statusCode: null, error: errorText(err), responseBody: null });
+      done({ statusCode: null, error: classifyError(err), responseBody: null });
     });
     r.on("response", (res) => {
       const chunks: Buffer[] = [];
       let size = 0;
       const finish = () => {
         clearTimeout(deadline);
-        const text = Buffer.concat(chunks).subarray(0, RESPONSE_BODY_CAP).toString("utf8");
+        const text = stripNul(Buffer.concat(chunks).subarray(0, RESPONSE_BODY_CAP).toString("utf8"));
         done({ statusCode: res.statusCode ?? null, error: null, responseBody: text.length > 0 ? text : null });
       };
       res.on("data", (chunk: Buffer) => {
@@ -90,11 +128,6 @@ export const httpsTransport: Transport = (req) =>
     });
     r.end(body);
   });
-
-function errorText(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err);
-  return msg.slice(0, 500);
-}
 
 /** 2xx only. A redirect is not followed and counts as a failure. */
 export const isSuccess = (statusCode: number | null): boolean => statusCode !== null && statusCode >= 200 && statusCode < 300;

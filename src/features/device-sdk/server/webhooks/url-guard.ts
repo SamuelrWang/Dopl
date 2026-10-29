@@ -30,8 +30,8 @@ for (const [net, prefix] of [
   blocked.addSubnet(net, prefix, "ipv4");
 }
 for (const [net, prefix] of [
-  ["::", 128],
-  ["::1", 128],
+  ["::", 96], // unspecified, loopback and IPv4-compatible (`[::127.0.0.1]`)
+  ["::ffff:0:0:0", 96], // IPv4-translated (SIIT)
   ["64:ff9b::", 96], // NAT64 (would reach an embedded IPv4)
   ["64:ff9b:1::", 48],
   ["100::", 64], // discard
@@ -39,6 +39,7 @@ for (const [net, prefix] of [
   ["2001:db8::", 32], // documentation
   ["2002::", 16], // 6to4
   ["fc00::", 7], // unique local, incl. fd00:ec2::254 metadata
+  ["fec0::", 10], // site-local (deprecated, still routed internally on some networks)
   ["fe80::", 10], // link-local
   ["ff00::", 8], // multicast
 ] as const) {
@@ -69,6 +70,11 @@ export const resolveAll: Resolver = (hostname) =>
   });
 
 export const ENDPOINT_URL_MAX = 2048;
+/**
+ * Ports an endpoint may use (ruled 2026-10-28): 443 (the https default) and 8443. Anything else would
+ * let the sender probe arbitrary services on public hosts.
+ */
+export const ALLOWED_PORTS: readonly string[] = ["", "443", "8443"];
 
 export type UrlCheck = { ok: true; url: string } | { ok: false; reason: string };
 
@@ -86,6 +92,7 @@ export function parseEndpointUrl(raw: string): UrlCheck {
   if (u.protocol !== "https:") return { ok: false, reason: "url must use https" };
   if (u.username || u.password) return { ok: false, reason: "url must not contain credentials" };
   if (u.hash) return { ok: false, reason: "url must not contain a fragment" };
+  if (!ALLOWED_PORTS.includes(u.port)) return { ok: false, reason: "url port must be 443 or 8443" };
   const host = hostOf(u);
   if (!host) return { ok: false, reason: "url has no host" };
   if (isIP(host) && isBlockedAddress(host)) return { ok: false, reason: "url points at a private or reserved address" };
@@ -95,9 +102,9 @@ export function parseEndpointUrl(raw: string): UrlCheck {
   return { ok: true, url: u.toString() };
 }
 
-/** URL hostname without IPv6 brackets. */
+/** URL hostname without IPv6 brackets or a trailing root dot (`localhost.` is `localhost`). */
 export function hostOf(u: URL): string {
-  return u.hostname.replace(/^\[(.*)\]$/, "$1").toLowerCase();
+  return u.hostname.replace(/^\[(.*)\]$/, "$1").replace(/\.+$/, "").toLowerCase();
 }
 
 /** Register-time check: syntax + every resolved address public. */

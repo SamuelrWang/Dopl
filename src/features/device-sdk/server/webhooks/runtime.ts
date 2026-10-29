@@ -25,7 +25,9 @@ export function runWebhookSenderNow(budgetMs: number): Promise<SenderReport> {
 }
 
 /**
- * Schedule one short sender run after the current response. Outside a request scope (tests,
+ * Schedule one short sender run after the current response. ⚠ The run can outlive the route's own
+ * `maxDuration`: if the platform kills it mid-send, the claimed deliveries keep their lease, which
+ * expires after `LEASE_S` and the cron sends them again (same `webhook-id`). At least once, never lost. Outside a request scope (tests,
  * scripts) it does nothing: the cron picks the event up. Never throws.
  */
 export function kickWebhookSender(): void {
