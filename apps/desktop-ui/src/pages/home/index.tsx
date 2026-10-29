@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { isStandardWorkspace } from "@/features/workspaces/types";
 import { Crossfade } from "@/shared/ui/crossfade";
@@ -24,6 +24,7 @@ import { channelRowId, homeRows } from "@/features/home/components/channels/home
 import type { SearchItem } from "@/features/search/contracts";
 import { HOME_DEFAULT_TAB, type HomeTab } from "./home-tabs";
 import { homeMemory, homeScope } from "./home-memory";
+import { readHomeIntent } from "./home-intent";
 
 /**
  * /home — the account surface: personal, cross-org channels, outside `/:workspaceSegment` (there
@@ -44,6 +45,19 @@ export default function HomePage() {
     onSelect: setSelectedId,
     onRaise: () => setTab("channels"),
   });
+
+  // An arrival from outside /home naming a channel (`./home-intent.ts`): consumed once,
+  // through the same jump a search hit takes, then cleared so Back and reload do not replay it.
+  const [search, setSearch] = useSearchParams();
+  const intent = readHomeIntent(search);
+  const intentKey = intent ? search.toString() : null;
+  useEffect(() => {
+    if (!intent) return;
+    jump.open(intent.workspaceId, intent.threadId, intent.seq);
+    setSearch({}, { replace: true });
+    // `intentKey` IS the intent; `jump`/`setSearch` are fresh each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intentKey]);
 
   /** A left-pane pick or an Overview channel row: drops any held thread and always raises the
    *  channel face, even on the selected row. */
