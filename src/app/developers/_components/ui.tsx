@@ -3,9 +3,11 @@
  * (`home/components/overview/overview.module.css`). Components only; no colour, size or shadow
  * is declared here. Server-safe: no hooks.
  */
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import { EmptyState } from "@/shared/ui/empty-state";
+import { pillButton } from "@/shared/ui/pill-button";
 import { SECTION_HEADING_TEXT } from "@/shared/ui/section-heading";
 import ov from "@/features/home/components/overview/overview.module.css";
 
@@ -69,12 +71,16 @@ export function Json({ value }: { value: unknown }) {
   );
 }
 
-/** Shown when the signed-in account belongs to no developer org yet. */
+/** Shown when the signed-in account belongs to no developer org yet: start one, or be invited. */
 export function NoProjects() {
   return (
     <EmptyState
       title="No developer projects yet"
-      description="This account is not in a developer org. Ask an org owner to add you."
-    />
+      description="Create an org to get test and live keys, or ask an org owner to invite you."
+    >
+      <Link href="/developers/new" className={pillButton("ink", "md")}>
+        Create an org
+      </Link>
+    </EmptyState>
   );
 }
