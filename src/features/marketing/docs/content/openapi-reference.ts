@@ -33,7 +33,7 @@ export interface RefResponse {
 
 export interface RefOperation {
   operationId: string;
-  method: "GET" | "POST" | "DELETE";
+  method: "GET" | "POST" | "PATCH" | "DELETE";
   path: string;
   tag: string;
   summary: string;
@@ -129,7 +129,7 @@ function bodyOf(spec: Obj, op: Obj): RefParam[] {
   }));
 }
 
-const METHODS = ["get", "post", "delete"] as const;
+const METHODS = ["get", "post", "patch", "delete"] as const;
 
 /** Every operation in path order, then method order. */
 export function buildApiReference(spec: unknown): RefOperation[] {

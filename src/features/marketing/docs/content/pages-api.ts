@@ -2,6 +2,7 @@ import { API, curl, DEVICE_ID, EXAMPLE_DEVICE, json } from "./shared";
 import REFERENCE from "./openapi-reference.generated.json";
 import type { RefOperation, RefParam } from "./openapi-reference";
 import type { DocBlock, DocPage, DocParam } from "./types";
+import { WEBHOOK_ENDPOINTS } from "./pages-api-webhooks";
 
 /**
  * The API Reference tab. ⚠ STRUCTURE IS GENERATED: method, path, auth, every parameter and body
@@ -58,6 +59,7 @@ const GROUP: Record<string, string> = {
   actions: "Actions",
   devices: "Devices",
   events: "Events",
+  webhooks: "Webhooks",
 };
 
 export interface EndpointSpec {
@@ -380,6 +382,7 @@ export const ENDPOINTS: EndpointSpec[] = [
     }),
     error: errorExample("429", "rate_limit_error", "rate_limited", "Too many log reads for this key. Try again in a minute.", true),
   },
+  ...WEBHOOK_ENDPOINTS,
 ];
 
 export const API_PAGES: DocPage[] = [

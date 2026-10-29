@@ -26,7 +26,7 @@ export type DocIcon =
   | "security"
   | "code";
 
-export type HttpMethod = "GET" | "POST" | "DELETE";
+export type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
 export interface CodeTab {
   label: string;

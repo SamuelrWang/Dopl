@@ -550,5 +550,374 @@
         "schema": null
       }
     ]
+  },
+  {
+    "operationId": "listWebhookEndpoints",
+    "method": "GET",
+    "path": "/webhook_endpoints",
+    "tag": "webhooks",
+    "summary": "List webhook endpoints (newest first)",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "cursor",
+        "in": "query",
+        "type": "string",
+        "required": false,
+        "description": "Opaque. Pass back the `next_cursor` of the previous page, unchanged. Omit for the first page."
+      },
+      {
+        "name": "limit",
+        "in": "query",
+        "type": "integer",
+        "required": false,
+        "description": "Items per page."
+      }
+    ],
+    "responses": [
+      {
+        "status": "200",
+        "schema": "WebhookEndpointList"
+      },
+      {
+        "status": "400",
+        "schema": null
+      },
+      {
+        "status": "401",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "createWebhookEndpoint",
+    "method": "POST",
+    "path": "/webhook_endpoints",
+    "tag": "webhooks",
+    "summary": "Register a webhook endpoint",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "url",
+        "in": "body",
+        "type": "string",
+        "required": true,
+        "description": "https only."
+      },
+      {
+        "name": "description",
+        "in": "body",
+        "type": "string | null",
+        "required": false,
+        "description": null
+      },
+      {
+        "name": "enabled_events",
+        "in": "body",
+        "type": "string[] | null",
+        "required": false,
+        "description": "Omit or null = every event, including types added later."
+      }
+    ],
+    "responses": [
+      {
+        "status": "201",
+        "schema": "WebhookEndpointWithSecret"
+      },
+      {
+        "status": "400",
+        "schema": null
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "403",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "getWebhookEndpoint",
+    "method": "GET",
+    "path": "/webhook_endpoints/{id}",
+    "tag": "webhooks",
+    "summary": "A webhook endpoint",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "id",
+        "in": "path",
+        "type": "string",
+        "required": true,
+        "description": null
+      }
+    ],
+    "responses": [
+      {
+        "status": "200",
+        "schema": "WebhookEndpoint"
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "404",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "updateWebhookEndpoint",
+    "method": "PATCH",
+    "path": "/webhook_endpoints/{id}",
+    "tag": "webhooks",
+    "summary": "Change url, description, events, or disable / enable",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "id",
+        "in": "path",
+        "type": "string",
+        "required": true,
+        "description": null
+      },
+      {
+        "name": "url",
+        "in": "body",
+        "type": "string",
+        "required": false,
+        "description": null
+      },
+      {
+        "name": "description",
+        "in": "body",
+        "type": "string | null",
+        "required": false,
+        "description": null
+      },
+      {
+        "name": "enabled_events",
+        "in": "body",
+        "type": "string[] | null",
+        "required": false,
+        "description": null
+      },
+      {
+        "name": "disabled",
+        "in": "body",
+        "type": "boolean",
+        "required": false,
+        "description": "true stops sending (pending deliveries are dead-lettered); false resumes."
+      }
+    ],
+    "responses": [
+      {
+        "status": "200",
+        "schema": "WebhookEndpoint"
+      },
+      {
+        "status": "400",
+        "schema": null
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "404",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "deleteWebhookEndpoint",
+    "method": "DELETE",
+    "path": "/webhook_endpoints/{id}",
+    "tag": "webhooks",
+    "summary": "Delete an endpoint and its delivery log",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "id",
+        "in": "path",
+        "type": "string",
+        "required": true,
+        "description": null
+      }
+    ],
+    "responses": [
+      {
+        "status": "200",
+        "schema": "WebhookEndpointDeleted"
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "404",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "rotateWebhookSecret",
+    "method": "POST",
+    "path": "/webhook_endpoints/{id}/rotate_secret",
+    "tag": "webhooks",
+    "summary": "Rotate the signing secret",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "id",
+        "in": "path",
+        "type": "string",
+        "required": true,
+        "description": null
+      },
+      {
+        "name": "overlap_seconds",
+        "in": "body",
+        "type": "integer",
+        "required": false,
+        "description": null
+      }
+    ],
+    "responses": [
+      {
+        "status": "200",
+        "schema": "WebhookEndpointWithSecret"
+      },
+      {
+        "status": "400",
+        "schema": null
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "404",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "listWebhookDeliveries",
+    "method": "GET",
+    "path": "/webhook_endpoints/{id}/deliveries",
+    "tag": "webhooks",
+    "summary": "An endpoint's deliveries (newest first)",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "id",
+        "in": "path",
+        "type": "string",
+        "required": true,
+        "description": null
+      },
+      {
+        "name": "cursor",
+        "in": "query",
+        "type": "string",
+        "required": false,
+        "description": "Opaque. Pass back the `next_cursor` of the previous page, unchanged. Omit for the first page."
+      },
+      {
+        "name": "limit",
+        "in": "query",
+        "type": "integer",
+        "required": false,
+        "description": "Items per page."
+      }
+    ],
+    "responses": [
+      {
+        "status": "200",
+        "schema": "WebhookDeliveryList"
+      },
+      {
+        "status": "400",
+        "schema": null
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "404",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "getWebhookDelivery",
+    "method": "GET",
+    "path": "/webhook_deliveries/{id}",
+    "tag": "webhooks",
+    "summary": "A delivery with every HTTP attempt",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "id",
+        "in": "path",
+        "type": "string",
+        "required": true,
+        "description": null
+      }
+    ],
+    "responses": [
+      {
+        "status": "200",
+        "schema": "WebhookDelivery"
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "404",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "replayWebhookDelivery",
+    "method": "POST",
+    "path": "/webhook_deliveries/{id}/replay",
+    "tag": "webhooks",
+    "summary": "Send a delivery again",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "id",
+        "in": "path",
+        "type": "string",
+        "required": true,
+        "description": null
+      }
+    ],
+    "responses": [
+      {
+        "status": "202",
+        "schema": "WebhookDelivery"
+      },
+      {
+        "status": "400",
+        "schema": null
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "404",
+        "schema": null
+      }
+    ]
   }
 ]

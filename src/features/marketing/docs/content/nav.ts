@@ -101,6 +101,20 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { title: "Devices", links: [{ label: "Get a device", slug: "api-reference/devices" }] },
       { title: "Events", links: [{ label: "List events", slug: "api-reference/events" }] },
+      {
+        title: "Webhooks",
+        links: [
+          { label: "Create a webhook endpoint", slug: "api-reference/webhook-endpoints-create" },
+          { label: "List webhook endpoints", slug: "api-reference/webhook-endpoints" },
+          { label: "Get a webhook endpoint", slug: "api-reference/webhook-endpoint" },
+          { label: "Update a webhook endpoint", slug: "api-reference/webhook-endpoint-update" },
+          { label: "Delete a webhook endpoint", slug: "api-reference/webhook-endpoint-delete" },
+          { label: "Rotate a signing secret", slug: "api-reference/webhook-endpoint-rotate-secret" },
+          { label: "List deliveries", slug: "api-reference/webhook-deliveries" },
+          { label: "Get a delivery", slug: "api-reference/webhook-delivery" },
+          { label: "Replay a delivery", slug: "api-reference/webhook-delivery-replay" },
+        ],
+      },
     ],
   },
   {
