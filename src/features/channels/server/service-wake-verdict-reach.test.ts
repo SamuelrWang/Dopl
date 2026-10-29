@@ -8,7 +8,7 @@ vi.mock("./repository", async (importOriginal) => ({
 }));
 
 import { projection, resolve, sessionRow, unaddressedResponder } from "./service-wake-verdict-harness";
-import { offScopeAgentIds, postScope } from "./service-wake-verdict-reach";
+import { CROSS_SCOPE_WAKE, offScopeAgentIds, postScope } from "./service-wake-verdict-reach";
 
 /**
  * **THREAD MENTION REACH, STEP 1 — THE SERVER STOPS CLAIMING `woken` FOR AN AGENT ITS
@@ -22,6 +22,8 @@ import { offScopeAgentIds, postScope } from "./service-wake-verdict-reach";
 const T = "11111111-2222-4333-8444-555555555555";
 const U = "99999999-2222-4333-8444-555555555555";
 const ID = "k3v7d2mq";
+// The integration cases below assert the rule's prediction under the CURRENT switch.
+const OFF = CROSS_SCOPE_WAKE ? "woken" : "unreachable";
 const mainRow = () => sessionRow({ session_key: `chan-1::${ID}`, thread_id: null, name: ID });
 const threadRow = (t: string) => sessionRow({ session_key: `chan-1:${t}:${ID}`, thread_id: t, name: ID });
 
@@ -42,30 +44,35 @@ describe("postScope / offScopeAgentIds (pure)", () => {
     expect(offScopeAgentIds(undefined, [ID], "chan-1", T)).toEqual([]);
   });
 
+  it("off-scope is found when the switch is off (explicit, whatever the build's value)", () => {
+    expect(offScopeAgentIds([mainRow()], [ID], "chan-1", T, false)).toEqual([ID]);
+    expect(offScopeAgentIds([threadRow(T)], [ID], "chan-1", T, false)).toEqual([]);
+  });
+
   it("the cross-scope switch turns the rule off", () => {
     expect(offScopeAgentIds([mainRow()], [ID], "chan-1", T, true)).toEqual([]);
   });
 });
 
 describe("resolveWakeVerdict · reach (both directions)", () => {
-  it("thread post → main-room agent: stored, but `unreachable`", async () => {
+  it("thread post → main-room agent: stored; unreachable only while the desktop is thread-scoped", async () => {
     projection(mainRow());
     const out = await resolve("please look", { threadId: T }, { toAgentId: ID, authorKind: "agent" });
     expect(out.verdict).toBe("agent");
     expect(out.recipientAgentIds).toEqual([ID]);
-    expect(out.delivery).toBe("unreachable");
+    expect(out.delivery).toBe(OFF);
   });
 
   it("main-room post → thread-bound agent: `unreachable`", async () => {
     projection(threadRow(T));
     const out = await resolve("please look", {}, { toAgentId: ID });
-    expect(out.delivery).toBe("unreachable");
+    expect(out.delivery).toBe(OFF);
   });
 
   it("thread post → agent on ANOTHER thread: `unreachable`", async () => {
     projection(threadRow(U));
     const out = await resolve("please look", { threadId: T }, { toAgentId: ID });
-    expect(out.delivery).toBe("unreachable");
+    expect(out.delivery).toBe(OFF);
   });
 
   it("on-scope addressee is still `woken`, both scopes", async () => {
