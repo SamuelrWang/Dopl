@@ -1,0 +1,540 @@
+[
+  {
+    "operationId": "createConnectSession",
+    "method": "POST",
+    "path": "/connect_sessions",
+    "tag": "connect",
+    "summary": "Create a Connect session",
+    "auth": "publishable",
+    "params": [
+      {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "type": "string",
+        "required": false,
+        "description": "Optional on every POST. Where the body also carries `idempotency_key`, both must match; reusing a key with a different body is `idempotency_conflict`."
+      },
+      {
+        "name": "external_user_id",
+        "in": "body",
+        "type": "string",
+        "required": true,
+        "description": null
+      },
+      {
+        "name": "allowed_kinds",
+        "in": "body",
+        "type": "string[]",
+        "required": false,
+        "description": null
+      },
+      {
+        "name": "requested_scopes",
+        "in": "body",
+        "type": "string[]",
+        "required": true,
+        "description": null
+      },
+      {
+        "name": "redirect_uri",
+        "in": "body",
+        "type": "string",
+        "required": false,
+        "description": null
+      },
+      {
+        "name": "branding",
+        "in": "body",
+        "type": "ConnectBranding",
+        "required": false,
+        "description": null
+      }
+    ],
+    "responses": [
+      {
+        "status": "201",
+        "schema": "ConnectSessionCreateResponse"
+      },
+      {
+        "status": "400",
+        "schema": null
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "403",
+        "schema": null
+      },
+      {
+        "status": "429",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "exchangePublicToken",
+    "method": "POST",
+    "path": "/connections/exchange",
+    "tag": "connect",
+    "summary": "Exchange the widget's public token for a connection",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "type": "string",
+        "required": false,
+        "description": "Optional on every POST. Where the body also carries `idempotency_key`, both must match; reusing a key with a different body is `idempotency_conflict`."
+      },
+      {
+        "name": "public_token",
+        "in": "body",
+        "type": "string",
+        "required": true,
+        "description": null
+      }
+    ],
+    "responses": [
+      {
+        "status": "200",
+        "schema": "ConnectionExchangeResponse"
+      },
+      {
+        "status": "400",
+        "schema": null
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "404",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "listConnections",
+    "method": "GET",
+    "path": "/users/{external_user_id}/connections",
+    "tag": "connect",
+    "summary": "List an end user's connections",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "external_user_id",
+        "in": "path",
+        "type": "string",
+        "required": true,
+        "description": "The developer's own id for the end user (no Dopl account, D1)."
+      }
+    ],
+    "responses": [
+      {
+        "status": "200",
+        "schema": "ConnectionListResponse"
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "404",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "revokeConnection",
+    "method": "DELETE",
+    "path": "/connections/{id}",
+    "tag": "connect",
+    "summary": "Revoke a connection",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "id",
+        "in": "path",
+        "type": "string",
+        "required": true,
+        "description": null
+      }
+    ],
+    "responses": [
+      {
+        "status": "200",
+        "schema": "Connection"
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "404",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "getContext",
+    "method": "GET",
+    "path": "/users/{external_user_id}/context",
+    "tag": "context",
+    "summary": "The user's device context",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "external_user_id",
+        "in": "path",
+        "type": "string",
+        "required": true,
+        "description": "The developer's own id for the end user (no Dopl account, D1)."
+      }
+    ],
+    "responses": [
+      {
+        "status": "200",
+        "schema": "DeviceContext"
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "404",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "deliver",
+    "method": "POST",
+    "path": "/users/{external_user_id}/deliver",
+    "tag": "actions",
+    "summary": "Deliver by intent; Dopl routes to a device (C5)",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "external_user_id",
+        "in": "path",
+        "type": "string",
+        "required": true,
+        "description": "The developer's own id for the end user (no Dopl account, D1)."
+      },
+      {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "type": "string",
+        "required": false,
+        "description": "Optional on every POST. Where the body also carries `idempotency_key`, both must match; reusing a key with a different body is `idempotency_conflict`."
+      },
+      {
+        "name": "intent",
+        "in": "body",
+        "type": "\"message\" | \"ask\" | \"notify\" | \"display\"",
+        "required": true,
+        "description": null
+      },
+      {
+        "name": "content",
+        "in": "body",
+        "type": "DeliverContent",
+        "required": true,
+        "description": null
+      },
+      {
+        "name": "urgency",
+        "in": "body",
+        "type": "\"low\" | \"normal\" | \"high\"",
+        "required": true,
+        "description": null
+      },
+      {
+        "name": "target",
+        "in": "body",
+        "type": "string",
+        "required": false,
+        "description": "`auto`, a device kind, or a device id."
+      },
+      {
+        "name": "profile",
+        "in": "body",
+        "type": "string",
+        "required": false,
+        "description": null
+      },
+      {
+        "name": "idempotency_key",
+        "in": "body",
+        "type": "string",
+        "required": true,
+        "description": null
+      }
+    ],
+    "responses": [
+      {
+        "status": "202",
+        "schema": "DeliverResponse"
+      },
+      {
+        "status": "400",
+        "schema": null
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "403",
+        "schema": null
+      },
+      {
+        "status": "404",
+        "schema": null
+      },
+      {
+        "status": "409",
+        "schema": null
+      },
+      {
+        "status": "429",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "createDeviceAction",
+    "method": "POST",
+    "path": "/devices/{device_id}/actions/{capability}",
+    "tag": "actions",
+    "summary": "Run one capability on one device",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "device_id",
+        "in": "path",
+        "type": "string",
+        "required": true,
+        "description": null
+      },
+      {
+        "name": "capability",
+        "in": "path",
+        "type": "string",
+        "required": true,
+        "description": null
+      },
+      {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "type": "string",
+        "required": false,
+        "description": "Optional on every POST. Where the body also carries `idempotency_key`, both must match; reusing a key with a different body is `idempotency_conflict`."
+      },
+      {
+        "name": "args",
+        "in": "body",
+        "type": "object",
+        "required": true,
+        "description": null
+      },
+      {
+        "name": "idempotency_key",
+        "in": "body",
+        "type": "string",
+        "required": true,
+        "description": null
+      }
+    ],
+    "responses": [
+      {
+        "status": "202",
+        "schema": "DeviceActionResponse"
+      },
+      {
+        "status": "400",
+        "schema": null
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "403",
+        "schema": null
+      },
+      {
+        "status": "404",
+        "schema": null
+      },
+      {
+        "status": "409",
+        "schema": null
+      },
+      {
+        "status": "422",
+        "schema": null
+      },
+      {
+        "status": "429",
+        "schema": null
+      },
+      {
+        "status": "502",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "getAction",
+    "method": "GET",
+    "path": "/actions/{id}",
+    "tag": "actions",
+    "summary": "Poll an action",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "id",
+        "in": "path",
+        "type": "string",
+        "required": true,
+        "description": null
+      }
+    ],
+    "responses": [
+      {
+        "status": "200",
+        "schema": "Action"
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "404",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "getDevice",
+    "method": "GET",
+    "path": "/devices/{id}",
+    "tag": "devices",
+    "summary": "A device and its capability descriptors",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "id",
+        "in": "path",
+        "type": "string",
+        "required": true,
+        "description": null
+      }
+    ],
+    "responses": [
+      {
+        "status": "200",
+        "schema": "Device"
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "404",
+        "schema": null
+      }
+    ]
+  },
+  {
+    "operationId": "listEvents",
+    "method": "GET",
+    "path": "/events",
+    "tag": "events",
+    "summary": "List this project's request log",
+    "auth": "secret",
+    "params": [
+      {
+        "name": "cursor",
+        "in": "query",
+        "type": "string",
+        "required": false,
+        "description": "Opaque. Pass back the `next_cursor` of the previous page, unchanged. Omit for the first page."
+      },
+      {
+        "name": "limit",
+        "in": "query",
+        "type": "integer",
+        "required": false,
+        "description": "Items per page."
+      },
+      {
+        "name": "since",
+        "in": "query",
+        "type": "string",
+        "required": false,
+        "description": "Oldest event to include. Defaults to 24 hours ago; at most 30 days ago."
+      },
+      {
+        "name": "outcome",
+        "in": "query",
+        "type": "\"ok\" | \"error\" | \"denied\"",
+        "required": false,
+        "description": null
+      },
+      {
+        "name": "device_kind",
+        "in": "query",
+        "type": "string",
+        "required": false,
+        "description": null
+      },
+      {
+        "name": "capability",
+        "in": "query",
+        "type": "string",
+        "required": false,
+        "description": null
+      },
+      {
+        "name": "intent",
+        "in": "query",
+        "type": "\"message\" | \"ask\" | \"notify\" | \"display\"",
+        "required": false,
+        "description": null
+      },
+      {
+        "name": "route",
+        "in": "query",
+        "type": "string",
+        "required": false,
+        "description": "The `route_decision.target` the call asked for (`auto`, a kind, a device id)."
+      }
+    ],
+    "responses": [
+      {
+        "status": "200",
+        "schema": "EventListResponse"
+      },
+      {
+        "status": "400",
+        "schema": null
+      },
+      {
+        "status": "401",
+        "schema": null
+      },
+      {
+        "status": "403",
+        "schema": null
+      },
+      {
+        "status": "429",
+        "schema": null
+      }
+    ]
+  }
+]

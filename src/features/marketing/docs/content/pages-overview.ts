@@ -23,7 +23,10 @@ const QUICKSTART: DocBlock[] = [
         title: "Get a test key and the SDK",
         blocks: [
           p(
-            "Dopl issues your project's keys while the developer portal is being built. Test secret keys start with `sk_test_` and only ever touch test data, so keep yours on your server. `@dopl/sdk` is private during testing and is available to design partners on request from [sales@usedopl.com](mailto:sales@usedopl.com)."
+            "Sign in to the [developer portal](https://www.usedopl.com/developers), pick your project and switch to **Test**, then copy a secret key from **API keys**. Test secret keys start with `sk_test_` and only ever touch test data, so keep yours on your server. `@dopl/sdk` is private during testing and is available to design partners on request from [sales@usedopl.com](mailto:sales@usedopl.com)."
+          ),
+          p(
+            "To try a call before writing code, paste the key into the portal's **Playground**. It runs the call on Dopl's servers against your test data and shows the request, the response and the log row."
           ),
           { type: "code", tabs: [{ label: ".env", code: "DOPL_SECRET_KEY=sk_test_…" }] },
           ts([
@@ -101,6 +104,23 @@ const QUICKSTART: DocBlock[] = [
             ``,
             `console.log(action.status, action.result); // done { simulated: true }`,
           ]),
+        ],
+      },
+      {
+        title: "See your calls in the log",
+        blocks: [
+          p(
+            "Every call is one event, and its `event_id` equals the `Request-Id` header of the response. Open **Request log** in the portal, or read the log from code with a key that has the `analytics:read` scope."
+          ),
+          ts([
+            `const page = await dopl.events.list({ limit: 10, outcome: "error" });`,
+            `for (const event of page.data) console.log(event.ts, event.capability, event.error_code);`,
+            ``,
+            `if (page.has_more) {`,
+            `  const older = await dopl.events.list({ limit: 10, outcome: "error", cursor: page.next_cursor! });`,
+            `}`,
+          ]),
+          p("**Usage** in the portal charts your calls and failed calls per hour or per day, for test and live separately."),
           p(
             "Next, shape output per device with [Context profiles and routing](/docs/concepts/context-profiles-and-routing) and force failure states with [Test mode](/docs/guides/test-mode)."
           ),

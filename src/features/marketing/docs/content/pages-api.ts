@@ -1,12 +1,17 @@
 import { API, curl, DEVICE_ID, EXAMPLE_DEVICE, json } from "./shared";
-import type { DocBlock, DocPage, DocParam, HttpMethod } from "./types";
+import REFERENCE from "./openapi-reference.generated.json";
+import type { RefOperation, RefParam } from "./openapi-reference";
+import type { DocBlock, DocPage, DocParam } from "./types";
 
 /**
- * The API Reference tab, hand written from `docs/specs/device-sdk/openapi.yaml` until a generator
- * is picked, with behaviour taken from the built routes (`src/app/api/v1/*`). ⚠ Deployed in 1.43.0
- * (2026-10-27) for design partners: every page here is `beta`. Paths, fields and status codes match the
- * contract exactly (`content.test.ts` parses the file and checks every path). `GET /devices/{id}`
- * was served in A9.
+ * The API Reference tab. ⚠ STRUCTURE IS GENERATED: method, path, auth, every parameter and body
+ * field with its type and required flag, and the response codes come from
+ * `openapi-reference.generated.json`, which `openapi-reference.test.ts` keeps equal to
+ * `docs/specs/device-sdk/openapi.yaml`. This file adds only what a spec does not say well: a slug,
+ * a title, prose per parameter NAME (`describe`, falling back to the spec's description), notes,
+ * and request/response examples taken from the built routes (`src/app/api/v1/*`). The same test
+ * fails when `describe` names a parameter the operation does not have, or a parameter ends up with
+ * no description. ⚠ Deployed in 1.43.0 (2026-10-27) for design partners: every page is `beta`.
  */
 
 const PLANNED: DocBlock = {
@@ -28,35 +33,13 @@ const AUTH_PUBLISHABLE: DocParam = {
     "A project secret key, or a publishable `pk_…` key from your app, sent as `Authorization: Bearer <key>`. This is the only route a publishable key may call.",
 };
 
-const IDEMPOTENCY: DocParam = {
-  name: "Idempotency-Key",
-  type: "string",
-  location: "header",
-  description:
-    "Optional. When sent it must equal the body's `idempotency_key`, or the request fails with `invalid_request`. A retry with the same key and body returns the first response; the same key with a different body returns `idempotency_conflict`.",
-};
-
-const IDEMPOTENCY_ACCEPTED: DocParam = {
-  ...IDEMPOTENCY,
-  description: "Optional and accepted for consistency. This route does not replay responses.",
-};
-
-const IDEMPOTENCY_KEY_BODY: DocParam = {
-  name: "idempotency_key",
-  type: "string",
-  required: true,
-  description: "1 to 255 characters, unique per request within the environment. The TypeScript SDK fills one when you pass none.",
-};
-
-const EXTERNAL_USER_ID: DocParam = {
-  name: "external_user_id",
-  type: "string",
-  location: "path",
-  required: true,
-  description: "Your own ID for the end user, 1 to 255 characters. End users never need a Dopl account.",
-};
-
-const pathId = (description: string): DocParam => ({ name: "id", type: "string", location: "path", required: true, description });
+/** Prose for the parameters many routes share, by name. */
+const IDEMPOTENCY =
+  "Optional. When sent it must equal the body's `idempotency_key`, or the request fails with `invalid_request`. A retry with the same key and body returns the first response; the same key with a different body returns `idempotency_conflict`.";
+const IDEMPOTENCY_ACCEPTED = "Optional and accepted for consistency. This route does not replay responses.";
+const IDEMPOTENCY_KEY_BODY =
+  "1 to 255 characters, unique per request within the environment. The TypeScript SDK fills one when you pass none.";
+const EXTERNAL_USER_ID = "Your own ID for the end user, 1 to 255 characters. End users never need a Dopl account.";
 
 const errorExample = (label: string, type: string, code: string, message: string, retryable = false) => ({
   label,
@@ -69,49 +52,92 @@ const ERROR_404 = errorExample("404", "invalid_request_error", "not_found", "No 
 
 const DELIVERY_ID = "4f7e2a10-6c1b-4d9e-8a35-0b2c7d9e1f42";
 
-interface EndpointSpec {
+const GROUP: Record<string, string> = {
+  connect: "Connect",
+  context: "Context",
+  actions: "Actions",
+  devices: "Devices",
+  events: "Events",
+};
+
+export interface EndpointSpec {
+  /** The spec's `operationId`; method, path, auth and parameters come from it. */
+  op: string;
   slug: string;
-  group: "Connect" | "Context" | "Actions" | "Devices" | "Events";
   title: string;
   description: string;
-  method: HttpMethod;
-  path: string;
   examplePath: string;
-  pathParams: DocParam[];
-  query?: DocParam[];
-  auth?: DocParam;
-  headers?: DocParam[];
-  body?: DocParam[];
+  /** Prose per parameter name; overrides the spec's own description. */
+  describe?: Record<string, string>;
   requestBody?: string;
   /** Prose between the endpoint line and the parameters. */
   notes?: string[];
-  status: string;
   response: string;
   /** The error example in the aside; a 404 unless the route has a likelier one. */
   error?: { label: string; code: string };
 }
 
+const OPS = REFERENCE as RefOperation[];
+
+export function referenceOf(op: string): RefOperation {
+  const ref = OPS.find((o) => o.operationId === op);
+  if (!ref) throw new Error(`pages-api: no operation ${op} in openapi.yaml`);
+  return ref;
+}
+
+/** The description a generated parameter shows: the page's prose, else the spec's. */
+export function paramDescription(e: EndpointSpec, p: RefParam): string | null {
+  return e.describe?.[p.name] ?? p.description;
+}
+
+function docParam(e: EndpointSpec, p: RefParam): DocParam {
+  return {
+    name: p.name,
+    type: p.type,
+    required: p.required || undefined,
+    location: p.in === "body" ? undefined : p.in,
+    description: paramDescription(e, p) ?? "",
+  };
+}
+
 function endpoint(e: EndpointSpec): DocPage {
+  const ref = referenceOf(e.op);
+  const of = (where: RefParam["in"]) => ref.params.filter((p) => p.in === where).map((p) => docParam(e, p));
+  const groups: Array<[string, DocParam[]]> = [
+    ["Authorizations", [ref.auth === "publishable" ? AUTH_PUBLISHABLE : AUTH, ...of("header")]],
+    ["Path parameters", of("path")],
+    ["Query parameters", of("query")],
+    ["Body", of("body")],
+  ];
+  const ok = ref.responses.find((r) => r.status.startsWith("2"));
+  const errors = ref.responses.filter((r) => !r.status.startsWith("2")).map((r) => r.status);
   return {
     slug: `api-reference/${e.slug}`,
     section: "api",
-    group: e.group,
+    group: GROUP[ref.tag] ?? "API",
     title: e.title,
     description: e.description,
     status: "beta",
     blocks: [
       PLANNED,
-      { type: "endpoint", method: e.method, path: `/v1${e.path}` },
+      { type: "endpoint", method: ref.method, path: `/v1${ref.path}` },
       ...(e.notes ?? []).map((text): DocBlock => ({ type: "p", text })),
-      { type: "params", title: "Authorizations", params: [e.auth ?? AUTH, ...(e.headers ?? [])] },
-      ...(e.pathParams.length > 0 ? [{ type: "params" as const, title: "Path parameters", params: e.pathParams }] : []),
-      ...(e.query && e.query.length > 0 ? [{ type: "params" as const, title: "Query parameters", params: e.query }] : []),
-      ...(e.body && e.body.length > 0 ? [{ type: "params" as const, title: "Body", params: e.body }] : []),
+      ...groups
+        .filter(([, params]) => params.length > 0)
+        .map(([title, params]): DocBlock => ({ type: "params", title, params })),
+      {
+        type: "table",
+        columns: ["Status", "Body"],
+        rows: [
+          ...(ok ? [[`\`${ok.status}\``, ok.schema ? `\`${ok.schema}\`` : "None"]] : []),
+          ...(errors.length > 0 ? [[errors.map((s) => `\`${s}\``).join(", "), "[Error](/docs/api-reference/errors)"]] : []),
+        ],
+      },
     ],
     aside: {
       title: e.title,
-      request: [{ label: "cURL", code: curl(e.method, e.examplePath, e.requestBody) }],
-      responses: [{ label: e.status, code: e.response }, e.error ?? ERROR_404],
+      request: [{ label: "cURL", code: curl(ref.method, e.examplePath, e.requestBody) }],
+      responses: [{ label: ok?.status ?? "200", code: e.response }, e.error ?? ERROR_404],
     },
   };
 }
@@ -147,6 +173,214 @@ const CONNECTION = {
 };
 
 const p = (text: string): DocBlock => ({ type: "p", text });
+
+/** One page per spec operation (`openapi-reference.test.ts` checks the set). */
+export const ENDPOINTS: EndpointSpec[] = [
+  {
+    op: "createConnectSession",
+    slug: "connect-sessions",
+    title: "Create a Connect session",
+    description: "Start the hosted page your user follows to pair a device and approve scopes",
+    examplePath: "/connect_sessions",
+    notes: [
+      "Creates the end user the first time it sees the `external_user_id`. The returned `url` opens the hosted page for 30 minutes; when the user finishes, the page redirects to `redirect_uri` with a `public_token` query parameter. Key scope `connect`.",
+    ],
+    describe: {
+      "Idempotency-Key": IDEMPOTENCY_ACCEPTED,
+      external_user_id: "Your own ID for the end user.",
+      requested_scopes: "Capability IDs or whole families such as `present.*`. At least one.",
+      allowed_kinds: "Limit the devices offered, for example `glasses`. Defaults to every kind.",
+      redirect_uri: "An http or https URL the page returns to with the `public_token`.",
+      branding: "`display_name`, `logo_url` and `accent_color` (`#RRGGBB`), over your project's saved branding.",
+    },
+    requestBody: '{"external_user_id":"usr_123","requested_scopes":["present.*","ask.*"],"redirect_uri":"https://example.com/connected"}',
+    response: json({ connect_token: "ct_…", url: "https://www.usedopl.com/connect/ct_…", expires_at: "2026-10-27T17:32:11Z" }),
+    error: errorExample("400", "invalid_request_error", "invalid_request", "requested_scopes: Too small: expected array to have >=1 items"),
+  },
+  {
+    op: "exchangePublicToken",
+    slug: "connections-exchange",
+    title: "Exchange a public token",
+    description: "Turn the token the hosted page returns into a durable connection",
+    examplePath: "/connections/exchange",
+    notes: ["A public token exchanges once, within 30 minutes of the user finishing. Secret key, scope `connect`."],
+    describe: {
+      "Idempotency-Key": IDEMPOTENCY_ACCEPTED,
+      public_token: "The `public_token` the hosted page added to your `redirect_uri`.",
+    },
+    requestBody: '{"public_token":"public-test-…"}',
+    response: json({ connection_id: CONNECTION.id, device: EXAMPLE_DEVICE }),
+    error: errorExample("400", "invalid_request_error", "invalid_request", "public_token is invalid, expired or already exchanged."),
+  },
+  {
+    op: "listConnections",
+    slug: "connections",
+    title: "List connections",
+    description: "List the devices an end user has connected and the scopes they granted",
+    examplePath: "/users/usr_123/connections",
+    notes: ["Revoked connections are included with the status `revoked`. Secret key, scope `connect`."],
+    describe: { external_user_id: EXTERNAL_USER_ID },
+    response: json({ data: [CONNECTION] }),
+  },
+  {
+    op: "revokeConnection",
+    slug: "revoke-connection",
+    title: "Revoke a connection",
+    description: "Stop your agent reaching a device, effective immediately",
+    examplePath: `/connections/${CONNECTION.id}`,
+    notes: ["Safe to repeat: revoking a revoked connection returns it unchanged. Secret key, scope `connect`."],
+    describe: { id: "The connection to revoke." },
+    response: json({ ...CONNECTION, status: "revoked", revoked_at: "2026-10-28T09:00:00Z" }),
+  },
+  {
+    op: "getContext",
+    slug: "context",
+    title: "Get context",
+    description: "The user's active device, posture, available devices and matched profile",
+    examplePath: "/users/usr_123/context",
+    notes: [
+      "`available` lists online devices only, and `profile` is the one that applies to the active device. [Context profiles and routing](/docs/concepts/context-profiles-and-routing) explains each field. Secret key, scope `devices:read`.",
+    ],
+    describe: { external_user_id: EXTERNAL_USER_ID },
+    response: json({
+      active_device: { id: DEVICE_ID, kind: "glasses", model: "simulated_glasses", last_seen_s: 4 },
+      posture: "glanceable",
+      available: [{ kind: "glasses", id: DEVICE_ID, capabilities: ["presence.read", "present.notify", "present.display", "ask.choice"] }],
+      profile: { id: "glasses-default", prompt_append: "They are on glasses: …", output: { max_lines: 5, max_chars: 300, format: "plain", markdown: false } },
+      source_of_last_message: null,
+    }),
+  },
+  {
+    op: "deliver",
+    slug: "deliver",
+    title: "Deliver",
+    description: "Deliver content by intent and let Dopl route it to one of the user's devices",
+    examplePath: "/users/usr_123/deliver",
+    notes: [
+      "Dopl routes the request, checks the grant and the tier, and enforces the device's limits without rewriting the content. `routed_to` says which device and why. An `ask` holds up to 200 seconds for the answer; read it with [Get an action](/docs/api-reference/actions) and the `delivery_id`. With `overflow: \"callback\"` and content over the limits, nothing is delivered, `status` is `failed` and the response adds `overflow_callback`. Secret key, scope `actions:write`.",
+    ],
+    describe: {
+      external_user_id: EXTERNAL_USER_ID,
+      "Idempotency-Key": IDEMPOTENCY,
+      intent: "`message`, `ask`, `notify` or `display`. The SDK's `notify`, `show` and `ask` set this for you.",
+      content: "At least one of `text`, `blocks` (display blocks) or `options` (two or more choices).",
+      urgency: "`low` (the active device only), `normal` (the top device) or `high` (every eligible device).",
+      target: "`auto` (the default), a device kind, or a device ID.",
+      profile: "One of your project's profile IDs, applied to this request only.",
+      idempotency_key: IDEMPOTENCY_KEY_BODY,
+    },
+    requestBody:
+      '{"intent":"ask","content":{"text":"Book the 9:40 flight?","options":[{"label":"Yes"},{"label":"No"}]},"urgency":"normal","idempotency_key":"req_01"}',
+    response: json({
+      delivery_id: DELIVERY_ID,
+      routed_to: { device_id: DEVICE_ID, kind: "glasses", reason: "fallback chain" },
+      status: "done",
+    }),
+    error: errorExample("409", "invalid_request_error", "idempotency_conflict", 'Idempotency key "req_01" was already used with a different request.'),
+  },
+  {
+    op: "createDeviceAction",
+    slug: "device-actions",
+    title: "Run a device action",
+    description: "Run one capability on one device",
+    examplePath: `/devices/${DEVICE_ID}/actions/present.notify`,
+    notes: [
+      "The device must be online, publish the capability and allow it under its profile, and the user's grant must cover it. `ask.*` actions hold up to 200 seconds for the answer. T4 capabilities fail with `confirmation_denied` by default; when the profile sets a confirmation mode they return `needs_confirmation` and do not run. Secret key, scope `actions:write`.",
+    ],
+    describe: {
+      device_id: "The device to act on.",
+      capability: "A capability ID such as `present.display`, `present.notify` or `ask.choice`.",
+      "Idempotency-Key": IDEMPOTENCY,
+      args: "The capability's arguments, such as `{ \"body\": \"…\" }` for `present.notify`.",
+      idempotency_key: IDEMPOTENCY_KEY_BODY,
+    },
+    requestBody: '{"args":{"body":"Build finished"},"idempotency_key":"req_02"}',
+    response: json({ action_id: "9d2e4b71-0a3c-4f86-b5e1-7c9a2d4f6b08", status: "done" }),
+    error: errorExample("409", "device_error", "device_offline", `Device ${DEVICE_ID} is offline.`, true),
+  },
+  {
+    op: "getAction",
+    slug: "actions",
+    title: "Get an action",
+    description: "Read a delivery's or device action's status and result",
+    examplePath: `/actions/${DELIVERY_ID}`,
+    notes: ["`result` holds the answer once an `ask` is `done`. Secret key, scope `actions:write`."],
+    describe: { id: "A `delivery_id` from Deliver or an `action_id` from Run a device action." },
+    response: json({
+      action_id: DELIVERY_ID,
+      device_id: DEVICE_ID,
+      capability: "ask.choice",
+      status: "done",
+      result: { simulated: true, index: 0, label: "Yes" },
+      error: null,
+      created_at: "2026-10-27T17:02:11Z",
+      updated_at: "2026-10-27T17:02:11Z",
+    }),
+  },
+  {
+    op: "getDevice",
+    slug: "devices",
+    title: "Get a device",
+    description: "A device and its capability descriptors",
+    examplePath: `/devices/${DEVICE_ID}`,
+    notes: [
+      "`capabilities` comes from the device's adapter and `online` from when it was last seen. A device in another project or environment, or one that was revoked, returns `not_found`. Secret key, scope `devices:read`.",
+    ],
+    describe: { id: "The device to read." },
+    response: json(EXAMPLE_DEVICE),
+  },
+  {
+    op: "listEvents",
+    slug: "events",
+    title: "List events",
+    description: "Your project's request log, newest first",
+    examplePath: "/events?limit=2&outcome=error",
+    notes: [
+      "Every call your keys make is one event, and its `event_id` equals the call's `Request-Id` header. This route reads the calls of the key's own project and environment. Reading the log is not itself logged. Secret key, scope `analytics:read`. Limited to 60 requests a minute per key.",
+    ],
+    describe: {
+      cursor: "Opaque. The `next_cursor` of the previous page, passed back unchanged.",
+      limit: "1 to 100. Default 50.",
+      since: "ISO date and time of the oldest event. Default 24 hours ago, at most 30 days ago.",
+      outcome: "Only calls with this outcome.",
+      device_kind: "Only calls that reached this kind of device.",
+      capability: "Only calls for this capability, for example `present.display`.",
+      intent: "Only calls with this intent.",
+      route: "The routing target the call asked for: `auto`, a device kind or a device ID.",
+    },
+    response: json({
+      data: [
+        {
+          event_id: "0b8f3c2e-5a41-4d7e-9c16-2f7a8e1d4b90",
+          ts: "2026-10-28T17:02:11.204518Z",
+          project_id: "8a1d4f2c-3b6e-4e90-a7c5-1d2e3f4a5b6c",
+          env: "test",
+          external_user_id: "usr_123",
+          connection_id: null,
+          device_id: DEVICE_ID,
+          device_kind: "glasses",
+          vendor: "even_realities",
+          model: "even_g2",
+          firmware: null,
+          adapter_version: "0.3.0",
+          capability: "present.display",
+          intent: "display",
+          route_decision: { target: "auto", reason: "only online device", candidates: [DEVICE_ID] },
+          profile_id: "glasses-default",
+          profile_version: 1,
+          risk_tier: "T1",
+          confirmation: { required: false, result: null },
+          outcome: "error",
+          error_code: "device_offline",
+          latency_ms: { api: 41, device_delivery: null, user_response: null },
+        },
+      ],
+      next_cursor: "MjAyNi0xMC0yOFQxNzowMjoxMS4yMDQ1MThafjBiOGYzYzJl",
+      has_more: true,
+    }),
+    error: errorExample("429", "rate_limit_error", "rate_limited", "Too many log reads for this key. Try again in a minute.", true),
+  },
+];
 
 export const API_PAGES: DocPage[] = [
   {
@@ -225,248 +459,5 @@ export const API_PAGES: DocPage[] = [
       },
     ],
   },
-  endpoint({
-    slug: "connect-sessions",
-    group: "Connect",
-    title: "Create a Connect session",
-    description: "Start the hosted page your user follows to pair a device and approve scopes",
-    method: "POST",
-    path: "/connect_sessions",
-    examplePath: "/connect_sessions",
-    pathParams: [],
-    auth: AUTH_PUBLISHABLE,
-    headers: [IDEMPOTENCY_ACCEPTED],
-    notes: [
-      "Creates the end user the first time it sees the `external_user_id`. The returned `url` opens the hosted page for 30 minutes; when the user finishes, the page redirects to `redirect_uri` with a `public_token` query parameter. Key scope `connect`.",
-    ],
-    body: [
-      { name: "external_user_id", type: "string", required: true, description: "Your own ID for the end user." },
-      { name: "requested_scopes", type: "string[]", required: true, description: "Capability IDs or whole families such as `present.*`. At least one." },
-      { name: "allowed_kinds", type: "string[]", description: "Limit the devices offered, for example `glasses`. Defaults to every kind." },
-      { name: "redirect_uri", type: "string", description: "An http or https URL the page returns to with the `public_token`." },
-      { name: "branding", type: "object", description: "`display_name`, `logo_url` and `accent_color` (`#RRGGBB`), over your project's saved branding." },
-    ],
-    requestBody: '{"external_user_id":"usr_123","requested_scopes":["present.*","ask.*"],"redirect_uri":"https://example.com/connected"}',
-    status: "201",
-    response: json({ connect_token: "ct_…", url: "https://www.usedopl.com/connect/ct_…", expires_at: "2026-10-27T17:32:11Z" }),
-    error: errorExample("400", "invalid_request_error", "invalid_request", "requested_scopes: Too small: expected array to have >=1 items"),
-  }),
-  endpoint({
-    slug: "connections-exchange",
-    group: "Connect",
-    title: "Exchange a public token",
-    description: "Turn the token the hosted page returns into a durable connection",
-    method: "POST",
-    path: "/connections/exchange",
-    examplePath: "/connections/exchange",
-    pathParams: [],
-    headers: [IDEMPOTENCY_ACCEPTED],
-    notes: ["A public token exchanges once, within 30 minutes of the user finishing. Secret key, scope `connect`."],
-    body: [{ name: "public_token", type: "string", required: true, description: "The `public_token` the hosted page added to your `redirect_uri`." }],
-    requestBody: '{"public_token":"public-test-…"}',
-    status: "200",
-    response: json({ connection_id: CONNECTION.id, device: EXAMPLE_DEVICE }),
-    error: errorExample("400", "invalid_request_error", "invalid_request", "public_token is invalid, expired or already exchanged."),
-  }),
-  endpoint({
-    slug: "connections",
-    group: "Connect",
-    title: "List connections",
-    description: "List the devices an end user has connected and the scopes they granted",
-    method: "GET",
-    path: "/users/{external_user_id}/connections",
-    examplePath: "/users/usr_123/connections",
-    pathParams: [EXTERNAL_USER_ID],
-    notes: ["Revoked connections are included with the status `revoked`. Secret key, scope `connect`."],
-    status: "200",
-    response: json({ data: [CONNECTION] }),
-  }),
-  endpoint({
-    slug: "revoke-connection",
-    group: "Connect",
-    title: "Revoke a connection",
-    description: "Stop your agent reaching a device, effective immediately",
-    method: "DELETE",
-    path: "/connections/{id}",
-    examplePath: `/connections/${CONNECTION.id}`,
-    pathParams: [pathId("The connection to revoke.")],
-    notes: ["Safe to repeat: revoking a revoked connection returns it unchanged. Secret key, scope `connect`."],
-    status: "200",
-    response: json({ ...CONNECTION, status: "revoked", revoked_at: "2026-10-28T09:00:00Z" }),
-  }),
-  endpoint({
-    slug: "context",
-    group: "Context",
-    title: "Get context",
-    description: "The user's active device, posture, available devices and matched profile",
-    method: "GET",
-    path: "/users/{external_user_id}/context",
-    examplePath: "/users/usr_123/context",
-    pathParams: [EXTERNAL_USER_ID],
-    notes: [
-      "`available` lists online devices only, and `profile` is the one that applies to the active device. [Context profiles and routing](/docs/concepts/context-profiles-and-routing) explains each field. Secret key, scope `devices:read`.",
-    ],
-    status: "200",
-    response: json({
-      active_device: { id: DEVICE_ID, kind: "glasses", model: "simulated_glasses", last_seen_s: 4 },
-      posture: "glanceable",
-      available: [{ kind: "glasses", id: DEVICE_ID, capabilities: ["presence.read", "present.notify", "present.display", "ask.choice"] }],
-      profile: { id: "glasses-default", prompt_append: "They are on glasses: …", output: { max_lines: 5, max_chars: 300, format: "plain", markdown: false } },
-      source_of_last_message: null,
-    }),
-  }),
-  endpoint({
-    slug: "deliver",
-    group: "Actions",
-    title: "Deliver",
-    description: "Deliver content by intent and let Dopl route it to one of the user's devices",
-    method: "POST",
-    path: "/users/{external_user_id}/deliver",
-    examplePath: "/users/usr_123/deliver",
-    pathParams: [EXTERNAL_USER_ID],
-    headers: [IDEMPOTENCY],
-    notes: [
-      "Dopl routes the request, checks the grant and the tier, and enforces the device's limits without rewriting the content. `routed_to` says which device and why. An `ask` holds up to 200 seconds for the answer; read it with [Get an action](/docs/api-reference/actions) and the `delivery_id`. With `overflow: \"callback\"` and content over the limits, nothing is delivered, `status` is `failed` and the response adds `overflow_callback`. Secret key, scope `actions:write`.",
-    ],
-    body: [
-      { name: "intent", type: "string", required: true, description: "`message`, `ask`, `notify` or `display`. The SDK's `notify`, `show` and `ask` set this for you." },
-      { name: "content", type: "object", required: true, description: "At least one of `text`, `blocks` (display blocks) or `options` (two or more choices)." },
-      { name: "urgency", type: "string", required: true, description: "`low` (the active device only), `normal` (the top device) or `high` (every eligible device)." },
-      { name: "target", type: "string", description: "`auto` (the default), a device kind, or a device ID." },
-      { name: "profile", type: "string", description: "One of your project's profile IDs, applied to this request only." },
-      IDEMPOTENCY_KEY_BODY,
-    ],
-    requestBody:
-      '{"intent":"ask","content":{"text":"Book the 9:40 flight?","options":[{"label":"Yes"},{"label":"No"}]},"urgency":"normal","idempotency_key":"req_01"}',
-    status: "202",
-    response: json({
-      delivery_id: DELIVERY_ID,
-      routed_to: { device_id: DEVICE_ID, kind: "glasses", reason: "fallback chain" },
-      status: "done",
-    }),
-    error: errorExample("409", "invalid_request_error", "idempotency_conflict", 'Idempotency key "req_01" was already used with a different request.'),
-  }),
-  endpoint({
-    slug: "device-actions",
-    group: "Actions",
-    title: "Run a device action",
-    description: "Run one capability on one device",
-    method: "POST",
-    path: "/devices/{device_id}/actions/{capability}",
-    examplePath: `/devices/${DEVICE_ID}/actions/present.notify`,
-    pathParams: [
-      { name: "device_id", type: "string", location: "path", required: true, description: "The device to act on." },
-      {
-        name: "capability",
-        type: "string",
-        location: "path",
-        required: true,
-        description: "A capability ID such as `present.display`, `present.notify` or `ask.choice`.",
-      },
-    ],
-    headers: [IDEMPOTENCY],
-    notes: [
-      "The device must be online, publish the capability and allow it under its profile, and the user's grant must cover it. `ask.*` actions hold up to 200 seconds for the answer. T4 capabilities fail with `confirmation_denied` by default; when the profile sets a confirmation mode they return `needs_confirmation` and do not run. Secret key, scope `actions:write`.",
-    ],
-    body: [
-      { name: "args", type: "object", required: true, description: "The capability's arguments, such as `{ \"body\": \"…\" }` for `present.notify`." },
-      IDEMPOTENCY_KEY_BODY,
-    ],
-    requestBody: '{"args":{"body":"Build finished"},"idempotency_key":"req_02"}',
-    status: "202",
-    response: json({ action_id: "9d2e4b71-0a3c-4f86-b5e1-7c9a2d4f6b08", status: "done" }),
-    error: errorExample("409", "device_error", "device_offline", `Device ${DEVICE_ID} is offline.`, true),
-  }),
-  endpoint({
-    slug: "actions",
-    group: "Actions",
-    title: "Get an action",
-    description: "Read a delivery's or device action's status and result",
-    method: "GET",
-    path: "/actions/{id}",
-    examplePath: `/actions/${DELIVERY_ID}`,
-    pathParams: [pathId("A `delivery_id` from Deliver or an `action_id` from Run a device action.")],
-    notes: ["`result` holds the answer once an `ask` is `done`. Secret key, scope `actions:write`."],
-    status: "200",
-    response: json({
-      action_id: DELIVERY_ID,
-      device_id: DEVICE_ID,
-      capability: "ask.choice",
-      status: "done",
-      result: { simulated: true, index: 0, label: "Yes" },
-      error: null,
-      created_at: "2026-10-27T17:02:11Z",
-      updated_at: "2026-10-27T17:02:11Z",
-    }),
-  }),
-  endpoint({
-    slug: "devices",
-    group: "Devices",
-    title: "Get a device",
-    description: "A device and its capability descriptors",
-    method: "GET",
-    path: "/devices/{id}",
-    examplePath: `/devices/${DEVICE_ID}`,
-    pathParams: [pathId("The device to read.")],
-    notes: [
-      "`capabilities` comes from the device's adapter and `online` from when it was last seen. A device in another project or environment, or one that was revoked, returns `not_found`. Secret key, scope `devices:read`.",
-    ],
-    status: "200",
-    response: json(EXAMPLE_DEVICE),
-  }),
-  endpoint({
-    slug: "events",
-    group: "Events",
-    title: "List events",
-    description: "Your project's request log, newest first",
-    method: "GET",
-    path: "/events",
-    examplePath: "/events?limit=2&outcome=error",
-    pathParams: [],
-    query: [
-      { name: "cursor", type: "string", location: "query", description: "Opaque. The `next_cursor` of the previous page, passed back unchanged." },
-      { name: "limit", type: "integer", location: "query", description: "1 to 100. Default 50." },
-      { name: "since", type: "string", location: "query", description: "ISO date and time of the oldest event. Default 24 hours ago, at most 30 days ago." },
-      { name: "outcome", type: "string", location: "query", description: "`ok`, `error` or `denied`." },
-      { name: "device_kind", type: "string", location: "query", description: "Only calls that reached this kind of device." },
-      { name: "capability", type: "string", location: "query", description: "Only calls for this capability, for example `present.display`." },
-      { name: "intent", type: "string", location: "query", description: "`message`, `ask`, `notify` or `display`." },
-      { name: "route", type: "string", location: "query", description: "The routing target the call asked for: `auto`, a device kind or a device ID." },
-    ],
-    notes: [
-      "Every call your keys make is one event, and its `event_id` equals the call's `Request-Id` header. This route reads the calls of the key's own project and environment. Reading the log is not itself logged. Secret key, scope `analytics:read`. Limited to 60 requests a minute per key.",
-    ],
-    status: "200",
-    response: json({
-      data: [
-        {
-          event_id: "0b8f3c2e-5a41-4d7e-9c16-2f7a8e1d4b90",
-          ts: "2026-10-28T17:02:11.204518Z",
-          project_id: "8a1d4f2c-3b6e-4e90-a7c5-1d2e3f4a5b6c",
-          env: "test",
-          external_user_id: "usr_123",
-          connection_id: null,
-          device_id: DEVICE_ID,
-          device_kind: "glasses",
-          vendor: "even_realities",
-          model: "even_g2",
-          firmware: null,
-          adapter_version: "0.3.0",
-          capability: "present.display",
-          intent: "display",
-          route_decision: { target: "auto", reason: "only online device", candidates: [DEVICE_ID] },
-          profile_id: "glasses-default",
-          profile_version: 1,
-          risk_tier: "T1",
-          confirmation: { required: false, result: null },
-          outcome: "error",
-          error_code: "device_offline",
-          latency_ms: { api: 41, device_delivery: null, user_response: null },
-        },
-      ],
-      next_cursor: "MjAyNi0xMC0yOFQxNzowMjoxMS4yMDQ1MThafjBiOGYzYzJl",
-      has_more: true,
-    }),
-    error: errorExample("429", "rate_limit_error", "rate_limited", "Too many log reads for this key. Try again in a minute.", true),
-  }),
+  ...ENDPOINTS.map(endpoint),
 ];

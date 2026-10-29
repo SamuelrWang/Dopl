@@ -106,6 +106,12 @@ export const CHANGELOG_PAGES: DocPage[] = [
         type: "changelog",
         entries: [
           {
+            date: "October 28",
+            title: "Request log API, playground and usage",
+            description:
+              "Read your request log with [List events](/docs/api-reference/events), scope `analytics:read`. Every list pages with `cursor` and `limit` and returns `data`, `next_cursor` and `has_more`. The developer portal adds a playground that runs calls with your test key, and usage charts. The API reference is now generated from the OpenAPI spec",
+          },
+          {
             date: "October 27",
             title: "Device categories",
             description:
