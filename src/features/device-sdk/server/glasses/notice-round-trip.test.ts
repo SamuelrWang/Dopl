@@ -21,7 +21,7 @@ import { GET as contextGET } from "@/app/api/v1/users/[external_user_id]/context
 import { POST as deliverPOST } from "@/app/api/v1/users/[external_user_id]/deliver/route";
 import { POST as deviceActionPOST } from "@/app/api/v1/devices/[device_id]/actions/[capability]/route";
 import { GET as actionGET } from "@/app/api/v1/actions/[id]/route";
-import { sdkUserLens, sdkUserNotices } from "@/features/display/server/sdk-lens";
+import { SDK_LENS_HEADERS, sdkUserLens, sdkUserNotices } from "@/features/display/server/sdk-lens";
 import { glassesGetAnswer, glassesNotify, SDK_NOTIFY_TTL_SEC, type GlassesSdkUser } from "@/features/glasses/core/messages/service";
 import { hashCredential } from "@/features/glasses/core/devices/credentials";
 import type { SdkGlassesPort } from "@/features/glasses/core/devices/sdk-device";
@@ -129,7 +129,8 @@ async function world() {
       headers: { authorization: `Bearer ${LEGACY_TOKEN}`, "content-type": "application/json" },
       ...(body !== undefined && { body: JSON.stringify(body) }),
     });
-  const dopl = new Dopl({ apiKey: key, baseUrl: "https://app.example/api/v1", fetch: inProcessFetch });
+  // As production builds it (`sdk-lens.ts › createDoplApp`): asks do not hold.
+  const dopl = new Dopl({ apiKey: key, baseUrl: "https://app.example/api/v1", fetch: inProcessFetch, headers: { ...SDK_LENS_HEADERS } });
   const lens = sdkUserLens(dopl, DOPL_USER);
   const notices: GlassesSdkUser = sdkUserNotices(dopl, DOPL_USER, [link.id]);
   // The glasses tools' deps as `glasses/core/mcp/exposure.ts` builds them, the port over the real client.
@@ -170,12 +171,10 @@ describe("W1.2 Gaps #1 notices over @dopl/sdk", () => {
 
   it("🔒 glasses_get_answer reads an SDK ask's answer by its delivery id", async () => {
     const w = await world();
-    onHold = async () => {
-      const { messages } = (await (await w.handlers.inbox(w.glasses("/api/glasses/device/inbox?wait=0"))).json()) as { messages: GlassesMessage[] };
-      expect((await w.handlers.answer(w.glasses("/api/glasses/device/answer", { id: messages[0].id, index: 0 }))).status).toBe(200);
-    };
-    await w.lens.ask({ question: "Ship?", options: ["Ship", "Wait"], timeoutMs: 60_000, idempotencyKey: "nrt-1" });
-    const deliveryId = w.store.actions[0].id;
+    const { deliveryId } = await w.lens.startAsk({ question: "Ship?", options: ["Ship", "Wait"], idempotencyKey: "nrt-1" });
+    const { messages } = (await (await w.handlers.inbox(w.glasses("/api/glasses/device/inbox?wait=0"))).json()) as { messages: GlassesMessage[] };
+    expect((await w.handlers.answer(w.glasses("/api/glasses/device/answer", { id: messages[0].id, index: 0 }))).status).toBe(200);
+    expect(deliveryId).toBe(w.store.actions[0].id);
     expect(await glassesGetAnswer(w.tools, DOPL_USER, { id: deliveryId })).toEqual({
       id: deliveryId,
       status: "answered",

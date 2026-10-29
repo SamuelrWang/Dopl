@@ -43,11 +43,22 @@ describe("sdkUserNotices.notify", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it("unavailable (network, 5xx, key refused) = fallback; device answered no = refusal", async () => {
-    const call = (r: () => Response) => notices(() => r()).n.notify({ deviceId: DEV, title: "T", body: "B", idempotencyKey: "k" });
-    expect(await notices(() => Promise.reject(new TypeError("fetch failed"))).n.notify({ deviceId: DEV, title: "T", body: "B", idempotencyKey: "k" })).toMatchObject({ ok: false, fallback: true });
-    expect(await call(() => err(503, "unexpected_response", "api_error"))).toMatchObject({ ok: false, fallback: true });
+  it("🔒 gap #6: fallback only when nothing was sent; may-have-landed replays once (same key), then unconfirmed", async () => {
+    const call = (r: () => Response | Promise<Response>) => notices(() => r()).n.notify({ deviceId: DEV, title: "T", body: "B", idempotencyKey: "k" });
+    // Never connected / key refused: proven, the prosumer notice is the one copy.
+    const refused = Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNREFUSED" } });
+    const sdkNotices = createSdkNotices({ key: KEY, baseUrl: "https://app.example/api/v1", fetch: async () => Promise.reject(refused) });
+    sdkDeliveryFor.mockResolvedValueOnce({ on: true, deviceIds: [DEV] });
+    expect(await (await sdkNotices.forUser(USER))!.notify({ deviceId: DEV, title: "T", body: "B", idempotencyKey: "k" })).toMatchObject({ ok: false, fallback: true });
     expect(await call(() => err(401, "unauthenticated", "authentication_error"))).toMatchObject({ ok: false, fallback: true });
+    // May have landed: one replay with the same key; still unknown = unconfirmed, no prosumer copy.
+    const lost = notices(() => Promise.reject(new TypeError("fetch failed")));
+    expect(await lost.n.notify({ deviceId: DEV, title: "T", body: "B", idempotencyKey: "k" })).toEqual({ ok: false, code: "unconfirmed", fallback: false });
+    expect(lost.fetch).toHaveBeenCalledTimes(2);
+    expect(await call(() => err(503, "unexpected_response", "api_error"))).toEqual({ ok: false, code: "unconfirmed", fallback: false });
+    let n = 0;
+    expect(await call(() => (n++ === 0 ? err(502, "bad_gateway", "api_error") : res(202, { action_id: "a1", status: "queued" })))).toEqual({ ok: true, value: { id: "a1", status: "queued" } });
+    // The device answered no.
     expect(await call(() => err(409, "device_offline", "device_error"))).toEqual({ ok: false, code: "device_offline", fallback: false });
     expect(await call(() => err(400, "invalid_request"))).toEqual({ ok: false, code: "invalid_request", fallback: false });
   });

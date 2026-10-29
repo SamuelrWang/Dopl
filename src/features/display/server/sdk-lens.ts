@@ -260,10 +260,25 @@ export function sdkUserLens(dopl: Dopl, userId: string): SdkUserLens {
   };
 }
 
+export interface DoplAppEnv {
+  key?: string;
+  baseUrl?: string;
+  fetch?: (input: string, init: RequestInit) => Promise<Response>;
+}
+
+/** The Dopl App's `@dopl/sdk` client for a user whose `sdk_delivery` flag is on (null = off). */
+export interface DoplApp {
+  forUser(userId: string): Promise<{ client: Dopl; deviceIds: string[] } | null>;
+}
+
 let warnedNoKey = false;
 
-/** Production: the `sdk_delivery` flag (W1.1) and the Dopl App client from the server env. */
-export function createSdkLens(env: { key?: string; baseUrl?: string; fetch?: (input: string, init: RequestInit) => Promise<Response> } = {}): SdkLens {
+/**
+ * The flag (W1.1), the server-env key and ONE client, shared by the lens ({@link createSdkLens}) and the
+ * notices ({@link createSdkNotices}): every call sends {@link SDK_LENS_HEADERS} and goes through
+ * {@link preSendAwareFetch}. Throws {@link SdkLensError} (fallback); a missing key is logged once.
+ */
+export function createDoplApp(env: DoplAppEnv = {}): DoplApp {
   let client: Dopl | null = null;
   return {
     async forUser(userId) {
@@ -271,13 +286,13 @@ export function createSdkLens(env: { key?: string; baseUrl?: string; fetch?: (in
       try {
         state = await sdkDeliveryFor(userId);
       } catch (err) {
-        console.error("[display] sdk_delivery lookup failed; prosumer lens path", err);
+        console.error("[display] sdk_delivery lookup failed; prosumer path", err);
         throw new SdkLensError("flag_lookup_failed", true);
       }
       if (!state.on) return null;
       const key = env.key ?? process.env.DOPL_APP_SDK_KEY;
       if (!key) {
-        if (!warnedNoKey) console.error("[display] sdk_delivery is on but DOPL_APP_SDK_KEY is not set; prosumer lens path");
+        if (!warnedNoKey) console.error("[display] sdk_delivery is on but DOPL_APP_SDK_KEY is not set; prosumer path");
         warnedNoKey = true;
         throw new SdkLensError("no_key", true);
       }
@@ -289,7 +304,22 @@ export function createSdkLens(env: { key?: string; baseUrl?: string; fetch?: (in
         headers: { ...SDK_LENS_HEADERS },
         fetch: preSendAwareFetch(env.fetch ?? ((input, init) => globalThis.fetch(input, init))),
       });
-      return { lens: sdkUserLens(client, userId), deviceIds: state.deviceIds };
+      return { client, deviceIds: state.deviceIds };
+    },
+  };
+}
+
+/** Production: one flag read path, one key, one client for the lens AND the notices. */
+const productionDoplApp = createDoplApp();
+const appOf = (app: DoplApp | DoplAppEnv): DoplApp => ("forUser" in app ? app : createDoplApp(app));
+
+/** The user's SDK lens (production: the shared Dopl App client). An env builds its own (suites). */
+export function createSdkLens(app: DoplApp | DoplAppEnv = productionDoplApp): SdkLens {
+  const dopl = appOf(app);
+  return {
+    async forUser(userId) {
+      const sel = await dopl.forUser(userId);
+      return sel && { lens: sdkUserLens(sel.client, userId), deviceIds: sel.deviceIds };
     },
   };
 }
@@ -335,8 +365,9 @@ export function sdkUserNotices(dopl: Dopl, userId: string, deviceIds: string[]):
   return {
     deviceIds,
     notify({ deviceId, title, body, idempotencyKey }) {
+      // A notice is a lens copy too: at most one (gap #6), so a may-have-landed call replays, never doubles.
       return settle(
-        timed(
+        deliverOnce(
           "notify",
           (signal) => dopl.devices.action(deviceId, "present.notify", { title, body }, { idempotencyKey, signal }),
           (r) => ({ action_id: r.action_id, status: r.status }),
@@ -344,7 +375,7 @@ export function sdkUserNotices(dopl: Dopl, userId: string, deviceIds: string[]):
       );
     },
     async action(id) {
-      const r = await settle(timed("action", (signal) => dopl.actions.get(id, { signal }), (a) => ({ status: a.status })));
+      const r = await settle(read("action", (signal) => dopl.actions.get(id, { signal })));
       if (!r.ok) return r;
       // 🔒 The Dopl App project holds EVERY user's actions; an id on another user's device is unknown here.
       if (!deviceIds.includes(r.value.device_id)) return { ok: false, code: "not_found", fallback: false };
@@ -354,28 +385,13 @@ export function sdkUserNotices(dopl: Dopl, userId: string, deviceIds: string[]):
   };
 }
 
-/** Production notices: the same flag and key as {@link createSdkLens}. Null = flag off. Throws {@link SdkLensError} (fallback). */
-export function createSdkNotices(env: { key?: string; baseUrl?: string } = {}): { forUser(userId: string): Promise<SdkUserNotices | null> } {
-  let client: Dopl | null = null;
+/** Production notices: the same Dopl App client as {@link createSdkLens}. Null = flag off. Throws {@link SdkLensError} (fallback). */
+export function createSdkNotices(app: DoplApp | DoplAppEnv = productionDoplApp): { forUser(userId: string): Promise<SdkUserNotices | null> } {
+  const dopl = appOf(app);
   return {
     async forUser(userId) {
-      let state: { on: boolean; deviceIds: string[] };
-      try {
-        state = await sdkDeliveryFor(userId);
-      } catch (err) {
-        console.error("[display] sdk_delivery lookup failed; prosumer notice path", err);
-        throw new SdkLensError("flag_lookup_failed", true);
-      }
-      if (!state.on) return null;
-      const key = env.key ?? process.env.DOPL_APP_SDK_KEY;
-      if (!key) {
-        if (!warnedNoKey) console.error("[display] sdk_delivery is on but DOPL_APP_SDK_KEY is not set; prosumer notice path");
-        warnedNoKey = true;
-        throw new SdkLensError("no_key", true);
-      }
-      const baseUrl = env.baseUrl ?? process.env.DOPL_APP_SDK_BASE_URL;
-      client ??= new Dopl({ apiKey: key, ...(baseUrl && { baseUrl }) });
-      return sdkUserNotices(client, userId, state.deviceIds);
+      const sel = await dopl.forUser(userId);
+      return sel && sdkUserNotices(sel.client, userId, sel.deviceIds);
     },
   };
 }
