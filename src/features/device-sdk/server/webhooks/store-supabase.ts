@@ -16,10 +16,11 @@ import type {
  * Endpoint rows never select `secret_id` / `previous_secret_id`.
  */
 
-const ENDPOINT_COLS =
+export const ENDPOINT_COLS =
   "id, project_id, env, url, description, enabled_events, previous_secret_expires_at, disabled_at, created_at, updated_at";
-const DELIVERY_COLS =
+export const DELIVERY_COLS =
   "id, outbox_id, endpoint_id, project_id, env, event_type, status, attempts, next_attempt_at, last_status_code, last_error, delivered_at, created_at, updated_at";
+export const ATTEMPT_COLS = "id, delivery_id, attempt, attempted_at, status_code, error, duration_ms, response_body";
 
 const db = () => supabaseAdmin();
 
@@ -27,7 +28,7 @@ function fail(op: string, error: { message: string }): never {
   throw new Error(`webhook store ${op} failed: ${error.message}`);
 }
 
-const pickEndpoint = (r: Record<string, unknown>): EndpointRow => ({
+export const pickEndpoint = (r: Record<string, unknown>): EndpointRow => ({
   id: r.id as string,
   project_id: r.project_id as string,
   env: r.env as EndpointRow["env"],
@@ -40,7 +41,7 @@ const pickEndpoint = (r: Record<string, unknown>): EndpointRow => ({
   updated_at: r.updated_at as string,
 });
 
-const pickDelivery = (r: Record<string, unknown>): DeliveryRow => ({
+export const pickDelivery = (r: Record<string, unknown>): DeliveryRow => ({
   id: r.id as string,
   outbox_id: r.outbox_id as string,
   endpoint_id: r.endpoint_id as string,
@@ -222,7 +223,7 @@ export const supabaseWebhookStore: WebhookStore = {
     if (deliveryIds.length === 0) return [];
     const { data, error } = await db()
       .from("dev_webhook_attempts")
-      .select("id, delivery_id, attempt, attempted_at, status_code, error, duration_ms, response_body")
+      .select(ATTEMPT_COLS)
       .in("delivery_id", [...deliveryIds])
       .order("attempt", { ascending: false });
     if (error) fail("attemptsFor", error);
