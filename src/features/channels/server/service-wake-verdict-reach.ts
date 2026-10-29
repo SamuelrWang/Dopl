@@ -38,15 +38,12 @@ import type { ChannelContext } from "./service-shared";
  */
 
 /**
- * `true` since step 2 (2026-10-29): the desktop wakes a `to=` addressee on any scope
- * (`main/session-dispatch-scope.js`), so an off-scope addressee is reachable and the
- * prediction is `woken` again, confirmed by the machine's receipt.
- * ⚠ **DEPLOY THIS COMMIT ONLY AFTER THAT DESKTOP IS THE INSTALLED BASE.** Before it, an
- * older desktop drops the addressee and `woken(predicted)` is never confirmed — the
- * pre-fix lie. KB Audits/Thread Mention Reach Fix › Rollout.
- * Left as a switch, not deleted, so the rule and its test survive a revert.
+ * `false` = this build's desktop feeds THREAD-scoped, so an off-scope addressee is
+ * not reachable. Flipped to `true` once a desktop that wakes addressees channel-wide
+ * (`main/session-dispatch.js › offScopeAddressees`) is the installed base — see the
+ * KB entry Audits/Thread Mention Reach Fix for the rollout order.
  */
-export const CROSS_SCOPE_WAKE = true;
+export const CROSS_SCOPE_WAKE = false;
 
 /** The scope a post lands in, as the desktop computes it: a uuid thread or `""`. */
 export function postScope(metadata: Record<string, unknown>): string {
