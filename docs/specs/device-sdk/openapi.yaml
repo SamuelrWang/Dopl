@@ -140,9 +140,11 @@ paths:
       tags: [actions]
       operationId: deliver
       summary: Deliver by intent; Dopl routes to a device (C5)
+      description: "An `ask` holds for up to 200s for the answer, unless the request sends `Prefer: respond-async`."
       parameters:
         - $ref: "#/components/parameters/ExternalUserId"
         - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/Prefer"
       requestBody:
         required: true
         content:
@@ -151,6 +153,8 @@ paths:
       responses:
         "202":
           description: Accepted and routed.
+          headers:
+            Preference-Applied: { $ref: "#/components/headers/PreferenceApplied" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DeliverResponse" }
@@ -166,7 +170,7 @@ paths:
       tags: [actions]
       operationId: createDeviceAction
       summary: Run one capability on one device
-      description: T4 capabilities return `needs_confirmation` first (C7). `ask.*` actions hold for up to 200s.
+      description: "T4 capabilities return `needs_confirmation` first (C7). `ask.*` actions hold for up to 200s, unless the request sends `Prefer: respond-async`."
       parameters:
         - name: device_id
           in: path
@@ -177,6 +181,7 @@ paths:
           required: true
           schema: { $ref: "#/components/schemas/CapabilityId" }
         - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/Prefer"
       requestBody:
         required: true
         content:
@@ -185,6 +190,8 @@ paths:
       responses:
         "202":
           description: Accepted.
+          headers:
+            Preference-Applied: { $ref: "#/components/headers/PreferenceApplied" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DeviceActionResponse" }
@@ -307,6 +314,17 @@ components:
       required: false
       description: Optional on every POST. Where the body also carries `idempotency_key`, both must match; reusing a key with a different body is `idempotency_conflict`.
       schema: { type: string, minLength: 1, maxLength: 255 }
+    Prefer:
+      name: Prefer
+      in: header
+      required: false
+      description: "`respond-async` (RFC 7240): do not hold an `ask` for its answer. The 202 returns at once with status `queued` or `delivered`; read the answer with GET /actions/{id} or the `action.completed` webhook. Other preferences are ignored."
+      schema: { type: string, example: respond-async }
+
+  headers:
+    PreferenceApplied:
+      description: "`respond-async` when the request asked for it and the ask was not held."
+      schema: { type: string }
 
     ListCursor:
       name: cursor

@@ -1,10 +1,10 @@
 import { withDeveloperKey } from "@/features/device-sdk/server/with-developer-key";
 import { deliver } from "@/features/device-sdk/server/delivery-service";
-import { deliveryDeps, headerKeyMismatch, parseBody, refuseBody, respond } from "@/features/device-sdk/server/delivery-routes";
+import { deliveryDeps, headerKeyMismatch, parseBody, prefersRespondAsync, refuseBody, respond } from "@/features/device-sdk/server/delivery-routes";
 import { DeliverRequestSchema } from "@/features/device-sdk/types";
 
 export const dynamic = "force-dynamic";
-/** An `ask` intent holds up to 200s (ASK_HOLD_MAX_S) for the answer. */
+/** An `ask` intent holds up to 200s (ASK_HOLD_MAX_S) for the answer, unless `Prefer: respond-async`. */
 export const maxDuration = 300;
 
 /**
@@ -22,7 +22,9 @@ export const POST = withDeveloperKey(
         external_user_id: userId,
       });
     }
-    return respond(ctx, await deliver(deliveryDeps(), { projectId: ctx.projectId, env: ctx.env }, userId, body.data));
+    const respondAsync = prefersRespondAsync(request);
+    const result = await deliver(deliveryDeps(), { projectId: ctx.projectId, env: ctx.env }, userId, body.data, { hold: !respondAsync });
+    return respond(ctx, result, { respondAsync });
   },
   { scopes: ["actions:write"] }
 );

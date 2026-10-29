@@ -57,8 +57,8 @@ const logged = async () => {
 };
 const deliver = (body: Record<string, unknown>, headers?: Record<string, string>) =>
   deliverPOST(req("users/u1/deliver", { urgency: "normal", ...body }, headers), params({ external_user_id: "u1" }));
-const act = (deviceId: string, capability: string, body: Record<string, unknown>) =>
-  actionPOST(req(`devices/${deviceId}/actions/${capability}`, body), params({ device_id: deviceId, capability }));
+const act = (deviceId: string, capability: string, body: Record<string, unknown>, headers?: Record<string, string>) =>
+  actionPOST(req(`devices/${deviceId}/actions/${capability}`, body, headers), params({ device_id: deviceId, capability }));
 
 beforeEach(async () => {
   NOW = Date.parse("2026-10-27T12:00:00Z");
@@ -279,6 +279,69 @@ describe("POST /v1/devices/{id}/actions/{capability} + GET /v1/actions/{id}", ()
     expect(DeviceActionResponseSchema.parse(await res.json()).status).toBe("delivered");
     expect(NOW - start).toBeGreaterThanOrEqual(200_000);
     expect(NOW - start).toBeLessThan(202_000);
+  });
+
+  describe("Prefer: respond-async (no ask hold, W1.2 gap #3)", () => {
+    const unanswered = () =>
+      setDeliveryDepsForTests({
+        store,
+        grants,
+        adapters: createAdapterRegistry([{ ...createSimulatorAdapter({ now: () => NOW }), execute: async () => ({ status: "delivered", result: null, error: null }) }]),
+        now: () => NOW,
+        sleep: async (ms) => void (NOW += ms),
+      });
+
+    it("device action: 202 at once, unanswered, Preference-Applied; the action stays readable", async () => {
+      unanswered();
+      const start = NOW;
+      const res = await act(ids.glasses, "ask.choice", { args: { options: [{ label: "Yes" }, { label: "No" }] }, idempotency_key: "ra1" }, { prefer: "respond-async" });
+      expect(res.status).toBe(202);
+      expect(res.headers.get("preference-applied")).toBe("respond-async");
+      const body = DeviceActionResponseSchema.parse(await res.json());
+      expect(body.status).toBe("delivered");
+      expect(NOW - start).toBe(0);
+      const poll = ActionSchema.parse(await (await actionGET(req(`actions/${body.action_id}`), params({ id: body.action_id }))).json());
+      expect(poll.status).toBe("delivered");
+    });
+
+    it("deliver ask: 202 at once with the delivery id, no hold", async () => {
+      unanswered();
+      const start = NOW;
+      const res = await deliver({ intent: "ask", content: { text: "Lunch?", options: [{ label: "Yes" }, { label: "No" }] }, idempotency_key: "ra2" }, { prefer: "wait=5, respond-async" });
+      expect(res.status).toBe(202);
+      expect(res.headers.get("preference-applied")).toBe("respond-async");
+      const body = DeliverResponseSchema.parse(await res.json());
+      expect(body.status).toBe("delivered");
+      expect(NOW - start).toBe(0);
+      expect(store.actions.find((a) => a.id === body.delivery_id)?.status).toBe("delivered");
+    });
+
+    it("token match is case-insensitive and ignores parameters; any other preference still holds", async () => {
+      unanswered();
+      let start = NOW;
+      await act(ids.glasses, "ask.choice", { args: { options: [{ label: "Yes" }, { label: "No" }] }, idempotency_key: "ra3" }, { prefer: "Respond-Async; x=1" });
+      expect(NOW - start).toBe(0);
+      start = NOW;
+      const held = await act(ids.glasses, "ask.choice", { args: { options: [{ label: "Yes" }, { label: "No" }] }, idempotency_key: "ra4" }, { prefer: "return=minimal" });
+      expect(held.headers.get("preference-applied")).toBeNull();
+      expect(NOW - start).toBeGreaterThanOrEqual(200_000);
+    });
+
+    it("an idempotent replay under respond-async returns the stored response, no second adapter call", async () => {
+      unanswered();
+      const body = { args: { options: [{ label: "Yes" }, { label: "No" }] }, idempotency_key: "ra5" };
+      const first = DeviceActionResponseSchema.parse(await (await act(ids.glasses, "ask.choice", body, { prefer: "respond-async" })).json());
+      const again = DeviceActionResponseSchema.parse(await (await act(ids.glasses, "ask.choice", body, { prefer: "respond-async" })).json());
+      expect(again.action_id).toBe(first.action_id);
+      expect(store.actions.filter((a) => a.idempotency_key === "ra5")).toHaveLength(1);
+    });
+
+    it("a refusal under respond-async is the same C10 error (no Preference-Applied)", async () => {
+      const off = store.addDevice(scope, { kind: "glasses", end_user_id: store.endUsers[0].id, id: "sim_device_offline_2" });
+      const res = await act(off.id, "ask.choice", { args: { options: [{ label: "Yes" }, { label: "No" }] }, idempotency_key: "ra6" }, { prefer: "respond-async" });
+      expect(res.status).toBe(409);
+      expect(res.headers.get("preference-applied")).toBeNull();
+    });
   });
 
   it("unknown device → 404; capability the device lacks → 422; magic offline id → 409", async () => {

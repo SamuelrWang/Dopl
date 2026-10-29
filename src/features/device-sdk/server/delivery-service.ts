@@ -95,7 +95,9 @@ export async function deliver(
   deps: DeliveryDeps,
   scope: Scope,
   externalUserId: string,
-  req: DeliverRequest
+  req: DeliverRequest,
+  /** `hold: false` (`Prefer: respond-async`): an `ask` returns at once, unanswered; no 200s hold. */
+  opts: { hold?: boolean } = {}
 ): Promise<ServiceResult> {
   const target = req.target ?? "auto";
   const hash = requestHash({ route: "deliver", external_user_id: externalUserId, body: req });
@@ -210,7 +212,9 @@ export async function deliver(
     return { ok: false, code: info.code, message: info.message, decision, event: { ...ev(), latency_ms: { device_delivery: delivery } } };
   }
   await deps.store.updateAction(scope, action.id, { status: res.status, result: res.result });
-  if (isAsk(primary.capability) && (res.status === "queued" || res.status === "delivered")) res = await holdAndSettle(deps, scope, action.id, res);
+  if (opts.hold !== false && isAsk(primary.capability) && (res.status === "queued" || res.status === "delivered")) {
+    res = await holdAndSettle(deps, scope, action.id, res);
+  }
   const fanout = results.length > 1 ? { fanout: routed.chosen.map((r, i) => ({ device_id: r.candidate.device.id, status: results[i].status })) } : {};
   const done = await finish(res.status, { ...(res.result ?? {}), ...fanout, ...(fit.kind === "truncated" ? { truncated: true } : {}) }, res.error);
   return { ...done, event: { ...done.event, latency_ms: { device_delivery: delivery } } };
