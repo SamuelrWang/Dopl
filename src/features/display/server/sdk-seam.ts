@@ -14,7 +14,8 @@ import { createSdkLens, SdkLensError, type SdkAskOutcome, type SdkLens, type Sdk
  * 🔒 FAITHFUL OR NOT AT ALL. The SDK path takes a lens copy only when the frozen contract can carry it
  * unchanged: a stack (no absolute layout) that fits the G2 at degradation level 0 (the SDK's even_g2
  * compiles level 0 only, D3), or a choice that IS an ask card (one heading/text line as the question,
- * 2-4 options; or the `glasses_ask` shortcut). Anything else keeps the prosumer lens copy, which a
+ * 2-4 options; or the `glasses_ask` shortcut), and never a display the caller named by `display_id`
+ * (a replace: Gap #11). Anything else keeps the prosumer lens copy, which a
  * migrated G2 still reads (`device-handlers.ts › mergedQueue`); every such case is logged
  * (`evt:"display_shown", path:"prosumer_fallback", fallback_reason`).
  */
@@ -26,9 +27,22 @@ export type SdkPlan = { kind: "screen" } | { kind: "ask"; question: string; opti
 /** What the SDK path does with this lens copy. Throws (like the prosumer path) on a bad `glasses_ask`. */
 export function sdkPlanOf(
   deps: GlassesDeps,
-  a: { blocks: Positioned<DisplayBlock>[]; layout: DisplayLayout; level: number; choice: ChoiceBlock | null; question: string; shortcut: "render" | "ask" | null }
+  a: {
+    blocks: Positioned<DisplayBlock>[];
+    layout: DisplayLayout;
+    level: number;
+    choice: ChoiceBlock | null;
+    question: string;
+    shortcut: "render" | "ask" | null;
+    /** The caller named the `display_id` (`screen_id`): a replace, or a screen it means to replace later. */
+    explicitId?: boolean;
+  }
 ): SdkPlan {
   const sanitize = platformOf(deps).sanitizeText;
+  // Gap #11: the contract has no replace-by-id (the even_g2 dispatcher gives every SDK screen a fresh
+  // card id), so a named display would STACK on the lens and `glasses_update` could not find it. The
+  // prosumer copy replaces in place by `card_id`. Replace-by-id over the SDK = P4.
+  if (a.explicitId) return { kind: "none", reason: "explicit display_id" };
   if (a.shortcut === "ask" && a.choice) {
     // The same checks and messages as the prosumer `pushAsk`.
     const question = cleanField(sanitize, "question", a.question, GL.question);

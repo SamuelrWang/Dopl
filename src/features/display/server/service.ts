@@ -244,7 +244,7 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
   let plan: SdkPlan | null = null;
   if (wantLens && !lens.ok) glasses = `skipped:${(lens.errors[0] as { message?: string })?.message ?? "does not fit"}`;
   else if (wantLens && sdk) {
-    plan = sdkPlanOf(deps, { blocks, layout, level: lens.level, choice, question: firstLine(blocks) ?? "", shortcut });
+    plan = sdkPlanOf(deps, { blocks, layout, level: lens.level, choice, question: firstLine(blocks) ?? "", shortcut, explicitId: input.display_id !== undefined });
     // ≤ 8 + 64 + 1 + 64 chars, inside the contract's 255.
     const key = `display-${displayId}-${newDisplayId()}`;
     if (plan.kind === "ask") {
