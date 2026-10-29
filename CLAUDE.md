@@ -89,16 +89,17 @@ Do this before reporting the work complete, not as a follow-up.
 
 ## When to run what
 
-**Per task: targeted. Before a push or release: the full Definition of green below, once.** (Samuel, 2026-10-08;
-extends the 2026-09-27 small-change rule — the full set after every task, multiplied by every live agent,
-drove the machine to load 270 with swap full.)
+**Nothing while working. Targeted once at the end of a significant change. The full set only when Samuel
+says.** (Samuel, 2026-10-29; replaces the 2026-10-08 per-task rule — live agents each running typecheck +
+vitest per task pushed the Dopl app's process tree to 12 GB.)
 
-- **After each task / before reporting it complete:** the typecheck that covers the files you touched
+- **While working, and for small changes (copy, layout tweaks, one-line fixes):** no tests, no typecheck.
+- **Once, at the end of a significant change:** the typecheck that covers the files you touched
   (`npm run typecheck`, or `npm run typecheck -w @dopl/desktop-ui` for the SPA) plus `vitest run <the changed
   files and their direct tests>`. Never a bare `npm test`, never a multi-directory run, never `test:all`.
-- **Full Definition of green** (everything below): only before a push to master, before a release or pack, or
-  when Samuel asks — and by one agent at a time, not each worker. CI still runs all of it and red CI is still
-  a P0; this rule moves WHO pays for the full run, not WHETHER it is green.
+- **Full Definition of green** (everything below): only when Samuel says (he asks before a push or release) —
+  and by one agent at a time, not each worker. CI still runs all of it and red CI is still a P0; this rule
+  moves WHO pays for the full run, not WHETHER it is green.
 - **Serialize the heavy runs:** `lockf /tmp/dopl-gate.lock <cmd>` (macOS has no `flock`). Local vitest is
   capped at 2 workers by `vitest.config.ts`. Do not spawn sub-agents to run gates.
 
