@@ -321,11 +321,6 @@ components:
       description: "`respond-async` (RFC 7240): do not hold an `ask` for its answer. The 202 returns at once with status `queued` or `delivered`; read the answer with GET /actions/{id} or the `action.completed` webhook. Other preferences are ignored."
       schema: { type: string, example: respond-async }
 
-  headers:
-    PreferenceApplied:
-      description: "`respond-async` when the request asked for it and an open ask returned without its hold (absent on non-asks and stored replays)."
-      schema: { type: string }
-
     ListCursor:
       name: cursor
       in: query
@@ -339,6 +334,11 @@ components:
       description: Items per page.
       schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
 
+
+  headers:
+    PreferenceApplied:
+      description: "`respond-async` when the request asked for it and an open ask returned without its hold (absent on non-asks and stored replays)."
+      schema: { type: string }
   responses:
     Error:
       description: The one error shape (C10).

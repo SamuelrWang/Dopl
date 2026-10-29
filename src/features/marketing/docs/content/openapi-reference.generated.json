@@ -231,6 +231,13 @@
         "description": "Optional on every POST. Where the body also carries `idempotency_key`, both must match; reusing a key with a different body is `idempotency_conflict`."
       },
       {
+        "name": "Prefer",
+        "in": "header",
+        "type": "string",
+        "required": false,
+        "description": "`respond-async` (RFC 7240): do not hold an `ask` for its answer. The 202 returns at once with status `queued` or `delivered`; read the answer with GET /actions/{id} or the `action.completed` webhook. Other preferences are ignored."
+      },
+      {
         "name": "intent",
         "in": "body",
         "type": "\"message\" | \"ask\" | \"notify\" | \"display\"",
@@ -332,6 +339,13 @@
         "type": "string",
         "required": false,
         "description": "Optional on every POST. Where the body also carries `idempotency_key`, both must match; reusing a key with a different body is `idempotency_conflict`."
+      },
+      {
+        "name": "Prefer",
+        "in": "header",
+        "type": "string",
+        "required": false,
+        "description": "`respond-async` (RFC 7240): do not hold an `ask` for its answer. The 202 returns at once with status `queued` or `delivered`; read the answer with GET /actions/{id} or the `action.completed` webhook. Other preferences are ignored."
       },
       {
         "name": "args",
