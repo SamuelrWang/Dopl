@@ -4,8 +4,9 @@ import { EVEN_G2_INFO } from "@/features/glasses/platforms/even-g2/info";
 import { TtlCache } from "@/features/glasses/core/ttl-cache";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { ActionStatus } from "../../types";
+import { ACTION_COLS } from "../delivery-store-supabase";
 import { sdkDeliveryFor } from "../sdk-delivery-flag";
-import { markDelivered, settle, withStatus, type LensActionStore } from "./lens-actions";
+import { markDelivered, settle, withStatus, type LensActionStore, type MovedLensAction } from "./lens-actions";
 import { sdkGlassesStore } from "./sdk-glasses-store";
 
 /**
@@ -25,7 +26,11 @@ function must<T>(res: { data: T; error: { message: string } | null }, op: string
   return res.data;
 }
 
-/** `dev_actions` rows moved by their `result.lens_message_id` (conditional on status: never regress). */
+/**
+ * `dev_actions` rows moved by their `result.lens_message_id` (conditional on status: never regress).
+ * Returns each row this call moved, as stored after the move (`ACTION_COLS`); a row another hop moved
+ * first matches no update and is not returned.
+ */
 export const supabaseLensActions: LensActionStore = {
   async move(deviceId, ids, from, patch) {
     const rows = must(
@@ -37,6 +42,7 @@ export const supabaseLensActions: LensActionStore = {
         .in("status", from),
       "lens action read"
     ) as Array<{ id: string; status: ActionStatus; result: Record<string, unknown> | null; response: Record<string, unknown> }> | null;
+    const moved: MovedLensAction[] = [];
     for (const r of rows ?? []) {
       const update: Record<string, unknown> = {
         status: patch.status,
@@ -44,8 +50,13 @@ export const supabaseLensActions: LensActionStore = {
         updated_at: new Date().toISOString(),
       };
       if (patch.result) update.result = { ...(r.result ?? {}), ...patch.result };
-      must(await db().from("dev_actions").update(update).eq("id", r.id).eq("device_id", deviceId).in("status", from), "lens action update");
+      const hit = must(
+        await db().from("dev_actions").update(update).eq("id", r.id).eq("device_id", deviceId).in("status", from).select(ACTION_COLS),
+        "lens action update"
+      ) as MovedLensAction[] | null;
+      moved.push(...(hit ?? []));
     }
+    return moved;
   },
 };
 
