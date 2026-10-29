@@ -22,7 +22,8 @@ import { answerersOf } from "../core/answerers";
 import { firstTextLine } from "../core/fallback";
 import { checkTemplateSpec, templateNameFrom, templateVariables } from "../core/template";
 import { choiceOf, DISPLAY_METADATA_KEY, type Display, type DisplayAnswerStamp } from "../core/types";
-import { findMessageRow, stampAnswer } from "./repository";
+import { findByDisplayId, findMessageRow, stampAnswer } from "./repository";
+import { parseSdkAskKey } from "./sdk-ask-key";
 
 /**
  * **ONE ANSWER ROUTE FOR EVERY DISPLAY** (spec §3.3, contract C2) and the Save button.
@@ -145,6 +146,44 @@ export async function answerFromLens(userId: string, row: GlassesMessage, source
     console.error("[display] lens answer post failed", err);
     return "ok";
   }
+}
+
+/** A `dev_actions` row the glasses' answer route settled (structurally `glasses/core/devices › SdkSettledAction`). */
+export interface SettledLensAction {
+  id: string;
+  idempotency_key: string;
+  status: string;
+  result: Record<string, unknown> | null;
+}
+
+/**
+ * A LENS ANSWER TO THE APP'S OWN SDK ASK (W1.2 gap #3), on the glasses' answer route: the actions that
+ * answer settled carry their channel link in the idempotency key (`sdk-ask-key.ts`), so the answer
+ * posts to that decision as the owner, from glasses, exactly like a prosumer tap ({@link answerFromLens})
+ * and with no function waiting on the wearer. A key that is not ours, a dismiss, or a decision whose
+ * envelope names another ask (replaced in place since) posts nothing. Never throws (logged).
+ */
+export async function answerFromSdkLens(userId: string, settled: SettledLensAction[], source: MessageSourceStamp): Promise<"ok" | "conflict"> {
+  let result: "ok" | "conflict" = "ok";
+  for (const action of settled) {
+    const link = action.status === "done" ? parseSdkAskKey(action.idempotency_key) : null;
+    const index = action.result?.index;
+    if (!link || typeof index !== "number" || action.result?.dismissed === true) continue;
+    try {
+      const message = await findByDisplayId(link.channelId, link.displayId, userId);
+      const envelope = (message?.metadata as Record<string, { sdk_ask_key?: unknown } | undefined> | undefined)?.[DISPLAY_METADATA_KEY];
+      if (!message || envelope?.sdk_ask_key !== action.idempotency_key) {
+        console.info("[display] " + JSON.stringify({ evt: "sdk_lens", op: "bridge", outcome: "stale", delivery_id: action.id }));
+        continue;
+      }
+      const posted = await answerDecisionFromLens(userId, message.id, index, source);
+      console.info("[display] " + JSON.stringify({ evt: "sdk_lens", op: "bridge", outcome: posted.result, delivery_id: action.id }));
+      if (posted.result === "conflict") result = "conflict";
+    } catch (err) {
+      console.error("[display] sdk lens answer bridge failed", err);
+    }
+  }
+  return result;
 }
 
 /**

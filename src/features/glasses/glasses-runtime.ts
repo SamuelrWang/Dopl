@@ -11,7 +11,7 @@ import { LAUNCH_RPM, MENU_READ_RPM, createMenuHandlers } from "./core/menu/handl
 import { PAIR_START_RPM, createDeviceHandlers } from "./core/messages/device-handlers";
 import { glassesRepository } from "./core/messages/repository";
 import { glassesMessageSource } from "@/features/channels/server/message-source-stamp";
-import { answerFromLens } from "@/features/display/server/answer";
+import { answerFromLens, answerFromSdkLens } from "@/features/display/server/answer";
 import { glassesChannelGateway } from "./core/voice/channel-gateway";
 import { UTTERANCE_RPM, createVoiceHandlers } from "./core/voice/handlers";
 import { sttProviderFromEnv } from "./core/voice/stt";
@@ -49,7 +49,14 @@ const voiceDeps = {
 
 // `connect`: a pairing claimed through a Device SDK Connect session (A4) collects its token here too;
 // `sdk`: that token then authenticates the inbox / answer / dismiss / unpair routes on the SDK device's own queue (A8).
-export const deviceHandlers = createDeviceHandlers({ ...base, connect: connectPairingPort, sdk: sdkGlassesPort });
+// `sdkAnswerLinked` (W1.2 gap #3): a migrated G2's answer to the app's own SDK ask posts to its channel decision.
+export const deviceHandlers = createDeviceHandlers({
+  ...base,
+  connect: connectPairingPort,
+  sdk: sdkGlassesPort,
+  sdkAnswerLinked: (device, settled) =>
+    answerFromSdkLens(device.user_id, settled, glassesMessageSource({ id: device.id, name: device.name ?? "", platform: device.platform })),
+});
 
 // `sdk` on voice and menu (A8b): a Device SDK G2 gets fixed, data-free answers there instead of a 401,
 // which the plugin treats as a revoked pairing. Hey Even authenticates with its own key and stays prosumer-only.

@@ -1,7 +1,7 @@
 import { HttpError } from "@/shared/lib/http-error";
 import { iso, nowOf, type Clock } from "../clock";
 import { hashCredential } from "../devices/credentials";
-import type { SdkGlassesDevice, SdkGlassesPort } from "../devices/sdk-device";
+import type { SdkGlassesDevice, SdkGlassesPort, SdkSettledAction } from "../devices/sdk-device";
 import { deviceFromBearer, type ChannelLinker } from "../devices/service";
 import type { DeviceStore, GlassesDevice } from "../devices/types";
 import { pairingStatus, startPairing, type ConnectPairingPort } from "../devices/pairing";
@@ -48,6 +48,12 @@ export interface DeviceHandlerDeps extends Clock {
    * owner from glasses (`display/server/answer.ts › answerFromLens`); absent = lens only (tests).
    */
   answerLinked?: (device: GlassesDevice, row: GlassesMessage) => Promise<"ok" | "conflict">;
+  /**
+   * W1.2 gap #3: a MIGRATED device's answer to an SDK row settles `dev_actions`; the Dopl app's own SDK
+   * asks among them post to their channel decision, as the device owner from glasses
+   * (`display/server/answer.ts › answerFromSdkLens`), so no function waits on the wearer. Absent = none.
+   */
+  sdkAnswerLinked?: (device: GlassesDevice, settled: SdkSettledAction[]) => Promise<"ok" | "conflict">;
 }
 
 export const PAIR_START_RPM = 10;
@@ -164,10 +170,18 @@ export function createDeviceHandlers(input: DeviceHandlerDeps) {
     },
   });
 
-  /** An SDK row answered on its own queue settles the `dev_actions` row it serves. */
-  const sdkAnswer = async (port: SdkGlassesPort, deviceId: string, body: unknown): Promise<AnswerOutcome> => {
+  /**
+   * An SDK row answered on its own queue settles the `dev_actions` row it serves. For a MIGRATED device
+   * (`owner` set: a Dopl user's G2) the settled actions then go to `sdkAnswerLinked`; `conflict` = the
+   * channel decision was answered first (the prosumer route answers 409 the same way).
+   */
+  const sdkAnswer = async (port: SdkGlassesPort, deviceId: string, body: unknown, owner?: GlassesDevice): Promise<AnswerOutcome & { conflict?: true }> => {
     const outcome = await answerAsk({ store: port.store, now: deps.now }, deviceId, body);
-    if (outcome.ok && outcome.message) await port.settled(deviceId, outcome.message);
+    if (!outcome.ok || !outcome.message) return outcome;
+    const settled = (await port.settled(deviceId, outcome.message)) ?? [];
+    if (owner && settled.length > 0 && deps.sdkAnswerLinked && (await deps.sdkAnswerLinked(owner, settled)) === "conflict") {
+      return { ...outcome, conflict: true };
+    }
     return outcome;
   };
 
@@ -269,7 +283,11 @@ export function createDeviceHandlers(input: DeviceHandlerDeps) {
     answer: authed("answer", async (request, device) => {
       const body = await readJson(request);
       const sdk = await sdkRowOwner(device, body);
-      if (sdk) return outcomeResponse(request, await sdkAnswer(sdk.port, sdk.deviceId, body));
+      if (sdk) {
+        const answered = await sdkAnswer(sdk.port, sdk.deviceId, body, device);
+        if (answered.conflict) return json(request, { ok: false, error: "already answered" }, 409);
+        return outcomeResponse(request, answered);
+      }
       const outcome = await answerAsk(deps, device.user_id, body);
       if (outcome.ok && outcome.message && deps.answerLinked) {
         // The channel decision was answered first: the lens now shows THAT answer; the tap lost.

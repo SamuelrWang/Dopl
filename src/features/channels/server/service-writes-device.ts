@@ -22,7 +22,7 @@ const SOURCE_METADATA_KEY = "source";
 export const SERVER_STAMPED_DEVICE_KEYS = [SOURCE_METADATA_KEY, DISPLAY_METADATA_KEY] as const;
 
 /** The server-owned half of a display envelope (never caller input): `PostMessageOptions.display`. */
-export type DisplayStampOptions = Partial<Pick<DisplayEnvelopeV2, "display_id" | "wait_until" | "glasses_message_id" | "origin">>;
+export type DisplayStampOptions = Partial<Pick<DisplayEnvelopeV2, "display_id" | "wait_until" | "glasses_message_id" | "sdk_ask_key" | "origin">>;
 
 function displayEnvelope(
   input: Pick<ChannelMessageCreateInput, "display" | "escalation">,
@@ -41,6 +41,7 @@ function displayEnvelope(
     ...(display.layout === "absolute" && { layout: "absolute" as const }),
     ...(opts.wait_until && { wait_until: opts.wait_until }),
     ...(opts.glasses_message_id && { glasses_message_id: opts.glasses_message_id }),
+    ...(opts.sdk_ask_key && { sdk_ask_key: opts.sdk_ask_key }),
     origin: display.origin,
   };
 }
