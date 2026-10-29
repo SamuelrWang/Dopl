@@ -84,6 +84,8 @@ export interface NewSdkDevice {
 }
 
 export interface OutboxRow {
+  /** Chosen by the writer so the payload can carry `evt_<id>`. */
+  id: string;
   project_id: string;
   env: Environment;
   event_type: WebhookEventName;

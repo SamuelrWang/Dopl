@@ -259,9 +259,14 @@ BEGIN
    WHERE o.id = ANY (v_ids)
   ON CONFLICT (outbox_id, endpoint_id) DO NOTHING;
 
-  UPDATE public.dev_webhook_outbox
-     SET status = 'delivered', attempts = attempts + 1
-   WHERE id = ANY (v_ids);
+  -- Stamp the project's pinned API version into the body before any endpoint sees it.
+  UPDATE public.dev_webhook_outbox o
+     SET status = 'delivered',
+         attempts = o.attempts + 1,
+         payload = CASE WHEN o.payload ? 'api_version' THEN o.payload
+                        ELSE o.payload || jsonb_build_object('api_version', p.api_version) END
+    FROM public.dev_projects p
+   WHERE o.id = ANY (v_ids) AND p.id = o.project_id;
 
   RETURN cardinality(v_ids);
 END $$;

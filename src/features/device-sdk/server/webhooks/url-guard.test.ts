@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkEndpointUrl, isBlockedAddress, parseEndpointUrl } from "./url-guard";
+import { BlockedAddressError, checkEndpointUrl, guardedLookup, isBlockedAddress, parseEndpointUrl } from "./url-guard";
 
 describe("webhook URL guard", () => {
   it.each([
@@ -56,5 +56,10 @@ describe("webhook URL guard", () => {
       ok: true,
       url: "https://ok.example.com/h",
     });
+  });
+
+  it("🔒 send-time lookup refuses a name that resolves to loopback (no rebinding window)", async () => {
+    const err = await new Promise<unknown>((resolve) => guardedLookup("localhost", { all: true }, (e) => resolve(e)));
+    expect(err).toBeInstanceOf(BlockedAddressError);
   });
 });
