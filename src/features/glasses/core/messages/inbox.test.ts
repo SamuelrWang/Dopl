@@ -57,7 +57,7 @@ describe("inbox long-poll", () => {
     const n = await glassesNotify(deps, USER, { title: "t", body: "b" });
     const first = await readInbox(deps, USER, null, 0);
     clock.advance(1000);
-    await store.transition(USER, n.id, ["pending", "delivered"], "dismissed", new Date(clock.now()).toISOString());
+    await store.transition(USER, n.id!, ["pending", "delivered"], "dismissed", new Date(clock.now()).toISOString());
     const res = await readInbox(deps, USER, first.messages[0].updated_at, 25);
     expect(res.messages).toEqual([expect.objectContaining({ id: n.id, status: "dismissed" })]);
   });
