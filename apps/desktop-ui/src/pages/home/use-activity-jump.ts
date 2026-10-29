@@ -4,9 +4,9 @@ import { channelRowId } from "@/features/home/components/channels/home-rows";
 /**
  * JUMPING FROM A ROW TO THE THING IT NAMES (2026-09-01).
  *
- * Two callers: the SEARCH popup (`index.tsx › openSearchHit`) and the
- * Overview's Needs you card (a decision lands on its message, a task on the
- * Tasks tab). `threadFor`/`seqFor`/`taskFor` are read by the record pane on
+ * Callers: the SEARCH popup (`index.tsx › openSearchHit`), the Overview's Needs
+ * you card (a decision lands on its message, a task on the Tasks tab), and an
+ * arrival from outside /home (`home-intent.ts`, 2026-10-29). `threadFor`/`seqFor`/`taskFor` are read by the record pane on
  * every render (`home-panes.tsx`).
  *
  * 🔒 **ON /home A JUMP IS A SELECTION, NOT A ROUTE, AND THAT IS FORCED BY THE

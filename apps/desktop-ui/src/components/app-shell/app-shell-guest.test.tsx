@@ -8,60 +8,29 @@ import type { BridgeResponse } from "#/lib/dopl-bridge";
 import { AppShellLayout } from "./index";
 
 /**
- * 🔒 A MEMBER OF A HOME-CHANNEL CONTAINER AT A WORKSPACE URL LANDS ON THEIR
- * CHANNEL — the GUEST by Samuel's 2026-08-30 ruling (ledger ASK-2, option b),
- * every other member of the same container by R-01 option (a), 2026-09-17.
+ * 🔒 NOBODY IN A HOME-CHANNEL CONTAINER GETS THE SHELL (2026-10-29, Samuel: "Yes,
+ * fix it"). Any URL under a `kind='link'` container's segment lands on /home with
+ * that container's row selected, `?thread=`/`?seq=` carried across — every role,
+ * the guest included. The container's channel used to open as a WORKSPACE channels
+ * page, which Samuel read as "an actual workspace" with no rail icon lit. /home's
+ * half (the row, the thread, the cleared query) is `pages/home/home-intent.test.tsx`.
  *
- * ⚠ THE ROLE IS NOT THE FENCE ANY MORE AND THE OWNER CASE BELOW FLIPPED TO SAY
- * SO. A `kind='link'` container is a relationship: its member, admin and owner
- * were all getting the eight-row nav, the Members console, Skills, Chats and a
- * Settings page with an owner delete, on a URL nothing links to. The kind is
- * the fence, read through `isStandardWorkspace` (positive form, INVARIANTS §4A)
- * — so a STANDARD workspace is untouched, which is the last case here.
+ * 🔒 A GUEST OF A STANDARD WORKSPACE STILL LANDS ON THEIR CHANNEL (ASK-2 option b,
+ * 2026-08-30), resolved off `GET /api/channels?scope=account` matched on
+ * `workspaceId`; no channel, a failed or a stale read ⇒ `/home`.
  *
- * WHAT THIS REPLACES. `segment.ts › BOOT_MIN_ROLE` is `"guest"` on purpose, and
- * `AppShellLayout` added no floor of its own — so a guest reaching
- * `/{linkContainerSegment}` got the shell in full (nav, upsell card, gear,
- * switcher, providers, banners) and then every routed page 403'd at the `viewer`
- * default: fully painted chrome around a stack of `PageError` cards. Nothing
- * links a guest there, so it was never a leak; it was URL-reachable.
+ * ⚠ THE FLOOR IS NOT THE FIX. `segment.ts › BOOT_MIN_ROLE` stays `"guest"`: the
+ * two pop-out windows live OUTSIDE this layout and pay the boot read themselves.
  *
- * ⚠ THE FLOOR IS NOT THE FIX AND THIS FILE PINS THAT TOO. Raising
- * `BOOT_MIN_ROLE` to `viewer` would 404 the two pop-out windows, which live
- * OUTSIDE this layout and pay the boot read themselves. The redirect is at the
- * SHELL layer for exactly that reason.
+ * ⚠ THE KIND IS THE FENCE, POSITIVELY (`=== "link"`, INVARIANTS §4A): a FOURTH
+ * kind and a row with NO kind stay in the shell, and the standard cases assert an
+ * UNASKED question, not just a pathname — the redirect needs a round trip, so
+ * "still on /overview" alone stays green under a dropped gate.
  *
- * ⚠ THE CONTAINER HAS ONE CHANNEL AND IT IS RESOLVED THE WAY THE GUEST WEB LANE
- * RESOLVES IT — `/c/{workspaceId}` calls `getHomeChannel(user, workspaceId)`;
- * the renderer's twin is `GET /api/channels?scope=account` matched on
- * `workspaceId` (ONE endpoint since R-26 (b)). The
- * "wrong container" case below is what makes that match load-bearing rather than
- * "take the first row".
- *
- * ⚠ MUTATION-VERIFY — MEASURED 2026-08-30, 6 tests baseline, 5 reverts:
- *   - the effect never navigates ................................. 4 red
- *   - `isGuest` widened to "any known role" (the gate dropped) .... 1 red
- *   - `channels[0]` instead of matching `workspaceId` ............. 1 red
- *   - `navigate(target)` instead of `{ replace: true }` ........... 1 red
- *   ⚠ THE SECOND ROW IS NOW THE OTHER WAY UP (2026-09-17): the gate is the
- *   KIND. Re-measured:
- *   the gate narrowed back to `role === "guest"` ................. 3 red
- *   the ghost dropped over the redirect window .................... 1 red
- *   ⚠ **THAT ROW IS NOW THE OTHER WAY UP AGAIN (2026-09-17).** The gate WAS
- *   `kind !== "home" && !isStandardWorkspace(…)` and is now
- *   `kind === "link"`; the negative spelling admitted every future kind, and
- *   "a FOURTH container kind" below is the fixture that catches it — 1 red.
- *   - `?? []` dropped from the `select` .......................... **0 red**,
- *     and that is recorded rather than papered over. A throwing `select` puts
- *     the query in an ERROR state, which lands on the same `/home` the absent
- *     channel does — so no assertion here can tell them apart. The guard stays
- *     (INVARIANTS §8: this payload is IndexedDB-persisted) and the stale case
- *     stays, because "a stale entry lands somewhere sane" is worth pinning even
- *     where only one route to it is. **Do not read that case as covering §8.**
- *
- * ⚠ THE STANDARD-WORKSPACE CASE ASSERTS AN UNASKED QUESTION, not just a
- * pathname — see its own comment. The pathname half alone stays green under a
- * dropped gate.
+ * ⚠ `?? []` in the guest read's `select` is NOT pinned by any case here: a
+ * throwing `select` errors the query, which lands on the same `/home` the absent
+ * channel does. The guard stays (INVARIANTS §8); do not read the stale case as
+ * covering it.
  */
 
 const { sendRequest } = vi.hoisted(() => ({ sendRequest: vi.fn() }));
@@ -202,29 +171,83 @@ function renderShell(path: string) {
   return router;
 }
 
-describe("the shell sends a container member to their channel", () => {
-  beforeEach(() => {
-    mounted.length = 0;
-    role = "guest";
-    workspaceRow = CONTAINER;
-    homePayload = { channels: [homeChannel()], pendingLinks: [] };
-    window.localStorage.clear();
-    // ⚠ `mockImplementation` does NOT reset the call log, and the last case
-    // asserts on an ABSENT call — without this it reads the previous case's.
-    sendRequest.mockClear();
-    mockApi();
-    mockBridge();
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+const asksAccountChannels = () =>
+  sendRequest.mock.calls.some((c: unknown[]) =>
+    isAccountChannels((c[0] as { path?: string })?.path ?? "")
+  );
+
+const HOME_TARGET = `/home?channel=${CONTAINER.id}`;
+const at = (router: ReturnType<typeof renderShell>) =>
+  `${router.state.location.pathname}${router.state.location.search}`;
+
+beforeEach(() => {
+  mounted.length = 0;
+  role = "guest";
+  workspaceRow = CONTAINER;
+  homePayload = { channels: [homeChannel()], pendingLinks: [] };
+  window.localStorage.clear();
+  // ⚠ `mockImplementation` does NOT reset the call log, and several cases
+  // assert on an ABSENT call — without this they read the previous case's.
+  sendRequest.mockClear();
+  mockApi();
+  mockBridge();
+  vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+});
+
+describe("a home-channel container member lands on /home", () => {
+  it("redirects off the workspace page onto /home with the container's row", async () => {
+    const router = renderShell(`/${SEGMENT}/overview`);
+
+    await waitFor(() => expect(at(router)).toBe(HOME_TARGET));
+    expect(await screen.findByText("account home")).toBeTruthy();
+    // REPLACE, not push: Back must not bounce them into the loop.
+    expect(router.state.historyAction).toBe("REPLACE");
   });
 
-  it("redirects off the workspace page onto the container's one channel", async () => {
+  it("carries the thread and the seq off a channel URL", async () => {
+    role = "owner";
+    const router = renderShell(`/${SEGMENT}/channels/${CHANNEL_ID}?thread=t-1&seq=7`);
+
+    await waitFor(() => expect(at(router)).toBe(`${HOME_TARGET}&thread=t-1&seq=7`));
+  });
+
+  for (const containerRole of ["guest", "viewer", "member", "admin", "owner"] as const) {
+    it(`sends the container's ${containerRole} there too`, async () => {
+      role = containerRole;
+      const router = renderShell(`/${SEGMENT}/members`);
+
+      await waitFor(() => expect(at(router)).toBe(HOME_TARGET));
+    });
+  }
+
+  /**
+   * 🔒 THE REDIRECT WINDOW IS PART OF THE RULING (wave 5 review, 2026-09-17).
+   * The navigate is an EFFECT, so the render before it could mount the very page
+   * being refused. ⚠ A pathname assertion CANNOT see this; the mount log can.
+   * And the target needs no read, so the account channels are never asked.
+   */
+  it("never paints the page it is about to leave, and asks nothing to leave it", async () => {
+    role = "member";
+    const router = renderShell(`/${SEGMENT}/members`);
+
+    await waitFor(() => expect(at(router)).toBe(HOME_TARGET));
+    expect(mounted).toEqual([]);
+    expect(asksAccountChannels()).toBe(false);
+  });
+});
+
+describe("a guest of a standard workspace lands on their channel", () => {
+  beforeEach(() => {
+    workspaceRow = STANDARD;
+  });
+
+  it("redirects off the workspace page onto the channel", async () => {
     const router = renderShell(`/${SEGMENT}/overview`);
 
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(`/${SEGMENT}/channels/${CHANNEL_ID}`)
     );
     expect(await screen.findByText("channel body")).toBeTruthy();
-    // REPLACE, not push: Back must not bounce them into the loop.
     expect(router.state.historyAction).toBe("REPLACE");
   });
 
@@ -235,9 +258,7 @@ describe("the shell sends a container member to their channel", () => {
     expect(router.state.location.pathname).toBe(`/${SEGMENT}/channels/${CHANNEL_ID}`);
   });
 
-  it("falls back to /home when the container has no channel for them", async () => {
-    // ⚠ NOT A THIRD ERROR CARD. `/home` is the guest's own surface; a workspace
-    // URL is never where a guest belongs, whatever the read answered.
+  it("falls back to /home when the workspace has no channel for them", async () => {
     homePayload = { channels: [], pendingLinks: [] };
     const router = renderShell(`/${SEGMENT}/overview`);
 
@@ -246,9 +267,6 @@ describe("the shell sends a container member to their channel", () => {
   });
 
   it("matches on the CONTAINER, never on the first row", async () => {
-    // A guest holds several relationships. Taking `channels[0]` would send them
-    // into somebody else's container — and it would look right in every
-    // single-row test.
     homePayload = {
       channels: [
         homeChannel({ workspaceId: "ws-other", id: "not-this-one" }),
@@ -264,68 +282,23 @@ describe("the shell sends a container member to their channel", () => {
   });
 
   it("survives a STALE cached payload with no `channels` key (§8)", async () => {
-    // The entry is IndexedDB-persisted; a `.find` on an absent key throws INSIDE
-    // the shell, which blanks every page rather than one pane.
     homePayload = { pendingLinks: [] };
     const router = renderShell(`/${SEGMENT}/overview`);
 
     await waitFor(() => expect(router.state.location.pathname).toBe("/home"));
   });
 
-  // 🔒 R-01(a), 2026-09-17: the container's OTHER members get the same answer
-  // the guest does. Each of these three had the full shell — Members, Skills,
-  // Chats, and a Settings page whose delete ends the relationship for everyone
-  // in it — at a URL nothing links to.
-  for (const containerRole of ["member", "admin", "owner"] as const) {
-    it(`redirects the container's ${containerRole} too, not only the guest`, async () => {
-      role = containerRole;
-      const router = renderShell(`/${SEGMENT}/members`);
-
-      await waitFor(() =>
-        expect(router.state.location.pathname).toBe(`/${SEGMENT}/channels/${CHANNEL_ID}`)
-      );
-      expect(await screen.findByText("channel body")).toBeTruthy();
-    });
-  }
-
-  /**
-   * 🔒 R-13 (Samuel, 2026-09-17) — **AND IT IS DELETED, NOT HIDDEN.** ASK-2 left
-   * the guest *"still wearing a nav they cannot use"*: the redirect leaves a
-   * container member exactly one reachable shell route, so all eight rows, the
-   * switcher and the settings gear pointed at pages that bounce straight back.
-   * ⚠ `queryByRole("link")` is the assertion, not a class or a `hidden` prop —
-   * a nav that renders and hides is the thing this forbids.
-   */
-  /**
-   * 🔒 THE REDIRECT WINDOW IS PART OF THE RULING (wave 5 review, 2026-09-17).
-   * The navigate is an EFFECT, so the render before it mounted the very page
-   * R-01(a) refuses — measured: `/members` mounted, ran its own reads and 403'd
-   * them, on every cold load for every container member. ⚠ A pathname assertion
-   * CANNOT see this: the URL is already the channel by the time it is read. The
-   * mount log is the only witness, and holding the shell ghost is the fix.
-   */
   it("never paints the page it is about to leave", async () => {
-    role = "member";
     const router = renderShell(`/${SEGMENT}/members`);
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(`/${SEGMENT}/channels/${CHANNEL_ID}`)
     );
     expect(mounted).toEqual([]);
   });
+});
 
-  it("renders NO workspace nav for a container member", async () => {
-    role = "member";
-    renderShell(`/${SEGMENT}/overview`);
-
-    expect(await screen.findByText("channel body")).toBeTruthy();
-    for (const label of ["Overview", "Channels", "Members", "Skills", "Chats"]) {
-      expect(screen.queryByRole("link", { name: label })).toBeNull();
-    }
-  });
-
+describe("everyone else keeps the shell", () => {
   it("keeps the nav for a standard workspace", async () => {
-    // The other half, or the case above passes on a shell that never renders a
-    // nav for anybody.
     role = "owner";
     workspaceRow = STANDARD;
     renderShell(`/${SEGMENT}/overview`);
@@ -333,81 +306,35 @@ describe("the shell sends a container member to their channel", () => {
     expect(await screen.findByRole("link", { name: "Members" })).toBeTruthy();
   });
 
-  it("leaves a STANDARD workspace alone, and never even ASKS", async () => {
-    // ⚠ THE UNASKED QUESTION IS THE ASSERTION. "Still on /overview" alone is
-    // VACUOUS here: the redirect needs a round trip, and the render assertion
-    // resolves before it lands — measured, a dropped gate keeps that half
-    // green. `enabled` is what makes the read cost nothing on every workspace
-    // page for every member of every workspace, and the request log is the only
-    // place that shows.
-    role = "owner";
-    workspaceRow = STANDARD;
-    const router = renderShell(`/${SEGMENT}/overview`);
+  /** The standard workspace, a FOURTH container kind (the case that tells `=== "link"`
+   *  from a negative spelling) and a pre-migration row with NO kind (absent = standard). */
+  const stays: Array<[string, () => unknown]> = [
+    ["a STANDARD workspace", () => STANDARD],
+    ["a FOURTH container kind", () => ({ ...CONTAINER, kind: "archive" })],
+    [
+      "a row with NO kind",
+      () => {
+        const noKind: Record<string, unknown> = { ...CONTAINER };
+        delete noKind.kind;
+        return noKind;
+      },
+    ],
+  ];
+  for (const [label, row] of stays) {
+    it(`leaves ${label} alone, and never even ASKS`, async () => {
+      role = "owner";
+      workspaceRow = row();
+      const router = renderShell(`/${SEGMENT}/overview`);
 
-    expect(await screen.findByText("overview body")).toBeTruthy();
-    // Let anything the shell was going to fetch actually fetch.
-    await waitFor(() =>
-      expect(sendRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ path: "/api/workspaces" })
-      )
-    );
-    expect(
-      sendRequest.mock.calls.some(
-        (c: unknown[]) =>
-          isAccountChannels((c[0] as { path?: string })?.path ?? "")
-      )
-    ).toBe(false);
-    expect(router.state.location.pathname).toBe(`/${SEGMENT}/overview`);
-  });
-
-  /** 🔒 THE POSITIVE FORM, AND THE CASE NO EXISTING KIND COULD MAKE (2026-09-17).
-   *  The gate was `kind !== "home" && !isStandardWorkspace(…)` — "not
-   *  personal and not standard" — so every kind added to `WorkspaceKind` later
-   *  would be ADMITTED and its members bounced out of the shell into a
-   *  single-channel redirect. `kind === "link"` excludes an unknown kind by
-   *  construction. The row is deliberately a kind the union does not have: that
-   *  is the only shape of fixture that can tell the two spellings apart. */
-  it("does NOT bounce a FOURTH container kind out of the shell", async () => {
-    role = "owner";
-    workspaceRow = { ...CONTAINER, kind: "archive" };
-    const router = renderShell(`/${SEGMENT}/overview`);
-
-    expect(await screen.findByText("overview body")).toBeTruthy();
-    // ⚠ THE UNASKED QUESTION AGAIN — "still on /overview" alone stays green
-    // under the broken gate, because the redirect needs a round trip.
-    await waitFor(() =>
-      expect(sendRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ path: "/api/workspaces" })
-      )
-    );
-    expect(
-      sendRequest.mock.calls.some((c: unknown[]) =>
-        isAccountChannels((c[0] as { path?: string })?.path ?? "")
-      )
-    ).toBe(false);
-    expect(router.state.location.pathname).toBe(`/${SEGMENT}/overview`);
-  });
-
-  it("leaves a workspace whose row carries NO kind alone (pre-migration rows)", async () => {
-    // `kind` is absent on rows read before the kind migration — and absent MEANS
-    // standard (`isStandardWorkspace`). A `!== "link"` read would agree here and
-    // disagree on the next kind added to the union.
-    const noKind: Record<string, unknown> = { ...CONTAINER };
-    delete noKind.kind;
-    role = "owner";
-    workspaceRow = noKind;
-    renderShell(`/${SEGMENT}/overview`);
-
-    expect(await screen.findByText("overview body")).toBeTruthy();
-    await waitFor(() =>
-      expect(sendRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ path: "/api/workspaces" })
-      )
-    );
-    expect(
-      sendRequest.mock.calls.some((c: unknown[]) =>
-        isAccountChannels((c[0] as { path?: string })?.path ?? "")
-      )
-    ).toBe(false);
-  });
+      expect(await screen.findByText("overview body")).toBeTruthy();
+      // Let anything the shell was going to fetch actually fetch.
+      await waitFor(() =>
+        expect(sendRequest).toHaveBeenCalledWith(
+          expect.objectContaining({ path: "/api/workspaces" })
+        )
+      );
+      expect(asksAccountChannels()).toBe(false);
+      expect(router.state.location.pathname).toBe(`/${SEGMENT}/overview`);
+    });
+  }
 });
