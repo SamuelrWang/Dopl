@@ -406,7 +406,7 @@ export const API_PAGES: DocPage[] = [
       ),
       { type: "h2", text: "Asynchronous actions" },
       p(
-        "Deliver and device actions answer `202` with a status: `queued`, `delivered`, `done`, `failed` or `needs_confirmation`. A question holds the request for up to 200 seconds while the user answers. If it is not answered by then, the status is still `delivered` or `queued`, and you read the answer later with [Get an action](/docs/api-reference/actions), passing the `delivery_id` or `action_id`."
+        "Deliver and device actions answer `202` with a status: `queued`, `delivered`, `done`, `failed` or `needs_confirmation`. A question holds the request for up to 200 seconds while the user answers, unless you send `Prefer: respond-async`, which answers at once. If it is not answered by then, the status is still `delivered` or `queued`, and you read the answer later with [Get an action](/docs/api-reference/actions), passing the `delivery_id` or `action_id`."
       ),
       { type: "h2", text: "Request IDs" },
       p("Every response carries a `Request-Id` header, which is the ID of the event Dopl recorded for the call."),

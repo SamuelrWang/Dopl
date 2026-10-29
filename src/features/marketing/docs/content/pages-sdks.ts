@@ -109,7 +109,7 @@ export const CHANGELOG_PAGES: DocPage[] = [
             date: "October 28",
             title: "Request log API, playground and usage",
             description:
-              "Read your request log with [List events](/docs/api-reference/events), scope `analytics:read`. Every list pages with `cursor` and `limit` and returns `data`, `next_cursor` and `has_more`. The developer portal adds a playground that runs calls with your test key, and usage charts. The API reference is now generated from the OpenAPI spec",
+              "Read your request log with [List events](/docs/api-reference/events), scope `analytics:read`. Every list pages with `cursor` and `limit` and returns `data`, `next_cursor` and `has_more`. The developer portal adds a playground that runs calls with your test key, and usage charts. The API reference is now generated from the OpenAPI spec. Asks can skip the 200 second hold: send `Prefer: respond-async` on deliver or a device action, then read the answer with `GET /v1/actions/{id}` or the `action.completed` webhook",
           },
           {
             date: "October 27",
