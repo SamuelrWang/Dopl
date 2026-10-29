@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { Activity, KeyRound, type LucideIcon } from "lucide-react";
+import { Activity, BarChart3, FlaskConical, KeyRound, type LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { SelectMenu } from "@/shared/ui/select-menu";
@@ -26,6 +26,8 @@ export const DEVELOPERS_BASE = "/developers";
 
 const SECTIONS: ReadonlyArray<{ href: string; label: string; icon: LucideIcon }> = [
   { href: "/logs", label: "Request log", icon: Activity },
+  { href: "/usage", label: "Usage", icon: BarChart3 },
+  { href: "/playground", label: "Playground", icon: FlaskConical },
   { href: "/keys", label: "API keys", icon: KeyRound },
 ];
 
