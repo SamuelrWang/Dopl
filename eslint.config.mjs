@@ -107,7 +107,7 @@ const eslintConfig = defineConfig([
   },
 
   // SDK SPLIT FENCE 2 — Device SDK server imports. Allowlist = what stays in the platform with it
-  // (Plan §2): the `/api/v1` routes, Connect, the events-prune cron, the developer portal, the
+  // (Plan §2): the `/api/v1` routes, Connect, the events-prune + webhooks-send crons, the developer portal, the
   // docs, plus `glasses-runtime.ts` (the composition root that wires the SDK glasses ports).
   {
     files: ["src/**/*.{ts,tsx,mts}"],
@@ -117,6 +117,7 @@ const eslintConfig = defineConfig([
       "src/app/api/connect/**",
       "src/app/connect/**",
       "src/app/api/cron/device-sdk-events-prune/**",
+      "src/app/api/cron/device-sdk-webhooks-send/**",
       "src/app/playground/developers/**",
       "src/app/developers/**",
       "src/app/api/developers/**",

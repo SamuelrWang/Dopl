@@ -8,6 +8,8 @@ import { ACTION_COLS } from "../delivery-store-supabase";
 import { sdkDeliveryFor } from "../sdk-delivery-flag";
 import { markDelivered, settle, withStatus, type LensActionStore, type MovedLensAction } from "./lens-actions";
 import { sdkGlassesStore } from "./sdk-glasses-store";
+import { connectStore } from "../connect/store";
+import { emitActionSettled } from "../webhooks/action-events";
 
 /**
  * {@link SdkGlassesPort} over the service role (A8): the glasses device routes
@@ -99,7 +101,12 @@ export const sdkGlassesPort: SdkGlassesPort = {
   },
 
   delivered: (deviceId, ids) => markDelivered(supabaseLensActions, deviceId, ids),
-  settled: (deviceId, row) => settle(supabaseLensActions, deviceId, row),
+  async settled(deviceId, row) {
+    const moved = await settle(supabaseLensActions, deviceId, row);
+    // C8: an answered / dismissed ask is `action.completed` for the developer (ruled 2026-10-28).
+    await emitActionSettled(connectStore, moved);
+    return moved;
+  },
   migratedDeviceIds: migratedDeviceIdsCached,
   isDoplAppProject: isDoplAppProjectCached,
 };
