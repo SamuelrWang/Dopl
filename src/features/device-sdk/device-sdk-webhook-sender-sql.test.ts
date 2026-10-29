@@ -20,6 +20,7 @@ const FUNCTIONS = [
   "dev_webhook_claim",
   "dev_webhook_record_attempt",
   "dev_webhook_replay",
+  "dev_webhook_prune_expired_secrets",
 ];
 
 const migration = readMigrations().find((m) => m.name === FILE);
@@ -32,7 +33,7 @@ function tableBody(t: string): string {
 }
 
 function functionBody(f: string): string {
-  const m = new RegExp(String.raw`CREATE OR REPLACE FUNCTION public\.${f}\(([\s\S]*?)\n\$\$;`).exec(sql);
+  const m = new RegExp(String.raw`CREATE OR REPLACE FUNCTION public\.${f}\(([\s\S]*?)(?:\n|END )\$\$;`).exec(sql);
   if (!m) throw new Error(`no CREATE FUNCTION for ${f}`);
   return m[1];
 }
@@ -124,5 +125,30 @@ describe("device SDK webhook sender migration", () => {
     expect(a).toMatch(/length\(response_body\) <= 1024/);
     expect(a).toMatch(/length\(error\) <= 500/);
     expect(a).toMatch(/UNIQUE \(delivery_id, attempt\)/);
+  });
+
+  it("🔒 a record lands only under the live claim token; replay never steals a live lease (review #3)", () => {
+    expect(tableBody("dev_webhook_deliveries")).toMatch(/claim_token\s+uuid\s+NULL/);
+    expect(functionBody("dev_webhook_claim")).toMatch(/claim_token = gen_random_uuid\(\)/);
+    const record = functionBody("dev_webhook_record_attempt");
+    expect(record).toMatch(/p_claim_token uuid/);
+    expect(record).toMatch(/WHERE id = p_delivery_id AND status = 'pending' AND claim_token = p_claim_token/);
+    expect(record).toMatch(/claim_token = NULL/);
+    expect(functionBody("dev_webhook_replay")).toMatch(
+      /AND \(status IN \('delivered', 'failed'\) OR locked_until IS NULL OR locked_until < now\(\)\)/
+    );
+  });
+
+  it("an endpoint never receives events from before it existed (review #5)", () => {
+    expect(functionBody("dev_webhook_fan_out")).toMatch(/AND e\.created_at <= o\.created_at/);
+  });
+
+  it("🔒 asserts vault reach: service_role only (review #4); expired previous secrets are pruned (review #9)", () => {
+    expect(sql).toMatch(/has_table_privilege\('anon', 'vault\.decrypted_secrets', 'SELECT'\)/);
+    expect(sql).toMatch(/has_function_privilege\('authenticated', 'vault\.create_secret\(text, text, text, uuid\)', 'EXECUTE'\)/);
+    expect(sql).toMatch(/NOT has_table_privilege\('service_role', 'vault\.decrypted_secrets', 'SELECT'\)/);
+    const prune = functionBody("dev_webhook_prune_expired_secrets");
+    expect(prune).toMatch(/previous_secret_expires_at <= now\(\)/);
+    expect(prune).toMatch(/DELETE FROM vault\.secrets WHERE id = ANY \(v_ids\)/);
   });
 });
