@@ -182,7 +182,9 @@ export async function glassesGetAnswer(deps: GlassesDeps, userId: string, args: 
   }
   const id = args.id.trim();
   const row = isUuid(id) ? await deps.store.get(userId, id) : null;
-  if (!row) return sdkGetAnswer(deps, userId, id);
+  // SDK action ids are `dev_actions.id` uuids too: a non-uuid id cannot be either, so no SDK read.
+  if (!row && isUuid(id)) return sdkGetAnswer(deps, userId, id);
+  if (!row) throw new GlassesValidationError(`no glasses message with id ${args.id}`);
   let status: GlassesStatus = row.status;
   const now = nowOf(deps);
   if ((status === "pending" || status === "delivered") && Date.parse(row.expires_at) <= now) {

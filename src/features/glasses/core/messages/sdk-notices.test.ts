@@ -144,6 +144,12 @@ describe("glasses_get_answer for an SDK action id", () => {
     await expect(glassesGetAnswer((await setup({ action: async () => unavailable("network_error") })).deps, USER, { id: ACT })).rejects.toThrow("(device SDK unavailable: network_error)");
   });
 
+  it("a non-uuid id is neither queue's: no SDK read", async () => {
+    const w = await setup();
+    await expect(glassesGetAnswer(w.deps, USER, { id: "not-a-uuid" })).rejects.toThrow("no glasses message with id not-a-uuid");
+    expect(w.forUser).not.toHaveBeenCalled();
+  });
+
   it("works while a second link is unmigrated (a read; the port scopes it to migrated devices)", async () => {
     const w = await setup({ migrated: "one of two", action: action("done", { index: 0, label: "Yes" }) });
     expect(await glassesGetAnswer(w.deps, USER, { id: ACT })).toMatchObject({ status: "answered", answer: { choice: "Yes", index: 0, at: "2026-10-28T12:00:00.000Z" } });
