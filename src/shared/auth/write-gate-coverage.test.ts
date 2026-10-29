@@ -241,6 +241,9 @@ describe("H-3 write-gate coverage", () => {
         // POST rotates a Device SDK API key (W1.3 developer portal) and answers the new raw
         // key once — credential minting, the same line as the two token routes above.
         "developers/keys/[keyId]/rotate/route.ts",
+        // POST runs one real `/v1` call (deliver, revoke a connection, create a Connect session)
+        // with a pasted test key (P3 playground). A person's tool: an agent token never drives it.
+        "developers/playground/route.ts",
         // Cancel writes on our own route (no Stripe-hosted click-through).
         "billing/cancel/route.ts",
         // POST switches a live personal subscription Pro ⇄ Max in place

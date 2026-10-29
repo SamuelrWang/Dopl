@@ -39,6 +39,8 @@ const RunSchema = z.object({
  * 🔒 THE KEY IS NEVER STORED, LOGGED OR ECHOED: it rides in the JSON body (the session owns
  * `Authorization`), goes into the in-process request's header, and comes back only masked.
  * Errors are mapped by `toHttpErrorResponse`, which logs the route name, never the body.
+ * ⚠ `sessionOnly`: a run WRITES (deliver, revoke, create a Connect session), so an agent's OAuth
+ * token never reaches it (pinned in `write-gate-coverage.test.ts`).
  * The call itself is the REAL handler (`dispatch.ts`) called in process: same key check, scopes,
  * rate limits and event row as a call from the developer's server.
  */
@@ -122,4 +124,4 @@ export const POST = withUserAuth(async (request, { userId }) => {
   } catch (err) {
     return toHttpErrorResponse("developers/playground", err);
   }
-});
+}, { sessionOnly: true });

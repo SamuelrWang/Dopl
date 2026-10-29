@@ -11,11 +11,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
+const { wrapperOptions } = vi.hoisted(() => ({ wrapperOptions: [] as Array<Record<string, unknown> | undefined> }));
 vi.mock("@/shared/auth/with-auth", () => ({
-  withUserAuth:
-    (handler: (req: NextRequest, ctx: { userId: string }) => Promise<Response>) =>
-    (req: NextRequest) =>
-      handler(req, { userId: "u1" }),
+  withUserAuth: (handler: (req: NextRequest, ctx: { userId: string }) => Promise<Response>, options?: Record<string, unknown>) => {
+    wrapperOptions.push(options);
+    return (req: NextRequest) => handler(req, { userId: "u1" });
+  },
 }));
 
 vi.mock("@/shared/supabase/admin", async () => {
@@ -87,6 +88,10 @@ beforeEach(async () => {
 });
 
 describe("POST /api/developers/playground", () => {
+  it("🔒 is sessionOnly: an agent token never runs a call", () => {
+    expect(wrapperOptions).toContainEqual(expect.objectContaining({ sessionOnly: true }));
+  });
+
   it("runs the real handler with the key, path and a fresh idempotency key; masks the key", async () => {
     const res = await run({
       project_id: P1,
