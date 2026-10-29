@@ -76,6 +76,7 @@ const agentHandles = require('./agent-handles');
 const deliveryAck = require('./delivery-ack');
 const { diag } = require('./diag');
 const { agentAuthorNote, authorAddress } = require('./room-roster');
+const dispatchScope = require('./session-dispatch-scope'); // off-scope addressees (2026-10-29)
 // ─── BEGIN SESSION-DISPATCH-PURE (routing; unit-tested via source extraction) ──
 
 // ⚠ THE SERVER'S OWN VOCABULARY, RESTATED — `src/features/channels/types-delivery.ts ›
@@ -130,8 +131,8 @@ function storedVerdict(m) {
 // ⚠ **ABSENT IS NOT EMPTY.** An ARRAY — EMPTY INCLUDED — is the server's authoritative answer
 // and the body parse is not run at all; `null` is "not resolved there" and falls through to the
 // parse, which is today's behaviour exactly. `??` and never `||` at the call site.
-// ⚠ **STILL INTERSECTED WITH `liveIds`**, and DE-DUPED: the server resolves CHANNEL-wide while
-// this feed is THREAD-scoped, and a `to=` list naming one agent twice is one address, one wake.
+// ⚠ **STILL INTERSECTED WITH `liveIds`**, and DE-DUPED: `liveIds` is this post's scope; a named
+// agent working ANOTHER scope is `session-dispatch-scope.js`'s, fed by `feedLiveSession` below.
 function serverAddressed(m, liveIds) {
   const ids = m && m.recipientAgentIds;
   if (!Array.isArray(ids)) return null;
@@ -396,9 +397,17 @@ function feedLiveSession(entry, m, myUserId) {
   // ⚠ AN AUTHOR-LESS POST FAILS CLOSED. A row with no author is a system row, nobody spoke, and
   // `authorLabel` would credit the words to nothing.
   if (!m.authorUserId) return false;
-  if (!live.length) return false;
+  // 🔒 OFF-SCOPE ADDRESSEES (2026-10-29, Thread Mention Reach Fix): a `to=` agent working another
+  // scope is fed too, under ITS OWN slot, framed "from <scope>, answer there". Context never widens.
+  const scope = targeting.firstClassThreadId(m);
+  const away = typeof dispatchScope !== 'undefined' && typeof sessionEngine.liveInChannel === 'function' // older slices inject neither
+    ? dispatchScope.offScopeAddressees(m, live, sessionEngine.liveInChannel(entry.channel.id)) : [];
+  if (!live.length && !away.length) return false;
   const liveIds = live.map((s) => String(s.agentId || ''));
   const plan = planFor(m, liveIds, myUserId);
+  const named = plan.ids.concat(away.map((s) => String(s.agentId || '')).filter((id) => plan.ids.indexOf(id) === -1));
+  const isAway = (s) => away.indexOf(s) !== -1;
+  const gap = (s) => { if (!isAway(s)) markGap(s); }; // another scope's post is not a gap in this run's thread
   const authorName = authorLabel(m); // the AUTHOR, not just the account — see authorLabel
   const wakeAllowed = mayWake(m, myUserId);
 
@@ -418,22 +427,24 @@ function feedLiveSession(entry, m, myUserId) {
   let fed = 0;
   let held = 0; // dormant agents this message named but could not wake
   let skipped = 0; // sessions this message was never for — the narrowing, counted
-  for (const s of live) {
+  for (const s of live.concat(away)) {
     // never feed a session its own post back — by the minted stamp OR the server's session key
     if (wroteIt(s, m) || authoredBySession(s, m)) continue;
-    const named = plan.ids.indexOf(String(s.agentId || '')) !== -1;
+    const forIt = isAway(s) || plan.ids.indexOf(String(s.agentId || '')) !== -1;
     // ⚠ NOT A REFUSAL AND NOT A HOLD. Nothing was aimed at this session, so nothing was
     // declined — filing a `refused` receipt here would report a decision the machine never made.
-    if (!named && !plan.context) { skipped += 1; markGap(s); continue; }
+    if (!forIt && !plan.context) { skipped += 1; markGap(s); continue; }
     // ruling 5: parsed here, consumed by `session-seed.frameContinuation`. FRAMING ONLY — the
     // wake key is `wake` below.
-    const addressing = addressingFor(s.agentId, plan.ids);
-    const wake = named && wakeAllowed;
-    if (!mayFeed(s, wake)) { held += 1; markGap(s); ack(s, { held: 1 }); continue; }
+    const addressing = addressingFor(s.agentId, named);
+    const wake = forIt && wakeAllowed;
+    if (!mayFeed(s, wake)) { held += 1; gap(s); ack(s, { held: 1 }); continue; }
     const wasDormant = dormant(s);
     const ok = sessionEngine.feedInbound({
       channelId: entry.channel.id,
-      threadId: targeting.firstClassThreadId(m),
+      // ⚠ AN OFF-SCOPE SESSION IS FED UNDER ITS OWN SLOT; `fromScope` is where the post was.
+      threadId: isAway(s) ? String(s.threadId || '') : scope,
+      ...(isAway(s) ? { fromScope: { threadId: scope } } : {}),
       agentId: s.agentId,
       message: m.body,
       seq: m.seq, // the turn's seq — the windowless outbound bridge's thread join
@@ -443,41 +454,32 @@ function feedLiveSession(entry, m, myUserId) {
       // becoming a second spelling of the wake rule.
       wake: wake === true, ...(m.authorKind !== 'agent' && m.metadata && m.metadata.source ? { source: m.metadata.source } : {}), // member's device (message-source.js)
       fromOperator: fromMe(m, myUserId), // the operator's account: their posts and their own agents' (ruling 2, 2026-09-25)
-      // 🔴 **WHO WROTE IT, FOR THE INBOUND BANNER'S WEIGHT** (Samuel, 2026-10-12; the full argument
-      // is `session-narration.js`'s inbound arm + INVARIANTS §11). `author_kind` is server-derived
-      // from the author's credential (`authorLabel` above), so it is the one honest human-vs-agent
-      // answer; the alternative — reading `"<person>'s agent"` out of the resolved LABEL — sniffs
-      // unverified peer prose. ⚠ It NARROWS ruling 2 for that face only and both flags ride:
-      // `fromOperator` answers whose ACCOUNT spoke, this answers what kind of AUTHOR wrote it.
-      // ⚠ ONLY THE TWO KNOWN SPELLINGS, never coerced onto `'user'`: absent must read as the
-      // neutral banner rather than paint a machine's words with a person's weight.
+      // 🔴 WHO WROTE IT, for the inbound banner's weight (Samuel, 2026-10-12; `session-narration.js`'s
+      // inbound arm + INVARIANTS §11): server-derived `author_kind`, only the two known spellings,
+      // absent stays absent. It NARROWS ruling 2 for that face only; `fromOperator` rides beside it.
       ...(m.authorKind === 'agent' || m.authorKind === 'user' ? { authorKind: m.authorKind } : {}),
-      // AND, FOR AN AGENT, ITS NAME AND ITS COLOUR KEY — both joined server-side onto the row
-      // (`types.ts › ChannelMessage.authorAgentName` / `.authorAgentColor`), so the banner can name
-      // `@the-agent` and paint with the colour that agent already wears. ⚠ GATED ON THE KIND, and
-      // the colour rides as the KEY: `src/shared/lib/agent-colors.ts` is the only place one becomes
-      // a `var()` and this machine does not own the palette.
+      // AND, FOR AN AGENT, its name and colour KEY (joined server-side; `agent-colors.ts` owns the palette).
       ...(m.authorKind === 'agent' && m.authorAgentName ? { authorAgentName: m.authorAgentName } : {}),
       ...(m.authorKind === 'agent' && m.authorAgentColor ? { authorAgentColor: m.authorAgentColor } : {}),
     });
-    if (!ok) { markGap(s); ack(s, { refused: 1 }); continue; }
+    if (!ok) { gap(s); ack(s, { refused: 1 }); continue; }
     fed += 1;
     // ⚠ `wake` ALONE DOES NOT MEAN "STARTED": an ADDRESSED session already running carries
     // `wake: true` too (it is what `session-gate.js` stamps `lastWakeSeq` on). Different news,
     // different next action, so the receipt tells them apart — and `wasDormant` is read BEFORE
     // the feed, because feeding is what stops it being true.
-    ack(s, { woke: wake && wasDormant ? 1 : 0, toAddressee: named ? 1 : 0, fed: 1 });
+    ack(s, { woke: wake && wasDormant ? 1 : 0, toAddressee: forIt ? 1 : 0, fed: 1 });
   }
   if (fed || held || skipped) {
     // ⚠ THE SKIPPED COUNT IS ON THE LINE ON PURPOSE, and it is the narrowing's only evidence. A
     // session a message was never for looks identical, from the outside, to one this machine
     // failed to route to — and the whole point of ruling B1 is that the drop is DELIBERATE.
     diag('fan-out', entry.channel.id.slice(0, 8), 'seq', m.seq,
-      'fed', fed, 'of', live.length,
+      'fed', fed, 'of', live.length + away.length, away.length ? `off-scope:${away.length}` : '',
       held ? `held:${held} (no wake)` : '',
       skipped ? `skipped:${skipped} (not addressed)` : '',
       'verdict', storedVerdict(m) || 'unstored',
-      plan.ids.length ? `to:${plan.ids.join(',')}` : plan.context ? 'thread' : 'nobody');
+      named.length ? `to:${named.join(',')}` : plan.context ? 'thread' : 'nobody');
   }
   return fed > 0;
 }

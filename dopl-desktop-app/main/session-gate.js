@@ -64,7 +64,8 @@ function enqueue(s, a) {
   // `session-dispatch.js › feedLiveSession` sets `gap` for any thread message this run was NOT given,
   // and the mark then stays where it was (a smaller `since` re-reads more, never less). Plain data on
   // `s`, no free var, so every harness that slices this block runs it unchanged.
-  const mark = s.catchUp;
+  // ⚠ AN OFF-SCOPE TURN (`a.fromScope`, 2026-10-29) is another scope's seq: it never moves this run's mark.
+  const mark = a.fromScope ? null : s.catchUp;
   if (mark && mark.gap !== true && typeof a.seq === 'number' && Number.isFinite(a.seq)) {
     mark.through = mark.through == null ? a.seq : Math.max(mark.through, a.seq);
   }
@@ -84,6 +85,7 @@ function enqueue(s, a) {
     ...(a.authorAgentColor ? { authorAgentColor: a.authorAgentColor } : {}),
     ...(a.source ? { source: a.source } : {}), // the member's device (message-source.js)
     ...(catchUpSeq != null ? { catchUpSeq: catchUpSeq } : {}), // the wake's `since=` (above)
+    ...(a.fromScope && typeof a.fromScope === 'object' ? { fromScope: { threadId: String(a.fromScope.threadId || '') } } : {}),
   });
   return true;
 }

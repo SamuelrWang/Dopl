@@ -26,6 +26,8 @@ const agentHandles = require(join(HERE, "..", "main", "agent-handles.js"));
 // and `verdictFor` is the one place the four outcome words are ordered.
 const realDeliveryAck = require(join(HERE, "..", "main", "delivery-ack.js"));
 const realRoomRoster = require(join(HERE, "..", "main", "room-roster.js"));
+// ⚠ THE REAL OFF-SCOPE RULE (2026-10-29, Thread Mention Reach Fix) — pure, so no fake.
+const realDispatchScope = require(join(HERE, "..", "main", "session-dispatch-scope.js"));
 
 const BEGIN = "// \u2500\u2500\u2500 BEGIN SESSION-DISPATCH-PURE";
 const END = "// \u2500\u2500\u2500 END SESSION-DISPATCH-PURE";
@@ -101,6 +103,8 @@ export function harness(over = {}) {
   // message is for is on the row — so a fake for it would be a fake for a call that is gone.
   const sessionEngine = {
     liveOnThread: () => cfg.agents,
+    // The channel-wide roster. Defaults to the thread's, so every older table sees NO off-scope agent.
+    liveInChannel: () => cfg.channelAgents ?? cfg.agents,
     feedInbound: (a) => { calls.feedInbound.push(a); return cfg.feedInboundReturn; },
   };
   // 2026-08-01: the label a fed message is titled with is the AUTHOR's — a peer's AGENT posts
@@ -122,9 +126,9 @@ export function harness(over = {}) {
   // these tables assert a sentence the app does not produce, which is the rule `deliveryAck.
   // verdictFor` beside it already follows.
   const api = new Function(
-    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote", "authorAddress",
+    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote", "authorAddress", "dispatchScope",
     `${BLOCK}\n return { feedLiveSession, authorLabel, mentionedAgentIds, serverAddressed, serverNamesMember, storedVerdict, planFor, escalationAnswerAgentIds, addressingFor, mayFeed, mayWake, unwoken, dormant };`
-  )(targeting, sessionEngine, io, agentHandles, deliveryAck, () => {}, realRoomRoster.agentAuthorNote, realRoomRoster.authorAddress);
+  )(targeting, sessionEngine, io, agentHandles, deliveryAck, () => {}, realRoomRoster.agentAuthorNote, realRoomRoster.authorAddress, realDispatchScope);
   return { ...api, calls, cfg };
 }
 

@@ -85,12 +85,13 @@ test("PUSH: it says the feed is the MAIN ROOM and that an unaddressed post start
   assert.match(out, /Silence is not a failure/);
 });
 
-test("PUSH: it states honestly that a thread post does not reach it, and the sender is told", () => {
-  // 2026-10-29 (Thread Mention Reach Fix step 1): the old line said NOBODY could summon it while
-  // the server told the sender `woken`. Now both sides say the same thing: not fed, `unreachable`.
+test("PUSH: a thread post that names it in to= reaches it; nothing else in a thread does", () => {
+  // 2026-10-29 (Thread Mention Reach Fix step 2): `session-dispatch.js` now feeds an off-scope
+  // addressee, so the standby is told it can be summoned by to=, and only by to=.
   const out = text(channelCtx());
-  assert.match(out, /A MESSAGE INSIDE A THREAD DOES NOT REACH YOU/);
-  assert.match(out, /told the post was unreachable/);
+  assert.match(out, /A THREAD POST THAT NAMES YOU IN to= REACHES YOU/);
+  assert.match(out, /answer it in that thread/);
+  assert.match(out, /@-mentions in\n?.*prose included/s);
   assert.match(out, /operator directs you from the main room/);
 });
 

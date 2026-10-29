@@ -8,6 +8,8 @@ const { doplTool } = require('./dopl-call-text');
 // Drops every line that is exactly a fence delimiter, so a body cannot forge a fence.
 const { stripFence } = require('./prompt-sanitize');
 const { withSourceNote } = require('./message-source');
+const { MAIN_ROOM_THREAD } = require('./main-room-thread');
+const { idToken } = require('./prompt-sanitize');
 
 /**
  * Fence a fed counterparty reply: the body is DATA under the session's nonce, forged fence lines stripped.
@@ -23,7 +25,7 @@ const { withSourceNote } = require('./message-source');
  * keeps the imperative and drops the call and the decision-card sentence; a different call (another
  * author's `to=`) is shown in full again. A turn for another agent shows no call, so it records none.
  */
-function frameContinuation(nonce, message, authorName, addressing, authorNote, set, reply, source, catchUpSeq, memo) {
+function frameContinuation(nonce, message, authorName, addressing, authorNote, set, reply, source, catchUpSeq, memo, fromScope) {
   const begin = `BEGIN-REQUEST-${nonce}`;
   const end = `END-REQUEST-${nonce}`;
   const body = stripFence(message, begin, end);
@@ -45,6 +47,7 @@ function frameContinuation(nonce, message, authorName, addressing, authorNote, s
     // `source`: the member's device (metadata.source) and, on glasses, the reply guidance.
     ...[withSourceNote(authorNote, source)].filter(Boolean),
     ...addressed,
+    ...originLines(fromScope),
     begin,
     body,
     end,
@@ -66,8 +69,33 @@ function initialCatchUp(spec) {
 
 // The reply call for one inbound turn, addressed from the SESSION's own slot (a thread reply carries `thread`,
 // a main-room reply `to`) and spelled in its tool set.
-function replyFor(s, to) {
-  return framing.replyCall({ channelId: s.channelId, workspaceId: s.workspaceId, threadId: s.threadId, toolSet: s.doplToolSet }, to);
+// ⚠ AN OFF-SCOPE TURN (`fromScope`, 2026-10-29) is answered WHERE IT WAS POSTED: its thread, or the main
+// room via the `thread="main"` sentinel a thread-bound session needs to beat its own auto-tag.
+function replyFor(s, to, fromScope) {
+  let threadId = s.threadId;
+  if (fromScope && typeof fromScope === 'object') {
+    const origin = idToken(fromScope.threadId);
+    threadId = origin || (s.threadId ? MAIN_ROOM_THREAD : '');
+  }
+  return framing.replyCall({ channelId: s.channelId, workspaceId: s.workspaceId, threadId: threadId, toolSet: s.doplToolSet }, to);
+}
+
+// WHERE AN OFF-SCOPE TURN CAME FROM (2026-10-29, Thread Mention Reach Fix). Our prose above the fence; the
+// thread id is a server uuid through `idToken`. `[]` for an ordinary turn on the session's own scope.
+function originLines(fromScope) {
+  if (!fromScope || typeof fromScope !== 'object') return [];
+  const t = idToken(fromScope.threadId);
+  if (t) {
+    return [
+      `This message was posted in thread ${t}, not where you work. It names you, so act on it`,
+      `and answer it IN THAT THREAD: pass thread="${t}". Your own work stays where it is.`,
+    ];
+  }
+  return [
+    `This message was posted in the channel's MAIN ROOM, not in your thread. It names you, so`,
+    `answer it in the main room: pass thread="${MAIN_ROOM_THREAD}" (the app removes it) plus to= the author,`,
+    `or your reply is tagged into your own thread.`,
+  ];
 }
 
 // The addressing verdict above the fence (ids are closed-charset and filtered to live sessions).
@@ -286,6 +314,7 @@ module.exports = {
   frameContinuation,
   replyFor,
   addressingLines,
+  originLines,
   frameOperatorTurn,
   frameDirectedTurn,
   frameHistorySeed,

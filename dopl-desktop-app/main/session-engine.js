@@ -26,7 +26,7 @@ const agentHistory = require('./agent-history');
 const sessionPrivate = require('./session-private');
 const sessionDirected = require('./session-directed');
 const sessionRegistry = require('./session-registry');
-const { liveOnThread, sessionOn, noteSiblings } = sessionRegistry;
+const { liveOnThread, liveInChannel, sessionOn, noteSiblings } = sessionRegistry;
 const sessionTeardown = require('./session-teardown');
 const { teardownHandles } = require('./session-handles');
 const { settle, narrationFor } = sessionTeardown;
@@ -153,7 +153,7 @@ function runEffect(s, eff) {
       break;
     case 'pushInbound':
       noteSiblings(s);
-      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote, s.doplToolSet, io.replyFor(s, eff.replyTo), eff.source, eff.catchUpSeq, s))));
+      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote, s.doplToolSet, io.replyFor(s, eff.replyTo, eff.fromScope), eff.source, eff.catchUpSeq, s, eff.fromScope))));
       break;
     case 'interruptQuery':
       // The interrupted turn still ends with a `result`; the direction it was answering lapses (P4-08).
@@ -428,6 +428,7 @@ module.exports = {
   launchRequesterSession,
   hasLiveSession,
   liveOnThread,
+  liveInChannel, // the off-scope addressee read (`session-dispatch-scope.js`, 2026-10-29)
   sessionOn,
   feedInbound: sessionGate.feedInbound,
   listLiveSessions: sessionReopen.listLiveSessions, listOrphanRisk: sessionReopen.listOrphanRisk, endLiveSessions: sessionReopen.endLiveSessions,

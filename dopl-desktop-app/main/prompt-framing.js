@@ -9,6 +9,7 @@ const { LANE_USE, THREAD_TAG, vocabularyFor, proseRuleFor, CONCISION, LANE_EXCLU
 
 // `sanitizeName` is re-exported below: `session-seed.js` reaches it as `framing.sanitizeName`.
 const { sanitizeName, idToken, stripFence } = require('./prompt-sanitize');
+const { MAIN_ROOM_THREAD } = require('./main-room-thread');
 const { ontologyReachLines } = require('./prompt-framing-ontology');
 // The identity ROLE block: `[]` with no identity, so a blank launch's turn is byte-identical.
 const { identityRoleFraming } = require('./prompt-framing-agent-identity');
@@ -83,9 +84,9 @@ function channelScopeFraming(ctx) {
     `- DO NOT WAIT FOR MESSAGES. You cannot, and you do not need to: a HELD read (${doplOp(set, 'channel.read')} with`,
     `  wait_ms) is refused in this session, and a post that names you is`,
     `  delivered to you as a new TURN by the app itself. Ending your turn is how you wait.`,
-    `- A MESSAGE INSIDE A THREAD DOES NOT REACH YOU, even when it names you in to=: this build`,
-    `  feeds you only main-room posts, and the sender is told the post was unreachable. Your`,
-    `  operator directs you from the main room, or privately.`,
+    `- A THREAD POST THAT NAMES YOU IN to= REACHES YOU as a turn that says which thread it came`,
+    `  from; answer it in that thread. Nothing else inside a thread reaches you, @-mentions in`,
+    `  prose included. Your operator directs you from the main room, or privately.`,
   ];
 }
 
@@ -100,7 +101,9 @@ function sendArgs(ctx, to) {
   const workspaceId = idToken(ctx && ctx.workspaceId);
   if (!channelId || !workspaceId) return '';
   const threadId = idToken(ctx && ctx.threadId);
-  const tail = threadId ? `, thread "${threadId}"` : to ? `, to "${to}"` : '';
+  // ⚠ THE MAIN-ROOM SENTINEL carries `to` too: it is a main-room post (`main-room-thread.js`).
+  const tail = threadId === MAIN_ROOM_THREAD ? `, thread "${threadId}"${to ? `, to "${to}"` : ''}`
+    : threadId ? `, thread "${threadId}"` : to ? `, to "${to}"` : '';
   return `channel "${channelId}", container "${workspaceId}"${tail}`;
 }
 
@@ -120,7 +123,8 @@ const ADDRESS_RE = /^@?[A-Za-z0-9_-]{1,64}$/;
 function replyCall(ctx, to) {
   const addr = ADDRESS_RE.test(String(to || '')) ? to : '';
   const args = sendArgs(ctx, addr);
-  if (!args || (!idToken(ctx.threadId) && !addr)) return '';
+  const t = idToken(ctx.threadId);
+  if (!args || ((!t || t === MAIN_ROOM_THREAD) && !addr)) return '';
   return doplCall(ctx.toolSet, 'channel.send', args);
 }
 

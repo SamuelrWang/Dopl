@@ -36,6 +36,7 @@
 // Its own module, kept dependency-free (session-profiles only, which is crypto + tool-profiles) so the truth table
 // drives the real shipped code instead of a slice.
 
+const { MAIN_ROOM_THREAD } = require('./main-room-thread');
 const {
   isOwnChannelPost, isChannelTool, isOwnChannelThreadOpen, isOwnChannelEscalate,
 } = require('./session-profiles');
@@ -199,8 +200,20 @@ function markOwnPost(s) {
 // rewriting none of it, and a post that is deliberately going to another thread is not a post
 // this session should later filter out of its own feed.
 function threadTagFor(input, threadId, clientMsgId) {
-  const want = typeof threadId === 'string' ? threadId.trim() : '';
   const stamp = typeof clientMsgId === 'string' ? clientMsgId.trim() : '';
+  // ⚠ THE MAIN-ROOM SENTINEL FIRST (2026-10-29, `main-room-thread.js`): an off-scope turn told this
+  // session to answer in the main room with thread="main". Strip it, never tag over it, stamp as usual.
+  if (input && typeof input === 'object' && suppliedThreadId(input) === MAIN_ROOM_THREAD) {
+    const next = Object.assign({}, input);
+    delete next[THREAD_ARG];
+    if (next.metadata && typeof next.metadata === 'object' && next.metadata.threadId === MAIN_ROOM_THREAD) {
+      next.metadata = Object.assign({}, next.metadata);
+      delete next.metadata.threadId;
+    }
+    if (stamp && !(typeof input[CLIENT_MSG_ID_ARG] === 'string' && input[CLIENT_MSG_ID_ARG].trim())) next[CLIENT_MSG_ID_ARG] = stamp;
+    return { action: 'inject', input: next };
+  }
+  const want = typeof threadId === 'string' ? threadId.trim() : '';
   if (!want && !stamp) return { action: 'none', reason: 'no-thread' };
   if (!input || typeof input !== 'object') return { action: 'none', reason: 'no-input' };
   const supplied = want ? suppliedThreadId(input) : '';
