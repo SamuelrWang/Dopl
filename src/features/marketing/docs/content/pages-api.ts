@@ -257,7 +257,7 @@ export const ENDPOINTS: EndpointSpec[] = [
     description: "Deliver content by intent and let Dopl route it to one of the user's devices",
     examplePath: "/users/usr_123/deliver",
     notes: [
-      "Dopl routes the request, checks the grant and the tier, and enforces the device's limits without rewriting the content. `routed_to` says which device and why. An `ask` holds up to 200 seconds for the answer; read it with [Get an action](/docs/api-reference/actions) and the `delivery_id`. With `overflow: \"callback\"` and content over the limits, nothing is delivered, `status` is `failed` and the response adds `overflow_callback`. Secret key, scope `actions:write`.",
+      "Dopl routes the request, checks the grant and the tier, and enforces the device's limits without rewriting the content. `routed_to` says which device and why. An `ask` holds up to 200 seconds for the answer (send `Prefer: respond-async` to skip the hold); read it with [Get an action](/docs/api-reference/actions) and the `delivery_id`. With `overflow: \"callback\"` and content over the limits, nothing is delivered, `status` is `failed` and the response adds `overflow_callback`. Secret key, scope `actions:write`.",
     ],
     describe: {
       external_user_id: EXTERNAL_USER_ID,
@@ -285,7 +285,7 @@ export const ENDPOINTS: EndpointSpec[] = [
     description: "Run one capability on one device",
     examplePath: `/devices/${DEVICE_ID}/actions/present.notify`,
     notes: [
-      "The device must be online, publish the capability and allow it under its profile, and the user's grant must cover it. `ask.*` actions hold up to 200 seconds for the answer. T4 capabilities fail with `confirmation_denied` by default; when the profile sets a confirmation mode they return `needs_confirmation` and do not run. Secret key, scope `actions:write`.",
+      "The device must be online, publish the capability and allow it under its profile, and the user's grant must cover it. `ask.*` actions hold up to 200 seconds for the answer, unless you send `Prefer: respond-async`. T4 capabilities fail with `confirmation_denied` by default; when the profile sets a confirmation mode they return `needs_confirmation` and do not run. Secret key, scope `actions:write`.",
     ],
     describe: {
       device_id: "The device to act on.",
