@@ -61,10 +61,10 @@ export const WEBHOOK_ENDPOINTS: EndpointSpec[] = [
     examplePath: "/webhook_endpoints",
     notes: [
       `The answer holds \`secret\`. Store it now: it is shown again only when you rotate it. Each event is a POST signed with the Standard Webhooks scheme. Check it with \`dopl.webhooks.unwrap(rawBody, headers, { secret })\`. ${KEY}`,
-      "Answer with any 2xx within 15 seconds. Otherwise Dopl tries again after 5 seconds, 5 minutes, 30 minutes, 2 hours, 5 hours, 10 hours and 10 hours. After 8 tries the delivery is `failed` until you replay it. Dedupe on the `webhook-id` header.",
+      "Answer with any 2xx within 15 seconds. Otherwise Dopl tries again, on a one minute tick, after 5 seconds, 5 minutes, 30 minutes, 2 hours, 5 hours, 10 hours and 10 hours. After 8 tries the delivery is `failed` until you replay it. Dedupe on the `webhook-id` header.",
     ],
     describe: {
-      url: "An https URL on a public host.",
+      url: "An https URL on a public host, on port 443 or 8443.",
       description: "A label for you, up to 500 characters.",
       enabled_events: EVENTS,
     },
@@ -99,7 +99,7 @@ export const WEBHOOK_ENDPOINTS: EndpointSpec[] = [
     examplePath: `/webhook_endpoints/${EP_ID}`,
     describe: {
       ...ID_EP,
-      url: "A new https URL, checked like on create.",
+      url: "A new https URL on port 443 or 8443, checked like on create.",
       description: "A new label.",
       enabled_events: EVENTS,
       disabled: "`true` stops sending, and waiting deliveries fail. `false` turns it back on.",
@@ -145,7 +145,9 @@ export const WEBHOOK_ENDPOINTS: EndpointSpec[] = [
     title: "Get a delivery",
     description: "One delivery with every try",
     examplePath: `/webhook_deliveries/${DL_ID}`,
-    notes: ["`attempts` lists each HTTP try, newest first, with the status code or error and the first 1 KiB of your answer."],
+    notes: [
+      "`attempts` lists each try, newest first. A try your server answered shows the status code and the first 1 KiB of your answer. A try with no answer shows only a class, such as `dns_failed`, `connect_refused`, `tls_failed` or `timeout`.",
+    ],
     describe: ID_DL,
     response: json({
       ...DELIVERY,

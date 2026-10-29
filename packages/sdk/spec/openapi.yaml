@@ -298,7 +298,7 @@ paths:
       operationId: createWebhookEndpoint
       summary: Register a webhook endpoint
       description: |
-        https only; the host must resolve to public addresses. The answer carries the signing
+        https only, on port 443 or 8443; the host must resolve to public addresses. The answer carries the signing
         secret (`whsec_…`): store it now, it is shown again only on rotate. Every POST to the
         endpoint is signed per Standard Webhooks (`webhook-id`, `webhook-timestamp`,
         `webhook-signature`) and carries a `WebhookEventEnvelope` body.
@@ -1196,7 +1196,9 @@ components:
         attempt, `webhook-signature` = `v1,<base64 HMAC-SHA256>` of `${webhook-id}.${webhook-timestamp}.${body}`
         keyed with the base64 part of the `whsec_` secret; during a rotation one `v1,` signature per live
         secret, space-separated. Retries after a non-2xx or no answer within 15s: 5s, 5m, 30m, 2h, 5h,
-        10h, 10h; after 8 attempts the delivery is `failed` until replayed. Redirects are not followed.
+        10h, 10h (retries run on a one-minute tick, so the first one lands within about a minute);
+        after 8 attempts the delivery is `failed` until replayed. Redirects are not followed. Delivery is
+        at least once: dedupe on `webhook-id`.
         Tolerate unknown `type`s and fields.
       required: [id, type, timestamp, livemode, data]
       properties:
@@ -1214,7 +1216,7 @@ components:
       additionalProperties: false
       required: [url]
       properties:
-        url: { type: string, minLength: 1, maxLength: 2048, description: "https only." }
+        url: { type: string, minLength: 1, maxLength: 2048, description: "https only, port 443 or 8443, public host." }
         description:
           oneOf: [{ type: string, maxLength: 500 }, { type: "null" }]
         enabled_events:
@@ -1296,7 +1298,13 @@ components:
         status_code:
           description: null = no HTTP answer (connect error, timeout, refused address).
           oneOf: [{ type: integer }, { type: "null" }]
-        error: { oneOf: [{ type: string }, { type: "null" }] }
+        error:
+          description: |
+            Without an HTTP answer, one class only (never the raw network error): `dns_failed`,
+            `connect_refused`, `tls_failed`, `timeout`, `address_blocked`, `url_refused`,
+            `connect_failed`. With a non-2xx answer, `http_<status>`. `not_sent: <reason>` when the
+            delivery was dead-lettered without a request (endpoint disabled or deleted).
+          oneOf: [{ type: string }, { type: "null" }]
         duration_ms: { type: integer, minimum: 0 }
         response_body:
           description: First 1 KiB of the response.

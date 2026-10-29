@@ -5,7 +5,8 @@
  * replays; `webhook-timestamp` per attempt; `webhook-signature: v1,<base64 HMAC-SHA256>` over
  * `${id}.${timestamp}.${body}`, one signature per live secret during a rotation). Body =
  * {@link WebhookEventEnvelopeSchema}. Retries: 5s, 5m, 30m, 2h, 5h, 10h, 10h; after
- * {@link WEBHOOK_MAX_ATTEMPTS} the delivery is `failed` (dead-letter) until replayed.
+ * {@link WEBHOOK_MAX_ATTEMPTS} the delivery is `failed` (dead-letter) until replayed. Endpoints: https,
+ * port 443 or 8443, public host. An attempt with no HTTP answer reports only an error class.
  */
 import { z } from "zod";
 import { ApiVersionSchema } from "./errors";

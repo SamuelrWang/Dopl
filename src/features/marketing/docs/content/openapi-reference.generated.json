@@ -602,7 +602,7 @@
         "in": "body",
         "type": "string",
         "required": true,
-        "description": "https only."
+        "description": "https only, port 443 or 8443, public host."
       },
       {
         "name": "description",
