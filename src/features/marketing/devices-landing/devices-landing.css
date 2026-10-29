@@ -1,0 +1,410 @@
+/* ── Dopl Devices SDK landing (`/devices`) ──────────────────────────────
+   Markup: src/features/marketing/devices-landing/*.tsx (copy: content.ts).
+   ⚠ Page-scoped like sdk.css: imported by the page, never by the app.
+   The landing's own classes carry the type, buttons and windows; this sheet
+   only lays them out. Reused, not restated: `.lp-headline / -subhead /
+   -cta-row` (hero), `.lp-mp-eyebrow / -heading` (section heads), `.lp-mp-card
+   / -copy / -card-title / -card-body` (bento cards), `.lp-connect-term*`
+   (code window), `.lp-ctl-list / -item / -check` (trust list), `.lp-final*`
+   (closing CTA), `.lp-btn*`. Colours come from `.lp`'s --ink / --muted /
+   --line and the globals.css tokens; sizes from the `--text-*` scale. */
+
+.lp-dv {
+  width: 100%;
+}
+
+/* Section rhythm: the landing's 1280px column under a 120px lead-in. */
+.lp-dv-section {
+  width: 100%;
+  padding: 120px var(--gutter) 0;
+}
+.lp-dv-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.lp-dv .lp-mp-heading {
+  margin-bottom: 18px;
+  max-width: 18em;
+  text-wrap: balance;
+}
+.lp-dv-line {
+  margin: 0 0 56px;
+  max-width: 40em;
+  font-size: var(--text-display);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* ── Hero ── */
+.lp-dv-hero .lp-headline {
+  max-width: 16em;
+  text-wrap: balance;
+}
+.lp-dv-hero-window {
+  width: 100%;
+  max-width: 680px;
+  margin-top: 56px;
+}
+
+/* ── Code window (the landing's `.lp-connect-term`) ── */
+.lp-dv-code {
+  margin: 0;
+  padding: 22px 24px;
+  overflow-x: auto;
+}
+.lp-dv-code .lp-connect-cmd,
+.lp-dv-code .lp-connect-comment {
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.lp-dv-install {
+  padding: 18px 16px 6px 24px;
+}
+.lp-dv-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.lp-dv-tab {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font-family: var(--grotesk);
+  font-size: var(--text-lead);
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+}
+.lp-dv-tab:hover {
+  color: var(--ink);
+}
+.lp-dv-tab[aria-selected="true"] {
+  background: var(--bg-inset);
+  color: var(--ink);
+}
+.lp-dv-tab:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.lp-dv-note {
+  margin: 18px 0 0;
+  font-size: var(--text-title);
+  color: var(--muted);
+}
+
+/* ── Bento grids ── */
+.lp-dv-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+}
+.lp-dv-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.lp-dv-grid--auto {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.lp-dv-grid--kinds {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+}
+.lp-dv-tile .lp-mp-copy {
+  padding: 18px 14px 22px;
+}
+
+/* The grey area inside a card (the landing's visual well). */
+.lp-dv-well {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-height: 220px;
+  padding: 22px;
+  border-radius: 8px;
+  background: var(--bg-inset);
+}
+.lp-dv-well--short {
+  min-height: 0;
+}
+
+/* White snippet in a well: mono on a hairline. */
+.lp-dv-snippet {
+  display: block;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-overlay);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre;
+  overflow-x: auto;
+}
+.lp-dv-key {
+  color: var(--muted);
+}
+
+/* Problem: one row per device, each its own pairing, auth and delivery. */
+.lp-dv-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-overlay);
+  font-size: var(--text-lead);
+  color: var(--ink);
+}
+.lp-dv-row-name {
+  margin-right: auto;
+  font-weight: 500;
+}
+.lp-dv-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: var(--text-caption);
+  color: var(--muted);
+}
+.lp-dv-chip--ink {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+/* Guidance: the layer stack, Dopl default at the top, this message last. */
+.lp-dv-layers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lp-dv-layer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-overlay);
+  font-size: var(--text-lead);
+  color: var(--ink);
+}
+.lp-dv-layer:last-child {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--text-on-cta);
+}
+.lp-dv-layer:nth-child(2) {
+  margin-left: 12px;
+}
+.lp-dv-layer:nth-child(3) {
+  margin-left: 24px;
+}
+.lp-dv-layer:nth-child(4) {
+  margin-left: 36px;
+}
+
+/* Guidance: the same reply on three surfaces. */
+.lp-dv-surfaces {
+  margin-top: 28px;
+}
+.lp-dv-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lp-dv-surface-label {
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+.lp-dv-lens {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+  color: var(--text-on-cta);
+}
+.lp-dv-notif {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-overlay);
+  font-size: var(--text-lead);
+  color: var(--ink);
+}
+.lp-dv-notif strong {
+  font-weight: 600;
+}
+.lp-dv-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-overlay);
+  font-size: var(--text-lead);
+  color: var(--ink);
+}
+.lp-dv-actions {
+  display: flex;
+  gap: 6px;
+}
+.lp-dv-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: var(--text-small);
+  font-weight: 500;
+  color: var(--ink);
+}
+.lp-dv-pill--ink {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--text-on-cta);
+}
+
+/* ── How it works: a three-step strip ── */
+.lp-dv-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+}
+.lp-dv-step {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--ink);
+}
+.lp-dv-step-num {
+  font-family: var(--font-mono);
+  font-size: var(--text-lead);
+  color: var(--muted);
+}
+
+/* ── Small icon tiles (features, coverage, support) ── */
+.lp-dv-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-overlay);
+  color: var(--ink);
+}
+.lp-dv-kind {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-overlay);
+  font-size: var(--text-title);
+  font-weight: 500;
+  color: var(--ink);
+}
+.lp-dv-link {
+  color: inherit;
+  text-decoration: none;
+}
+.lp-dv-link:hover .lp-mp-card-title {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Trust: the landing's check list in two columns. */
+.lp-dv .lp-dv-trust {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px 48px;
+}
+
+/* Pricing: heading, line and one link, no tiers. */
+.lp-dv-pricing .lp-dv-line {
+  margin-bottom: 28px;
+}
+
+/* Closing CTA: `.lp-final` with the install line above the buttons. */
+.lp-dv-final .lp-final-heading {
+  max-width: 14em;
+}
+.lp-dv-final-line {
+  margin: 22px 0 0;
+  font-size: var(--text-display);
+  color: var(--muted);
+}
+.lp-dv-final-install {
+  width: 100%;
+  max-width: 460px;
+  margin-top: 32px;
+  text-align: left;
+}
+.lp-dv-final-install .lp-dv-install {
+  padding: 14px 12px 14px 20px;
+}
+.lp-dv-bottom {
+  padding-bottom: 120px;
+}
+
+@media (max-width: 900px) {
+  .lp-dv-section {
+    padding-top: 80px;
+  }
+  .lp-dv-line {
+    margin-bottom: 36px;
+    font-size: var(--text-heading);
+  }
+  .lp-dv-grid,
+  .lp-dv-grid--2,
+  .lp-dv-steps,
+  .lp-dv .lp-dv-trust {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .lp-dv-grid--kinds {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .lp-dv-well {
+    min-height: 0;
+    padding: 16px;
+  }
+  .lp-dv-code {
+    padding: 18px 16px;
+  }
+  .lp-dv-install {
+    padding: 14px 12px 4px 16px;
+  }
+  .lp-dv-bottom {
+    padding-bottom: 72px;
+  }
+}

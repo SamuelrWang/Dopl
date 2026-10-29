@@ -177,7 +177,7 @@ export default function RootLayout({
     <html lang="en">
       <body
         // ⚠ The inline script below mutates body's class before hydration (strips mosaic-bg /
-        // adds landing-active on / and /pricing), so server/client class lists differ on first paint.
+        // adds landing-active on /, /pricing and /devices), so server/client class lists differ on first paint.
         suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${inter.variable} antialiased mosaic-bg min-h-screen`}
       >
@@ -213,7 +213,7 @@ export default function RootLayout({
             drive-by. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=location.pathname;if(p==='/'||p==='/pricing'){document.body.classList.remove('mosaic-bg');document.body.classList.add('landing-active');}else if(p==='/services-agreement'||p==='/privacy'||p==='/docs'||p.indexOf('/docs/')===0){document.body.classList.remove('mosaic-bg');document.body.classList.add('legal-active');}}catch(e){}})();`,
+            __html: `(function(){try{var p=location.pathname;if(p==='/'||p==='/pricing'||p==='/devices'){document.body.classList.remove('mosaic-bg');document.body.classList.add('landing-active');}else if(p==='/services-agreement'||p==='/privacy'||p==='/docs'||p.indexOf('/docs/')===0){document.body.classList.remove('mosaic-bg');document.body.classList.add('legal-active');}}catch(e){}})();`,
           }}
         />
         <QueryProvider>

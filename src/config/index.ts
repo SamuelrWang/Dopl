@@ -34,6 +34,8 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "canvas",
   "connect",
   "design",
+  // The Device SDK landing (`src/app/devices`, 2026-10-29), public in PUBLIC_ROUTES.
+  "devices",
   "docs",
   // `/download` (the dmg redirect) and `/get-started` (the post-auth download
   // page) are both top-level routes; a workspace slugged either name would be

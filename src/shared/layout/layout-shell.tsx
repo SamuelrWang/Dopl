@@ -69,7 +69,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLanding = pathname === "/";
   const isPricing = pathname === "/pricing";
-  const isNoChrome = isLanding || isPricing;
+  // `/devices`, the Device SDK landing (2026-10-29): a `.lp` page like `/`, so it renders bare too.
+  const isDevices = pathname === "/devices";
+  const isNoChrome = isLanding || isPricing || isDevices;
   const isLegal = LEGAL_ROUTES.has(pathname) || isDocsPath(pathname);
   const segments = pathname.split("/").filter(Boolean);
   const isAppShellRoute =

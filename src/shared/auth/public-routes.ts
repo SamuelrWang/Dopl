@@ -78,6 +78,10 @@ export const PUBLIC_ROUTES = [
   // `/api/connect/{token}/{step}` checks it itself. `/connect` is a reserved workspace slug.
   "/connect/",
   "/api/connect/",
+  // Device SDK landing (2026-10-29): `/devices` is a marketing page whose audience has no account.
+  // `/developers` stays the gated portal. No other route begins with these bytes, and `devices` is
+  // a reserved workspace slug (`config/index.ts`).
+  "/devices",
   // Remote MCP + OAuth surface. These self-authenticate: the /api/mcp handler
   // returns its own MCP-spec 401 + WWW-Authenticate (so clients can discover
   // the OAuth server and start the login dance); the OAuth endpoints are

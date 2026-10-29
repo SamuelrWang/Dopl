@@ -87,6 +87,8 @@ const RESERVED_TOP_LEVEL = new Set([
   // `/developers/**` — the Device SDK developer portal (W1.3). Dashless, so KEEP by accident
   // otherwise; named so a child segment that ever collides with `APP_PAGES` cannot retire it.
   "developers",
+  // `/devices`: the Device SDK landing (2026-10-29), public in PUBLIC_ROUTES.
+  "devices",
   "docs",
   "download",
   "favicon.ico",
