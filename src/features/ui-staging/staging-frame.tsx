@@ -41,6 +41,7 @@ import { STAGING_IDENTITY, STAGING_VIEWER } from "./staging-stubs";
 import { StagingChannelRail, StagingChannelRailPlaceholder } from "./staging-channel-rail";
 import { StagingPopupsContext, useStagingPopupsState } from "./staging-popups-provider";
 import { useStagingAppBridge } from "./staging-app-bridge";
+import { HELD_BACK_MOCKS_VISIBLE } from "./held-back";
 
 /**
  * The playground's tabs: the product's five plus the MOCKED Tasks page, between Identities and
@@ -50,11 +51,9 @@ import { useStagingAppBridge } from "./staging-app-bridge";
  */
 export type StagingTab = HomeTab | "tasks";
 
-export const STAGING_TABS: ReadonlyArray<{ key: StagingTab; label: string }> = [
-  ...HOME_TABS.slice(0, 4),
-  { key: "tasks", label: "Tasks" },
-  ...HOME_TABS.slice(4),
-];
+export const STAGING_TABS: ReadonlyArray<{ key: StagingTab; label: string }> = HELD_BACK_MOCKS_VISIBLE
+  ? [...HOME_TABS.slice(0, 4), { key: "tasks", label: "Tasks" }, ...HOME_TABS.slice(4)]
+  : HOME_TABS;
 
 /** Each tab's PUBLIC playground route (`src/app/playground/<face>/page.tsx`). */
 export const STAGING_ROUTES: Partial<Record<StagingTab, string>> = {
@@ -62,7 +61,7 @@ export const STAGING_ROUTES: Partial<Record<StagingTab, string>> = {
   channels: "/playground/channels",
   knowledge: "/playground/knowledge",
   identities: "/playground/identities",
-  tasks: "/playground/tasks",
+  ...(HELD_BACK_MOCKS_VISIBLE ? { tasks: "/playground/tasks" } : {}),
   ontology: "/playground/ontology",
 };
 

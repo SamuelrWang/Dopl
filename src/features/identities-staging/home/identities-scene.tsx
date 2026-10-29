@@ -41,6 +41,7 @@ import { useStagingAttachableBases } from "../store/use-staging-attachable-bases
 import { useStagingIdentities } from "../store/use-staging-identities";
 import { useStagingIdentitySave } from "../store/use-staging-identity-save";
 import { TeamsHome } from "../teams/teams-home";
+import { HELD_BACK_MOCKS_VISIBLE } from "@/features/ui-staging/held-back";
 
 
 const runtimeLabel = (id: string) => STAGING_RUNTIMES.find((r) => r.id === id)?.label ?? id;
@@ -72,7 +73,7 @@ export function IdentitiesScene({
   );
 
   // N1 (Samuel, 2026-10-28): a track switch leading the page's own control row, not a tab bar.
-  const switcher = (
+  const switcher = HELD_BACK_MOCKS_VISIBLE && (
     <SegmentedControl
       variant="track"
       options={[

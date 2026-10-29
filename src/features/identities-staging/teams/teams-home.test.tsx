@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { IdentitiesStagingPage } from "../identities-staging-page";
+import { HELD_BACK_MOCKS_VISIBLE } from "@/features/ui-staging/held-back";
 
 afterEach(cleanup);
 
@@ -14,7 +15,8 @@ async function openTeams() {
   fireEvent.click(await screen.findByRole("tab", { name: "Agent teams" }));
 }
 
-describe("/playground/identities → Teams", () => {
+// Reached through the Agent teams switch, which is held back from release (ui-staging/held-back.ts).
+describe.skipIf(!HELD_BACK_MOCKS_VISIBLE)("/playground/identities → Teams", () => {
   it("draws shared and personal team cards and the running team in the rail", async () => {
     await openTeams();
     const shared = screen.getByRole("region", { name: "Shared in this channel" });
