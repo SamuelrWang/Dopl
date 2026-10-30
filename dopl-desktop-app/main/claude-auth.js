@@ -19,11 +19,13 @@ const { spawn } = require('child_process');
 
 const spawner = require('./session-spawner');
 const cliSpawn = require('./runtime/cli-spawn');
-const { setStoredOAuthToken, fullLoginDir, setFullLogin } = require('./claude-token');
+const { setStoredOAuthToken, fullLoginDir, hasFullLogin, setFullLogin } = require('./claude-token');
 const { SECURE_STORE_ENV } = require('./runtime/claude/credential');
 const { diag } = require('./diag');
 
 const SETUP_TIMEOUT_MS = 5 * 60 * 1000;
+// `auth status` reads local state and answers at once; a child still silent after this reads as "unknown".
+const STATUS_TIMEOUT_MS = 15 * 1000;
 // What setup-token prints around its token (claude 2.1.220), whitespace removed: under a pty the CLI spaces
 // words with cursor moves, not spaces. Both are required, so a token still arriving is never taken.
 const TOKEN_OPEN = 'YourOAuthtoken';
@@ -50,15 +52,21 @@ function extractLoneToken(s) {
   return lines.length === 1 ? lines[0] : null;
 }
 
-/** `auth status --json` says a claude.ai login is in the store it was pointed at. */
-function isClaudeAiLogin(out) {
+// `auth status --json`'s answer, or null when it printed none.
+function parseStatus(out) {
   const plain = String(out).replace(ANSI_RE, '');
   try {
     const s = JSON.parse(plain.slice(plain.indexOf('{'), plain.lastIndexOf('}') + 1));
-    return s.loggedIn === true && s.authMethod === 'claude.ai';
+    return s && typeof s === 'object' ? s : null;
   } catch (_) {
-    return false;
+    return null;
   }
+}
+
+/** `auth status --json` says a claude.ai login is in the store it was pointed at. */
+function isClaudeAiLogin(out) {
+  const s = parseStatus(out);
+  return !!s && s.loggedIn === true && s.authMethod === 'claude.ai';
 }
 
 // Every child running now → its stop, so a Cancel can end them (`cancel`).
@@ -66,7 +74,8 @@ const stoppers = new Set();
 
 // One CLI child → `{ code, out, picked }`: at its exit, at the timeout or a Cancel (`code: null`), or as soon as
 // `pick(out)` answers (the child is then stopped). A failed spawn is `code: null` too. `tty`: run under script(1).
-function runChild(bin, args, env, pick, { tty = false } = {}) {
+// `probe`: no sign-in, so a short timeout and no Cancel.
+function runChild(bin, args, env, pick, { tty = false, probe = false } = {}) {
   return new Promise((resolve) => {
     let child;
     const [cmd, argv] = tty && process.platform === 'darwin'
@@ -82,9 +91,10 @@ function runChild(bin, args, env, pick, { tty = false } = {}) {
     let out = '';
     let settled = false;
     const timer = setTimeout(() => {
-      diag('claude signin: timeout (5m)');
+      diag('claude signin: timeout');
       finish(null, null);
-    }, SETUP_TIMEOUT_MS);
+    }, probe ? STATUS_TIMEOUT_MS : SETUP_TIMEOUT_MS);
+    if (timer.unref) timer.unref();
     function finish(code, picked) {
       if (settled) return;
       settled = true;
@@ -110,7 +120,7 @@ function runChild(bin, args, env, pick, { tty = false } = {}) {
       diag('claude signin: cancelled');
       finish(null, null);
     };
-    stoppers.add(stop);
+    if (!probe) stoppers.add(stop);
   });
 }
 
@@ -137,6 +147,7 @@ function fullLoginEnv(bin) {
 
 // auth login → true once `auth status` confirms a claude.ai login in Dopl's store and the marker is written.
 async function runFullLoginFlow(bin) {
+  fullLoginFlows += 1;
   let env;
   try {
     env = fullLoginEnv(bin);
@@ -171,6 +182,8 @@ async function resolveClaudeBin() {
 
 // One flow per kind at a time: a click while one runs joins it rather than starting a second.
 const running = new Map();
+// Bumped by every full-login flow: a status read that spans one may predate the login, so it says nothing.
+let fullLoginFlows = 0;
 function joined(kind, flow) {
   if (!running.has(kind)) {
     running.set(kind, (async () => {
@@ -202,4 +215,45 @@ function signOutFull() {
     .catch((err) => diag('claude full login: logout failed', err && err.message));
 }
 
-module.exports = { signIn, signInFull, cancel, signOutFull, extractToken, extractLoneToken, isClaudeAiLogin };
+// One status read at a time → 'in' / 'out' / 'unknown'. Only a printed answer can say 'out': a failed spawn,
+// a timeout or unreadable output is 'unknown'. The output is read here and never logged.
+let statusCheck = null;
+function checkFullLogin() {
+  if (statusCheck) return statusCheck;
+  statusCheck = (async () => {
+    if (running.has('full')) return 'unknown';
+    const flows = fullLoginFlows;
+    const bin = await resolveClaudeBin();
+    if (!bin) return 'unknown';
+    const r = await runChild(bin, ['auth', 'status', '--json'], fullLoginEnv(bin), null, { probe: true });
+    if (r.code === null || flows !== fullLoginFlows) return 'unknown';
+    if (isClaudeAiLogin(r.out)) return 'in';
+    const s = parseStatus(r.out);
+    return s && typeof s.loggedIn === 'boolean' ? 'out' : 'unknown';
+  })().catch(() => 'unknown').finally(() => { statusCheck = null; });
+  return statusCheck;
+}
+
+/**
+ * A session on the full login was refused: is that login dead? → true once the marker is off, so the next spawn
+ * runs on the token. Dead means `auth status` says not logged in, or `signInDidNotHelp`: a fresh token sign-in
+ * released the session and it was refused again. The status only reads local state, so it still answers
+ * logged in for a login revoked at Anthropic, and the repeat refusal is what proves that case.
+ * Only the marker goes; "Enable Chrome & connectors" writes the store again.
+ */
+async function settleFullLogin(signInDidNotHelp) {
+  if (!hasFullLogin()) return true;
+  if (running.has('full')) return false;
+  let dead = signInDidNotHelp === true;
+  if (!dead) {
+    const status = await checkFullLogin();
+    diag('claude full login: status', status);
+    dead = status === 'out';
+  }
+  if (!dead) return false;
+  const off = setFullLogin(false) && !hasFullLogin();
+  diag('claude full login:', off ? 'marker dropped' : 'marker not dropped');
+  return off;
+}
+
+module.exports = { signIn, signInFull, cancel, signOutFull, settleFullLogin, extractToken, extractLoneToken, isClaudeAiLogin };

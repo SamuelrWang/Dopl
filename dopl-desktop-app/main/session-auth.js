@@ -1,6 +1,7 @@
 // The auth HOLD, for every runtime: a session whose runtime holds no Dopl credential, or whose credential
 // was rejected mid-run, parks and is held instead of crashing. The credential is the runtime's own
-// (`credentialState`); the sign-in status and prompt are `runtime-credentials.js`'s.
+// (`credentialState`); the sign-in status and prompt are `runtime-credentials.js`'s. A session that ran on the
+// optional full login first asks whether that login is dead (`settleFullLoginHold`): a token sign-in cannot revive it.
 
 const store = require('./session-store');
 const { floorWindowlessMessage } = require('./session-profiles');
@@ -66,8 +67,51 @@ function holdIfAuthFailure(s, _text) {
   deps.teardown(s);
   if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
   dispatchHold(s);
-  credentials.noteRejected(copyFor(s).id);
+  if (!s.spawnedOnFullLogin) {
+    credentials.noteRejected(copyFor(s).id);
+  } else if (!s.authHold.settling) {
+    // One settle per hold; a converging failure joins it. Consumed here, so it proves this failure only.
+    const signInDidNotHelp = s.signInTriedOnFullLogin === true;
+    s.signInTriedOnFullLogin = false;
+    s.authHold.settling = settleFullLoginHold(s, s.authHold, signInDidNotHelp);
+  }
   return true;
+}
+
+// A hold on the full login. Login alive or unknown: the token prompt, as for any rejection, and the sign-in it
+// leads to arms `signInDidNotHelp` for the next refusal. Login dead: its marker is off, so with a token stored the
+// session respawns on the token with no prompt. That spawn stamps `spawnedOnFullLogin` false, so it cannot come
+// back here; a refused token is an ordinary rejection. No token: the ordinary sign-in prompt. Never throws.
+async function settleFullLoginHold(s, hold, signInDidNotHelp) {
+  const id = copyFor(s).id;
+  const current = () => !s.settled && s.authHold === hold;
+  let rt = null;
+  let dead = false;
+  try {
+    rt = runtimeRegistry.runtimeFor(s.runtimeId);
+    if (typeof rt.settleFullLogin === 'function') dead = (await rt.settleFullLogin(signInDidNotHelp)) === true;
+  } catch (err) {
+    diag('session-auth: full login check failed', err && err.message);
+  }
+  if (dead) void credentials.refresh();
+  if (!current()) return;
+  if (!dead) {
+    credentials.noteRejected(id);
+    return;
+  }
+  let usable = false;
+  try { usable = (await rt.credentialState()).usable === true; } catch (_) { /* unreadable reads as absent */ }
+  if (!current()) return;
+  if (!usable) {
+    credentials.needSignIn(id);
+    return;
+  }
+  diag('session-auth: full login is off -> releasing the hold onto the token');
+  try {
+    await resumeAfterSignIn(s);
+  } catch (err) {
+    diag('session-auth: fallback resume failed', err && err.message);
+  }
 }
 
 const resumeNudgeFor = (s) => runtimeCopy.resumeNudge(copyFor(s));
@@ -101,6 +145,8 @@ async function resumeHeldSessions(runtimeId) {
     if (s && !s.settled && s.authHold && copyFor(s).id === runtimeId) held.push(s);
   }
   for (const s of held) {
+    // Refused again on the full login after this, the token was not the problem (`settleFullLoginHold`).
+    s.signInTriedOnFullLogin = s.spawnedOnFullLogin === true && s.authHold.kind === 'error';
     try {
       await resumeAfterSignIn(s);
     } catch (err) {
