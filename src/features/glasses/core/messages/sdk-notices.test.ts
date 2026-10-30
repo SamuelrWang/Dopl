@@ -15,7 +15,7 @@ const ACT = "22222222-2222-4222-8222-222222222222";
 type Notify = GlassesSdkUser["notify"];
 type ActionFn = GlassesSdkUser["action"];
 
-async function setup(opts: { migrated?: "all" | "none" | "one of two"; notify?: Notify; action?: ActionFn; forUser?: () => Promise<GlassesSdkUser | null> } = {}) {
+async function setup(opts: { migrated?: "all" | "both" | "none" | "one of two"; notify?: Notify; action?: ActionFn; forUser?: () => Promise<GlassesSdkUser | null> } = {}) {
   const fake = createFakeGlassesStore();
   const clock = fakeClock();
   const { devices } = createFakeDeviceStore();
@@ -26,8 +26,8 @@ async function setup(opts: { migrated?: "all" | "none" | "one of two"; notify?: 
     return d.id;
   };
   const ids = [await pair("G2")];
-  if (opts.migrated === "one of two") ids.push(await pair("G2 b"));
-  const migratedIds = opts.migrated === "none" ? [] : [ids[0]];
+  if (opts.migrated === "one of two" || opts.migrated === "both") ids.push(await pair("G2 b"));
+  const migratedIds = opts.migrated === "none" ? [] : opts.migrated === "both" ? ids : [ids[0]];
   const notify = vi.fn<Notify>(opts.notify ?? (async () => ({ ok: true, value: { id: ACT, status: "queued" } })));
   const action = vi.fn<ActionFn>(opts.action ?? (async () => ({ ok: false, code: "not_found", fallback: false })));
   const user: GlassesSdkUser = { deviceIds: migratedIds, notify, action };
@@ -105,6 +105,19 @@ describe("glasses_notify over the SDK", () => {
     expect(r.id).toBe(w.rows[0].id);
     expect(w.rows).toHaveLength(1);
     expect(logs).toContainEqual({ evt: "glasses_notify", path: "prosumer_fallback", fallback_reason: "device_offline" });
+  });
+
+  it("prod 2026-10-30: a stale device refusing device_offline does not keep the notice from a live one", async () => {
+    let calls = 0;
+    const w = await setup({
+      migrated: "both",
+      notify: async () => (calls++ === 0 ? unavailable("device_offline") : { ok: true, value: { id: ACT, status: "queued" } }),
+    });
+    const r = await glassesNotify(w.deps, USER, { title: "t", body: "b" });
+    expect(r).toEqual({ id: ACT, status: "pending" });
+    expect(w.notify).toHaveBeenCalledTimes(2);
+    expect(w.rows).toHaveLength(0);
+    expect(logs).toContainEqual({ evt: "glasses_notify", path: "sdk", devices: 1 });
   });
 
   it("SDK refusal that may have landed (our timeout, unconfirmed): skipped, never a second copy", async () => {

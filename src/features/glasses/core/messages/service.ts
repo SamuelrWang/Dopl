@@ -117,9 +117,10 @@ export async function glassesNotify(
 }
 
 /**
- * `present.notify` on each migrated device (the prosumer queue reaches every device too). Prosumer
- * fallback ONLY while nothing has landed (proven non-delivery on the first device: SDK unavailable, or
- * refused before any lens copy existed, e.g. `device_offline`); after that a device that fails is
+ * `present.notify` on each migrated device (the prosumer queue reaches every device too). EVERY device
+ * is tried: one stale pairing refusing `device_offline` must not keep the notice from a live one.
+ * Prosumer fallback ONLY when no device took it and every refusal was proven non-delivery (SDK
+ * unavailable, or refused before any lens copy existed); a device that fails after another landed is
  * logged, never re-sent (no double copy). A may-have-landed outcome (unconfirmed, our timeout) or any
  * other refusal reports `skipped:sdk <code>` when no device took it.
  */
@@ -131,19 +132,20 @@ async function notifyOverSdk(
   const key = newKey();
   let first: { id: string; status: string } | null = null;
   let refusal: string | null = null;
+  let proven: string | null = null;
   let landed = 0;
   for (const deviceId of deviceIds) {
     const r = await user.notify({ deviceId, title: a.title, body: a.body, idempotencyKey: `${key}:${deviceId}` });
     if (r.ok) {
       first ??= r.value;
       landed += 1;
-    }
-    else if (r.fallback && !first && !refusal) return { path: "prosumer", reason: r.code };
-    else {
-      refusal ??= r.code;
+    } else {
+      if (r.fallback) proven ??= r.code;
+      else refusal ??= r.code;
       logNotice({ evt: "glasses_notify", path: "sdk", device_id: deviceId, outcome: r.code });
     }
   }
+  if (!first && proven && !refusal) return { path: "prosumer", reason: proven };
   if (!first) return { path: "sdk", id: null, status: `skipped:sdk ${refusal ?? "no device"}`, devices: 0 };
   return { path: "sdk", id: first.id, status: first.status === "delivered" ? "delivered" : "pending", devices: landed };
 }
