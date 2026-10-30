@@ -39,7 +39,7 @@ export function Initials({ text, small, ink }: { text: string; small?: boolean; 
 }
 
 /** The one scale, in JS for icon and chart sizes. Must equal --u in tokens.module.css. */
-export const U = 0.8;
+export const U = 0.72;
 /** Stroke is in the icon's own 24-unit viewBox, so it scales with size and never changes. */
 export const ICON = { size: 20 * U, strokeWidth: 1.6 } as const;
 export const ICON_SM = { size: 17.5 * U, strokeWidth: 1.6 } as const;

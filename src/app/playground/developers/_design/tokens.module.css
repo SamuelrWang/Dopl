@@ -7,7 +7,7 @@
 .u125 { --legacy-unit: 1; }
 .u100 { --legacy-unit: 1; }
 .scope {
-  --u: 0.8px;
+  --u: 0.72px;
   --ink: #000000;
   --ink-soft: #111111;
   --body: #333333;
