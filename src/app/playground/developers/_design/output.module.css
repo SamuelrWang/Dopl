@@ -44,3 +44,8 @@
 .dotFaint { opacity: 0.45; }
 .stepBody { display: flex; flex: 1; flex-direction: column; gap: calc(1 * var(--u)); min-width: 0; }
 .g2 { flex: none; width: 576px; max-width: 100%; aspect-ratio: 2 / 1; background: #000; image-rendering: pixelated; }
+.ruleRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: calc(8.75 * var(--u)) calc(15 * var(--u)); padding: calc(13.75 * var(--u)) 0; box-shadow: inset 0 calc(-1.25 * var(--u)) 0 var(--line-tool); }
+.ruleRow:last-child { padding-bottom: 0; box-shadow: none; }
+.ruleActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: calc(7.5 * var(--u)); }
+.sticky { position: sticky; top: 0; }
+.ruleValue { grid-column: 1 / -1; min-width: 0; }

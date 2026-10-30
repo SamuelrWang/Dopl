@@ -2,14 +2,11 @@
 
 /** One rule row: value, source, inline Override, and reset to the inherited value. */
 import { useState } from "react";
-import { cn } from "@/shared/lib/utils";
-import { pillButton } from "@/shared/ui/pill-button";
-import { SelectMenu } from "@/shared/ui/select-menu";
-import { TEXT_LINK_BUTTON } from "@/shared/ui/text-link";
-import { RAISED_INPUT } from "@/shared/ui/wells";
+import { Badge, Button, Chip, PillMenu } from "../_design/ui";
+import { RuleRow } from "../_design/ui-output";
+import { FilterRow, Row, Text, TextArea, TextField } from "../_design/ui-page";
 import { modelById } from "../_data/catalog";
 import { ownValue, resolveField, setField, type FieldDef, type FieldValue } from "../_data/receives";
-import { FactChip, ov } from "../_components/ui";
 import type { ReceivesEditor } from "./receives";
 
 function display(field: FieldDef, value: FieldValue, modelId: ReceivesEditor["modelId"]): string {
@@ -22,74 +19,50 @@ function display(field: FieldDef, value: FieldValue, modelId: ReceivesEditor["mo
 function Editor({ field, value, onChange, editor }: { field: FieldDef; value: FieldValue; onChange: (v: FieldValue) => void; editor: ReceivesEditor }) {
   const model = modelById(editor.modelId);
   if (field.control === "select") {
-    return (
-      <SelectMenu
-        variant="outline"
-        ariaLabel={field.label}
-        value={String(value)}
-        options={field.options!(model)}
-        onChange={onChange}
-      />
-    );
+    const options = field.options!(model);
+    return <PillMenu stable label={options.find((o) => o.value === String(value))?.label ?? String(value)} value={String(value)} options={options} onChange={onChange} />;
   }
   if (field.control === "chips") {
     const on = value as string[];
     return (
-      <span className="flex flex-wrap gap-1">
+      <FilterRow>
         {field.options!(model).map((o) => {
           const active = on.includes(o.value);
           return (
-            <button
-              key={o.value}
-              type="button"
-              aria-pressed={active}
-              onClick={() => onChange(active ? on.filter((x) => x !== o.value) : [...on, o.value])}
-              className={pillButton(active ? "ink" : "outline", "xs", { raise: false })}
-            >
+            <Chip key={o.value} on={active} pressed={active} onClick={() => onChange(active ? on.filter((x) => x !== o.value) : [...on, o.value])}>
               {o.label}
-            </button>
+            </Chip>
           );
         })}
-      </span>
+      </FilterRow>
     );
   }
   if (field.control === "number") {
     const max = field.max?.(model);
     return (
-      <span className="flex items-center gap-2">
-        <input
+      <Row>
+        <TextField
           type="number"
-          aria-label={field.label}
-          value={Number(value)}
+          label={field.label}
+          value={String(value)}
           min={field.min}
           max={max}
-          onChange={(e) => {
-            const n = Number(e.target.value);
+          onChange={(raw) => {
+            const n = Number(raw);
             if (Number.isNaN(n)) return;
             onChange(Math.max(field.min ?? 0, max !== undefined ? Math.min(max, n) : n));
           }}
-          className={cn(RAISED_INPUT, "h-7 w-20 px-2")}
         />
         {max !== undefined && (
-          <span className="text-caption text-text-muted">
+          <Text kind="smallMuted" nowrap>
             Limit {max} on {model.name}
-          </span>
+          </Text>
         )}
-      </span>
+      </Row>
     );
   }
-  if (field.control === "textarea") {
-    return (
-      <textarea
-        aria-label={field.label}
-        rows={3}
-        value={String(value)}
-        onChange={(e) => onChange(e.target.value)}
-        className={cn(RAISED_INPUT, "resize-none px-2.5 py-1.5")}
-      />
-    );
-  }
-  return <input aria-label={field.label} value={String(value)} onChange={(e) => onChange(e.target.value)} className={cn(RAISED_INPUT, "h-7 px-2 font-mono")} />;
+  if (field.control === "textarea") return <TextArea label={field.label} value={String(value)} onChange={onChange} />;
+  return <TextField label={field.label} value={String(value)} onChange={onChange} />;
 }
 
 export function FieldRow({ field, editor }: { field: FieldDef; editor: ReceivesEditor }) {
@@ -107,46 +80,42 @@ export function FieldRow({ field, editor }: { field: FieldDef; editor: ReceivesE
 
   const editing = open && own !== undefined;
   return (
-    <li className={cn(ov.row, "items-start")}>
-      <span className="w-34 shrink-0 pt-0.5 text-body font-medium text-text-primary">{field.label}</span>
-      <span className="min-w-0 flex-1 pt-0.5">
-        {editing ? (
-          <Editor field={field} value={own!} onChange={write} editor={editor} />
-        ) : (
-          <span className={cn("block text-body text-text-secondary", field.control === "text" && "font-mono text-caption")}>{display(field, resolved.value, modelId)}</span>
-        )}
-      </span>
-      <span className="flex shrink-0 items-center gap-2">
-        <FactChip>{resolved.source}</FactChip>
-        {editing ? (
-          <button type="button" className={pillButton("outline", "xs")} onClick={() => setOpen(false)}>
-            Done
-          </button>
-        ) : (
-          <button
-            type="button"
-            className={pillButton("outline", "xs")}
-            onClick={() => {
-              if (own === undefined) write(resolved.value);
-              setOpen(true);
-            }}
-          >
-            {own === undefined ? "Override" : "Edit"}
-          </button>
-        )}
-        {own !== undefined && (
-          <button
-            type="button"
-            className={cn(TEXT_LINK_BUTTON, "text-caption text-text-muted")}
-            onClick={() => {
-              write(undefined);
-              setOpen(false);
-            }}
-          >
-            Reset to inherited
-          </button>
-        )}
-      </span>
-    </li>
+    <RuleRow
+      label={field.label}
+      actions={
+        <>
+          <Badge tone="ring">{resolved.source}</Badge>
+          {editing ? (
+            <Button size="sm" onClick={() => setOpen(false)}>
+              Done
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              onClick={() => {
+                if (own === undefined) write(resolved.value);
+                setOpen(true);
+              }}
+            >
+              {own === undefined ? "Override" : "Edit"}
+            </Button>
+          )}
+          {own !== undefined && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                write(undefined);
+                setOpen(false);
+              }}
+            >
+              Reset to inherited
+            </Button>
+          )}
+        </>
+      }
+    >
+      {editing ? <Editor field={field} value={own!} onChange={write} editor={editor} /> : <Text kind={field.control === "text" ? "mono" : "text"}>{display(field, resolved.value, modelId)}</Text>}
+    </RuleRow>
   );
 }

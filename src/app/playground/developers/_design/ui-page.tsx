@@ -5,6 +5,7 @@
  * compose these and add only their own grid widths. None takes a className. See README.md.
  */
 import { Check, ChevronLeft, ChevronRight, X, type LucideIcon } from "lucide-react";
+import Link from "next/link";
 import { createElement, useEffect, useRef, type ReactNode, type Ref } from "react";
 import b from "./base.module.css";
 import c from "./catalog.module.css";
@@ -63,6 +64,25 @@ export function PageHeader({ title, test, action }: { title: string; test?: bool
       </div>
       {action}
     </header>
+  );
+}
+
+export function Breadcrumbs({ items }: { items: { label: string; href?: string }[] }) {
+  return (
+    <nav className={p.crumbs} aria-label="Breadcrumb">
+      {items.map((item, i) => (
+        <span key={item.label} className={b.row}>
+          {i > 0 && <ChevronRight {...ICON_SM} aria-hidden="true" className={b.iconSoft} />}
+          {item.href ? (
+            <Link href={item.href} className={p.crumbLink}>
+              {item.label}
+            </Link>
+          ) : (
+            <Text kind="strong">{item.label}</Text>
+          )}
+        </span>
+      ))}
+    </nav>
   );
 }
 
@@ -373,10 +393,13 @@ export function Alert({ tone, icon, children }: { tone: "warn" | "error"; icon: 
   );
 }
 
-export function TextField({ label, placeholder, value, autoFocus, grow, onChange, onEnter }: { label: string; placeholder?: string; value: string; autoFocus?: boolean; /** Fills its row. */ grow?: boolean; onChange: (next: string) => void; onEnter?: () => void }) {
+export function TextField({ label, placeholder, value, autoFocus, grow, type, min, max, onChange, onEnter }: { label: string; placeholder?: string; value: string; autoFocus?: boolean; /** Fills its row. */ grow?: boolean; type?: "number"; min?: number; max?: number; onChange: (next: string) => void; onEnter?: () => void }) {
   return (
     <label className={cx(f.field, grow && f.fieldGrow)}>
       <input
+        type={type}
+        min={min}
+        max={max}
         autoFocus={autoFocus}
         className={f.fieldInput}
         aria-label={label}

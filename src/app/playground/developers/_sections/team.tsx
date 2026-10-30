@@ -3,12 +3,11 @@
 /** Team: who has access, what each role can do, and who needs a look. */
 import { Check, Minus, Plus, RotateCcw, SearchX, Shield, Trash2, UserRound, Code2, Eye, Crown } from "lucide-react";
 import { useState } from "react";
-import { Badge, Button, Card, DataCell, DataRow, DataTable, ICON, ICON_SM, Initials, PillMenu, SearchField, Segmented, StatCard, TwoLine, initialsOf, type Column } from "../_design/ui";
-import { ConfirmDialog, EmptyState, FlowDialog, Grow, Mark, Page, PageHeader, PlainButton, Row, Stack, StatRow, TableHead, Text, TextField, Tile, Tiles, Toast, Toolbar, Between } from "../_design/ui-page";
+import { Badge, Button, Card, DataCell, DataRow, DataTable, ICON, ICON_SM, Initials, PillMenu, SearchField, Segmented, TwoLine, initialsOf, type Column } from "../_design/ui";
+import { ConfirmDialog, EmptyState, FlowDialog, Grow, Mark, Page, PageHeader, PlainButton, Row, Stack, TableHead, Text, TextField, Tile, Tiles, Toast, Toolbar, Between } from "../_design/ui-page";
 import { minsAgo, type Member } from "../_data/company";
-import { PLAN } from "../_data/misc";
 import { usePortal } from "../_components/portal-store";
-import { fmt, since } from "../_components/ui";
+import { since } from "../_components/ui";
 
 type Role = Member["role"];
 const ROLES: { role: Role; icon: typeof Crown; sub: string }[] = [
@@ -64,7 +63,6 @@ export function TeamSection() {
   const members = view === 0 ? state.members.filter((m) => `${m.name} ${m.email} ${m.role}`.toLowerCase().includes(needle)) : [];
   const pending = invites.filter((i) => i.email.includes(needle));
   const keysBy = (name: string) => state.keys.filter((k) => k.createdBy === name && !k.revoked).length;
-  const used = state.members.length + invites.length;
   const owners = state.members.filter((m) => m.role === "Owner").length;
   const setRole = (id: string, role: Role) => update((s) => ({ ...s, members: s.members.map((m) => (m.id === id ? { ...m, role } : m)) }));
 
@@ -116,13 +114,6 @@ export function TeamSection() {
           </Button>
         }
       />
-
-      <StatRow>
-        <StatCard label="Members" value={fmt(state.members.length)} hint={`${owners} owner, ${state.members.filter((m) => m.role === "Admin").length} admin`} />
-        <StatCard label="Seats" value={`${used} of ${PLAN.seatsIncluded}`} hint={`${PLAN.seatsIncluded - used} left on ${PLAN.name}`} />
-        <StatCard label="Pending invites" value={fmt(invites.length)} hint={invites.length ? `Oldest sent ${since(invites[0].sentAt).toLowerCase()}` : "None waiting"} pressed={view === 1} onClick={() => setView(view === 1 ? 0 : 1)} />
-        <StatCard label="Inactive" value={fmt(state.members.filter(quiet).length)} hint={`Not seen in ${QUIET_DAYS} days`} />
-      </StatRow>
 
       <Toolbar>
         <Between>

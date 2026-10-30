@@ -44,16 +44,26 @@ function metaOf(call: Call) {
   return [user, device ?? call.http?.key, call.errorCode].filter(Boolean).join(", ") || KIND_LABEL[call.kind];
 }
 
+/** Page-level Activity: every call in this environment. */
 export function ActivitySection({ initial }: { initial: { call?: string; user?: string; device?: string; status?: string } }) {
   const { state } = usePortal();
   const calls = useCalls();
-  const [openId, setOpenId] = useState<string | null>(initial.call ?? null);
+  return (
+    <Page fit>
+      <CallsBrowser calls={calls} initial={initial} figures test={state.env === "test"} />
+    </Page>
+  );
+}
+
+/** Figures, filters, every call and the selected call's story. Fills a fit page. */
+export function CallsBrowser({ calls, initial, figures, test }: { calls: Call[]; initial?: { call?: string; user?: string; device?: string; status?: string }; figures?: boolean; test?: boolean }) {
+  const [openId, setOpenId] = useState<string | null>(initial?.call ?? null);
   const [kind, setKind] = useState(0);
-  const [status, setStatus] = useState(initial.status ?? "all");
-  const [user, setUser] = useState(initial.user ?? "all");
+  const [status, setStatus] = useState(initial?.status ?? "all");
+  const [user, setUser] = useState(initial?.user ?? "all");
   const [capability, setCapability] = useState("all");
   const [time, setTime] = useState("all");
-  const [q, setQ] = useState(initial.device ?? "");
+  const [q, setQ] = useState(initial?.device ?? "");
 
   const needle = q.trim().toLowerCase();
   const limit = TIMES.find((t) => t.value === time)!.mins;
@@ -95,23 +105,27 @@ export function ActivitySection({ initial }: { initial: { call?: string; user?: 
   };
 
   return (
-    <Page fit>
-      <PageHeader
-        title="Activity"
-        test={state.env === "test"}
-        action={
-          <Button disabled={rows.length === 0} onClick={exportCsv}>
-            <Download {...ICON} aria-hidden="true" />
-            Export
-          </Button>
-        }
-      />
+    <>
+      {figures && (
+        <PageHeader
+          title="Activity"
+          test={test}
+          action={
+            <Button disabled={rows.length === 0} onClick={exportCsv}>
+              <Download {...ICON} aria-hidden="true" />
+              Export
+            </Button>
+          }
+        />
+      )}
+      {figures && (
       <StatRow>
         <StatCard label="Calls" value={fmt(rows.length)} hint={rows.length === calls.length ? "Most recent" : `of ${fmt(calls.length)}`} />
         <StatCard label="Succeeded" value={rows.length ? `${Math.round((worked / rows.length) * 100)}%` : "None"} hint={`${fmt(worked)} calls`} />
         <StatCard label="Median time" value={`${fmt(median)} ms`} hint="Accepted to sent" />
         <StatCard label="Needs a look" value={fmt(trouble)} hint="Failed, retrying or unanswered" pressed={status === "trouble"} onClick={() => setStatus(status === "trouble" ? "all" : "trouble")} />
       </StatRow>
+      )}
       <SplitLayout
         wide
         left={
@@ -161,6 +175,6 @@ export function ActivitySection({ initial }: { initial: { call?: string; user?: 
         }
         right={<FillCard>{open ? <CallDetail call={open} /> : <Between><Text kind="muted">No call selected</Text></Between>}</FillCard>}
       />
-    </Page>
+    </>
   );
 }

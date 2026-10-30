@@ -5,12 +5,11 @@
  * shows its value and where the value comes from. Publishing walks a version from draft to Test to
  * Live. Dopl never rewrites a message, so nothing here offers to.
  */
-import { useState } from "react";
 import { Lock } from "lucide-react";
-import { toast } from "@/shared/ui/toast";
-import { cn } from "@/shared/lib/utils";
-import { pillButton } from "@/shared/ui/pill-button";
-import { StatusPill } from "@/shared/ui/status-pill";
+import { useState } from "react";
+import { Badge, Button, Card, ICON_SM, PillMenu, TwoLine } from "../_design/ui";
+import { RuleRow, SplitLayout } from "../_design/ui-output";
+import { Between, FilterRow, Grow, ListRow, Row, Text, Toast, Toolbar } from "../_design/ui-page";
 import { minsAgo } from "../_data/company";
 import { MEMBERS } from "../_data/company";
 import { categoryById, modelById, type CategoryId, type ModelId } from "../_data/catalog";
@@ -27,10 +26,11 @@ import {
   type Segment,
 } from "../_data/receives";
 import { usePortal } from "../_components/portal-store";
-import { Card, FactChip, Filter, ov, since } from "../_components/ui";
+import { since } from "../_components/ui";
 import { FieldRow } from "./receives-fields";
+import { ReceivesPreview } from "./receives-preview";
 
-export { ReceivesPreview } from "./receives-preview";
+export { ReceivesPreview };
 
 export interface ReceivesEditor {
   categoryId: CategoryId;
@@ -71,13 +71,16 @@ export function useReceivesEditor(categoryId: CategoryId, modelId: ModelId): Rec
   };
 }
 
-function VersionBar({ editor }: { editor: ReceivesEditor }) {
+function VersionBar({ editor, say }: { editor: ReceivesEditor; say: (text: string) => void }) {
   const { state, modelId, categoryId } = editor;
   const testRules = state.versions.find((v) => v.n === state.test)?.rules;
   const dirty = !testRules || !rulesEqual(state.draft, testRules);
   const canPromote = state.test !== 0 && state.test !== state.live;
   const category = categoryById(categoryId).name;
-
+  const scopes = [
+    { value: "category", label: `${category}, all models` },
+    { value: "model", label: `${modelById(modelId).name} only` },
+  ];
   const publish = () => {
     const n = Math.max(0, ...state.versions.map((v) => v.n)) + 1;
     editor.write((s) => ({
@@ -85,76 +88,62 @@ function VersionBar({ editor }: { editor: ReceivesEditor }) {
       test: n,
       versions: [{ n, at: minsAgo(0), by: MEMBERS[2].name, note: `${countOverrides(s.draft)} overrides on ${category}`, rules: s.draft }, ...s.versions],
     }));
-    toast({ title: `Published v${n} to Test` });
+    say(`Published v${n} to Test`);
   };
   const promote = () => {
     editor.write((s) => ({ ...s, live: s.test }));
-    toast({ title: `Promoted v${state.test} to Live` });
+    say(`Promoted v${state.test} to Live`);
   };
-
   return (
-    <section className={cn("white-card", ov.card)} aria-label="Rules">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Filter
-          label="Set on"
-          value={editor.scopeKind}
-          options={[
-            { value: "category", label: `${category}, all models` },
-            { value: "model", label: `${modelById(modelId).name} only` },
-          ]}
-          onChange={editor.setScopeKind}
-        />
-        <Filter label="Segment" value={editor.segment} options={SEGMENTS} onChange={editor.setSegment} />
-        <span className="ml-auto flex items-center gap-1.5">
-          {dirty ? <StatusPill tone="attention">Draft has changes</StatusPill> : <StatusPill>Draft matches Test</StatusPill>}
-          <FactChip>Test v{state.test || "none"}</FactChip>
-          <FactChip>Live v{state.live || "none"}</FactChip>
-          <button type="button" disabled={!dirty} className={cn(pillButton("outline", "md"), "disabled:opacity-60")} onClick={publish}>
+    <Toolbar>
+      <Between>
+        <FilterRow>
+          <PillMenu stable label={scopes.find((o) => o.value === editor.scopeKind)!.label} value={editor.scopeKind} options={scopes} onChange={(v) => editor.setScopeKind(v as "category" | "model")} />
+          <PillMenu stable label={SEGMENTS.find((o) => o.value === editor.segment)?.label ?? "Segment"} value={editor.segment} options={SEGMENTS} onChange={(v) => editor.setSegment(v as Segment)} />
+          {dirty ? <Badge tone="warn">Draft has changes</Badge> : <Badge>Draft matches Test</Badge>}
+        </FilterRow>
+        <Row>
+          <Badge tone="ring">Test v{state.test || "none"}</Badge>
+          <Badge tone="ok" dot>Live v{state.live || "none"}</Badge>
+          <Button disabled={!dirty} onClick={publish}>
             Publish to Test
-          </button>
-          <button type="button" disabled={!canPromote} className={cn(pillButton("ink", "md", { raise: false }), "disabled:opacity-60")} onClick={promote}>
+          </Button>
+          <Button variant="ink" disabled={!canPromote} onClick={promote}>
             Promote to Live
-          </button>
-        </span>
-      </div>
-    </section>
+          </Button>
+        </Row>
+      </Between>
+    </Toolbar>
   );
 }
 
-function Versions({ editor }: { editor: ReceivesEditor }) {
+function Versions({ editor, say }: { editor: ReceivesEditor; say: (text: string) => void }) {
   const { state } = editor;
   const rollback = (n: number) => {
     const version = state.versions.find((v) => v.n === n);
     if (!version) return;
     editor.write((s) => ({ ...s, live: n, test: n, draft: version.rules }));
-    toast({ title: `Rolled back to v${n}` });
+    say(`Rolled back to v${n}`);
   };
   return (
-    <Card title="Versions" count={state.versions.length}>
-      <ul className={ov.rows}>
-        {state.versions.map((v) => (
-          <li key={v.n} className={ov.row}>
-            <span className={cn(ov.mono, "w-7")}>v{v.n}</span>
-            <span className={ov.rowMain}>
-              <span className={ov.rowTitle}>{v.note}</span>
-              <span className={ov.rowMeta}>
-                {v.by}, {since(v.at)}
-              </span>
-            </span>
-            {v.n === state.live && (
-              <StatusPill tone="live" dot bare>
-                Live
-              </StatusPill>
-            )}
-            {v.n === state.test && <StatusPill>Test</StatusPill>}
+    <Card>
+      <Text kind="h3">Versions</Text>
+      <div>
+        {state.versions.map((v, i) => (
+          <ListRow key={v.n} line={i < state.versions.length - 1}>
+            <Text kind="mono">v{v.n}</Text>
+            <TwoLine strong={false} title={v.note} sub={`${v.by}, ${since(v.at)}`} />
+            <Grow />
+            {v.n === state.live && <Badge tone="ok" dot>Live</Badge>}
+            {v.n === state.test && <Badge tone="ring">Test</Badge>}
             {v.n !== state.live && (
-              <button type="button" className={pillButton("quiet", "xs")} onClick={() => rollback(v.n)}>
+              <Button size="sm" variant="ghost" onClick={() => rollback(v.n)}>
                 Roll back
-              </button>
+              </Button>
             )}
-          </li>
+          </ListRow>
         ))}
-      </ul>
+      </div>
     </Card>
   );
 }
@@ -168,55 +157,62 @@ function Floors({ editor }: { editor: ReceivesEditor }) {
     ["User blocks and quiet hours", "Always honoured"],
   ];
   return (
-    <Card title="Safety floors" aside={<Lock size={12} aria-hidden="true" className="text-text-muted" />}>
-      <ul className={ov.rows}>
+    <Card>
+      <Between>
+        <Text kind="h3">Safety floors</Text>
+        <Lock {...ICON_SM} aria-hidden="true" />
+      </Between>
+      <div>
         {rows.map(([label, value]) => (
-          <li key={label} className={ov.row}>
-            <span className={ov.rowMain}>
-              <span className={ov.rowTitle}>{label}</span>
-            </span>
-            <span className="text-caption text-text-secondary">{value}</span>
-          </li>
+          <RuleRow key={label} label={label} actions={null}>
+            <Text>{value}</Text>
+          </RuleRow>
         ))}
-      </ul>
+      </div>
     </Card>
   );
 }
 
 export function ReceivesTab({ editor, onCapabilities }: { editor: ReceivesEditor; onCapabilities: () => void }) {
   const { state: portal } = usePortal();
+  const [notice, setNotice] = useState<string | null>(null);
+  const say = (text: string) => {
+    setNotice(text);
+    window.setTimeout(() => setNotice((now) => (now === text ? null : now)), 3200);
+  };
   const caps = Object.values(portal.capabilities[editor.modelId] ?? {}).filter((c) => c?.on).length;
   const total = modelById(editor.modelId).capabilities.length;
   return (
     <>
-      <VersionBar editor={editor} />
-      {FIELD_GROUPS.map((group) => (
-        <div key={group.title} className="contents">
-          {group.title === "If too long" && (
-            <Card title="What it may do">
-              <div className={ov.row}>
-                <span className={ov.rowMain}>
-                  <span className={ov.rowTitle}>
-                    {caps} of {total} capabilities allowed
-                  </span>
-                </span>
-                <button type="button" className={pillButton("outline", "sm")} onClick={onCapabilities}>
+      <VersionBar editor={editor} say={say} />
+      <SplitLayout
+        left={
+          <>
+            {FIELD_GROUPS.map((group) => (
+              <Card key={group.title} label={group.title}>
+                <Text kind="h3">{group.title}</Text>
+                <div>
+                  {group.fields.map((field) => (
+                    <FieldRow key={field.key} field={field} editor={editor} />
+                  ))}
+                </div>
+              </Card>
+            ))}
+            <Card>
+              <Between>
+                <TwoLine title={<Text kind="h3">What it may do</Text>} sub={`${caps} of ${total} capabilities allowed`} />
+                <Button size="sm" onClick={onCapabilities}>
                   Open capabilities
-                </button>
-              </div>
+                </Button>
+              </Between>
             </Card>
-          )}
-          <Card title={group.title}>
-            <ul className={ov.rows}>
-              {group.fields.map((field) => (
-                <FieldRow key={field.key} field={field} editor={editor} />
-              ))}
-            </ul>
-          </Card>
-        </div>
-      ))}
-      <Floors editor={editor} />
-      <Versions editor={editor} />
+            <Floors editor={editor} />
+            <Versions editor={editor} say={say} />
+          </>
+        }
+        right={<ReceivesPreview editor={editor} />}
+      />
+      {notice && <Toast>{notice}</Toast>}
     </>
   );
 }

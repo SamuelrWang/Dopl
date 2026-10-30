@@ -14,7 +14,7 @@ import f from "./forms.module.css";
 import side from "./sidebar.module.css";
 import o from "./surfaces.module.css";
 
-export { PillMenu, PopMenu, Segmented, type PillOption } from "./interactive";
+export { PillMenu, PopMenu, Segmented, Switch, type PillOption } from "./interactive";
 export { Initials, cx, initialsOf, ICON, ICON_SM } from "./components";
 
 /* Buttons */

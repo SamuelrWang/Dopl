@@ -171,3 +171,14 @@ export function TierRow({ label, children }: { label: string; children: ReactNod
 
 export const Swatch = ({ color }: { color: string }) => <span className={x.swatch} style={{ backgroundColor: color }} aria-hidden="true" />;
 export const PreviewStage = ({ children }: { children: ReactNode }) => <div className={x.previewStage}>{children}</div>;
+
+/** A setting: its name, where it comes from and what to do, then its value or editor at full width. */
+export function RuleRow({ label, children, actions }: { label: string; children: ReactNode; actions: ReactNode }) {
+  return (
+    <div className={x.ruleRow}>
+      <Text kind="strong">{label}</Text>
+      <div className={x.ruleActions}>{actions}</div>
+      <div className={x.ruleValue}>{children}</div>
+    </div>
+  );
+}

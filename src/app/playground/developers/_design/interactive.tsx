@@ -32,10 +32,21 @@ export function Radios({ options, start = 0 }: { options: string[]; start?: numb
   );
 }
 
-export function Switch({ on = false, label }: { on?: boolean; label: string }) {
-  const [enabled, set] = useState(on);
+export function Switch({ on = false, checked, label, onChange }: { on?: boolean; /** Set with onChange when the page holds the value. */ checked?: boolean; label: string; onChange?: (next: boolean) => void }) {
+  const [own, set] = useState(on);
+  const enabled = checked ?? own;
   return (
-    <button type="button" role="switch" aria-checked={enabled} aria-label={label} className={cx(f.switch, enabled && f.switchOn)} onClick={() => set(!enabled)}>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      aria-label={label}
+      className={cx(f.switch, enabled && f.switchOn)}
+      onClick={() => {
+        set(!enabled);
+        onChange?.(!enabled);
+      }}
+    >
       <span className={f.knob} />
     </button>
   );

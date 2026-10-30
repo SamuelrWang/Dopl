@@ -68,7 +68,7 @@ export const INTEGRATIONS: readonly Integration[] = [
         capabilities: ["presence.read", "present.notify", "present.display", "ask.choice", "input.utterance", "input.tap"],
         intents: ["message", "ask", "notify", "display"],
         surface: "lens",
-        floor: LENS_FLOOR,
+        floor: { ...LENS_FLOOR, maxLines: 10, lineWidth: 70 },
       },
     ],
   },

@@ -4,16 +4,15 @@
  * The sticky preview: a sample message rendered on this model as the draft rules would deliver it.
  * It only cuts and routes, as the runtime does; the words are the agent's.
  */
-import { cn } from "@/shared/lib/utils";
-import { SelectMenu } from "@/shared/ui/select-menu";
-import { SECTION_TITLE } from "@/shared/ui/section-title";
-import { StatusPill } from "@/shared/ui/status-pill";
-import { ThinMeter } from "@/shared/ui/usage-meter";
-import { pillButton } from "@/shared/ui/pill-button";
-import { DeviceScreen, SimulatorCalls, SimulatorControls, useSimulatorSession } from "../_components/device-simulator";
+import { CircleAlert, Play, Send, Square } from "lucide-react";
+import { useSimulatorSession } from "../_components/device-simulator";
+import { G2Screen } from "../_design/g2-screen";
+import { Badge, Button, Card, ICON_SM, PillMenu, TwoLine, type Tone } from "../_design/ui";
+import { Limit } from "../_design/ui-data";
+import { LensScreen, PanelScreen, Stage } from "../_design/ui-output";
+import { Alert, Between, CodeBlock, Grow, ListRow, Row, Stack, Text } from "../_design/ui-page";
 import { modelById } from "../_data/catalog";
 import { SAMPLE_MESSAGES, resolveField, wrapLines, type FieldKey } from "../_data/receives";
-import { ov } from "../_components/ui";
 import type { ReceivesEditor } from "./receives";
 
 export function renderPreview(editor: Pick<ReceivesEditor, "modelId" | "state" | "segment" | "sample">) {
@@ -51,62 +50,108 @@ export function renderPreview(editor: Pick<ReceivesEditor, "modelId" | "state" |
   return { model, shown, total: all.length, maxLines, overflow, mode, options, refused, payload, sendTo, title: message.title, instructions: String(get("agent_instructions")) };
 }
 
+const CALL_TONE: Record<string, Tone> = { refused: "error", seen: "ok", answered: "ok", received: "ok" };
+
+function Screen({ surface, modelId, lines, options, onTap }: { surface: string; modelId: string; lines: string[]; options: string[]; onTap?: (option: string) => void }) {
+  const replies = options.map((o) => (
+    <Button key={o} size="sm" onClick={() => onTap?.(o)}>
+      {o}
+    </Button>
+  ));
+  if (modelId === "g2") {
+    return (
+      <>
+        <G2Screen lines={[...lines, ...options.map((o, i) => `${i === 0 ? ">" : " "} ${o}`)]} />
+        {onTap && replies.length > 0 && <Row>{replies}</Row>}
+      </>
+    );
+  }
+  if (surface === "lens") return <LensScreen lines={lines}>{replies.length > 0 ? replies : null}</LensScreen>;
+  return <PanelScreen app="Larkfield Assist" lines={lines}>{replies.length > 0 ? replies : null}</PanelScreen>;
+}
+
 export function ReceivesPreview({ editor }: { editor: ReceivesEditor }) {
   const r = renderPreview(editor);
   const fits = r.shown.length;
   const sim = useSimulatorSession();
   const sendTest = () => sim.send({ capability: r.payload.capability, lines: r.shown, options: r.options, refused: r.refused });
+  const sample = SAMPLE_MESSAGES.find((m) => m.value === editor.sample)!;
   return (
-    <div className="flex min-w-0 flex-col gap-3 p-1">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className={SECTION_TITLE}>Live preview</h2>
-        <SelectMenu
-          variant="outline"
-          ariaLabel="Sample message"
-          value={editor.sample}
-          options={SAMPLE_MESSAGES.map((m) => ({ value: m.value, label: m.label }))}
-          onChange={editor.setSample}
-        />
-      </div>
-      {sim.running ? (
-        <DeviceScreen surface={r.model.surface} lines={sim.screen?.lines ?? []} options={sim.screen?.options} placeholder="Waiting for a message" onTap={sim.tap} />
-      ) : r.refused ? (
-        <div className="card-well flex items-center justify-center px-3 py-8">
-          <StatusPill tone="attention">Refused, ask is not an allowed intent</StatusPill>
-        </div>
-      ) : (
-        <DeviceScreen surface={r.model.surface} lines={r.shown} options={r.options} />
-      )}
-      <SimulatorControls session={sim} model={r.model}>
-        <button type="button" className={pillButton("ink", "sm", { raise: false })} onClick={sendTest}>
-          Send test
-        </button>
-      </SimulatorControls>
-      <SimulatorCalls calls={sim.calls} />
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <span className={cn("text-caption font-medium", r.overflow ? "text-warning" : "text-text-primary")}>
-            Fits {fits} of {r.total} lines
-          </span>
-          <span className={ov.rowMeta}>Limit {r.maxLines}</span>
-        </div>
-        <ThinMeter used={fits} limit={Math.max(r.total, 1)} />
+    <>
+      <Card>
+        <Between>
+          <Text kind="h3">Live preview</Text>
+          <PillMenu stable label={sample.label} value={editor.sample} options={SAMPLE_MESSAGES.map((m) => ({ value: m.value, label: m.label }))} onChange={(v) => editor.setSample(v as ReceivesEditor["sample"])} />
+        </Between>
+        <Stage>
+          {sim.running ? (
+            <Screen surface={r.model.surface} modelId={r.model.id} lines={sim.screen?.lines ?? ["Waiting for a message"]} options={sim.screen?.options ?? []} onTap={sim.tap} />
+          ) : r.refused ? (
+            <Alert tone="error" icon={CircleAlert}>
+              Refused, ask is not an allowed intent
+            </Alert>
+          ) : (
+            <Screen surface={r.model.surface} modelId={r.model.id} lines={r.shown} options={r.options} />
+          )}
+        </Stage>
+        <Between>
+          <Badge tone={sim.running ? "ok" : "neutral"} dot>
+            {sim.running ? "Simulator on" : "Simulator off"}
+          </Badge>
+          <Row>
+            {sim.running ? (
+              <>
+                {r.model.capabilities.includes("input.utterance") && (
+                  <Button size="sm" onClick={sim.voice}>
+                    Voice
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" onClick={sim.stop}>
+                  <Square {...ICON_SM} aria-hidden="true" />
+                  Stop
+                </Button>
+                <Button size="sm" variant="ink" onClick={sendTest}>
+                  <Send {...ICON_SM} aria-hidden="true" />
+                  Send test
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" onClick={sim.start}>
+                <Play {...ICON_SM} aria-hidden="true" />
+                Start simulator
+              </Button>
+            )}
+          </Row>
+        </Between>
+        {sim.calls.length > 0 && (
+          <div>
+            {sim.calls.map((c, i) => (
+              <ListRow key={c.id} line={i < sim.calls.length - 1}>
+                <TwoLine strong={false} title={c.capability} sub={c.detail ? `${c.at}, ${c.detail}` : c.at} />
+                <Grow />
+                <Badge tone={CALL_TONE[c.status] ?? "neutral"}>{c.status}</Badge>
+              </ListRow>
+            ))}
+          </div>
+        )}
+        <Limit goal label={`Fits ${fits} of ${r.total} lines`} used={fits} limit={Math.max(r.maxLines, r.total, 1)} />
         {r.overflow && (
-          <span className="text-caption text-text-muted">
+          <Text kind="smallMuted">
             {r.mode === "truncate" && "The rest is cut."}
             {r.mode === "send_to" && `The full text goes to ${modelById(r.sendTo as never)?.name ?? r.sendTo}.`}
             {r.mode === "callback" && "Your agent is called back with the full text."}
-          </span>
+          </Text>
         )}
-      </div>
-      <section className="flex flex-col gap-1.5">
-        <h3 className={SECTION_TITLE}>Passed to your agent</h3>
-        <p className="card-well px-3 py-2.5 text-caption text-text-secondary">{r.instructions}</p>
-      </section>
-      <section className="flex flex-col gap-1.5">
-        <h3 className={SECTION_TITLE}>Final payload</h3>
-        <pre className="card-well overflow-x-auto px-3 py-2.5 font-mono text-caption leading-relaxed text-text-secondary">{JSON.stringify(r.payload, null, 2)}</pre>
-      </section>
-    </div>
+      </Card>
+      <Card>
+        <Stack>
+          <Text kind="strong" as="h3">
+            Passed to your agent
+          </Text>
+          <Text kind="muted">{r.instructions}</Text>
+        </Stack>
+        <CodeBlock title="Final payload">{JSON.stringify(r.payload, null, 2)}</CodeBlock>
+      </Card>
+    </>
   );
 }

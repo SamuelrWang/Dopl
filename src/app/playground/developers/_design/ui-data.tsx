@@ -56,12 +56,12 @@ function LimitRow({ label, used, limit }: { label: string; used: string; limit: 
   );
 }
 
-export function Limit({ label, used, limit, format = String }: { label: string; used: number; limit: number; format?: (n: number) => string }) {
+export function Limit({ label, used, limit, goal, format = String }: { label: string; used: number; limit: number; /** Full is the aim, as with tests passed, so it never turns red. */ goal?: boolean; format?: (n: number) => string }) {
   const share = Math.min(100, Math.round((used / limit) * 100));
   return (
     <div className={c.limit}>
       <LimitRow label={label} used={format(used)} limit={format(limit)} />
-      <Meter value={share} tone={share >= 90 ? "error" : "ink"} />
+      <Meter value={share} tone={!goal && share >= 90 ? "error" : "ink"} />
     </div>
   );
 }
