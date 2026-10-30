@@ -1,5 +1,5 @@
-import { DashboardSection } from "./_sections/dashboard";
+import { OverviewSection } from "./_sections/overview";
 
 export default function Page() {
-  return <DashboardSection />;
+  return <OverviewSection />;
 }
