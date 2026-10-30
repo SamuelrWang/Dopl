@@ -109,6 +109,108 @@ describe("Devices", () => {
   });
 });
 
+describe("API keys", () => {
+  const ToTest = () => {
+    const { update } = usePortal();
+    return (
+      <button type="button" onClick={() => update((s) => ({ ...s, env: "test" }))}>
+        Switch to test
+      </button>
+    );
+  };
+
+  it("sections keys by type for the environment in the store", () => {
+    wrap(
+      <>
+        <KeysSection />
+        <ToTest />
+      </>
+    );
+    const secrets = screen.getByRole("region", { name: "Secret keys" });
+    expect(within(secrets).getByRole("article", { name: "Assist backend" })).toBeTruthy();
+    expect(within(secrets).queryByRole("article", { name: "Contractor sandbox" })).toBeNull();
+    expect(within(screen.getByRole("region", { name: "Publishable keys" })).getByRole("article", { name: "Connect widget" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Switch to test" }));
+    expect(screen.getByText("Test data")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Secret keys" })).getByRole("article", { name: "Local development" })).toBeTruthy();
+    expect(screen.queryByRole("article", { name: "Assist backend" })).toBeNull();
+  });
+
+  it("creates a secret one decision at a time, keeps choices on Back, and shows it once", () => {
+    wrap(<KeysSection />);
+    fireEvent.click(screen.getByRole("button", { name: "Create key" }));
+    const dialog = () => within(screen.getByRole("dialog"));
+    const next = () => fireEvent.click(dialog().getByRole("button", { name: "Continue" }));
+    expect((dialog().getByRole("button", { name: "Continue" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(dialog().getByRole("button", { name: /Secret/ }));
+    next();
+    fireEvent.click(dialog().getByRole("button", { name: /Read events/ }));
+    fireEvent.click(dialog().getByRole("button", { name: "Back" }));
+    next();
+    expect(dialog().getByRole("button", { name: /Read events/ }).getAttribute("aria-pressed")).toBe("true");
+    next();
+    expect((dialog().getByRole("button", { name: "Create key" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(dialog().getByRole("textbox", { name: "Key name" }), { target: { value: "Nightly export" } });
+    fireEvent.click(dialog().getByRole("button", { name: "Create key" }));
+    expect(dialog().getByRole("heading", { name: "Copy your secret key" })).toBeTruthy();
+    const secret = dialog().getByText(/^sk_live_.{24}$/).textContent!;
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.click(dialog().getByRole("button", { name: "Done" }));
+    const card = screen.getByRole("article", { name: "Nightly export" });
+    expect(within(card).getByText("Not used yet")).toBeTruthy();
+    expect(screen.queryByText(secret)).toBeNull();
+  });
+
+  it("makes a publishable key without asking for permissions, and it stays readable", () => {
+    wrap(<KeysSection />);
+    fireEvent.click(screen.getByRole("button", { name: /New publishable key/ }));
+    const dialog = () => within(screen.getByRole("dialog"));
+    expect(dialog().getByRole("heading", { name: "Name this key" })).toBeTruthy();
+    fireEvent.change(dialog().getByRole("textbox", { name: "Key name" }), { target: { value: "Mobile app" } });
+    fireEvent.click(dialog().getByRole("button", { name: "Create key" }));
+    const token = dialog().getByText(/^pk_live_.{24}$/).textContent!;
+    fireEvent.click(dialog().getByRole("button", { name: "Done" }));
+    expect(within(screen.getByRole("article", { name: "Mobile app" })).getByText(token)).toBeTruthy();
+  });
+
+  it("confirms a revoke, then moves the key to Revoked", () => {
+    wrap(<KeysSection />);
+    const card = () => screen.getByRole("article", { name: "Assist backend" });
+    fireEvent.click(within(card()).getByRole("button", { name: "Revoke" }));
+    const confirm = screen.getByRole("alertdialog");
+    expect(within(confirm).getByText("In use. Its calls fail at once.")).toBeTruthy();
+    fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(card()).getByRole("button", { name: "Revoke" }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Revoke key" }));
+    expect(screen.queryByRole("article", { name: "Assist backend" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Revoked" }));
+    expect(within(card()).queryByRole("button", { name: "Revoke" })).toBeNull();
+  });
+
+  it("rotates with a grace period and reveals the new secret", () => {
+    wrap(<KeysSection />);
+    fireEvent.click(within(screen.getByRole("article", { name: "Dispatch worker" })).getByRole("button", { name: "Rotate" }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Rotate key" }));
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByRole("heading", { name: "Copy your new secret" })).toBeTruthy();
+    fireEvent.click(dialog.getByRole("button", { name: "Done" }));
+    const card = within(screen.getByRole("article", { name: "Dispatch worker" }));
+    expect(card.getByText("Old secret ends in 24h")).toBeTruthy();
+    expect(card.queryByText(/sk_live_Ld71/)).toBeNull();
+  });
+
+  it("finds unused keys, and answers an empty search", () => {
+    wrap(<KeysSection />);
+    fireEvent.click(screen.getByRole("button", { name: /Needs review/ }));
+    expect(screen.getByRole("article", { name: "Old reporting job" })).toBeTruthy();
+    expect(screen.queryByRole("article", { name: "Assist backend" })).toBeNull();
+    fireEvent.change(screen.getByPlaceholderText("Search keys"), { target: { value: "nothing like this" } });
+    expect(screen.getByText("No keys match")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(screen.getByRole("article", { name: "Assist backend" })).toBeTruthy();
+  });
+});
+
 describe("Add new device", () => {
   it("picks a model and goes live, warning about tests that have not passed without blocking", async () => {
     const Probe = () => <output>{usePortal().state.integrations.meta?.status}</output>;

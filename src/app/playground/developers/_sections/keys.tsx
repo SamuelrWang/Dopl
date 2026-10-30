@@ -1,124 +1,196 @@
 "use client";
 
-import { useState } from "react";
-import { cn } from "@/shared/lib/utils";
-import { CopyButton } from "@/shared/ui/copy-button";
-import { pillButton } from "@/shared/ui/pill-button";
-import { CreateButton } from "../_components/create-button";
-import { DialogActions, StandardDialog } from "@/shared/ui/standard-dialog";
-import { StatusPill } from "@/shared/ui/status-pill";
-import { toast } from "@/shared/ui/toast";
-import { RAISED_INPUT } from "@/shared/ui/wells";
-import { minsAgo } from "../_data/company";
-import { ALL_KEY_SCOPES, type ApiKeyRow } from "../_data/misc";
+/**
+ * API keys: which keys can reach this environment, what each may do, which to rotate or revoke, and
+ * how to make one. Secret and publishable keys are separate sections because they behave differently:
+ * a secret is shown once and rotates, a publishable key stays readable.
+ */
+import { CheckCircle2, Globe, KeyRound, Plus, SearchX } from "lucide-react";
+import { useMemo, useState } from "react";
+import { SearchPill } from "@/shared/ui/search-pill";
+import b from "../_design/base.module.css";
+import c from "../_design/catalog.module.css";
+import { cx, ICON_100 } from "../_design/components";
+import d from "../_design/data.module.css";
+import { Segmented } from "../_design/interactive";
+import k from "../_design/keys.module.css";
+import p from "../_design/page.module.css";
+import o from "../_design/surfaces.module.css";
+import tokens from "../_design/tokens.module.css";
+import { MEMBERS, minsAgo } from "../_data/company";
+import type { ApiKeyRow } from "../_data/misc";
 import { usePortal } from "../_components/portal-store";
-import { Cell, FactChip, Id, PortalPage, RowList, Strip, ov, since } from "../_components/ui";
+import { fmt } from "../_components/ui";
+import { AddKeyCard, KeyCard } from "./keys-card";
+import { CreateKeyFlow, RevealDialog, RevokeDialog, RotateDialog, copyText } from "./keys-dialogs";
+import { KEY_VIEWS, days, isUnused, keepsKey, newKey, rotated, type KeyKind, type KeyView } from "./keys-model";
 
-const STALE_MINS = 30 * 1440;
-
-const tail = (n: number) => Array.from({ length: n }, (_, i) => "abcdefghjkmnpqrstuvwxyz23456789"[(n * 7 + i * 13) % 31]).join("");
+const SECTIONS = [
+  { kind: "secret", label: "Secret keys", add: "New secret key", Glyph: KeyRound },
+  { kind: "publishable", label: "Publishable keys", add: "New publishable key", Glyph: Globe },
+] as const;
+/** The demo has one signed-in person, the same one the sidebar shows. */
+const ME = MEMBERS[2];
 
 export function KeysSection() {
   const { state, update } = usePortal();
-  const keys = state.keys.filter((k) => k.env === state.env);
-  const [creating, setCreating] = useState(false);
-  const [name, setName] = useState("");
-  const [scopes, setScopes] = useState<string[]>(["deliver"]);
-  const [secret, setSecret] = useState<string | null>(null);
+  const [view, setView] = useState<KeyView>("active");
+  const [q, setQ] = useState("");
+  const [creating, setCreating] = useState<KeyKind | "any" | null>(null);
+  const [rotating, setRotating] = useState<ApiKeyRow | null>(null);
+  const [revoking, setRevoking] = useState<ApiKeyRow | null>(null);
+  const [revealed, setRevealed] = useState<{ row: ApiKeyRow; token: string } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const create = () => {
-    const prefix = `sk_${state.env}_`;
-    const full = `${prefix}${tail(24)}`;
-    const row: ApiKeyRow = { id: `key_${state.keys.length + 1}`, name: name || "Untitled key", kind: "secret", env: state.env, prefix: full.slice(0, prefix.length + 4), scopes, createdAt: minsAgo(0), lastUsedAt: null, revoked: false };
+  const all = useMemo(() => state.keys.filter((key) => key.env === state.env), [state.keys, state.env]);
+  const rows = useMemo(() => all.filter((key) => keepsKey(key, view, q)), [all, view, q]);
+  const active = all.filter((key) => !key.revoked);
+  const secrets = active.filter((key) => key.kind === "secret");
+  const calls = active.reduce((n, key) => n + key.calls7d, 0);
+  const busiest = active.reduce<ApiKeyRow | null>((top, key) => (!top || key.calls7d > top.calls7d ? key : top), null);
+  const oldest = secrets.reduce<ApiKeyRow | null>((top, key) => (!top || key.createdAt < top.createdAt ? key : top), null);
+  const unused = active.filter(isUnused).length;
+  const envLabel = state.env === "live" ? "Live" : "Test";
+  const browsing = q === "" && view === "active";
+  const sections = SECTIONS.filter((section) => browsing || rows.some((key) => key.kind === section.kind));
+
+  const say = (text: string) => {
+    setNotice(text);
+    window.setTimeout(() => setNotice((now) => (now === text ? null : now)), 3200);
+  };
+  const seed = () => state.keys.length + 1;
+  const replace = (row: ApiKeyRow) => update((s) => ({ ...s, keys: s.keys.map((key) => (key.id === row.id ? row : key)) }));
+  const create = ({ name, kind, scopes }: { name: string; kind: KeyKind; scopes: string[] }) => {
+    const { row, token } = newKey({ name, kind, scopes, env: state.env, by: ME.name, seed: seed() });
     update((s) => ({ ...s, keys: [row, ...s.keys] }));
-    setSecret(full);
-    setCreating(false);
-    setName("");
+    return token;
   };
-  const rotate = (id: string) => {
-    update((s) => ({ ...s, keys: s.keys.map((k) => (k.id === id ? { ...k, prefix: `${k.prefix.slice(0, -4)}${tail(4)}`, createdAt: minsAgo(0) } : k)) }));
-    toast({ title: "Key rotated", description: "The old secret keeps working for 24 hours." });
+  const rotate = (graceHours: number) => {
+    if (!rotating) return;
+    const next = rotated(rotating, graceHours, seed() + rotating.prefix.charCodeAt(9));
+    replace(next.row);
+    setRotating(null);
+    setRevealed(next);
   };
-  const revoke = (id: string) => update((s) => ({ ...s, keys: s.keys.map((k) => (k.id === id ? { ...k, revoked: true } : k)) }));
-  const active = keys.filter((k) => !k.revoked);
-  const stale = active.filter((k) => !k.lastUsedAt || Date.parse(minsAgo(0)) - Date.parse(k.lastUsedAt) > STALE_MINS * 60_000);
+  const revoke = () => {
+    if (!revoking) return;
+    replace({ ...revoking, revoked: true, revokedAt: minsAgo(0) });
+    setRevoking(null);
+    say(`${revoking.name} revoked`);
+  };
+  const clear = () => {
+    setQ("");
+    setView("active");
+  };
 
   return (
-    <PortalPage title="API keys" actions={<CreateButton onClick={() => setCreating(true)}>Create key</CreateButton>}>
-      <Strip label="Summary">
-        <Cell label="Active keys" value={String(active.length)} />
-        <Cell label="Unused for 30 days" value={String(stale.length)} />
-        <Cell label="Environment" value={state.env === "live" ? "Live" : "Test"} />
-      </Strip>
-      {secret && (
-        <section className="white-card flex items-center gap-2 px-3.5 py-3" aria-label="New secret">
-          <span className={ov.rowMain}>
-            <span className={ov.rowTitle}>Copy this secret now, it is shown once</span>
-            <Id className="text-caption">{secret}</Id>
-          </span>
-          <CopyButton text={secret} label="Copy secret" />
-          <button type="button" className={pillButton("quiet", "sm")} onClick={() => setSecret(null)}>
-            Done
-          </button>
-        </section>
-      )}
-      <RowList>
-        {keys.map((k) => {
-          const isStale = stale.includes(k);
-          return (
-            <li key={k.id} className={cn(ov.row, "min-h-13 border-t border-border-default first:border-t-0", k.revoked && "opacity-60")}>
-              <span className={ov.rowMain}>
-                <span className={ov.rowTitle}>
-                  {k.name}
-                  <Id>{k.prefix}...</Id>
+    <div className={cx(p.root, tokens.scope, tokens.u100)}>
+      <div className={p.scroller}>
+        <div className={p.inner}>
+          <header className={b.between}>
+            <div className={b.row}>
+              <h1 className={b.title}>API keys</h1>
+              {state.env === "test" && <span className={cx(b.badge, b.badgeWarn)}>Test data</span>}
+            </div>
+            <button type="button" className={cx(b.btn, b.ink)} onClick={() => setCreating("any")}>
+              <Plus {...ICON_100} aria-hidden="true" />
+              Create key
+            </button>
+          </header>
+
+          <div className={p.stats}>
+            <div className={b.card}>
+              <div className={d.stat}>
+                <span className={b.muted}>Active keys</span>
+                <span className={b.big}>{fmt(active.length)}</span>
+                <span className={b.smallMuted}>
+                  {secrets.length} secret, {active.length - secrets.length} publishable
                 </span>
-                <span className="flex flex-wrap gap-1 pt-0.5">
-                  {k.scopes.map((s) => (
-                    <FactChip key={s}>{s}</FactChip>
-                  ))}
-                </span>
+              </div>
+            </div>
+            <div className={b.card}>
+              <div className={d.stat}>
+                <span className={b.muted}>Calls, 7d</span>
+                <span className={b.big}>{fmt(calls)}</span>
+                <span className={b.smallMuted}>{busiest && calls > 0 ? `${Math.round((busiest.calls7d / calls) * 100)}% from ${busiest.name}` : "None yet"}</span>
+              </div>
+            </div>
+            <div className={b.card}>
+              <div className={d.stat}>
+                <span className={b.muted}>Oldest secret</span>
+                <span className={b.big}>{oldest ? `${days(oldest.createdAt)}d` : "None"}</span>
+                <span className={b.smallMuted}>{oldest ? oldest.name : "No secret keys"}</span>
+              </div>
+            </div>
+            <button type="button" aria-pressed={view === "review"} className={cx(b.card, p.statBtn, view === "review" && p.statOn)} onClick={() => setView(view === "review" ? "active" : "review")}>
+              <span className={d.stat}>
+                <span className={b.muted}>Needs review</span>
+                <span className={b.big}>{fmt(unused)}</span>
+                <span className={b.smallMuted}>Unused for 30 days</span>
               </span>
-              {k.revoked ? <StatusPill>Revoked</StatusPill> : isStale ? <StatusPill tone="attention">Unused for 30 days</StatusPill> : null}
-              <span className={ov.rowAside}>{k.lastUsedAt ? `Used ${since(k.lastUsedAt)}` : "Never used"}</span>
-              {!k.revoked && (
-                <span className="flex shrink-0 gap-1.5">
-                  {k.kind === "secret" && (
-                    <button type="button" className={pillButton("outline", "xs")} onClick={() => rotate(k.id)}>
-                      Rotate
-                    </button>
-                  )}
-                  <button type="button" className={pillButton("quiet", "xs")} onClick={() => revoke(k.id)}>
-                    Revoke
-                  </button>
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </RowList>
-      <StandardDialog open={creating} onClose={() => setCreating(false)} title="Create key">
-        <div className="flex flex-col gap-3">
-          <input aria-label="Key name" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} className={cn(RAISED_INPUT, "h-8 px-3")} />
-          <span className="flex flex-wrap gap-1.5">
-            {ALL_KEY_SCOPES.map((s) => {
-              const on = scopes.includes(s);
-              return (
-                <button key={s} type="button" aria-pressed={on} onClick={() => setScopes(on ? scopes.filter((x) => x !== s) : [...scopes, s])} className={pillButton(on ? "ink" : "outline", "xs", { raise: false })}>
-                  {s}
+            </button>
+          </div>
+
+          <div className={b.card}>
+            <div className={b.between}>
+              <SearchPill value={q} onChange={setQ} label="Search keys" />
+              <Segmented label="Key views" options={KEY_VIEWS.map((v) => v.label)} value={KEY_VIEWS.findIndex((v) => v.key === view)} onChange={(i) => setView(KEY_VIEWS[i].key)} />
+            </div>
+          </div>
+
+          {sections.length === 0 ? (
+            <div className={b.card}>
+              <div className={o.empty}>
+                <span className={b.tile}>{q !== "" ? <SearchX {...ICON_100} aria-hidden="true" /> : <CheckCircle2 {...ICON_100} aria-hidden="true" />}</span>
+                <span className={b.h3}>{q !== "" ? "No keys match" : view === "review" ? "Nothing to review" : "No revoked keys"}</span>
+                <button type="button" className={b.btn} onClick={clear}>
+                  {q !== "" ? "Clear filters" : "Show active keys"}
                 </button>
+              </div>
+            </div>
+          ) : (
+            sections.map(({ kind, label, add, Glyph }) => {
+              const inSection = rows.filter((key) => key.kind === kind);
+              const sectionCalls = inSection.reduce((n, key) => n + key.calls7d, 0);
+              return (
+                <section key={kind} className={c.section} aria-label={label}>
+                  <h2 className={c.sectionHead}>
+                    <span className={c.sectionMark}>
+                      <Glyph {...ICON_100} aria-hidden="true" />
+                    </span>
+                    <span className={b.h3}>{label}</span>
+                    {sectionCalls > 0 && <span className={cx(b.smallMuted, b.num, c.sectionMeta)}>{fmt(sectionCalls)} calls, 7d</span>}
+                  </h2>
+                  <div className={c.grid}>
+                    {inSection.map((row) => (
+                      <KeyCard
+                        key={row.id}
+                        row={row}
+                        onRotate={() => setRotating(row)}
+                        onRevoke={() => setRevoking(row)}
+                        onCopy={(token) => {
+                          copyText(token);
+                          say("Key copied");
+                        }}
+                      />
+                    ))}
+                    {browsing && <AddKeyCard label={add} env={envLabel} wide={inSection.length === 0} onClick={() => setCreating(kind)} />}
+                  </div>
+                </section>
               );
-            })}
-          </span>
+            })
+          )}
         </div>
-        <DialogActions>
-          <button type="button" className={pillButton("quiet", "md")} onClick={() => setCreating(false)}>
-            Cancel
-          </button>
-          <button type="button" className={pillButton("ink", "md", { raise: false })} onClick={create}>
-            Create key
-          </button>
-        </DialogActions>
-      </StandardDialog>
-    </PortalPage>
+      </div>
+      {creating && <CreateKeyFlow env={state.env} initialKind={creating === "any" ? null : creating} onCreate={create} onClose={() => setCreating(null)} />}
+      {rotating && <RotateDialog row={rotating} onCancel={() => setRotating(null)} onConfirm={rotate} />}
+      {revoking && <RevokeDialog row={revoking} onCancel={() => setRevoking(null)} onConfirm={revoke} />}
+      {revealed && <RevealDialog row={revealed.row} token={revealed.token} onDone={() => setRevealed(null)} />}
+      {notice && (
+        <div role="status" className={cx(o.toast, o.toastBlack, k.notice)}>
+          <span className={b.onInk}>{notice}</span>
+        </div>
+      )}
+    </div>
   );
 }

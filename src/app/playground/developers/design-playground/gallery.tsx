@@ -1,5 +1,6 @@
 import { ButtonsGroup } from "./g-buttons";
 import { ComposedGroup } from "./g-composed";
+import { CredentialsGroup } from "./g-credentials";
 import { DataGroupA, DataGroupB } from "./g-data";
 import { FeedbackGroup } from "./g-feedback";
 import { InputsGroup } from "./g-inputs";
@@ -25,6 +26,7 @@ export function Gallery() {
         <DataGroupB />
       </div>
       <ComposedGroup />
+      <CredentialsGroup />
     </div>
   );
 }

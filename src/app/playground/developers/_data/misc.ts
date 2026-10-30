@@ -1,7 +1,7 @@
 /** API keys, webhook endpoints, plan and Connect defaults. */
 import type { CapabilityScope, RiskTier } from "@dopl/device-contracts";
 import { CAPABILITY_FAMILY, CAPABILITY_RISK_TIER, type CapabilityId } from "@dopl/device-contracts";
-import { minsAgo, type Env } from "./company";
+import { MEMBERS, minsAgo, type Env } from "./company";
 
 export interface ApiKeyRow {
   id: string;
@@ -9,22 +9,40 @@ export interface ApiKeyRow {
   kind: "secret" | "publishable";
   env: Env;
   prefix: string;
+  /** Publishable keys only: they stay readable, a secret is shown once. */
+  token?: string;
   scopes: string[];
   createdAt: string;
+  createdBy: string;
   lastUsedAt: string | null;
+  calls7d: number;
   revoked: boolean;
+  revokedAt?: string;
+  /** Set by a rotation that leaves the previous secret working for a while. */
+  oldSecretEndsAt?: string;
 }
 
+const [PRIYA, JONAS, MEI, DARIO] = MEMBERS;
+
 export const SEED_KEYS: ApiKeyRow[] = [
-  { id: "key_01", name: "Assist backend", kind: "secret", env: "live", prefix: "sk_live_8fQ2", scopes: ["deliver", "users.read", "devices.read", "devices.act"], createdAt: minsAgo(79200), lastUsedAt: minsAgo(1), revoked: false },
-  { id: "key_02", name: "Dispatch worker", kind: "secret", env: "live", prefix: "sk_live_Ld71", scopes: ["deliver"], createdAt: minsAgo(50400), lastUsedAt: minsAgo(145), revoked: false },
-  { id: "key_03", name: "Connect widget", kind: "publishable", env: "live", prefix: "pk_live_R3s9", scopes: ["connect"], createdAt: minsAgo(79000), lastUsedAt: minsAgo(14), revoked: false },
-  { id: "key_04", name: "Old reporting job", kind: "secret", env: "live", prefix: "sk_live_q0Zk", scopes: ["events.read"], createdAt: minsAgo(120000), lastUsedAt: minsAgo(62000), revoked: false },
-  { id: "key_05", name: "Local development", kind: "secret", env: "test", prefix: "sk_test_Nw4c", scopes: ["deliver", "users.read", "devices.read", "devices.act", "events.read"], createdAt: minsAgo(82000), lastUsedAt: minsAgo(11), revoked: false },
-  { id: "key_06", name: "Connect widget", kind: "publishable", env: "test", prefix: "pk_test_Hh20", scopes: ["connect"], createdAt: minsAgo(82000), lastUsedAt: minsAgo(240), revoked: false },
+  { id: "key_01", name: "Assist backend", kind: "secret", env: "live", prefix: "sk_live_8fQ2", scopes: ["deliver", "users.read", "devices.read", "devices.act"], createdAt: minsAgo(79200), createdBy: PRIYA.name, lastUsedAt: minsAgo(1), calls7d: 12480, revoked: false },
+  { id: "key_02", name: "Dispatch worker", kind: "secret", env: "live", prefix: "sk_live_Ld71", scopes: ["deliver"], createdAt: minsAgo(50400), createdBy: JONAS.name, lastUsedAt: minsAgo(145), calls7d: 3264, revoked: false },
+  { id: "key_03", name: "Connect widget", kind: "publishable", env: "live", prefix: "pk_live_R3s9", token: "pk_live_R3s9tVb6mKe2xNw7Yc4HqZ8d", scopes: ["connect"], createdAt: minsAgo(79000), createdBy: PRIYA.name, lastUsedAt: minsAgo(14), calls7d: 842, revoked: false },
+  { id: "key_04", name: "Old reporting job", kind: "secret", env: "live", prefix: "sk_live_q0Zk", scopes: ["events.read"], createdAt: minsAgo(120000), createdBy: DARIO.name, lastUsedAt: minsAgo(62000), calls7d: 0, revoked: false },
+  { id: "key_05", name: "Local development", kind: "secret", env: "test", prefix: "sk_test_Nw4c", scopes: ["deliver", "users.read", "devices.read", "devices.act", "events.read"], createdAt: minsAgo(82000), createdBy: MEI.name, lastUsedAt: minsAgo(11), calls7d: 1176, revoked: false },
+  { id: "key_06", name: "Connect widget", kind: "publishable", env: "test", prefix: "pk_test_Hh20", token: "pk_test_Hh20pRa5sJd9uFk3Lg6TnW2y", scopes: ["connect"], createdAt: minsAgo(82000), createdBy: MEI.name, lastUsedAt: minsAgo(240), calls7d: 63, revoked: false },
+  { id: "key_07", name: "Contractor sandbox", kind: "secret", env: "live", prefix: "sk_live_Vm3x", scopes: ["devices.read"], createdAt: minsAgo(150000), createdBy: JONAS.name, lastUsedAt: minsAgo(21000), calls7d: 0, revoked: true, revokedAt: minsAgo(12000) },
 ];
 
-export const ALL_KEY_SCOPES = ["deliver", "users.read", "devices.read", "devices.act", "events.read", "webhooks.write"] as const;
+/** What a secret key can be allowed to do. A publishable key only ever opens Connect. */
+export const KEY_SCOPES = [
+  { id: "deliver", name: "Send to devices" },
+  { id: "devices.act", name: "Control devices" },
+  { id: "devices.read", name: "Read devices" },
+  { id: "users.read", name: "Read users" },
+  { id: "events.read", name: "Read events" },
+  { id: "webhooks.write", name: "Manage webhooks" },
+] as const;
 
 export interface EndpointRow {
   id: string;
