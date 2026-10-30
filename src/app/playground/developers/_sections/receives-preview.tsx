@@ -9,6 +9,8 @@ import { SelectMenu } from "@/shared/ui/select-menu";
 import { SECTION_TITLE } from "@/shared/ui/section-title";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { ThinMeter } from "@/shared/ui/usage-meter";
+import { pillButton } from "@/shared/ui/pill-button";
+import { DeviceScreen, SimulatorCalls, SimulatorControls, useSimulatorSession } from "../_components/device-simulator";
 import { modelById } from "../_data/catalog";
 import { SAMPLE_MESSAGES, resolveField, wrapLines, type FieldKey } from "../_data/receives";
 import { ov } from "../_components/ui";
@@ -52,6 +54,8 @@ export function renderPreview(editor: Pick<ReceivesEditor, "modelId" | "state" |
 export function ReceivesPreview({ editor }: { editor: ReceivesEditor }) {
   const r = renderPreview(editor);
   const fits = r.shown.length;
+  const sim = useSimulatorSession();
+  const sendTest = () => sim.send({ capability: r.payload.capability, lines: r.shown, options: r.options, refused: r.refused });
   return (
     <div className="flex min-w-0 flex-col gap-3 p-1">
       <div className="flex items-center justify-between gap-2">
@@ -64,46 +68,21 @@ export function ReceivesPreview({ editor }: { editor: ReceivesEditor }) {
           onChange={editor.setSample}
         />
       </div>
-      {r.refused ? (
+      {sim.running ? (
+        <DeviceScreen surface={r.model.surface} lines={sim.screen?.lines ?? []} options={sim.screen?.options} placeholder="Waiting for a message" onTap={sim.tap} />
+      ) : r.refused ? (
         <div className="card-well flex items-center justify-center px-3 py-8">
           <StatusPill tone="attention">Refused, ask is not an allowed intent</StatusPill>
         </div>
-      ) : r.model.surface === "lens" ? (
-        <div className="flex min-h-34 flex-col justify-center gap-2 rounded-card bg-surface-cta px-4 py-3.5 font-mono text-small leading-relaxed text-text-on-cta" aria-label="Lens preview">
-          <div className="flex flex-col">
-            {r.shown.map((line, i) => (
-              <span key={i} className="whitespace-pre">
-                {line}
-              </span>
-            ))}
-          </div>
-          {r.options.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {r.options.map((o) => (
-                <StatusPill key={o} onDark>
-                  {o}
-                </StatusPill>
-              ))}
-            </div>
-          )}
-        </div>
       ) : (
-        <div className="white-card flex flex-col gap-1.5 p-3" aria-label="Panel preview">
-          <span className="text-caption font-medium text-text-muted">Larkfield Assist</span>
-          <div className="flex flex-col text-body text-text-primary">
-            {r.shown.map((line, i) => (
-              <span key={i}>{line}</span>
-            ))}
-          </div>
-          {r.options.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {r.options.map((o) => (
-                <StatusPill key={o}>{o}</StatusPill>
-              ))}
-            </div>
-          )}
-        </div>
+        <DeviceScreen surface={r.model.surface} lines={r.shown} options={r.options} />
       )}
+      <SimulatorControls session={sim} model={r.model}>
+        <button type="button" className={pillButton("ink", "sm", { raise: false })} onClick={sendTest}>
+          Send test
+        </button>
+      </SimulatorControls>
+      <SimulatorCalls calls={sim.calls} />
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
           <span className={cn("text-caption font-medium", r.overflow ? "text-warning" : "text-text-primary")}>

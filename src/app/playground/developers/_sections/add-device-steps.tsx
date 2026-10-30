@@ -8,6 +8,7 @@ import { cn } from "@/shared/lib/utils";
 import { pillButton } from "@/shared/ui/pill-button";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { functionsOf, type Category, type Integration, type Model } from "../_data/catalog";
+import { DeviceScreen, SimulatorControls, type SimMessage, type SimulatorSession } from "../_components/device-simulator";
 import { FactChip, TierChip, TypeMark, ov } from "../_components/ui";
 
 export type TestMethod = "simulator" | "hardware";
@@ -108,7 +109,7 @@ function QrWell({ seed }: { seed: string }) {
   );
 }
 
-export function ConnectStep({ method, model, connected, onConnect }: { method: TestMethod; model: Model; connected: boolean; onConnect: () => void }) {
+export function ConnectStep({ method, model, sim, connected, onConnect }: { method: TestMethod; model: Model; sim: SimulatorSession; connected: boolean; onConnect: () => void }) {
   const status = connected ? (
     <StatusPill tone="live" dot bare>
       Online
@@ -131,27 +132,40 @@ export function ConnectStep({ method, model, connected, onConnect }: { method: T
     );
   }
   return (
-    <div className="card-well flex flex-col items-center gap-3 px-4 py-8">
-      <span className="text-heading font-medium text-text-primary">Simulated {model.name}</span>
-      {status}
-      <button type="button" className={pillButton(connected ? "outline" : "ink", "md", { raise: false })} onClick={onConnect}>
-        {connected ? "Running" : "Start simulator"}
-      </button>
+    <div className="flex flex-col gap-3">
+      <DeviceScreen surface={model.surface} lines={sim.screen?.lines ?? []} options={sim.screen?.options} placeholder={sim.running ? "Waiting for a message" : `Simulated ${model.name}`} onTap={sim.tap} />
+      <SimulatorControls session={sim} model={model} />
     </div>
   );
 }
 
-export function TestsStep({ model, results, setResults }: { model: Model; results: Results; setResults: (fn: (r: Results) => Results) => void }) {
+/** What each capability test puts on the simulator; reads and captures only log. */
+function testMessage(c: CapabilityId): SimMessage | null {
+  if (c === "ask.choice" || c === "ask.confirm") return { capability: c, lines: ["Test: deploy to production?"], options: ["Yes", "No"] };
+  if (c.startsWith("present.") || c === "ask.text") return { capability: c, lines: [`Test: ${c}`] };
+  return null;
+}
+
+export function TestsStep({ model, sim, results, setResults }: { model: Model; sim: SimulatorSession; results: Results; setResults: (fn: (r: Results) => Results) => void }) {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const run = (id: CapabilityId, delay = 0) => {
-    timers.current.push(setTimeout(() => setResults((r) => ({ ...r, [id]: "running" })), delay));
+    timers.current.push(
+      setTimeout(() => {
+        setResults((r) => ({ ...r, [id]: "running" }));
+        if (!sim.running) return;
+        const message = testMessage(id);
+        if (message) sim.send(message);
+        else sim.log(id);
+      }, delay)
+    );
     timers.current.push(setTimeout(() => setResults((r) => ({ ...r, [id]: "passed" })), delay + 420));
   };
   const runAll = () => model.capabilities.filter((c) => results[c] !== "passed").forEach((c, i) => run(c, i * 340));
   const passed = model.capabilities.filter((c) => results[c] === "passed").length;
   return (
     <div className="flex flex-col gap-2.5">
+      {sim.running && <DeviceScreen surface={model.surface} lines={sim.screen?.lines ?? []} options={sim.screen?.options} placeholder="Waiting for a message" onTap={sim.tap} className="min-h-24" />}
       <div className="flex items-center justify-between">
         <span className="text-caption tabular-nums text-text-secondary">
           {passed} of {model.capabilities.length} passed

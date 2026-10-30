@@ -108,6 +108,20 @@ describe("Add new device", () => {
   });
 });
 
+describe("The simulator in the live preview", () => {
+  it("starts, shows the test send on its screen, and takes a tap", async () => {
+    wrap(<IntegrationPageSection integrationId="even_realities" initialTab="receives" />);
+    fireEvent.click(screen.getByRole("button", { name: "Start simulator" }));
+    expect(screen.getByText("Waiting for a message")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Send test" }));
+    expect(await screen.findByText("Queued")).toBeTruthy();
+    expect(await screen.findByText("Seen by device", {}, { timeout: 2000 })).toBeTruthy();
+    expect(screen.queryByText("Waiting for a message")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    expect(screen.getByRole("button", { name: "Start simulator" })).toBeTruthy();
+  });
+});
+
 describe("What it receives", () => {
   it("overrides inline, moves the source label, and resets to inherited", () => {
     wrap(<IntegrationPageSection integrationId="even_realities" initialTab="receives" />);

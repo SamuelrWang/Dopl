@@ -11,6 +11,7 @@ import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import { cn } from "@/shared/lib/utils";
 import { pillButton } from "@/shared/ui/pill-button";
+import { useSimulatorSession } from "../_components/device-simulator";
 import { DEMO_NOW } from "../_data/company";
 import { CATEGORIES, INTEGRATIONS, type Category, type CategoryId, type Integration, type Model } from "../_data/catalog";
 import { addIntegration, usePortal, type PortalState } from "../_components/portal-store";
@@ -31,7 +32,8 @@ export function AddDeviceDialog({ initialCategory, onClose }: { initialCategory:
   const [category, setCategory] = useState<Category | null>(startable ? CATEGORIES.find((c) => c.id === initialCategory)! : null);
   const [modelId, setModelId] = useState<string | null>(null);
   const [method, setMethod] = useState<TestMethod | null>(null);
-  const [connected, setConnected] = useState(false);
+  const [paired, setPaired] = useState(false);
+  const sim = useSimulatorSession();
   const [results, setResults] = useState<Results>({});
 
   const options = category ? availableIn(state, category.id) : [];
@@ -40,7 +42,8 @@ export function AddDeviceDialog({ initialCategory, onClose }: { initialCategory:
 
   const resetTest = () => {
     setMethod(null);
-    setConnected(false);
+    setPaired(false);
+    sim.stop();
     setResults({});
   };
   const pickCategory = (next: Category) => {
@@ -55,7 +58,10 @@ export function AddDeviceDialog({ initialCategory, onClose }: { initialCategory:
     setModelId(id);
   };
   const pickMethod = (next: TestMethod) => {
-    if (next !== method) setConnected(false);
+    if (next !== method) {
+      setPaired(false);
+      sim.stop();
+    }
     setMethod(next);
   };
 
@@ -69,6 +75,7 @@ export function AddDeviceDialog({ initialCategory, onClose }: { initialCategory:
     });
     onClose();
   };
+  const connected = method === "simulator" ? sim.running : paired;
   const testDevice = connected && chosen ? `${method === "simulator" ? "Simulated" : "Bench"} ${chosen.model.name}` : "None";
 
   return (
@@ -92,8 +99,8 @@ export function AddDeviceDialog({ initialCategory, onClose }: { initialCategory:
           {step === 0 && <CategoryStep categories={CATEGORIES} availableCount={(c) => availableIn(state, c.id).length} value={category?.id ?? null} onPick={pickCategory} />}
           {step === 1 && category && <ModelStep kind={category.kind} options={options} value={modelId} onPick={pickModel} />}
           {step === 2 && <MethodStep value={method} onPick={pickMethod} />}
-          {step === 3 && chosen && method && <ConnectStep method={method} model={chosen.model} connected={connected} onConnect={() => setConnected(true)} />}
-          {step === 4 && chosen && <TestsStep model={chosen.model} results={results} setResults={setResults} />}
+          {step === 3 && chosen && method && <ConnectStep method={method} model={chosen.model} sim={sim} connected={paired} onConnect={() => setPaired(true)} />}
+          {step === 4 && chosen && <TestsStep model={chosen.model} sim={sim} results={results} setResults={setResults} />}
           {step === 5 && chosen && category && <ReviewStep kind={category.kind} model={chosen.model} integration={chosen.integration} testDevice={testDevice} passed={passed} />}
         </div>
         <footer className="flex items-center gap-2 border-t border-border-default px-6 py-3.5">
