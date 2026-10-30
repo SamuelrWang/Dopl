@@ -1,3 +1,4 @@
+import { u } from "../_design/components";
 import styles from "./design-playground.module.css";
 import { RUNS, type RunName } from "./text-runs";
 
@@ -6,7 +7,7 @@ export function T({ n }: { n: RunName }) {
   return (
     <span className={`${styles.run} ${styles[n]}`}>
       {RUNS[n].map(([word, left], i) => (
-        <span key={i} className={styles.word} style={{ left }}>
+        <span key={i} className={styles.word} style={{ left: u(left) }}>
           {word}{" "}
         </span>
       ))}

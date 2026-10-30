@@ -1,14 +1,13 @@
 /*
- * The Design Playground's recipes, as one source. Put .scope and one unit class on a page's root.
- * --u is the unit every length in _design multiplies: the reference was drawn at 1.25x, so .u125
- * renders its literal values (the Playground's canvas) and .u100 renders real pages at the size the
- * canvas reads at once ScaleToFit has fitted it to a typical content width.
+ * The design system's recipes, as one source. Put .scope on a page's root. --u is the one unit every
+ * length in _design multiplies, on every page and in the Playground; ICON in components.tsx follows it.
+ * Tune it here and in components.tsx › U, together. The values are the reference's own at --u: 1px.
  */
-.u125 { --u: 1px; }
-.u100 { --u: 0.72px; }
+/* No-ops, kept until _sections/keys* moves to ui.tsx. */
+.u125 { --legacy-unit: 1; }
+.u100 { --legacy-unit: 1; }
 .scope {
-  /* A recipe whose text would fall below this scales up whole (its own --fu); on .u125 none does. */
-  --text-floor: 11px;
+  --u: 0.8px;
   --ink: #000000;
   --ink-soft: #111111;
   --body: #333333;

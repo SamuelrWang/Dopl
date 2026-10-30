@@ -1,5 +1,5 @@
 /* API key recipes, on top of base, catalog and flow. Shown in the gallery's Credentials group. */
-.token { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: max(var(--text-floor), calc(14.5 * var(--u))); line-height: calc(20 * var(--u)); color: var(--muted-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.token { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(14.5 * var(--u)); line-height: calc(20 * var(--u)); color: var(--muted-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .secret { display: flex; align-items: center; gap: calc(12.5 * var(--u)); padding: calc(13.75 * var(--u)) calc(15 * var(--u)); }
 .secretValue { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .codeBody { overflow-x: auto; }

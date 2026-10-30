@@ -1,5 +1,5 @@
 /* A portal's sidebar. Structure from app-sidebar-core.tsx (identity, nav, foot); rows from .navItem. */
-.sidebar { display: flex; flex-direction: column; flex: none; gap: calc(15 * var(--u)); width: clamp(calc(240 * var(--u)), 18vw, calc(290 * var(--u))); min-height: 0; padding: 0 calc(15 * var(--u)) calc(15 * var(--u)); color: var(--ink); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: geometricPrecision; font-kerning: normal; }
+.sidebar { display: flex; flex-direction: column; flex: none; gap: calc(15 * var(--u)); width: calc(340 * var(--u)); min-height: 0; padding: 0 calc(15 * var(--u)) calc(15 * var(--u)); color: var(--ink); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: geometricPrecision; font-kerning: normal; }
 .sidebar * { box-sizing: border-box; }
 .identity { display: flex; flex-direction: column; gap: calc(12.5 * var(--u)); flex: none; }
 .projects { display: flex; flex-direction: column; gap: calc(2.5 * var(--u)); }
@@ -11,13 +11,13 @@
 .projectOn .mark { background: var(--ink); box-shadow: none; color: var(--surface); }
 .nav { display: flex; flex-direction: column; gap: calc(15 * var(--u)); flex: 1; min-height: 0; overflow-y: auto; }
 .group { display: flex; flex-direction: column; gap: calc(1.25 * var(--u)); flex: none; }
-.groupLabel { --fu: max(var(--u), calc(var(--text-floor) / 14.5)); padding: calc(2.5 * var(--fu)) calc(12.5 * var(--fu)) calc(3.75 * var(--fu)); font-size: calc(14.5 * var(--fu)); line-height: calc(20 * var(--fu)); letter-spacing: -0.015em; color: var(--faint); }
+.groupLabel { padding: calc(2.5 * var(--u)) calc(12.5 * var(--u)) calc(3.75 * var(--u)); font-size: calc(14.5 * var(--u)); line-height: calc(20 * var(--u)); letter-spacing: -0.015em; color: var(--faint); }
 .navRow:not([aria-current]):hover { background: var(--fill-strong); }
 .navRow:focus-visible, .project:focus-visible { outline: 0; box-shadow: var(--ring-focus); }
 .navIcon { color: var(--icon-soft); flex: none; }
 [aria-current] > .navIcon { color: inherit; }
 .navLabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar .alert { display: inline-flex; align-items: center; gap: calc(6.25 * var(--fu)); font-weight: 500; color: var(--warn); }
+.sidebar .alert { display: inline-flex; align-items: center; gap: calc(6.25 * var(--u)); font-weight: 500; color: var(--warn); }
 [aria-current] > .alert.alert { color: inherit; }
 .foot { display: flex; align-items: center; gap: calc(12.5 * var(--u)); flex: none; min-width: 0; padding-top: calc(15 * var(--u)); box-shadow: inset 0 calc(1.25 * var(--u)) 0 var(--line-tool); }
 .ellipsis { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

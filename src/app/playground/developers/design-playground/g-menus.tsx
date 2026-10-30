@@ -1,4 +1,5 @@
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Download, FolderInput, Link2, LogOut, Pencil, Search, Settings, Trash2, User } from "lucide-react";
+import { Badge, Button, Chip } from "../_design/ui";
 import b from "../_design/base.module.css";
 import f from "../_design/forms.module.css";
 import o from "../_design/surfaces.module.css";
@@ -15,13 +16,13 @@ function DatePicker() {
   return (
     <Card>
       <div className={b.between}>
-        <span className={cx(b.btn, b.sm, b.square)} aria-label="Previous month">
+        <Button label="Previous month" size="sm" square>
           <ChevronLeft {...ICON} />
-        </span>
+        </Button>
         <span className={b.h3}>October 2024</span>
-        <span className={cx(b.btn, b.sm, b.square)} aria-label="Next month">
+        <Button label="Next month" size="sm" square>
           <ChevronRight {...ICON} />
-        </span>
+        </Button>
       </div>
       <div className={o.calendar}>
         {DAY_NAMES.map((d) => (
@@ -47,7 +48,7 @@ function DatePicker() {
       </div>
       <div className={b.between}>
         <span className={b.muted}>Oct 9 to Oct 15</span>
-        <span className={cx(b.btn, b.primary, b.sm)}>Apply</span>
+        <Button variant="primary" size="sm">Apply</Button>
       </div>
     </Card>
   );
@@ -116,10 +117,10 @@ export function MenusGroup() {
           </Card>
           <Card>
             <div className={b.row}>
-              <span className={b.pill}>
+              <Chip>
                 Region
                 <ChevronDown {...ICON} className={b.iconSoft} />
-              </span>
+              </Chip>
             </div>
             <div className={o.menu}>
               {["Central Java", "East Java", "West Java", "Banten", "Yogyakarta"].map((r, i) => (
@@ -179,7 +180,7 @@ export function MenusGroup() {
                 <span className={b.strong}>Parang Rusak scan.tiff</span>
                 <span className={b.smallMuted}>Scan, Oct 12</span>
               </div>
-              <span className={b.badge}>42 MB</span>
+              <Badge>42 MB</Badge>
             </div>
             <div className={o.menu}>
               <div className={o.item}>

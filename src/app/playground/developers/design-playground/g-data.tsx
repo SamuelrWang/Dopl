@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, ChevronsUpDown, Copy, FileText, Folder, MoreHorizontal, Music, TrendingDown, TrendingUp } from "lucide-react";
+import { Badge, Button } from "../_design/ui";
 import b from "../_design/base.module.css";
 import d from "../_design/data.module.css";
 import f from "../_design/forms.module.css";
@@ -27,11 +28,11 @@ function Table() {
       <div className={cx(b.between, b.padRow)}>
         <div className={b.row}>
           <span className={b.h3}>Entries</span>
-          <span className={cx(b.badge, b.badgeInk)}>2 selected</span>
+          <Badge tone="ink">2 selected</Badge>
         </div>
         <div className={b.row}>
-          <span className={cx(b.btn, b.sm)}>Move</span>
-          <span className={cx(b.btn, b.sm, b.dangerOutline)}>Delete</span>
+          <Button size="sm">Move</Button>
+          <Button size="sm" variant="dangerOutline">Delete</Button>
         </div>
       </div>
       <div className={b.line} />
@@ -113,7 +114,7 @@ export function DataGroupA() {
           <Card>
             <div className={b.between}>
               <span className={b.h3}>Uploads</span>
-              <span className={cx(b.badge, b.badgeRing)}>This week</span>
+              <Badge tone="ring">This week</Badge>
             </div>
             <div className={d.bars}>
               {BARS.map(([day, h], i) => (
@@ -166,10 +167,9 @@ export function DataGroupA() {
                   <span className={b.strong}>Ladrang Wilujeng</span>
                   <span className={b.smallMuted}>Audio, 6:42</span>
                 </div>
-                <span className={cx(b.badge, b.badgeOk)}>
-                  <span className={b.dot} />
+                <Badge tone="ok" dot>
                   Live
-                </span>
+                </Badge>
               </div>
               <div className={cx(d.listRow, d.rowLine)}>
                 <span className={b.tile}>
@@ -179,7 +179,7 @@ export function DataGroupA() {
                   <span className={b.strong}>Serat Centhini, vol. 3</span>
                   <span className={b.smallMuted}>Transcript, 212 pages</span>
                 </div>
-                <span className={cx(b.badge, b.badgeRing)}>v4</span>
+                <Badge tone="ring">v4</Badge>
               </div>
               <div className={d.listRow}>
                 <span className={b.tile}>
@@ -189,7 +189,7 @@ export function DataGroupA() {
                   <span className={b.strong}>Keraton Yogyakarta</span>
                   <span className={b.smallMuted}>Folder, 48 items</span>
                 </div>
-                <span className={b.badge}>Shared</span>
+                <Badge>Shared</Badge>
               </div>
             </div>
           </Card>
@@ -244,15 +244,14 @@ export function DataGroupB() {
         <Card>
           <span className={b.h3}>Badges</span>
           <div className={cx(b.row, b.wrap)}>
-            <span className={cx(b.badge, b.badgeInk)}>Featured</span>
-            <span className={b.badge}>Audio</span>
-            <span className={cx(b.badge, b.badgeRing)}>v2.4</span>
-            <span className={cx(b.badge, b.badgeOk)}>
-              <span className={b.dot} />
+            <Badge tone="ink">Featured</Badge>
+            <Badge>Audio</Badge>
+            <Badge tone="ring">v2.4</Badge>
+            <Badge tone="ok" dot>
               Verified
-            </span>
-            <span className={cx(b.badge, b.badgeWarn)}>Pending</span>
-            <span className={cx(b.badge, b.badgeError)}>Expired</span>
+            </Badge>
+            <Badge tone="warn">Pending</Badge>
+            <Badge tone="error">Expired</Badge>
           </div>
         </Card>
       </div>

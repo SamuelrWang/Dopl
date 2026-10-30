@@ -1,4 +1,5 @@
 import { Minus, Monitor, Moon, Plus, Sun } from "lucide-react";
+import { Chip } from "../_design/ui";
 import b from "../_design/base.module.css";
 import f from "../_design/forms.module.css";
 import { Check, Radios, Segmented, Switch } from "../_design/interactive";
@@ -45,9 +46,9 @@ export function SelectionGroup() {
             <Segmented options={["Day", "Week", "Month", "Year"]} start={1} />
             <div className={cx(b.row, b.wrap)}>
               {CHIPS.map((chip, i) => (
-                <span key={chip} className={cx(b.pill, i === 1 && b.pillOn)}>
+                <Chip key={chip} on={i === 1}>
                   {chip}
-                </span>
+                </Chip>
               ))}
             </div>
           </Card>

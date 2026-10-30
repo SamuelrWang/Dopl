@@ -6,9 +6,9 @@
 
 .table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .colUser { width: 23%; }
-.colDevices { width: 28%; }
+.colDevices { width: 26%; }
 .colActive { width: 15%; }
-.colDelivery { width: 10%; }
+.colDelivery { width: 12%; }
 .colSuccess { width: 11%; }
 .colStatus { width: 11%; }
 .colEnd { width: 2%; min-width: calc(42.5 * var(--u)); }

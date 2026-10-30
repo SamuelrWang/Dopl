@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { u } from "../_design/components";
 import styles from "./design-playground.module.css";
 
 /**
@@ -7,7 +8,7 @@ import styles from "./design-playground.module.css";
  */
 function Svg({ x, y, w, h, children }: { x: number; y: number; w: number; h: number; children: ReactNode }) {
   return (
-    <svg className={styles.svg} style={{ left: x, top: y }} width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg className={styles.svg} style={{ left: u(x), top: u(y), width: u(w), height: u(h) }} viewBox={`0 0 ${w} ${h}`} fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {children}
     </svg>
   );
@@ -16,7 +17,7 @@ function Svg({ x, y, w, h, children }: { x: number; y: number; w: number; h: num
 export function DropZoneOutline() {
   const dash = { stroke: "#cccccc", strokeWidth: 1.25, strokeLinecap: "butt" } as const;
   return (
-    <svg className={styles.svg} style={{ left: 160, top: 318 }} width={463} height={187} viewBox="160 318 463 187" fill="none" aria-hidden="true">
+    <svg className={styles.svg} style={{ left: u(160), top: u(318), width: u(463), height: u(187) }} viewBox="160 318 463 187" fill="none" aria-hidden="true">
       <path {...dash} d="M172 321.3H610.6M172 502H610.6" strokeDasharray="5.7 6.03" />
       <path {...dash} d="M163 330V492M620 330V492" strokeDasharray="5.6 5.69" />
       <path {...dash} d="M163.5 327.5A11 11 0 0 1 168 322.3M619.5 327.5A11 11 0 0 0 615 322.3M163.5 496A11 11 0 0 0 168 501M619.5 496A11 11 0 0 1 615 501" />
@@ -207,7 +208,7 @@ export function ToolbarImage() {
 /** Lucide's link, the one icon it matches, scaled to the reference's 21.7px. */
 export function ToolbarLink() {
   return (
-    <svg className={styles.svg} style={{ left: 1770.33, top: 697.83 }} width={26} height={26} viewBox="0 0 24 24" fill="none" stroke="#111111" strokeWidth={1.57} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg className={styles.svg} style={{ left: u(1770.33), top: u(697.83), width: u(26), height: u(26) }} viewBox="0 0 24 24" fill="none" stroke="#111111" strokeWidth={1.57} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </svg>

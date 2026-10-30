@@ -18,6 +18,7 @@ export function Section({ label, children }: { label: string; children: ReactNod
   );
 }
 
+/** Old; pages use ui.tsx › Card. Remove once g-credentials and _sections/keys* move. */
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
   return <div className={cx(b.card, className)}>{children}</div>;
 }
@@ -37,11 +38,16 @@ export function Initials({ text, small, ink }: { text: string; small?: boolean; 
   return <span className={cx(b.initials, small && b.initialsSm, ink && b.initialsInk)}>{text}</span>;
 }
 
-export const ICON = { size: 20, strokeWidth: 1.6 } as const;
-export const ICON_SM = { size: 17.5, strokeWidth: 1.6 } as const;
-/** The same icons on .u100: reference size x 0.72 to a whole pixel, stroke 0.08 of size. */
-export const ICON_100 = { size: 14, strokeWidth: 1.12 } as const;
-export const ICON_100_SM = { size: 13, strokeWidth: 1.04 } as const;
+/** The one scale, in JS for icon and chart sizes. Must equal --u in tokens.module.css. */
+export const U = 0.8;
+/** Stroke is in the icon's own 24-unit viewBox, so it scales with size and never changes. */
+export const ICON = { size: 20 * U, strokeWidth: 1.6 } as const;
+export const ICON_SM = { size: 17.5 * U, strokeWidth: 1.6 } as const;
+/** Old names; remove once _sections/keys* moves to ui.tsx. */
+export const ICON_100 = ICON;
+export const ICON_100_SM = ICON_SM;
+/** A length on the scale, for an inline style. */
+export const u = (n: number) => `calc(${n} * var(--u))`;
 
 export const initialsOf = (name: string) =>
   name

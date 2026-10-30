@@ -1,4 +1,5 @@
 import { AlertTriangle, ChevronDown, Link2, X } from "lucide-react";
+import { Badge, Button, Chip } from "../_design/ui";
 import b from "../_design/base.module.css";
 import f from "../_design/forms.module.css";
 import o from "../_design/surfaces.module.css";
@@ -34,8 +35,8 @@ export function OverlaysGroup() {
                   <div className={cx(f.floatCell, f.floatValue)}>terus@jawa.id</div>
                 </div>
                 <div className={b.row}>
-                  <span className={cx(b.pill, b.pillOn)}>Editor</span>
-                  <span className={b.pill}>Viewer</span>
+                  <Chip on>Editor</Chip>
+                  <Chip>Viewer</Chip>
                 </div>
                 <div className={b.between}>
                   <div className={b.row}>
@@ -45,15 +46,15 @@ export function OverlaysGroup() {
                       <span className={b.smallMuted}>Owner</span>
                     </div>
                   </div>
-                  <span className={cx(b.badge, b.badgeRing)}>You</span>
+                  <Badge tone="ring">You</Badge>
                 </div>
                 <div className={b.line} />
                 <div className={b.between}>
-                  <span className={cx(b.btn, b.sm)}>
+                  <Button size="sm">
                     <Link2 {...ICON} />
                     Copy link
-                  </span>
-                  <span className={cx(b.btn, b.primary)}>Send Invite</span>
+                  </Button>
+                  <Button variant="primary">Send Invite</Button>
                 </div>
               </div>
             </div>
@@ -72,18 +73,18 @@ export function OverlaysGroup() {
                   <span className={b.muted}>Gamelan Sekaten, 14 recordings</span>
                 </div>
                 <div className={b.row}>
-                  <span className={cx(b.btn, b.full)}>Cancel</span>
-                  <span className={cx(b.btn, b.danger, b.full)}>Delete</span>
+                  <Button full>Cancel</Button>
+                  <Button variant="danger" full>Delete</Button>
                 </div>
               </div>
             </div>
           </Card>
           <Card>
             <div className={b.row}>
-              <span className={cx(b.btn, b.sm)}>
+              <Button size="sm">
                 Members
                 <ChevronDown {...ICON} className={b.iconSoft} />
-              </span>
+              </Button>
             </div>
             <div className={o.popover}>
               <span className={o.popoverTail} />
@@ -94,7 +95,7 @@ export function OverlaysGroup() {
                 <Initials text="+4" small />
               </div>
               <span className={b.strong}>7 people have access</span>
-              <span className={cx(b.btn, b.sm)}>Manage Access</span>
+              <Button size="sm">Manage Access</Button>
             </div>
           </Card>
         </div>
@@ -110,14 +111,14 @@ export function OverlaysGroup() {
                 <div className={b.line} />
                 <span className={b.faint}>Region</span>
                 <div className={cx(b.row, b.wrap)}>
-                  <span className={cx(b.pill, b.pillOn)}>Java</span>
-                  <span className={b.pill}>Bali</span>
-                  <span className={b.pill}>Sumatra</span>
+                  <Chip on>Java</Chip>
+                  <Chip>Bali</Chip>
+                  <Chip>Sumatra</Chip>
                 </div>
                 <span className={b.faint}>Period</span>
                 <div className={cx(b.row, b.wrap)}>
-                  <span className={b.pill}>1900s</span>
-                  <span className={cx(b.pill, b.pillOn)}>2000s</span>
+                  <Chip>1900s</Chip>
+                  <Chip on>2000s</Chip>
                 </div>
                 <div className={b.between}>
                   <span className={b.text}>Has audio</span>
@@ -128,7 +129,7 @@ export function OverlaysGroup() {
                   <Switch label="Verified" />
                 </div>
                 <div className={b.grow} />
-                <span className={cx(b.btn, b.primary, b.full, b.noGrow)}>Show 24 Results</span>
+                <Button variant="primary" block>Show 24 Results</Button>
               </div>
             </div>
           </Card>

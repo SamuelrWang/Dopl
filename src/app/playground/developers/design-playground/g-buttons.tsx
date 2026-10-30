@@ -1,4 +1,5 @@
 import { ChevronDown, Copy, Download, FileText, Heart, Loader2, MoreHorizontal, Pencil, Plus, Share2, Trash2, Upload } from "lucide-react";
+import { Badge, Button } from "../_design/ui";
 import b from "../_design/base.module.css";
 import { Card, Section, cx, ICON } from "../_design/components";
 
@@ -12,24 +13,24 @@ export function ButtonsGroup() {
           <Card>
             <div className={b.title}>Variants</div>
             <div className={cx(b.row, b.wrap)}>
-              <span className={cx(b.btn, b.primary)}>Publish</span>
-              <span className={b.btn}>Save draft</span>
-              <span className={cx(b.btn, b.ghost)}>Discard</span>
+              <Button variant="primary">Publish</Button>
+              <Button>Save draft</Button>
+              <Button variant="ghost">Discard</Button>
             </div>
             <div className={cx(b.row, b.wrap)}>
-              <span className={cx(b.btn, b.danger)}>Delete project</span>
-              <span className={cx(b.btn, b.dangerOutline)}>Revoke</span>
+              <Button variant="danger">Delete project</Button>
+              <Button variant="dangerOutline">Revoke</Button>
             </div>
             <div className={cx(b.row, b.wrap)}>
-              <span className={cx(b.btn, b.primary)}>
+              <Button variant="primary">
                 <Spin />
                 Publishing
-              </span>
-              <span className={b.btn}>
+              </Button>
+              <Button>
                 <Spin />
                 Saving
-              </span>
-              <span className={cx(b.btn, b.off)}>Disabled</span>
+              </Button>
+              <Button disabled>Disabled</Button>
             </div>
           </Card>
         </div>
@@ -37,30 +38,30 @@ export function ButtonsGroup() {
           <Card>
             <div className={b.title}>Sizes and icons</div>
             <div className={cx(b.row, b.wrap)}>
-              <span className={cx(b.btn, b.primary, b.lg)}>Large</span>
-              <span className={cx(b.btn, b.primary)}>Medium</span>
-              <span className={cx(b.btn, b.primary, b.sm)}>Small</span>
+              <Button variant="primary" size="lg">Large</Button>
+              <Button variant="primary">Medium</Button>
+              <Button variant="primary" size="sm">Small</Button>
             </div>
             <div className={cx(b.row, b.wrap)}>
-              <span className={cx(b.btn, b.lg)}>Large</span>
-              <span className={b.btn}>Medium</span>
-              <span className={cx(b.btn, b.sm)}>Small</span>
+              <Button size="lg">Large</Button>
+              <Button>Medium</Button>
+              <Button size="sm">Small</Button>
             </div>
             <div className={cx(b.row, b.wrap)}>
-              <span className={b.btn}>
+              <Button>
                 <Upload {...ICON} />
                 Upload
-              </span>
-              <span className={cx(b.btn, b.primary)}>
+              </Button>
+              <Button variant="primary">
                 <Plus {...ICON} />
                 New file
-              </span>
-              <span className={cx(b.btn, b.square)} aria-label="Copy">
+              </Button>
+              <Button label="Copy" square>
                 <Copy {...ICON} />
-              </span>
-              <span className={cx(b.btn, b.square)} aria-label="More">
+              </Button>
+              <Button label="More" square>
                 <MoreHorizontal {...ICON} />
-              </span>
+              </Button>
             </div>
           </Card>
         </div>
@@ -76,31 +77,31 @@ export function ButtonsGroup() {
                   <span className={b.muted}>Edited by Ada Komeng, 4 min ago</span>
                 </div>
               </div>
-              <span className={cx(b.badge, b.badgeRing)}>Draft</span>
+              <Badge tone="ring">Draft</Badge>
             </div>
             <div className={b.line} />
             <div className={cx(b.row, b.wrap)}>
-              <span className={cx(b.btn, b.sm)}>
+              <Button size="sm">
                 <Pencil {...ICON} />
                 Edit
-              </span>
-              <span className={cx(b.btn, b.sm)}>
+              </Button>
+              <Button size="sm">
                 <Share2 {...ICON} />
                 Share
-              </span>
-              <span className={cx(b.btn, b.sm)}>
+              </Button>
+              <Button size="sm">
                 <Download {...ICON} />
                 Export
-              </span>
-              <span className={cx(b.btn, b.sm, b.square)} aria-label="Favorite">
+              </Button>
+              <Button label="Favorite" size="sm" square>
                 <Heart {...ICON} />
-              </span>
-              <span className={cx(b.btn, b.sm, b.square, b.dangerOutline)} aria-label="Delete">
+              </Button>
+              <Button label="Delete" size="sm" square variant="dangerOutline">
                 <Trash2 {...ICON} />
-              </span>
+              </Button>
             </div>
             <div className={b.between}>
-              <span className={b.btn}>Back</span>
+              <Button>Back</Button>
               <span className={b.split}>
                 <span className={b.splitMain}>Publish</span>
                 <span className={b.splitDivider} />

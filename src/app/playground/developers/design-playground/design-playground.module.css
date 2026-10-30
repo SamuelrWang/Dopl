@@ -2,17 +2,17 @@
  * The one page that does not use the design kit (Samuel's ask): a literal clone of a reference image.
  * Every value is that image's own pixel coordinate or a colour sampled from it. Nothing here is a Dopl
  * token and nothing leaks: all of it hangs off .canvas, and the font is applied by page.tsx.
- * Rings are box-shadows because Chrome floors a 1.25px border to whole device pixels.
+ * Rings are box-shadows because Chrome floors a thin border to whole device pixels.
  */
-.fit { width: 100%; overflow: hidden; }
-.fitInner { transform-origin: 0 0; }
-
+/* One layout, one unit: the clone keeps its canvas coordinates inside each card's box. */
 .canvas {
   position: relative;
-  width: 2000px;
-  min-height: 1500px;
-  overflow: hidden;
-  background: #f6f6f6;
+  min-width: 0;
+  padding: calc(30 * var(--u)) calc(30 * var(--u)) calc(150 * var(--u));
+  background-color: #f6f6f6;
+  background-image: linear-gradient(90deg, #e4e4e4 calc(1 * var(--u)), transparent calc(1 * var(--u))), linear-gradient(#e3e3e3 calc(1.25 * var(--u)), transparent calc(1.25 * var(--u)));
+  background-size: calc(250 * var(--u)) calc(251.25 * var(--u));
+  background-position: calc(174 * var(--u)) calc(250.1 * var(--u));
   color: #000000;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -20,9 +20,16 @@
   font-kerning: normal;
 }
 .canvas * { box-sizing: border-box; }
+.clone { display: flex; flex-wrap: wrap; gap: calc(29 * var(--u)); margin-bottom: calc(90 * var(--u)); }
+/* Upload and Verify sit side by side until the reference's full width fits, then stack as drawn. */
+.cloneSide { display: flex; flex-wrap: wrap; gap: calc(27.7 * var(--u)); }
+@media (min-width: 1800px) { .cloneSide { flex-direction: column; } }
+.cloneCol { display: flex; flex-direction: column; gap: calc(27.7 * var(--u)); }
+.cloneMain { display: flex; flex-direction: column; gap: calc(29.6 * var(--u)); max-width: 100%; }
+.cloneRow { display: flex; flex-wrap: wrap; gap: calc(29 * var(--u)); }
+.cloneBox { position: relative; flex: none; }
+.origin { position: absolute; left: 0; top: 0; }
 
-.gridV { position: absolute; top: 0; width: 1px; height: 100%; background: #e4e4e4; }
-.gridH { position: absolute; left: 0; width: 2000px; height: 1.25px; background: #e3e3e3; }
 
 .run { position: absolute; left: 0; width: 0; white-space: pre; }
 .word { position: absolute; top: 0; }
@@ -33,155 +40,155 @@
 .card {
   position: absolute;
   background: #ffffff;
-  border-radius: 22.5px;
-  box-shadow: inset 0 0 0 1.25px #d8d8d8, 0 3.75px 0 #dcdcdc, 0 7.5px 0.5px #e1e1e1;
+  border-radius: calc(22.5 * var(--u));
+  box-shadow: inset 0 0 0 calc(1.25 * var(--u)) #d8d8d8, 0 calc(3.75 * var(--u)) 0 #dcdcdc, 0 calc(7.5 * var(--u)) calc(0.5 * var(--u)) #e1e1e1;
 }
-.cardUpload { left: 138.9px; top: 213.9px; width: 505.2px; height: 660.2px; }
-.cardVerify { left: 138.9px; top: 901.8px; width: 505.2px; height: 383.8px; }
-.cardSearch { left: 673.7px; top: 600.3px; width: 520.1px; height: 685.3px; }
-.cardRich { left: 1222.9px; top: 600.4px; width: 637.7px; height: 234.5px; }
-.cardLogin { left: 1222.9px; top: 864.8px; width: 637.7px; height: 420.8px; }
+.cardUpload { left: calc(138.9 * var(--u)); top: calc(213.9 * var(--u)); width: calc(505.2 * var(--u)); height: calc(660.2 * var(--u)); }
+.cardVerify { left: calc(138.9 * var(--u)); top: calc(901.8 * var(--u)); width: calc(505.2 * var(--u)); height: calc(383.8 * var(--u)); }
+.cardSearch { left: calc(673.7 * var(--u)); top: calc(600.3 * var(--u)); width: calc(520.1 * var(--u)); height: calc(685.3 * var(--u)); }
+.cardRich { left: calc(1222.9 * var(--u)); top: calc(600.4 * var(--u)); width: calc(637.7 * var(--u)); height: calc(234.5 * var(--u)); }
+.cardLogin { left: calc(1222.9 * var(--u)); top: calc(864.8 * var(--u)); width: calc(637.7 * var(--u)); height: calc(420.8 * var(--u)); }
 
 /* Outlined boxes and buttons */
-.box { position: absolute; background: #ffffff; border-radius: 11.25px; box-shadow: inset 0 0 0 1.25px #d6d6d6; }
-.file1 { left: 162.4px; top: 572.4px; width: 458.2px; height: 108.4px; }
-.file2 { left: 162.4px; top: 692.8px; width: 458.2px; height: 81.8px; }
-.btnCancel { left: 162.4px; top: 798.5px; width: 223.2px; height: 53.6px; }
-.otpBox1 { left: 162.4px; top: 1116.5px; width: 105.7px; height: 58.1px; }
-.otpBox2 { left: 279.9px; top: 1116.5px; width: 105.7px; height: 58.1px; }
-.otpBox3 { left: 397.4px; top: 1116.5px; width: 105.7px; height: 58.1px; }
-.otpBox4 { left: 514.9px; top: 1116.5px; width: 105.7px; height: 58.1px; }
-.btnBack { left: 162.4px; top: 1209.6px; width: 223.2px; height: 54.1px; }
-.btnRichBack { left: 1246.4px; top: 764.4px; width: 100.2px; height: 53.2px; }
-.btnGoogle { left: 1246.4px; top: 1214.8px; width: 590.6px; height: 56.8px; border-radius: 12.5px; }
-.field { left: 1246.8px; top: 999.8px; width: 590.4px; height: 70.7px; border-radius: 16.25px; }
-.fieldDivider { position: absolute; left: 1411.9px; top: 1000.4px; width: 1.25px; height: 69px; background: #d6d6d6; }
-.fieldGap { position: absolute; left: 1261px; top: 998.8px; width: 137.5px; height: 3px; background: #ffffff; }
+.box { position: absolute; background: #ffffff; border-radius: calc(11.25 * var(--u)); box-shadow: inset 0 0 0 calc(1.25 * var(--u)) #d6d6d6; }
+.file1 { left: calc(162.4 * var(--u)); top: calc(572.4 * var(--u)); width: calc(458.2 * var(--u)); height: calc(108.4 * var(--u)); }
+.file2 { left: calc(162.4 * var(--u)); top: calc(692.8 * var(--u)); width: calc(458.2 * var(--u)); height: calc(81.8 * var(--u)); }
+.btnCancel { left: calc(162.4 * var(--u)); top: calc(798.5 * var(--u)); width: calc(223.2 * var(--u)); height: calc(53.6 * var(--u)); }
+.otpBox1 { left: calc(162.4 * var(--u)); top: calc(1116.5 * var(--u)); width: calc(105.7 * var(--u)); height: calc(58.1 * var(--u)); }
+.otpBox2 { left: calc(279.9 * var(--u)); top: calc(1116.5 * var(--u)); width: calc(105.7 * var(--u)); height: calc(58.1 * var(--u)); }
+.otpBox3 { left: calc(397.4 * var(--u)); top: calc(1116.5 * var(--u)); width: calc(105.7 * var(--u)); height: calc(58.1 * var(--u)); }
+.otpBox4 { left: calc(514.9 * var(--u)); top: calc(1116.5 * var(--u)); width: calc(105.7 * var(--u)); height: calc(58.1 * var(--u)); }
+.btnBack { left: calc(162.4 * var(--u)); top: calc(1209.6 * var(--u)); width: calc(223.2 * var(--u)); height: calc(54.1 * var(--u)); }
+.btnRichBack { left: calc(1246.4 * var(--u)); top: calc(764.4 * var(--u)); width: calc(100.2 * var(--u)); height: calc(53.2 * var(--u)); }
+.btnGoogle { left: calc(1246.4 * var(--u)); top: calc(1214.8 * var(--u)); width: calc(590.6 * var(--u)); height: calc(56.8 * var(--u)); border-radius: calc(12.5 * var(--u)); }
+.field { left: calc(1246.8 * var(--u)); top: calc(999.8 * var(--u)); width: calc(590.4 * var(--u)); height: calc(70.7 * var(--u)); border-radius: calc(16.25 * var(--u)); }
+.fieldDivider { position: absolute; left: calc(1411.9 * var(--u)); top: calc(1000.4 * var(--u)); width: calc(1.25 * var(--u)); height: calc(69 * var(--u)); background: #d6d6d6; }
+.fieldGap { position: absolute; left: calc(1261 * var(--u)); top: calc(998.8 * var(--u)); width: calc(137.5 * var(--u)); height: calc(3 * var(--u)); background: #ffffff; }
 
 /* Black buttons: black face, pale gap, grey ring, soft drop */
 .black {
   position: absolute;
   background: #000000;
-  border-radius: 11.25px;
-  box-shadow: 0 0 0 1.25px #ececec, 0 0 0 2.5px #b8b8b8, 0 2.5px 5px 2.5px rgba(0, 0, 0, 0.08);
+  border-radius: calc(11.25 * var(--u));
+  box-shadow: 0 0 0 calc(1.25 * var(--u)) #ececec, 0 0 0 calc(2.5 * var(--u)) #b8b8b8, 0 calc(2.5 * var(--u)) calc(5 * var(--u)) calc(2.5 * var(--u)) rgba(0, 0, 0, 0.08);
 }
-.btnUpload { left: 398.5px; top: 799.4px; width: 220.8px; height: 51.2px; }
-.btnConfirm { left: 398.5px; top: 1210.8px; width: 220.8px; height: 51.6px; }
-.btnSend { left: 1693.4px; top: 765.5px; width: 142.6px; height: 51px; }
-.btnLogin { left: 1247.6px; top: 1140.6px; width: 588.4px; height: 54.9px; }
-.sendDivider { position: absolute; left: 1782.8px; top: 780px; width: 1.25px; height: 22.5px; background: rgba(255, 255, 255, 0.8); }
+.btnUpload { left: calc(398.5 * var(--u)); top: calc(799.4 * var(--u)); width: calc(220.8 * var(--u)); height: calc(51.2 * var(--u)); }
+.btnConfirm { left: calc(398.5 * var(--u)); top: calc(1210.8 * var(--u)); width: calc(220.8 * var(--u)); height: calc(51.6 * var(--u)); }
+.btnSend { left: calc(1693.4 * var(--u)); top: calc(765.5 * var(--u)); width: calc(142.6 * var(--u)); height: calc(51 * var(--u)); }
+.btnLogin { left: calc(1247.6 * var(--u)); top: calc(1140.6 * var(--u)); width: calc(588.4 * var(--u)); height: calc(54.9 * var(--u)); }
+.sendDivider { position: absolute; left: calc(1782.8 * var(--u)); top: calc(780 * var(--u)); width: calc(1.25 * var(--u)); height: calc(22.5 * var(--u)); background: rgba(255, 255, 255, 0.8); }
 .logo {
   position: absolute;
-  left: 368.6px;
-  top: 925.9px;
-  width: 45.6px;
-  height: 45.6px;
+  left: calc(368.6 * var(--u));
+  top: calc(925.9 * var(--u));
+  width: calc(45.6 * var(--u));
+  height: calc(45.6 * var(--u));
   border-radius: 50%;
   background: #000000;
-  box-shadow: 0 0 0 1.25px #f0f0f0, 0 0 0 2.5px #b8b8b8, 0 5px 7.5px 1px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 0 0 calc(1.25 * var(--u)) #f0f0f0, 0 0 0 calc(2.5 * var(--u)) #b8b8b8, 0 calc(5 * var(--u)) calc(7.5 * var(--u)) calc(1 * var(--u)) rgba(0, 0, 0, 0.22);
 }
 
 /* Upload progress */
-.track { position: absolute; left: 176.8px; top: 657.4px; width: 428.6px; height: 8.75px; border-radius: 8.75px; background: #d9d9d9; }
-.trackFill { position: absolute; left: 176.8px; top: 657.4px; width: 210.8px; height: 8.75px; border-radius: 8.75px; background: #000000; }
+.track { position: absolute; left: calc(176.8 * var(--u)); top: calc(657.4 * var(--u)); width: calc(428.6 * var(--u)); height: calc(8.75 * var(--u)); border-radius: calc(8.75 * var(--u)); background: #d9d9d9; }
+.trackFill { position: absolute; left: calc(176.8 * var(--u)); top: calc(657.4 * var(--u)); width: calc(210.8 * var(--u)); height: calc(8.75 * var(--u)); border-radius: calc(8.75 * var(--u)); background: #000000; }
 
 /* AI Tools */
-.aiFrame { position: absolute; left: 673.55px; top: 214.2px; width: 1186.95px; height: 356.5px; border-radius: 25px; background: #111111; box-shadow: 0 5.5px 1px #e0e0e0; }
-.aiHeader { position: absolute; left: 679.55px; top: 220px; width: 1174.8px; height: 80px; border-radius: 18.75px 18.75px 0 0; background: #000000; }
-.aiBody { position: absolute; left: 679.55px; top: 281.5px; width: 1174.8px; height: 283.75px; border-radius: 18.75px; background: #ffffff; }
-.aiQuote { position: absolute; left: 685.5px; top: 286.75px; width: 1163px; height: 122.75px; border-radius: 12.5px; background: #f7f7f7; }
-.aiDivider { position: absolute; left: 679.55px; top: 494.4px; width: 1174.8px; height: 1.25px; background: #d8d8d8; }
-.cursor { position: absolute; left: 897.5px; top: 439.4px; width: 2px; height: 25.2px; background: #0f0f0f; }
+.aiFrame { position: absolute; left: calc(673.55 * var(--u)); top: calc(214.2 * var(--u)); width: calc(1186.95 * var(--u)); height: calc(356.5 * var(--u)); border-radius: calc(25 * var(--u)); background: #111111; box-shadow: 0 calc(5.5 * var(--u)) calc(1 * var(--u)) #e0e0e0; }
+.aiHeader { position: absolute; left: calc(679.55 * var(--u)); top: calc(220 * var(--u)); width: calc(1174.8 * var(--u)); height: calc(80 * var(--u)); border-radius: calc(18.75 * var(--u)) calc(18.75 * var(--u)) 0 0; background: #000000; }
+.aiBody { position: absolute; left: calc(679.55 * var(--u)); top: calc(281.5 * var(--u)); width: calc(1174.8 * var(--u)); height: calc(283.75 * var(--u)); border-radius: calc(18.75 * var(--u)); background: #ffffff; }
+.aiQuote { position: absolute; left: calc(685.5 * var(--u)); top: calc(286.75 * var(--u)); width: calc(1163 * var(--u)); height: calc(122.75 * var(--u)); border-radius: calc(12.5 * var(--u)); background: #f7f7f7; }
+.aiDivider { position: absolute; left: calc(679.55 * var(--u)); top: calc(494.4 * var(--u)); width: calc(1174.8 * var(--u)); height: calc(1.25 * var(--u)); background: #d8d8d8; }
+.cursor { position: absolute; left: calc(897.5 * var(--u)); top: calc(439.4 * var(--u)); width: calc(2 * var(--u)); height: calc(25.2 * var(--u)); background: #0f0f0f; }
 
 /* Search and filter */
-.searchInput { position: absolute; left: 691.3px; top: 617.8px; width: 484.7px; height: 60.3px; border-radius: 16.25px; background: #ffffff; box-shadow: inset 0 0 0 1.25px #858585, 0 0 0 5px #ececec; }
-.panel { left: 691.4px; top: 695.8px; width: 484.7px; height: 572.8px; border-radius: 15px; }
-.pill { position: absolute; top: 762px; height: 37.5px; border-radius: 18.75px; background: #fafafa; }
-.pillBox1 { left: 715.5px; width: 76px; }
-.pillBox2 { left: 800px; width: 115.5px; }
-.pillBox3 { left: 921px; width: 86px; }
-.pillBox4 { left: 1014px; width: 121px; }
-.searchDivider { position: absolute; left: 714.75px; top: 1066.9px; width: 437.15px; height: 1.25px; background: #d6d6d6; }
+.searchInput { position: absolute; left: calc(691.3 * var(--u)); top: calc(617.8 * var(--u)); width: calc(484.7 * var(--u)); height: calc(60.3 * var(--u)); border-radius: calc(16.25 * var(--u)); background: #ffffff; box-shadow: inset 0 0 0 calc(1.25 * var(--u)) #858585, 0 0 0 calc(5 * var(--u)) #ececec; }
+.panel { left: calc(691.4 * var(--u)); top: calc(695.8 * var(--u)); width: calc(484.7 * var(--u)); height: calc(572.8 * var(--u)); border-radius: calc(15 * var(--u)); }
+.pill { position: absolute; top: calc(762 * var(--u)); height: calc(37.5 * var(--u)); border-radius: calc(18.75 * var(--u)); background: #fafafa; }
+.pillBox1 { left: calc(715.5 * var(--u)); width: calc(76 * var(--u)); }
+.pillBox2 { left: calc(800 * var(--u)); width: calc(115.5 * var(--u)); }
+.pillBox3 { left: calc(921 * var(--u)); width: calc(86 * var(--u)); }
+.pillBox4 { left: calc(1014 * var(--u)); width: calc(121 * var(--u)); }
+.searchDivider { position: absolute; left: calc(714.75 * var(--u)); top: calc(1066.9 * var(--u)); width: calc(437.15 * var(--u)); height: calc(1.25 * var(--u)); background: #d6d6d6; }
 
 /* Rich text */
-.richDivider { position: absolute; left: 1223.5px; width: 636.5px; height: 1.25px; background: #dadada; }
-.richDivider1 { top: 676.3px; }
-.richDivider2 { top: 745.2px; }
-.swatch { position: absolute; left: 1246.3px; top: 703px; width: 18.2px; height: 18.3px; border-radius: 3.75px; background: #000000; }
-.toolSep { position: absolute; top: 699.5px; width: 2px; height: 23px; background: #e0e0e0; }
-.toolSep1 { left: 1510px; }
-.toolSep2 { left: 1664px; }
+.richDivider { position: absolute; left: calc(1223.5 * var(--u)); width: calc(636.5 * var(--u)); height: calc(1.25 * var(--u)); background: #dadada; }
+.richDivider1 { top: calc(676.3 * var(--u)); }
+.richDivider2 { top: calc(745.2 * var(--u)); }
+.swatch { position: absolute; left: calc(1246.3 * var(--u)); top: calc(703 * var(--u)); width: calc(18.2 * var(--u)); height: calc(18.3 * var(--u)); border-radius: calc(3.75 * var(--u)); background: #000000; }
+.toolSep { position: absolute; top: calc(699.5 * var(--u)); width: calc(2 * var(--u)); height: calc(23 * var(--u)); background: #e0e0e0; }
+.toolSep1 { left: calc(1510 * var(--u)); }
+.toolSep2 { left: calc(1664 * var(--u)); }
 
 /* Photos cropped from the reference */
-.avatar1 { left: 713px; top: 861px; width: 50px; height: 50px; }
-.avatar2 { left: 713px; top: 929px; width: 50px; height: 50px; }
-.avatar3 { left: 713px; top: 996px; width: 50px; height: 50px; }
-.flag { left: 1266px; top: 1022px; width: 38px; height: 28px; }
+.avatar1 { left: calc(713 * var(--u)); top: calc(861 * var(--u)); width: calc(50 * var(--u)); height: calc(50 * var(--u)); }
+.avatar2 { left: calc(713 * var(--u)); top: calc(929 * var(--u)); width: calc(50 * var(--u)); height: calc(50 * var(--u)); }
+.avatar3 { left: calc(713 * var(--u)); top: calc(996 * var(--u)); width: calc(50 * var(--u)); height: calc(50 * var(--u)); }
+.flag { left: calc(1266 * var(--u)); top: calc(1022 * var(--u)); width: calc(38 * var(--u)); height: calc(28 * var(--u)); }
 
 /* Text runs: top = measured baseline minus the rounded ascent; word lefts live in text-runs.ts */
-.uploadTitle { top: 238px; font-size: 23.75px; line-height: 29px; font-weight: 600; letter-spacing: -0.005em; color: #000000; }
-.uploadSub { top: 275px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.02em; color: #5c5c5c; }
-.dropTitle { top: 411.5px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0375em; color: #000000; }
-.dropSub { top: 444.5px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0375em; color: #787878; }
-.limitType { top: 521px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.02em; color: #6a6a6a; }
-.limitSize { top: 521px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.02em; color: #6a6a6a; }
-.file1Name { top: 587.5px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
-.file1Size { top: 619px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0125em; color: #666666; }
-.file1State { top: 619px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0125em; color: #111111; }
-.file1Pct { top: 603.25px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0475em; color: #000000; }
-.file2Name { top: 708px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
-.file2Size { top: 739.5px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.005em; color: #666666; }
-.file2State { top: 739.5px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0125em; color: #111111; }
-.cancelLabel { top: 815px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
-.uploadLabel { top: 815px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.01em; color: #ffffff; }
-.verifyTitle { top: 1007px; font-size: 23.75px; line-height: 29px; font-weight: 600; letter-spacing: -0.045em; color: #000000; }
-.verifyLine1 { top: 1048.5px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.03em; color: #3a3a3a; }
-.verifyLine2 { top: 1071px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0425em; color: #333333; }
-.verifyRetry { top: 1071px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0375em; color: #000000; }
-.otp1 { top: 1131px; font-size: 23.75px; line-height: 29px; font-weight: 500; color: #000000; }
-.otp2 { top: 1130.75px; font-size: 23.75px; line-height: 29px; font-weight: 500; color: #000000; }
-.otp3 { top: 1130.75px; font-size: 23.75px; line-height: 29px; font-weight: 500; color: #000000; }
-.otp4 { top: 1131px; font-size: 23.75px; line-height: 29px; font-weight: 500; color: #000000; }
-.verifyBack { top: 1226.5px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.015em; color: #000000; }
-.verifyConfirm { top: 1226.5px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.015em; color: #ffffff; }
-.aiTitle { top: 237.5px; font-size: 20.5px; line-height: 25px; font-weight: 600; letter-spacing: -0.0025em; color: #ffffff; }
-.aiLine1 { top: 312.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0175em; color: #383838; }
-.aiLine2 { top: 337.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0175em; color: #383838; }
-.aiLine3 { top: 362.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0175em; color: #383838; }
-.aiPrompt { top: 439.25px; font-size: 20.5px; line-height: 25px; font-weight: 500; letter-spacing: -0.04em; color: #000000; }
-.aiSend { top: 438.75px; font-size: 20.5px; line-height: 25px; font-weight: 600; letter-spacing: 0.005em; color: #000000; }
-.aiAttach { top: 519.5px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.005em; color: #1e1e1e; }
-.aiImage { top: 519.5px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.015em; color: #1e1e1e; }
-.aiModel { top: 519.5px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0075em; color: #1e1e1e; }
-.searchLabel { top: 637.25px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.02em; color: #000000; }
-.searchKey { top: 636.75px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0275em; color: #000000; }
-.filterBy { top: 721px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.015em; color: #000000; }
-.pillAll { top: 769.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.01em; color: #141414; }
-.pillPeople { top: 769.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0075em; color: #141414; }
-.pillFile { top: 769.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0175em; color: #141414; }
-.pillProduct { top: 769.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0075em; color: #141414; }
-.recent { top: 823.25px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0175em; color: #333333; }
-.p1Name { top: 865px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
-.p1Role { top: 889.75px; font-size: 14.5px; line-height: 17px; font-weight: 400; letter-spacing: -0.015em; color: #333333; }
-.p2Name { top: 932.5px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.02em; color: #000000; }
-.p2Role { top: 957.5px; font-size: 14.5px; line-height: 17px; font-weight: 400; letter-spacing: -0.0125em; color: #333333; }
-.p3Name { top: 1000.25px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
-.p3Role { top: 1025px; font-size: 14.5px; line-height: 17px; font-weight: 400; letter-spacing: -0.0175em; color: #333333; }
-.fileRecent { top: 1081.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.02em; color: #333333; }
-.r1Name { top: 1123.5px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
-.r1Meta { top: 1148.25px; font-size: 14.5px; line-height: 17px; font-weight: 400; letter-spacing: -0.015em; color: #333333; }
-.r2Name { top: 1191px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0225em; color: #000000; }
-.r2Meta { top: 1216px; font-size: 14.5px; line-height: 17px; font-weight: 400; letter-spacing: -0.015em; color: #333333; }
-.richText { top: 625.75px; font-size: 20px; line-height: 24px; font-weight: 500; letter-spacing: -0.015em; color: #0d0d0d; }
-.richBody { top: 702.25px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.015em; color: #000000; }
-.richBack { top: 780.75px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.015em; color: #000000; }
-.richSend { top: 780.75px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0075em; color: #ffffff; }
-.loginTitle { top: 888px; font-size: 23.75px; line-height: 29px; font-weight: 600; letter-spacing: -0.0375em; color: #000000; }
-.loginSub { top: 929.75px; font-size: 20px; line-height: 24px; font-weight: 400; letter-spacing: -0.015em; color: #5c5c5c; }
-.phoneA { top: 992.75px; font-size: 17px; line-height: 20px; font-weight: 400; letter-spacing: -0.0375em; color: #595959; }
-.phoneB { top: 992.75px; font-size: 17px; line-height: 20px; font-weight: 400; letter-spacing: -0.04em; color: #595959; }
-.dial { top: 1023.5px; font-size: 20px; line-height: 24px; font-weight: 500; letter-spacing: -0.01em; color: #000000; }
-.phone { top: 1023.5px; font-size: 20px; line-height: 24px; font-weight: 500; letter-spacing: -0.0225em; color: #000000; }
-.loginHelp { top: 1080.25px; font-size: 19.25px; line-height: 24px; font-weight: 400; letter-spacing: -0.03em; color: #5a5a5a; }
-.loginBtn { top: 1158px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.01em; color: #ffffff; }
-.googleBtn { top: 1233px; font-size: 17.5px; line-height: 21px; font-weight: 600; letter-spacing: -0.015em; color: #000000; }
+.uploadTitle { top: calc(238 * var(--u)); font-size: calc(23.75 * var(--u)); line-height: calc(29 * var(--u)); font-weight: 600; letter-spacing: -0.005em; color: #000000; }
+.uploadSub { top: calc(275 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.02em; color: #5c5c5c; }
+.dropTitle { top: calc(411.5 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.0375em; color: #000000; }
+.dropSub { top: calc(444.5 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.0375em; color: #787878; }
+.limitType { top: calc(521 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.02em; color: #6a6a6a; }
+.limitSize { top: calc(521 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.02em; color: #6a6a6a; }
+.file1Name { top: calc(587.5 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
+.file1Size { top: calc(619 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.0125em; color: #666666; }
+.file1State { top: calc(619 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.0125em; color: #111111; }
+.file1Pct { top: calc(603.25 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.0475em; color: #000000; }
+.file2Name { top: calc(708 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
+.file2Size { top: calc(739.5 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.005em; color: #666666; }
+.file2State { top: calc(739.5 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.0125em; color: #111111; }
+.cancelLabel { top: calc(815 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
+.uploadLabel { top: calc(815 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.01em; color: #ffffff; }
+.verifyTitle { top: calc(1007 * var(--u)); font-size: calc(23.75 * var(--u)); line-height: calc(29 * var(--u)); font-weight: 600; letter-spacing: -0.045em; color: #000000; }
+.verifyLine1 { top: calc(1048.5 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.03em; color: #3a3a3a; }
+.verifyLine2 { top: calc(1071 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.0425em; color: #333333; }
+.verifyRetry { top: calc(1071 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.0375em; color: #000000; }
+.otp1 { top: calc(1131 * var(--u)); font-size: calc(23.75 * var(--u)); line-height: calc(29 * var(--u)); font-weight: 500; color: #000000; }
+.otp2 { top: calc(1130.75 * var(--u)); font-size: calc(23.75 * var(--u)); line-height: calc(29 * var(--u)); font-weight: 500; color: #000000; }
+.otp3 { top: calc(1130.75 * var(--u)); font-size: calc(23.75 * var(--u)); line-height: calc(29 * var(--u)); font-weight: 500; color: #000000; }
+.otp4 { top: calc(1131 * var(--u)); font-size: calc(23.75 * var(--u)); line-height: calc(29 * var(--u)); font-weight: 500; color: #000000; }
+.verifyBack { top: calc(1226.5 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.015em; color: #000000; }
+.verifyConfirm { top: calc(1226.5 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.015em; color: #ffffff; }
+.aiTitle { top: calc(237.5 * var(--u)); font-size: calc(20.5 * var(--u)); line-height: calc(25 * var(--u)); font-weight: 600; letter-spacing: -0.0025em; color: #ffffff; }
+.aiLine1 { top: calc(312.75 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.0175em; color: #383838; }
+.aiLine2 { top: calc(337.75 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.0175em; color: #383838; }
+.aiLine3 { top: calc(362.75 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.0175em; color: #383838; }
+.aiPrompt { top: calc(439.25 * var(--u)); font-size: calc(20.5 * var(--u)); line-height: calc(25 * var(--u)); font-weight: 500; letter-spacing: -0.04em; color: #000000; }
+.aiSend { top: calc(438.75 * var(--u)); font-size: calc(20.5 * var(--u)); line-height: calc(25 * var(--u)); font-weight: 600; letter-spacing: 0.005em; color: #000000; }
+.aiAttach { top: calc(519.5 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.005em; color: #1e1e1e; }
+.aiImage { top: calc(519.5 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.015em; color: #1e1e1e; }
+.aiModel { top: calc(519.5 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.0075em; color: #1e1e1e; }
+.searchLabel { top: calc(637.25 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.02em; color: #000000; }
+.searchKey { top: calc(636.75 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.0275em; color: #000000; }
+.filterBy { top: calc(721 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.015em; color: #000000; }
+.pillAll { top: calc(769.75 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.01em; color: #141414; }
+.pillPeople { top: calc(769.75 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.0075em; color: #141414; }
+.pillFile { top: calc(769.75 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.0175em; color: #141414; }
+.pillProduct { top: calc(769.75 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.0075em; color: #141414; }
+.recent { top: calc(823.25 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.0175em; color: #333333; }
+.p1Name { top: calc(865 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
+.p1Role { top: calc(889.75 * var(--u)); font-size: calc(14.5 * var(--u)); line-height: calc(17 * var(--u)); font-weight: 400; letter-spacing: -0.015em; color: #333333; }
+.p2Name { top: calc(932.5 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.02em; color: #000000; }
+.p2Role { top: calc(957.5 * var(--u)); font-size: calc(14.5 * var(--u)); line-height: calc(17 * var(--u)); font-weight: 400; letter-spacing: -0.0125em; color: #333333; }
+.p3Name { top: calc(1000.25 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
+.p3Role { top: calc(1025 * var(--u)); font-size: calc(14.5 * var(--u)); line-height: calc(17 * var(--u)); font-weight: 400; letter-spacing: -0.0175em; color: #333333; }
+.fileRecent { top: calc(1081.75 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 400; letter-spacing: -0.02em; color: #333333; }
+.r1Name { top: calc(1123.5 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
+.r1Meta { top: calc(1148.25 * var(--u)); font-size: calc(14.5 * var(--u)); line-height: calc(17 * var(--u)); font-weight: 400; letter-spacing: -0.015em; color: #333333; }
+.r2Name { top: calc(1191 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.0225em; color: #000000; }
+.r2Meta { top: calc(1216 * var(--u)); font-size: calc(14.5 * var(--u)); line-height: calc(17 * var(--u)); font-weight: 400; letter-spacing: -0.015em; color: #333333; }
+.richText { top: calc(625.75 * var(--u)); font-size: calc(20 * var(--u)); line-height: calc(24 * var(--u)); font-weight: 500; letter-spacing: -0.015em; color: #0d0d0d; }
+.richBody { top: calc(702.25 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.015em; color: #000000; }
+.richBack { top: calc(780.75 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.015em; color: #000000; }
+.richSend { top: calc(780.75 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.0075em; color: #ffffff; }
+.loginTitle { top: calc(888 * var(--u)); font-size: calc(23.75 * var(--u)); line-height: calc(29 * var(--u)); font-weight: 600; letter-spacing: -0.0375em; color: #000000; }
+.loginSub { top: calc(929.75 * var(--u)); font-size: calc(20 * var(--u)); line-height: calc(24 * var(--u)); font-weight: 400; letter-spacing: -0.015em; color: #5c5c5c; }
+.phoneA { top: calc(992.75 * var(--u)); font-size: calc(17 * var(--u)); line-height: calc(20 * var(--u)); font-weight: 400; letter-spacing: -0.0375em; color: #595959; }
+.phoneB { top: calc(992.75 * var(--u)); font-size: calc(17 * var(--u)); line-height: calc(20 * var(--u)); font-weight: 400; letter-spacing: -0.04em; color: #595959; }
+.dial { top: calc(1023.5 * var(--u)); font-size: calc(20 * var(--u)); line-height: calc(24 * var(--u)); font-weight: 500; letter-spacing: -0.01em; color: #000000; }
+.phone { top: calc(1023.5 * var(--u)); font-size: calc(20 * var(--u)); line-height: calc(24 * var(--u)); font-weight: 500; letter-spacing: -0.0225em; color: #000000; }
+.loginHelp { top: calc(1080.25 * var(--u)); font-size: calc(19.25 * var(--u)); line-height: calc(24 * var(--u)); font-weight: 400; letter-spacing: -0.03em; color: #5a5a5a; }
+.loginBtn { top: calc(1158 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 500; letter-spacing: -0.01em; color: #ffffff; }
+.googleBtn { top: calc(1233 * var(--u)); font-size: calc(17.5 * var(--u)); line-height: calc(21 * var(--u)); font-weight: 600; letter-spacing: -0.015em; color: #000000; }

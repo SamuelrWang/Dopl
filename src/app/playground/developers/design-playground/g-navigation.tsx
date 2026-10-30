@@ -1,9 +1,10 @@
 import { Archive, Bell, BookOpen, Check, ChevronLeft, ChevronRight, Home, Layers, MoreHorizontal, Search, Settings, Users } from "lucide-react";
+import { Button } from "../_design/ui";
 import b from "../_design/base.module.css";
 import f from "../_design/forms.module.css";
 import o from "../_design/surfaces.module.css";
 import { Tabs } from "../_design/interactive";
-import { Card, Face, Section, cx, ICON } from "../_design/components";
+import { Card, Face, Section, cx, ICON, U } from "../_design/components";
 
 const NAV = [
   { icon: Home, label: "Home" },
@@ -73,9 +74,9 @@ export function NavigationGroup() {
                   <span className={cx(f.placeholder, b.grow)}>Search</span>
                   <span className={b.kbd}>⌘ K</span>
                 </div>
-                <span className={cx(b.btn, b.square)} aria-label="Notifications">
+                <Button label="Notifications" square>
                   <Bell {...ICON} />
-                </span>
+                </Button>
                 <Face who="ada" />
               </div>
             </div>
@@ -88,7 +89,7 @@ export function NavigationGroup() {
             <div className={o.steps}>
               {STEPS.map((step, i) => (
                 <div key={step} className={cx(b.row, i < STEPS.length - 1 && b.grow)}>
-                  <span className={cx(o.stepDot, i < 2 && o.stepDone, i === 2 && o.stepNow)}>{i < 2 ? <Check size={17.5} strokeWidth={2.2} /> : i + 1}</span>
+                  <span className={cx(o.stepDot, i < 2 && o.stepDone, i === 2 && o.stepNow)}>{i < 2 ? <Check size={17.5 * U} strokeWidth={2.2} /> : i + 1}</span>
                   <span className={i <= 2 ? b.strong : b.muted}>{step}</span>
                   {i < STEPS.length - 1 && <span className={cx(o.stepLine, i < 2 && o.stepLineDone)} />}
                 </div>

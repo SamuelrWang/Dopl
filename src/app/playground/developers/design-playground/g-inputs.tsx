@@ -1,4 +1,5 @@
 import { AlertCircle, CheckCircle2, ChevronDown, Eye, Mail, Paperclip, Search, X } from "lucide-react";
+import { Button } from "../_design/ui";
 import b from "../_design/base.module.css";
 import f from "../_design/forms.module.css";
 import { Card, Section, cx, ICON, ICON_SM } from "../_design/components";
@@ -35,7 +36,7 @@ export function InputsGroup() {
                 <Eye {...ICON} className={b.iconSoft} />
               </div>
             </div>
-            <span className={cx(b.btn, b.primary, b.full)}>Create Account</span>
+            <Button variant="primary" full>Create Account</Button>
           </Card>
         </div>
         <div className={b.col}>

@@ -50,3 +50,4 @@
 .fieldInput { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: none; font: inherit; letter-spacing: inherit; color: var(--ink); }
 .fieldInput::placeholder { color: var(--faint); }
 .field:focus-within { box-shadow: var(--ring-focus); }
+.fieldGrow { flex: 1; }

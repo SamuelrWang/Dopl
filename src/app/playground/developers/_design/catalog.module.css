@@ -1,5 +1,5 @@
 /* A catalog of cards under category headers. Card anatomy from .card and the gallery's Device card. */
-.pillCount { --fu: max(var(--u), calc(var(--text-floor) / 14.5)); font-size: calc(14.5 * var(--fu)); font-variant-numeric: tabular-nums; color: var(--faint); }
+.pillCount { font-size: calc(14.5 * var(--u)); font-variant-numeric: tabular-nums; color: var(--faint); }
 .pillOnCount { color: #b8b8b8; }
 .section { display: flex; flex-direction: column; gap: calc(12.5 * var(--u)); }
 .sectionHead { display: flex; align-items: center; gap: calc(10 * var(--u)); min-width: 0; }

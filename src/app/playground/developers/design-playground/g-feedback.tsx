@@ -1,7 +1,8 @@
 import { AlertCircle, AlertTriangle, CheckCircle2, CloudOff, Info, Loader2, Undo2, X } from "lucide-react";
+import { Badge, Button } from "../_design/ui";
 import b from "../_design/base.module.css";
 import o from "../_design/surfaces.module.css";
-import { Card, Section, cx, ICON } from "../_design/components";
+import { Card, Section, cx, ICON, U, u } from "../_design/components";
 
 function Ring({ value }: { value: number }) {
   const r = 34;
@@ -58,17 +59,17 @@ export function FeedbackGroup() {
           </Card>
           <Card>
             <div className={b.row}>
-              <div className={cx(o.skeleton, o.skeletonRound)} style={{ width: 44, height: 44 }} />
+              <div className={cx(o.skeleton, o.skeletonRound)} style={{ width: u(44), height: u(44) }} />
               <div className={cx(b.stack, b.grow)}>
-                <div className={o.skeleton} style={{ width: "62%", height: 15 }} />
-                <div className={o.skeleton} style={{ width: "38%", height: 12.5 }} />
+                <div className={o.skeleton} style={{ width: "62%", height: u(15) }} />
+                <div className={o.skeleton} style={{ width: "38%", height: u(12.5) }} />
               </div>
-              <div className={o.skeleton} style={{ width: 87.5, height: 37.5 }} />
+              <div className={o.skeleton} style={{ width: u(87.5), height: u(37.5) }} />
             </div>
             <div className={b.line} />
-            <div className={o.skeleton} style={{ height: 112.5 }} />
-            <div className={o.skeleton} style={{ width: "86%", height: 15 }} />
-            <div className={o.skeleton} style={{ width: "54%", height: 15 }} />
+            <div className={o.skeleton} style={{ height: u(112.5) }} />
+            <div className={o.skeleton} style={{ width: "86%", height: u(15) }} />
+            <div className={o.skeleton} style={{ width: "54%", height: u(15) }} />
           </Card>
         </div>
         <div className={b.col}>
@@ -97,7 +98,7 @@ export function FeedbackGroup() {
                 <CloudOff {...ICON} />
               </span>
               <span className={b.h3}>No recordings yet</span>
-              <span className={cx(b.btn, b.primary)}>Upload Recording</span>
+              <Button variant="primary">Upload Recording</Button>
             </div>
           </Card>
         </div>
@@ -106,11 +107,11 @@ export function FeedbackGroup() {
             <div className={b.between}>
               <div className={b.stack}>
                 <div className={o.tooltip}>Copied to clipboard</div>
-                <span className={cx(b.btn, b.sm)}>Copy link</span>
+                <Button size="sm">Copy link</Button>
               </div>
               <Ring value={72} />
               <div className={b.row}>
-                <Loader2 size={30} strokeWidth={1.8} className={b.spinner} />
+                <Loader2 size={30 * U} strokeWidth={1.8} className={b.spinner} />
                 <span className={b.muted}>Syncing</span>
               </div>
             </div>
@@ -136,7 +137,7 @@ export function FeedbackGroup() {
                 <span className={b.strong}>Monthly storage</span>
                 <span className={b.smallMuted}>18.4 of 20 GB</span>
               </div>
-              <span className={cx(b.badge, b.badgeWarn)}>92%</span>
+              <Badge tone="warn">92%</Badge>
             </div>
           </Card>
         </div>
