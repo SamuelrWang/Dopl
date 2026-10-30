@@ -6,7 +6,7 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 
 import DevicesPage from "@/app/devices/page";
 import { HERO } from "./content";
@@ -20,9 +20,15 @@ describe("/devices landing", () => {
   });
 
   it("links both CTAs, in the hero and in the closing panel", () => {
-    render(<DevicesPage />);
-    const keys = screen.getAllByRole("link", { name: /Get a key/ });
-    const docs = screen.getAllByRole("link", { name: /Read the docs/ });
+    const { container } = render(<DevicesPage />);
+    // Scoped to the landing's own two panels: the site nav's product menu carries a docs link too.
+    const panels = ["dv-hero-heading", "dv-final-heading"].map((id) => {
+      const el = container.querySelector<HTMLElement>(`section[aria-labelledby="${id}"]`);
+      if (!el) throw new Error(`missing section ${id}`);
+      return within(el);
+    });
+    const keys = panels.flatMap((p) => p.getAllByRole("link", { name: /Get a key/ }));
+    const docs = panels.flatMap((p) => p.getAllByRole("link", { name: /Read the docs/ }));
     expect(keys).toHaveLength(2);
     expect(docs).toHaveLength(2);
     for (const a of keys) expect(a.getAttribute("href")).toBe("/developers/keys");
