@@ -144,3 +144,28 @@ export function CaptureOutput() {
     </div>
   );
 }
+
+export const FieldGrid = ({ children }: { children: ReactNode }) => <div className={x.fieldGrid}>{children}</div>;
+
+/** A label over its control. */
+export function LabeledField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className={b.stack}>
+      <Text kind="muted">{label}</Text>
+      {children}
+    </div>
+  );
+}
+
+/** A name on the left, its options on the right: permissions by tier. */
+export function TierRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className={x.tierRow}>
+      <Text kind="muted">{label}</Text>
+      <div className={x.answers}>{children}</div>
+    </div>
+  );
+}
+
+export const Swatch = ({ color }: { color: string }) => <span className={x.swatch} style={{ backgroundColor: color }} aria-hidden="true" />;
+export const PreviewStage = ({ children }: { children: ReactNode }) => <div className={x.previewStage}>{children}</div>;

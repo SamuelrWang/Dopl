@@ -1,225 +1,163 @@
 "use client";
 
 /**
- * Connect page: allowed integrations, branding and scopes beside the END USER's real hosted screen
- * (`ConnectFlow`). Its POSTs to `/api/connect/{token}/{step}` are answered in the browser by a fetch
- * shim scoped to the demo token's prefix, so nothing reaches the API.
+ * Connect page: settings for the screen Dopl hosts when an end user links a device. Most developers
+ * set this once; each session is created in code, inside the limits set here.
  */
-import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
-import type { CapabilityScope, RiskTier } from "@dopl/device-contracts";
-import { CAPABILITY_FAMILY, CAPABILITY_RISK_TIER, type CapabilityId } from "@dopl/device-contracts";
-import type { ConnectCandidate, ConnectPageView } from "@/features/device-sdk/server/connect/hosted";
-import { ConnectFlow } from "@/app/connect/[token]/connect-flow";
-import { cn } from "@/shared/lib/utils";
-import { NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
-import { pillButton } from "@/shared/ui/pill-button";
-import { SECTION_TITLE } from "@/shared/ui/section-title";
-import { StatusPill } from "@/shared/ui/status-pill";
-import { Switch } from "@/shared/ui/switch";
-import { RAISED_INPUT } from "@/shared/ui/wells";
-import { INTEGRATIONS, categoryById } from "../_data/catalog";
-import { scopesByTier, type ConnectConfig } from "../_data/misc";
+import { Check, Copy, ExternalLink, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Badge, Button, Card, Chip, ICON, ICON_SM, TwoLine, type Tone } from "../_design/ui";
+import { FieldGrid, LabeledField, SplitLayout, Swatch, TierRow } from "../_design/ui-output";
+import { Between, BoxRow, CodeBlock, Grow, Mark, Page, PageHeader, PlainButton, Row, Stack, Text, TextField, Tile, Tiles } from "../_design/ui-page";
+import { INTEGRATIONS, TIER_LABEL, categoryById } from "../_data/catalog";
+import { scopesByTier } from "../_data/misc";
+import { CategoryGlyph } from "../_components/category-glyph";
 import { usePortal } from "../_components/portal-store";
-import { Card, IntegrationStatusPill, PortalPage, TierChip, ov } from "../_components/ui";
+import { ConnectTest } from "./connect-test";
 
-const DEMO_TOKEN_PREFIX = "demo_larkfield_";
-
-const CANDIDATES: Record<string, ConnectCandidate> = {
-  even_realities: { adapter_id: "even_g2", kind: "glasses", label: "Even Realities G2", pairing: "enter_code", supported: ["present.*", "ask.*", "input.*"], unsupported: ["capture.photo"] },
-  dopl_desktop: { adapter_id: "desktop", kind: "desktop", label: "Dopl desktop app", pairing: "display_code", supported: ["present.notify"], unsupported: ["ask.*", "input.*", "capture.photo"] },
-};
-
-const LOW_TIERS: readonly RiskTier[] = ["T0", "T1"];
-
-function tierOfScope(scope: CapabilityScope): RiskTier {
-  if (!scope.endsWith(".*")) return CAPABILITY_RISK_TIER[scope as CapabilityId];
-  const family = scope.slice(0, -2);
-  const ids = (Object.keys(CAPABILITY_RISK_TIER) as CapabilityId[]).filter((id) => CAPABILITY_FAMILY[id] === family);
-  return (["T0", "T1", "T2", "T3", "T4"] as RiskTier[]).find((t) => ids.some((id) => CAPABILITY_RISK_TIER[id] === t)) ?? "T0";
-}
-
-function viewOf(config: ConnectConfig, phase: { device: string } | null): ConnectPageView {
-  const branding = { display_name: config.displayName, logo_url: config.logoUrl || undefined, accent_color: config.accent };
-  if (!phase) {
-    return { state: "choose", branding, candidates: config.allowedIntegrations.map((id) => CANDIDATES[id]).filter(Boolean) };
-  }
-  return {
-    state: "consent",
-    branding,
-    device: phase.device,
-    scopes: config.scopes.map((scope) => ({ scope, tier: tierOfScope(scope), checked: LOW_TIERS.includes(tierOfScope(scope)) })),
-  };
-}
-
-const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
-
-function Preview({ draft }: { draft: ConnectConfig }) {
-  const [run, setRun] = useState(0);
-  const [phase, setPhase] = useState<{ device: string } | null>(null);
-  const picked = useRef("Even Realities G2");
-  const token = `${DEMO_TOKEN_PREFIX}${run}`;
-  useEffect(() => {
-    const realFetch = window.fetch;
-    window.fetch = async (input, init) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      const m = url.match(/\/api\/connect\/([^/]+)\/(pair|claim|consent)$/);
-      if (!m || !decodeURIComponent(m[1]).startsWith(DEMO_TOKEN_PREFIX)) return realFetch(input, init);
-      const body = JSON.parse(typeof init?.body === "string" ? init.body : "{}") as { adapter_id?: string };
-      if (m[2] === "pair") {
-        picked.current = Object.values(CANDIDATES).find((c) => c.adapter_id === body.adapter_id)?.label ?? "Device";
-        return json(body.adapter_id === "even_g2" ? { method: "enter_code" } : { method: "display_code", code: "K7Q2-94" });
-      }
-      if (m[2] === "claim") {
-        setPhase({ device: picked.current });
-        return json({ ok: true });
-      }
-      return json({ connection_id: "conn_demo" });
-    };
-    return () => {
-      window.fetch = realFetch;
-    };
-  }, []);
-  const view = viewOf(draft, phase);
-  return (
-    <div className="flex min-w-0 flex-col gap-3 p-1">
-      <div className="flex items-center justify-between">
-        <h2 className={SECTION_TITLE}>End user preview</h2>
-        <button
-          type="button"
-          className={pillButton("outline", "xs")}
-          onClick={() => {
-            setPhase(null);
-            setRun((n) => n + 1);
-          }}
-        >
-          Restart
-        </button>
-      </div>
-      <div className="card-well flex justify-center px-3 py-8">
-        <ConnectFlow key={`${token}:${view.state}:${JSON.stringify(draft)}`} token={token} view={view} />
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className={ov.cellLabel}>{label}</span>
-      {children}
-    </label>
-  );
-}
+const HEX = /^#[0-9a-fA-F]{6}$/;
+const URL_OK = /^https:\/\/\S+\.\S+/;
+const STATUS: Record<string, [string, Tone]> = { live: ["Live", "ok"], testing: ["Testing", "neutral"] };
 
 export function ConnectSection() {
   const { state, update } = usePortal();
   const { draft, published } = state.connect;
   const dirty = JSON.stringify(draft) !== JSON.stringify(published);
-  const edit = (patch: Partial<ConnectConfig>) => update((s) => ({ ...s, connect: { ...s.connect, draft: { ...s.connect.draft, ...patch } } }));
+  const edit = (patch: Partial<typeof draft>) => update((s) => ({ ...s, connect: { ...s.connect, draft: { ...s.connect.draft, ...patch } } }));
   const [next, setNext] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const snippet = `const session = await dopl.connectSessions.create({
+  external_user_id: "user_123",
+  requested_scopes: ${JSON.stringify(draft.scopes.slice(0, 3))},
+  redirect_uri: ${JSON.stringify(draft.redirects[0] ?? "https://")},
+});
+
+// Send your user to session.url`;
   return (
-    <PortalPage
-      title="Connect page"
-      aside={<Preview draft={draft} />}
-      asideWidth={420}
-      actions={
-        <>
-          {dirty ? (
-            <StatusPill tone="attention">Draft</StatusPill>
-          ) : (
-            <StatusPill tone="live" dot bare>
-              Published
-            </StatusPill>
-          )}
-          <button type="button" disabled={!dirty} className={cn(pillButton("ink", "lg", { raise: false }), "disabled:opacity-60")} onClick={() => update((s) => ({ ...s, connect: { ...s.connect, published: s.connect.draft } }))}>
-            Publish
-          </button>
-        </>
-      }
-    >
-      <Card title="Allowed integrations" count={draft.allowedIntegrations.length}>
-        <ul className={ov.rows}>
-          {INTEGRATIONS.filter((i) => state.integrations[i.id]).map((i) => {
-            const on = draft.allowedIntegrations.includes(i.id);
-            return (
-              <li key={i.id} className={ov.row}>
-                <span className={ov.rowMain}>
-                  <span className={ov.rowTitle}>{i.name}</span>
-                  <span className={ov.rowMeta}>{categoryById(i.categoryId).name}</span>
-                </span>
-                <IntegrationStatusPill status={state.integrations[i.id]!.status} />
-                <Switch
-                  aria-label={`Allow ${i.name}`}
-                  checked={on}
-                  onChange={() => edit({ allowedIntegrations: on ? draft.allowedIntegrations.filter((x) => x !== i.id) : [...draft.allowedIntegrations, i.id] })}
-                />
-              </li>
-            );
-          })}
-        </ul>
-      </Card>
-      <Card title="Branding">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Name">
-            <input value={draft.displayName} onChange={(e) => edit({ displayName: e.target.value })} className={cn(RAISED_INPUT, "h-8 px-3")} />
-          </Field>
-          <Field label="Logo URL">
-            <input value={draft.logoUrl} placeholder="https://" onChange={(e) => edit({ logoUrl: e.target.value })} className={cn(RAISED_INPUT, "h-8 px-3 font-mono")} />
-          </Field>
-        </div>
-      </Card>
-      <Card title="Requested scopes" count={`${draft.scopes.length} selected`}>
-        {scopesByTier().map(({ tier, scopes }) => (
-          <div key={tier} className="flex items-start gap-2.5">
-            <span className="w-8 shrink-0 pt-0.5">
-              <TierChip tier={tier} />
-            </span>
-            <span className="flex flex-wrap gap-1.5">
-              {scopes.map((s) => {
-                const on = draft.scopes.includes(s);
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => edit({ scopes: on ? draft.scopes.filter((x) => x !== s) : [...draft.scopes, s] })}
-                    className={cn(pillButton(on ? "ink" : "outline", "xs", { raise: false }), "font-mono")}
+    <Page overlays={testing && <ConnectTest draft={draft} onClose={() => setTesting(false)} />}>
+      <PageHeader
+        title="Connect page"
+        test={state.env === "test"}
+        action={
+          <Row>
+            {dirty ? <Badge tone="warn">Draft</Badge> : <Badge tone="ok" dot>Published</Badge>}
+            <Button onClick={() => setTesting(true)}>
+              <ExternalLink {...ICON} aria-hidden="true" />
+              Open test link
+            </Button>
+            <Button variant="ink" disabled={!dirty} onClick={() => update((s) => ({ ...s, connect: { ...s.connect, published: s.connect.draft } }))}>
+              Publish
+            </Button>
+          </Row>
+        }
+      />
+      <SplitLayout
+        left={
+          <>
+            <Card>
+              <Text kind="h3">Branding</Text>
+              <FieldGrid>
+                <LabeledField label="Name">
+                  <TextField label="Name" value={draft.displayName} onChange={(displayName) => edit({ displayName })} />
+                </LabeledField>
+                <LabeledField label="Button color">
+                  <Row>
+                    <Swatch color={HEX.test(draft.accent) ? draft.accent : "#ffffff"} />
+                    <TextField grow label="Button color" value={draft.accent} onChange={(accent) => edit({ accent })} />
+                  </Row>
+                </LabeledField>
+              </FieldGrid>
+              <LabeledField label="Logo URL">
+                <TextField label="Logo URL" placeholder="https://" value={draft.logoUrl} onChange={(logoUrl) => edit({ logoUrl })} />
+              </LabeledField>
+            </Card>
+            <Card>
+              <Text kind="h3">Redirect URLs</Text>
+              <Stack>
+                {draft.redirects.map((u) => (
+                  <BoxRow key={u}>
+                    <Text kind="mono" clip>
+                      {u}
+                    </Text>
+                    <Grow />
+                    <PlainButton label={`Remove ${u}`} onClick={() => edit({ redirects: draft.redirects.filter((x) => x !== u) })}>
+                      <Trash2 {...ICON} aria-hidden="true" />
+                    </PlainButton>
+                  </BoxRow>
+                ))}
+                <Row>
+                  <TextField grow label="Add redirect URL" placeholder="https://" value={next} onChange={setNext} />
+                  <Button
+                    disabled={!URL_OK.test(next)}
+                    onClick={() => {
+                      edit({ redirects: [...draft.redirects, next] });
+                      setNext("");
+                    }}
                   >
-                    {s}
-                  </button>
-                );
-              })}
-            </span>
-          </div>
-        ))}
-      </Card>
-      <Card title="Redirect URIs" count={draft.redirects.length}>
-        <ul className={ov.rows}>
-          {draft.redirects.map((u) => (
-            <li key={u} className={ov.row}>
-              <span className={cn(ov.rowTitle, "min-w-0 flex-1 font-mono text-caption")}>{u}</span>
-              <button type="button" aria-label={`Remove ${u}`} className={cn(NAKED_ICON_BUTTON, "p-1")} onClick={() => edit({ redirects: draft.redirects.filter((x) => x !== u) })}>
-                <X size={13} aria-hidden="true" />
-              </button>
-            </li>
-          ))}
-        </ul>
-        <span className="flex gap-2">
-          <input value={next} placeholder="https://" onChange={(e) => setNext(e.target.value)} className={cn(RAISED_INPUT, "h-8 flex-1 px-3 font-mono")} />
-          <button
-            type="button"
-            disabled={!/^https:\/\/\S+\.\S+/.test(next)}
-            className={cn(pillButton("outline", "md"), "disabled:opacity-60")}
-            onClick={() => {
-              edit({ redirects: [...draft.redirects, next] });
-              setNext("");
-            }}
-          >
-            Add
-          </button>
-        </span>
-      </Card>
-    </PortalPage>
+                    Add
+                  </Button>
+                </Row>
+              </Stack>
+            </Card>
+            <Card>
+              <Between>
+                <Text kind="h3">Start a session</Text>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(snippet);
+                    setCopied(true);
+                  }}
+                >
+                  {copied ? <Check {...ICON_SM} aria-hidden="true" /> : <Copy {...ICON_SM} aria-hidden="true" />}
+                  {copied ? "Copied" : "Copy"}
+                </Button>
+              </Between>
+              <CodeBlock title="JavaScript">{snippet}</CodeBlock>
+            </Card>
+          </>
+        }
+        right={
+          <>
+            <Card>
+              <Text kind="h3">Allowed integrations</Text>
+              <Tiles>
+                {INTEGRATIONS.filter((i) => state.integrations[i.id]).map((i) => {
+                  const on = draft.allowedIntegrations.includes(i.id);
+                  const [label, tone] = STATUS[state.integrations[i.id]!.status];
+                  return (
+                    <Tile key={i.id} selected={on} onClick={() => edit({ allowedIntegrations: on ? draft.allowedIntegrations.filter((x) => x !== i.id) : [...draft.allowedIntegrations, i.id] })}>
+                      <Mark>
+                        <CategoryGlyph id={i.categoryId} size={ICON} />
+                      </Mark>
+                      <TwoLine title={i.name} sub={categoryById(i.categoryId).name} />
+                      <Badge tone={tone}>{label}</Badge>
+                    </Tile>
+                  );
+                })}
+              </Tiles>
+            </Card>
+            <Card>
+              <Text kind="h3">Maximum permissions</Text>
+              <Stack>
+                {scopesByTier().map(({ tier, scopes }) => (
+                  <TierRow key={tier} label={TIER_LABEL[tier]}>
+                    {scopes.map((s) => {
+                      const on = draft.scopes.includes(s);
+                      return (
+                        <Chip key={s} on={on} pressed={on} onClick={() => edit({ scopes: on ? draft.scopes.filter((x) => x !== s) : [...draft.scopes, s] })}>
+                          {s}
+                        </Chip>
+                      );
+                    })}
+                  </TierRow>
+                ))}
+              </Stack>
+            </Card>
+          </>
+        }
+      />
+    </Page>
   );
 }

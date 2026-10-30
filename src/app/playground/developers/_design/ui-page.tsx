@@ -373,9 +373,9 @@ export function Alert({ tone, icon, children }: { tone: "warn" | "error"; icon: 
   );
 }
 
-export function TextField({ label, placeholder, value, autoFocus, onChange, onEnter }: { label: string; placeholder?: string; value: string; autoFocus?: boolean; onChange: (next: string) => void; onEnter?: () => void }) {
+export function TextField({ label, placeholder, value, autoFocus, grow, onChange, onEnter }: { label: string; placeholder?: string; value: string; autoFocus?: boolean; /** Fills its row. */ grow?: boolean; onChange: (next: string) => void; onEnter?: () => void }) {
   return (
-    <label className={f.field}>
+    <label className={cx(f.field, grow && f.fieldGrow)}>
       <input
         autoFocus={autoFocus}
         className={f.fieldInput}

@@ -1,7 +1,6 @@
 "use client";
 
 /** The portal: the sidebar and the page's content, on one surface. No rail, no panel around either. */
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import {
@@ -42,7 +41,6 @@ const GROUPS: { label: string | null; items: NavItem[] }[] = [
     label: "Build",
     items: [
       { href: "/devices", label: "Devices", icon: Cpu },
-      { href: "/connect", label: "Connect page", icon: Link2 },
       { href: "/playground", label: "Playground", icon: FlaskConical },
     ],
   },
@@ -57,6 +55,7 @@ const GROUPS: { label: string | null; items: NavItem[] }[] = [
   {
     label: "Configure",
     items: [
+      { href: "/connect", label: "Connect page", icon: Link2 },
       { href: "/keys", label: "API keys", icon: KeyRound },
       { href: "/webhooks", label: "Webhooks", icon: Webhook },
       { href: "/usage", label: "Usage", icon: BarChart3 },
