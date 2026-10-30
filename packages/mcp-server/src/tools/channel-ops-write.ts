@@ -23,7 +23,7 @@
  * back as "not a member" instead of the 400 that lists the live handles.
  */
 
-import { bySet, callRef, toolName } from "../call-ref.js";
+import { callRef, toolName } from "../call-ref.js";
 import type { ChannelMessageInput, DoplClient } from "@dopl/client";
 
 /** `cites` ON THE WIRE — by NUMBER, never by id. ⚠ Declared, not imported: the
@@ -43,6 +43,7 @@ import { inlineOr, isErr, resolveChannelOr } from "./channel-shared";
 // ⚠ Whether a pending HOLD outlives the turn is a CLIENT property this
 // server cannot see — one module decides what may be claimed about it.
 import { holdFact } from "./channel-wake-guidance";
+import { displayTip, reachWarning } from "./channel-ops-write-notes";
 // ⚠ A 400's MEANING is read off its CODE, never guessed from its status.
 import {
   fieldCapsNote,
@@ -476,34 +477,3 @@ export async function opPost(
     }) + displayTip(message.displayHint) + reachWarning(message),
   );
 }
-
-/**
- * **THE AGENT YOU NAMED IS NOT ON THIS SCOPE** (2026-10-29, Thread Mention Reach Fix
- * step 1). The server stored the address but predicted `unreachable`: every agent
- * named works a different thread or the main room, and its desktop feeds only its
- * own scope. Said in the result, never silently, so the sender can re-post where
- * the agent works. ⚠ Only on the PREDICTION: a machine receipt that upgraded the row
- * (`deliveryAt` set) means it landed after all.
- */
-function reachWarning(message: {
-  delivery?: string | null;
-  deliveryAt?: string | null;
-  recipientAgentIds?: string[] | null;
-}): string {
-  if (message.delivery !== "unreachable" || message.deliveryAt) return "";
-  if ((message.recipientAgentIds?.length ?? 0) === 0) return "";
-  return "\nWarning: unreachable. The agent you named is not working this thread (or the main room, for a room post), so nothing woke it. Post where it works with the same `to=`; a main-room post reaches a main-room agent.";
-}
-
-/**
- * **THE DISPLAY NUDGE, READ BACK** (unified display §6.2): the server saw structure in a plain
- * send. ONE line, never a refusal — the post already landed as written.
- */
-function displayTip(hint: "choice" | "structure" | undefined): string {
-  if (!hint) return "";
-  const show = bySet({ legacy: 'kind="decision"', granular: "dopl_show" });
-  return hint === "choice"
-    ? `\nTip: a question with options is a decision — send it with ${toolName("channel.send", { kind: '"decision"' })} or ${show} (a choice block) so they answer in one press, on any device.`
-    : `\nTip: lists, tables and status read better as a display — ${show} draws them on desktop and glasses.`;
-}
-
