@@ -51,8 +51,6 @@
 .sticky { position: sticky; top: 0; }
 .ruleValue { grid-column: 1 / -1; min-width: 0; }
 .scrollArea:first-child { margin-top: calc(1.75 * var(--u)); border-radius: var(--radius-card); }
-.fill .scrollArea table { height: 100%; }
-.fill .scrollArea thead tr { height: var(--cell-head-h); }
 .fitRows { display: flex; flex: 1; flex-direction: column; gap: calc(20 * var(--u)); min-height: 0; }
 .fitRows > * { flex: 1 1 0; min-height: 0; }
 .fillEven { justify-content: space-evenly; }
