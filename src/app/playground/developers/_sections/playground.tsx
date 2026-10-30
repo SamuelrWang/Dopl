@@ -5,7 +5,7 @@
  * the capability, not the device, so anything with no screen still shows a result. The simulator and
  * the real device are the same call; here both are computed locally and nothing is sent.
  */
-import { Check, CircleAlert, Copy, Play, Radio, RotateCcw, Send } from "lucide-react";
+import { Check, CircleAlert, Copy, Play, Radio, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CapabilityId } from "@dopl/device-contracts";
 import { Badge, Button, Chip, ICON, PillMenu, Segmented, TwoLine, type Tone } from "../_design/ui";
@@ -18,8 +18,7 @@ import { HAPTICS, answersOf, changeOf, choicesOf, defaultText, eventsOf, familyO
 import { runSnippet } from "./playground-run";
 
 const PHASE: Record<Phase, [string, Tone]> = { idle: ["Not sent", "neutral"], queued: ["Queued", "neutral"], delivered: ["Sent", "neutral"], seen: ["Seen by device", "ok"], answered: ["Answered", "ok"], refused: ["Refused", "error"] };
-const TABS = ["Snippet", "Request", "Response", "Events"];
-const MODES = ["Form", "Code"];
+const TABS = ["Request", "Response", "Events"];
 
 /** What is on the device now, from the form or from a run. */
 interface Shown {
@@ -87,7 +86,6 @@ export function PlaygroundSection({ initialModel }: { initialModel?: string }) {
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [target, setTarget] = useState(0);
   const [deviceId, setDeviceId] = useState<string | null>(null);
-  const [mode, setMode] = useState(0);
   const [edited, setEdited] = useState<string | null>(null);
   const [ran, setRan] = useState<Shown | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +94,7 @@ export function PlaygroundSection({ initialModel }: { initialModel?: string }) {
   const [answer, setAnswer] = useState<string | null>(null);
   const [tab, setTab] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState<Shown | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const clear = () => {
@@ -123,7 +121,6 @@ export function PlaygroundSection({ initialModel }: { initialModel?: string }) {
   const generated = snippetOf(capability, callDevice, text, choice, answers);
   const code = edited ?? generated;
   const shown: Shown = ran ?? { capability, text, choice, answers };
-  const snippet = mode === 1 ? code : snippetOf(shown.capability, callDevice, shown.text, shown.choice, shown.answers);
 
   const pickModel = (id: ModelId) => {
     const list = sendable(modelById(id));
@@ -138,12 +135,6 @@ export function PlaygroundSection({ initialModel }: { initialModel?: string }) {
     setPhase("queued");
     timers.current.push(setTimeout(() => setPhase("delivered"), 300), setTimeout(() => setPhase((p) => (p === "delivered" ? "seen" : p)), 800));
   };
-  const run = () => {
-    clear();
-    if (real && device?.state !== "online") return setPhase("refused");
-    play();
-  };
-  const send = () => (real && needsConfirm(capability) ? setConfirming(true) : run());
   const runCode = async () => {
     clear();
     const result = await runSnippet(code);
@@ -156,12 +147,14 @@ export function PlaygroundSection({ initialModel }: { initialModel?: string }) {
     const last = result.calls.at(-1);
     if (!last) return refuse("The code made no call to dopl");
     if (!capabilities.includes(last.capability as CapabilityId)) return refuse(`${model.name} does not support ${last.capability}`);
-    if (real && device?.state !== "online") return setPhase("refused");
     const c = last.capability as CapabilityId;
-    setRan({ capability: c, text: last.text ?? last.lines?.join(" ") ?? "", lines: last.lines, choice: last.value ?? choicesOf(c)[0] ?? "", answers: last.options ?? answersOf(c, options) });
+    const next: Shown = { capability: c, text: last.text ?? last.lines?.join(" ") ?? "", lines: last.lines, choice: last.value ?? choicesOf(c)[0] ?? "", answers: last.options ?? answersOf(c, options) };
+    if (real && device?.state !== "online") return setPhase("refused");
+    if (real && needsConfirm(c)) return setConfirming(next);
+    setRan(next);
     play();
   };
-  const canSend = (!needsText(capability) || text.trim() !== "") && (!real || device !== null);
+  const canRun = code.trim() !== "" && (!real || device !== null);
   const tag = PHASE[phase];
   const events = eventsOf(phase, answer);
 
@@ -171,13 +164,13 @@ export function PlaygroundSection({ initialModel }: { initialModel?: string }) {
       overlays={
         confirming && (
           <ConfirmDialog
-            label={`Send ${labelOf(capability)}`}
+            label={`Send ${labelOf(confirming.capability)}`}
             mark={<Mark icon={CircleAlert} tone="danger" />}
-            title={`${labelOf(capability)} on a real device?`}
+            title={`${labelOf(confirming.capability)} on a real device?`}
             sub={device?.name ?? model.name}
-            onCancel={() => setConfirming(false)}
+            onCancel={() => setConfirming(null)}
             action={
-              <Button full variant="dangerFlat" onClick={() => { setConfirming(false); run(); }}>
+              <Button full variant="dangerFlat" onClick={() => { setRan(confirming); setConfirming(null); play(); }}>
                 Send
               </Button>
             }
@@ -189,8 +182,7 @@ export function PlaygroundSection({ initialModel }: { initialModel?: string }) {
       <SplitLayout
         left={
           <FillCard>
-            <Between>
-              <FilterRow>
+            <FilterRow>
                 <PillMenu
                   label={category.name}
                   value={category.id}
@@ -201,12 +193,8 @@ export function PlaygroundSection({ initialModel }: { initialModel?: string }) {
                   }}
                 />
                 <PillMenu label={model.name} value={modelId} options={inCategory.map((m) => ({ value: m.id, label: m.name }))} onChange={(id) => pickModel(id as ModelId)} />
-              </FilterRow>
-              <Segmented label="Build with" options={MODES} value={mode} onChange={setMode} />
-            </Between>
-            {mode === 0 ? (
-              <>
-                <FillBody>
+            </FilterRow>
+            <FillBody>
                   <Stack>
                     <Text kind="strong">Do</Text>
                     <FilterRow>
@@ -245,30 +233,32 @@ export function PlaygroundSection({ initialModel }: { initialModel?: string }) {
                       </FilterRow>
                     </Stack>
                   )}
-                </FillBody>
-                <Button block variant="ink" disabled={!canSend} onClick={send}>
-                  <Send {...ICON} aria-hidden="true" />
-                  {familyOf(capability) === "read" || familyOf(capability) === "capture" ? "Read" : "Send"}
+                  <CodeEditor label="Code" value={code} onChange={setEdited} />
+            </FillBody>
+            <FilterRow>
+              {edited !== null && (
+                <Button variant="ghost" onClick={() => setEdited(null)}>
+                  <RotateCcw {...ICON} aria-hidden="true" />
+                  Reset
                 </Button>
-              </>
-            ) : (
-              <>
-                <CodeEditor label="Code" value={code} onChange={setEdited} />
-                <FilterRow>
-                  {edited !== null && (
-                    <Button variant="ghost" onClick={() => setEdited(null)}>
-                      <RotateCcw {...ICON} aria-hidden="true" />
-                      Reset
-                    </Button>
-                  )}
-                  <Grow />
-                  <Button variant="ink" onClick={() => void runCode()}>
-                    <Play {...ICON} aria-hidden="true" />
-                    Run
-                  </Button>
-                </FilterRow>
-              </>
-            )}
+              )}
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(code);
+                  setCopied(true);
+                  timers.current.push(setTimeout(() => setCopied(false), 1500));
+                }}
+              >
+                {copied ? <Check {...ICON} aria-hidden="true" /> : <Copy {...ICON} aria-hidden="true" />}
+                {copied ? "Copied" : "Copy"}
+              </Button>
+              <Grow />
+              <Button variant="ink" disabled={!canRun} onClick={() => void runCode()}>
+                <Play {...ICON} aria-hidden="true" />
+                Run
+              </Button>
+            </FilterRow>
           </FillCard>
         }
         right={
@@ -285,27 +275,11 @@ export function PlaygroundSection({ initialModel }: { initialModel?: string }) {
               </Badge>
             </Between>
             <Output model={model} shown={shown} phase={phase} error={error} answer={answer} onAnswer={(a) => { setAnswer(a); setPhase("answered"); }} />
-            <Between>
-              <Segmented label="Details" options={TABS} value={tab} onChange={setTab} />
-              {tab === 0 && (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    void navigator.clipboard?.writeText(snippet);
-                    setCopied(true);
-                    timers.current.push(setTimeout(() => setCopied(false), 1500));
-                  }}
-                >
-                  {copied ? <Check {...ICON} aria-hidden="true" /> : <Copy {...ICON} aria-hidden="true" />}
-                  {copied ? "Copied" : "Copy"}
-                </Button>
-              )}
-            </Between>
+            <Segmented label="Details" options={TABS} value={tab} onChange={setTab} />
             <DetailsPane>
-              {tab === 0 && <CodeBlock title="JavaScript">{snippet}</CodeBlock>}
-              {tab === 1 && <CodeBlock title="HTTP">{requestOf(shown.capability, callDevice, shown.text, shown.choice, shown.answers, shown.lines)}</CodeBlock>}
-              {tab === 2 && (phase === "idle" ? <Text kind="muted">Nothing sent yet</Text> : <CodeBlock title="Response">{responseOf(shown.capability, callDevice, phase, model)}</CodeBlock>)}
-              {tab === 3 &&
+              {tab === 0 && <CodeBlock title="HTTP">{requestOf(shown.capability, callDevice, shown.text, shown.choice, shown.answers, shown.lines)}</CodeBlock>}
+              {tab === 1 && (phase === "idle" ? <Text kind="muted">Nothing sent yet</Text> : <CodeBlock title="Response">{responseOf(shown.capability, callDevice, phase, model)}</CodeBlock>)}
+              {tab === 2 &&
                 (events.length === 0 && logs.length === 0 ? (
                   <Text kind="muted">Nothing sent yet</Text>
                 ) : (

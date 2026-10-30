@@ -45,7 +45,12 @@ export const FillBody = ({ children }: { children: ReactNode }) => <div classNam
 export const DetailsPane = ({ children }: { children: ReactNode }) => <div className={x.details}>{children}</div>;
 
 export function CodeEditor({ label, value, onChange }: { label: string; value: string; onChange: (next: string) => void }) {
-  return <textarea className={x.editor} aria-label={label} spellCheck={false} autoCapitalize="off" autoCorrect="off" value={value} onChange={(e) => onChange(e.target.value)} />;
+  return (
+    <div className={x.editorWrap}>
+      <Text kind="strong">{label}</Text>
+      <textarea className={x.editor} aria-label={label} spellCheck={false} autoCapitalize="off" autoCorrect="off" value={value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
 }
 
 /** Plays in the browser's own voice: close enough to hear the words and the length. */
