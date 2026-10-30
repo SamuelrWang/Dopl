@@ -9,8 +9,8 @@ import type { CapabilityId, DeliverIntent, DeviceKind, RiskTier } from "@dopl/de
 import { CAPABILITY_RISK_TIER, type RISK_TIER_DEFAULT_POLICY } from "@dopl/device-contracts";
 
 export type CategoryId = "glasses" | "desktop" | "phone" | "vehicle" | "home" | "robots";
-export type IntegrationId = "even_realities" | "meta" | "mentra" | "dopl_desktop" | "ios" | "carplay" | "home_assistant";
-export type ModelId = "g2" | "meta_glasses" | "mentra_glasses" | "macos" | "iphone_16" | "any_car" | "thermostat";
+export type IntegrationId = "even_realities" | "meta" | "mentra" | "dopl_desktop" | "ios" | "carplay" | "google_home" | "home_assistant";
+export type ModelId = "g2" | "meta_glasses" | "mentra_glasses" | "macos" | "iphone_16" | "any_car" | "google_speaker" | "google_display" | "thermostat";
 export type IntegrationStatus = "testing" | "live";
 export type Surface = "lens" | "panel";
 
@@ -163,6 +163,33 @@ export const INTEGRATIONS: readonly Integration[] = [
     ],
   },
   {
+    id: "google_home",
+    name: "Google Home",
+    categoryId: "home",
+    comingSoon: true,
+    adapter: "google_home@preview",
+    models: [
+      {
+        id: "google_speaker",
+        name: "Speaker",
+        integrationId: "google_home",
+        capabilities: ["state.read", "present.speak", "act.media"],
+        intents: ["message", "notify"],
+        surface: "panel",
+        floor: PANEL_FLOOR,
+      },
+      {
+        id: "google_display",
+        name: "Smart display",
+        integrationId: "google_home",
+        capabilities: ["state.read", "present.speak", "present.display", "act.media"],
+        intents: ["message", "notify", "display"],
+        surface: "panel",
+        floor: PANEL_FLOOR,
+      },
+    ],
+  },
+  {
     id: "home_assistant",
     name: "Home Assistant",
     categoryId: "home",
@@ -259,6 +286,7 @@ const CAPABILITY_LABEL: Partial<Record<CapabilityId, string>> = {
   "act.navigate": "Navigate",
   "act.lock": "Lock",
   "act.set": "Control",
+  "act.media": "Media",
 };
 
 export const functionsOf = (model: Model): string[] => model.capabilities.flatMap((c) => CAPABILITY_LABEL[c] ?? []);
