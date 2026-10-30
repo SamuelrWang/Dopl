@@ -104,7 +104,7 @@ export function WebhooksSection() {
           <TableHead>
             <Between>
               <SearchField hug value={q} placeholder="Search events" onChange={setQ} />
-              <PillMenu label={endpointId === "all" ? "All endpoints" : nameOf(endpointId)} value={endpointId} options={[{ value: "all", label: "All endpoints" }, ...endpoints.map((e) => ({ value: e.id, label: e.description }))]} onChange={setEndpointId} />
+              <PillMenu stable label={endpointId === "all" ? "All endpoints" : nameOf(endpointId)} value={endpointId} options={[{ value: "all", label: "All endpoints" }, ...endpoints.map((e) => ({ value: e.id, label: e.description }))]} onChange={setEndpointId} />
             </Between>
             <Segmented label="Event views" options={VIEWS} value={view} onChange={setView} />
           </TableHead>

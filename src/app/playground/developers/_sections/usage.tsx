@@ -99,8 +99,8 @@ export function UsageSection() {
       <Toolbar>
         <Between>
           <Between>
-            <PillMenu label={category === "all" ? "All categories" : CATEGORIES.find((c) => c.id === category)!.name} value={category} options={[{ value: "all", label: "All categories" }, ...CATEGORIES.map((c) => ({ value: c.id, label: c.name }))]} onChange={(v) => { setCategory(v); setModelId("all"); }} />
-            <PillMenu label={modelId === "all" ? "All models" : modelById(modelId as ModelId).name} value={modelId} options={[{ value: "all", label: "All models" }, ...models.filter((m) => category === "all" || categoryOf(m.id).id === category).map((m) => ({ value: m.id, label: m.name }))]} onChange={setModelId} />
+            <PillMenu stable label={category === "all" ? "All categories" : CATEGORIES.find((c) => c.id === category)!.name} value={category} options={[{ value: "all", label: "All categories" }, ...CATEGORIES.map((c) => ({ value: c.id, label: c.name }))]} onChange={(v) => { setCategory(v); setModelId("all"); }} />
+            <PillMenu stable label={modelId === "all" ? "All models" : modelById(modelId as ModelId).name} value={modelId} options={[{ value: "all", label: "All models" }, ...models.filter((m) => category === "all" || categoryOf(m.id).id === category).map((m) => ({ value: m.id, label: m.name }))]} onChange={setModelId} />
           </Between>
           <Segmented label="Range" options={RANGES.map((r) => r.label)} value={range} onChange={setRange} />
         </Between>

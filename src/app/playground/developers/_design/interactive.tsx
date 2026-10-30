@@ -133,13 +133,24 @@ export interface PillOption {
 }
 
 /** The reference's "Filter by" pill: label and chevron, one menu, the choice ticked inside. */
-export function PillMenu({ label, value, options, onChange }: { label: string; value: string; options: PillOption[]; onChange: (value: string) => void }) {
+export function PillMenu({ label, value, options, stable, onChange }: { label: string; value: string; options: PillOption[]; /** The label shows the choice, so the pill holds the width of its longest option. */ stable?: boolean; onChange: (value: string) => void }) {
   return (
     <PopMenu
       label={label}
       trigger={(open, toggle) => (
         <button type="button" aria-haspopup="menu" aria-expanded={open} className={cx(b.pill, b.pillBtn)} onClick={toggle}>
-          {label}
+          {stable ? (
+            <span className={b.pillSizer}>
+              <span>{label}</span>
+              {options.map((o) => (
+                <span key={o.value} className={b.pillGhost} aria-hidden="true">
+                  {o.label}
+                </span>
+              ))}
+            </span>
+          ) : (
+            label
+          )}
           <ChevronDown size={ICON.size} strokeWidth={ICON.strokeWidth} className={b.iconSoft} />
         </button>
       )}

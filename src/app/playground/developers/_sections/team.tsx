@@ -143,7 +143,7 @@ export function TeamSection() {
                   <TwoLine title={m.name} sub={m.email} />
                 </DataCell>
                 <DataCell open>
-                  {m.role === "Owner" && owners === 1 ? <Text>Owner</Text> : <PillMenu label={m.role} value={m.role} options={ROLES.map((r) => ({ value: r.role, label: r.role }))} onChange={(role) => setRole(m.id, role as Role)} />}
+                  {m.role === "Owner" && owners === 1 ? <Text>Owner</Text> : <PillMenu stable label={m.role} value={m.role} options={ROLES.map((r) => ({ value: r.role, label: r.role }))} onChange={(role) => setRole(m.id, role as Role)} />}
                 </DataCell>
                 <DataCell>
                   <Text num>{keysBy(m.name)}</Text>

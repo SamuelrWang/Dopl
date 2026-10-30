@@ -119,3 +119,6 @@
 .dotOff { color: var(--track); }
 .pillCount { font-size: calc(14.5 * var(--u)); font-variant-numeric: tabular-nums; color: var(--faint); }
 .pillCountOn { color: #b8b8b8; }
+.pillSizer { display: inline-grid; text-align: left; }
+.pillSizer > * { grid-area: 1 / 1; white-space: nowrap; }
+.pillGhost { visibility: hidden; height: 0; }

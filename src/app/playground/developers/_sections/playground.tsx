@@ -184,6 +184,7 @@ export function PlaygroundSection({ initialModel }: { initialModel?: string }) {
           <FillCard>
             <FilterRow>
                 <PillMenu
+                  stable
                   label={category.name}
                   value={category.id}
                   options={CATEGORIES.map((c) => ({ value: c.id, label: c.name }))}
@@ -192,7 +193,7 @@ export function PlaygroundSection({ initialModel }: { initialModel?: string }) {
                     if (first) pickModel(first.id);
                   }}
                 />
-                <PillMenu label={model.name} value={modelId} options={inCategory.map((m) => ({ value: m.id, label: m.name }))} onChange={(id) => pickModel(id as ModelId)} />
+                <PillMenu stable label={model.name} value={modelId} options={inCategory.map((m) => ({ value: m.id, label: m.name }))} onChange={(id) => pickModel(id as ModelId)} />
             </FilterRow>
             <FillBody>
                   <Stack>
@@ -267,7 +268,7 @@ export function PlaygroundSection({ initialModel }: { initialModel?: string }) {
               <FilterRow>
                 <Segmented label="Send to" options={TARGETS} value={target} onChange={(i) => { setTarget(i); setEdited(null); clear(); }} />
                 {real && owned.length === 0 && <Text kind="muted">No paired {model.name}</Text>}
-                {real && owned.length > 0 && <PillMenu label={device?.name ?? "Device"} value={device?.id ?? ""} options={owned.slice(0, 12).map((d) => ({ value: d.id, label: d.name }))} onChange={(id) => { setDeviceId(id); setEdited(null); clear(); }} />}
+                {real && owned.length > 0 && <PillMenu stable label={device?.name ?? "Device"} value={device?.id ?? ""} options={owned.slice(0, 12).map((d) => ({ value: d.id, label: d.name }))} onChange={(id) => { setDeviceId(id); setEdited(null); clear(); }} />}
                 {real && device && <Badge tone={device.state === "online" ? "ok" : "warn"}>{device.state === "online" ? "Online" : "Offline"}</Badge>}
               </FilterRow>
               <Badge tone={tag[1]} dot={phase === "seen" || phase === "answered"}>

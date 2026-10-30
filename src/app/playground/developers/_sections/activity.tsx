@@ -122,10 +122,10 @@ export function ActivitySection({ initial }: { initial: { call?: string; user?: 
                 <Segmented label="Type" options={KINDS.map((k) => k.label)} value={kind} onChange={setKind} />
               </Between>
               <FilterRow>
-                <PillMenu label={labelOf(STATUSES, status)} value={status} options={STATUSES} onChange={setStatus} />
-                <PillMenu label={labelOf(userOptions, user)} value={user} options={userOptions} onChange={setUser} />
-                <PillMenu label={labelOf(capabilityOptions, capability)} value={capability} options={capabilityOptions} onChange={setCapability} />
-                <PillMenu label={labelOf(TIMES, time)} value={time} options={TIMES} onChange={setTime} />
+                <PillMenu stable label={labelOf(STATUSES, status)} value={status} options={STATUSES} onChange={setStatus} />
+                <PillMenu stable label={labelOf(userOptions, user)} value={user} options={userOptions} onChange={setUser} />
+                <PillMenu stable label={labelOf(capabilityOptions, capability)} value={capability} options={capabilityOptions} onChange={setCapability} />
+                <PillMenu stable label={labelOf(TIMES, time)} value={time} options={TIMES} onChange={setTime} />
                 <Grow />
                 {filtered && (
                   <Button size="sm" variant="ghost" onClick={clear}>
