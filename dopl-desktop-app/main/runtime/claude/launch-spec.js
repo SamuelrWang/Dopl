@@ -112,6 +112,8 @@ function buildLaunchSpec(request) {
   // ⚠ UNVERIFIED UNTIL THE INIT CHECKS OUT (cross-review H1): every spawn starts unverified, and the gate
   // denies every call until `normalize.js` has checked the CLI's own report (`launch_verified`).
   s.launchVerified = false;
+  // Which credential this spawn runs on: an auth hold reads it (`session-auth.js › holdIfAuthFailure`).
+  s.spawnedOnFullLogin = credential.ranOnFullLogin(options.env);
   options.canUseTool = untilVerified(s, options.canUseTool);
   return { prompt: s.pushIterator, options, session: s };
 }

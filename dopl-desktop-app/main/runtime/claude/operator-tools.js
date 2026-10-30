@@ -58,7 +58,8 @@ function withOperatorTools(options, home) {
   out.mcpServers = Object.assign(userMcpServers(h), out.mcpServers);
   out.tools = (out.tools || []).concat(NATIVE_BUILTINS);
   // Connectors and Chrome need a claude.ai login's scopes: Dopl's full login when the operator enabled one;
-  // on Dopl's setup-token (user:inference only) they stay off by themselves.
+  // on Dopl's setup-token (user:inference only) they stay off by themselves. A dead full login has its marker
+  // dropped (`claude-auth.js › settleFullLogin`), so this spawn lands on the token.
   delete out.env[CLAUDEAI_MCP_ENV];
   withFullLogin(out.env);
   out.extraArgs = Object.assign({}, out.extraArgs, { chrome: null });

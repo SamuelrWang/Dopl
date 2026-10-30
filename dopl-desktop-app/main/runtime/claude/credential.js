@@ -49,6 +49,11 @@ function withFullLogin(env) {
   return env;
 }
 
+/** Did this spawn's final env end up on the full login? Stamped per spawn (`launch-spec.js › buildLaunchSpec`). */
+function ranOnFullLogin(env) {
+  return !!env && !env[TOKEN_ENV] && !!env[SECURE_STORE_ENV];
+}
+
 /** Is the full login enabled (the status row's `full`)? An unreadable store is "no". */
 function hasFullLogin() {
   try { return tokenStore().hasFullLogin() === true; } catch (_) { return false; }
@@ -62,6 +67,11 @@ function signIn() {
 /** "Enable Chrome & connectors" (`claude-auth.js › signInFull`): `{ ok }` once the full login is stored. */
 function signInFull() {
   return require('../../claude-auth').signInFull();
+}
+
+/** A session on the full login was refused: true once the login is off (`claude-auth.js › settleFullLogin`). */
+function settleFullLogin(signInDidNotHelp) {
+  return require('../../claude-auth').settleFullLogin(signInDidNotHelp);
 }
 
 /** Cancel: stop the sign-in child running now (either flow) → true when one ran. */
@@ -82,6 +92,6 @@ const descriptor = {
 };
 
 module.exports = {
-  credentialState, accountFingerprint, withCredential, withFullLogin, hasFullLogin, signIn, signInFull, cancelSignIn, signOut, descriptor,
+  credentialState, accountFingerprint, withCredential, withFullLogin, ranOnFullLogin, hasFullLogin, settleFullLogin, signIn, signInFull, cancelSignIn, signOut, descriptor,
   TOKEN_ENV, SECURE_STORE_ENV,
 };
