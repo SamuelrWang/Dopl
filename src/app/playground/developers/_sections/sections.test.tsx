@@ -68,19 +68,20 @@ describe("every page renders on the fixtures", () => {
 });
 
 describe("Devices", () => {
-  it("groups by category and labels the empty ones", () => {
+  it("groups by category with an add card in each section", () => {
     wrap(<DevicesSection />);
     const robots = screen.getByRole("region", { name: "Robots" });
-    expect(within(robots).getByText("No integration yet")).toBeTruthy();
+    expect(within(robots).getByRole("button", { name: "Add new device" })).toBeTruthy();
     const glasses = screen.getByRole("region", { name: "Glasses" });
     expect(within(glasses).getByText("Even Realities")).toBeTruthy();
-    expect(within(glasses).getAllByText("Coming soon")).toHaveLength(2);
+    expect(within(glasses).getByText("G2")).toBeTruthy();
+    expect(within(glasses).queryByText("Coming soon")).toBeNull();
     expect(screen.queryByText("Simulator")).toBeNull();
   });
 });
 
 describe("Add new device", () => {
-  it("picks a model and goes live, warning about tests that have not passed without blocking", () => {
+  it("picks a model and goes live, warning about tests that have not passed without blocking", async () => {
     const Probe = () => <output>{usePortal().state.integrations.meta?.status}</output>;
     const onClose = vi.fn();
     wrap(
@@ -89,7 +90,7 @@ describe("Add new device", () => {
         <Probe />
       </>
     );
-    expect(screen.getByText(/tests have not passed/)).toBeTruthy();
+    expect(await screen.findByText(/tests have not passed/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Go live" }));
     expect(screen.getByRole("status").textContent).toBe("live");
     expect(onClose).toHaveBeenCalled();
