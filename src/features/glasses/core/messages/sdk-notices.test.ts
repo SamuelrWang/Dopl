@@ -98,7 +98,16 @@ describe("glasses_notify over the SDK", () => {
     expect(logs).toContainEqual({ evt: "glasses_notify", path: "prosumer_fallback", fallback_reason: "network_error" });
   });
 
-  it("SDK refusal (offline, refused, our timeout): skipped, never a second copy", async () => {
+  it("prod 2026-10-30: device_offline (proven nothing sent) falls back; the notice reaches the lens via prosumer", async () => {
+    const w = await setup({ notify: async () => unavailable("device_offline") });
+    const r = await glassesNotify(w.deps, USER, { title: "t", body: "b" });
+    expect(r.status).toBe("pending");
+    expect(r.id).toBe(w.rows[0].id);
+    expect(w.rows).toHaveLength(1);
+    expect(logs).toContainEqual({ evt: "glasses_notify", path: "prosumer_fallback", fallback_reason: "device_offline" });
+  });
+
+  it("SDK refusal that may have landed (our timeout, unconfirmed): skipped, never a second copy", async () => {
     const w = await setup({ notify: async () => refused("timeout") });
     const r = await glassesNotify(w.deps, USER, { title: "t", body: "b" });
     expect(r).toEqual({ id: null, status: "skipped:sdk timeout" });

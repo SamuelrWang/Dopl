@@ -217,10 +217,11 @@ describe("W1.2 ask round trip over @dopl/sdk", () => {
     expect(logs.map((l) => [l.op, l.outcome])).toEqual([["context", "ok"], ["show", "ok"]]);
   });
 
-  it("offline glasses: the SDK refuses (device_offline), a refusal the seam reports instead of a second copy", async () => {
+  it("offline glasses: the SDK refuses (device_offline) before any lens copy: proven non-delivery, the seam falls back", async () => {
     const w = await world();
     w.store.devices[0].last_seen = null;
     // (Paired-but-offline reads `connections.list`, a Connect-store route: unit-tested in `sdk-lens.test.ts`.)
-    await expect(w.lens.screen({ blocks: [{ id: "h", type: "heading", text: "x" }], idempotencyKey: "rt-4" })).rejects.toMatchObject({ code: "device_offline", fallback: false });
+    await expect(w.lens.screen({ blocks: [{ id: "h", type: "heading", text: "x" }], idempotencyKey: "rt-4" })).rejects.toMatchObject({ code: "device_offline", fallback: true });
+    expect(w.store.actions).toHaveLength(0);
   });
 });

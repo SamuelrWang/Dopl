@@ -53,9 +53,12 @@ describe("classify", () => {
     expect(classify(de(202, "unexpected_response", "api_error"))).toMatchObject({ fallback: false, unconfirmed: true });
     expect(classify(new TypeError("boom"))).toMatchObject({ code: "error", fallback: false, unconfirmed: true });
     expect(classify(de(null, "network_error", "api_error"), { timedOut: true, preSend: true })).toMatchObject({ code: "timeout", fallback: false, unconfirmed: true });
-    // Refusals.
-    expect(classify(de(409, "device_offline", "device_error"))).toMatchObject({ code: "device_offline", fallback: false, unconfirmed: false });
-    expect(classify(de(400, "invalid_request"))).toMatchObject({ fallback: false, unconfirmed: false });
+    // Refused before any lens copy existed: proven non-delivery (prod 2026-10-30: device_offline was dropped).
+    for (const [status, code, type] of [[409, "device_offline", "device_error"], [422, "capability_unsupported"], [429, "rate_limited", "rate_limit_error"], [404, "not_found"], [400, "invalid_request"]] as const) {
+      expect(classify(de(status, code, type))).toMatchObject({ code, fallback: true, unconfirmed: false });
+    }
+    // Other refusals: no second copy.
+    expect(classify(de(409, "idempotency_conflict"))).toMatchObject({ fallback: false, unconfirmed: false });
   });
 
   it("isPreSendFailure: connection-phase codes through the cause chain; a reset is not one", () => {
@@ -126,12 +129,12 @@ describe("sdkUserLens", () => {
     expect(logs.map((l) => [l.op, l.outcome])).toEqual([["ask", "ok"]]);
   });
 
-  it("startAsk: an SDK no is a refusal; accepted-but-not-shown (failed, needs_confirmation) too", async () => {
+  it("startAsk: a router refusal or a stored `failed` falls back (nothing shown); needs_confirmation is a refusal", async () => {
     const offline = sdkUserLens(client({ [`POST /users/${USER}/deliver`]: () => err(409, "device_offline", "device_error") }).dopl, USER);
-    await expect(offline.startAsk({ question: "Q?", options: ["A", "B"], idempotencyKey: "k" })).rejects.toMatchObject({ code: "device_offline", fallback: false, unconfirmed: false });
-    for (const status of ["failed", "needs_confirmation"]) {
+    await expect(offline.startAsk({ question: "Q?", options: ["A", "B"], idempotencyKey: "k" })).rejects.toMatchObject({ code: "device_offline", fallback: true, unconfirmed: false });
+    for (const [status, fallback] of [["failed", true], ["needs_confirmation", false]] as const) {
       const c = client({ [`POST /users/${USER}/deliver`]: () => ok({ delivery_id: "dl1", routed_to: { device_id: "g2", kind: "glasses", reason: "r" }, status }, 202) });
-      await expect(sdkUserLens(c.dopl, USER).startAsk({ question: "Q?", options: ["A", "B"], idempotencyKey: "k" })).rejects.toMatchObject({ code: status, fallback: false });
+      await expect(sdkUserLens(c.dopl, USER).startAsk({ question: "Q?", options: ["A", "B"], idempotencyKey: "k" })).rejects.toMatchObject({ code: status, fallback });
     }
   });
 

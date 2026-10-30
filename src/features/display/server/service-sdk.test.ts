@@ -21,7 +21,8 @@ import type { ChannelContext } from "@/features/channels/server/service-shared";
 import type { GlassesDeps } from "@/features/glasses/core/messages/service";
 import { createFakeGlassesStore, fakeClock } from "@/features/glasses/core/testing/fake-store";
 import { findByDisplayId, hasAnswerMessage, replaceDisplay } from "./repository";
-import { SdkLensError, type SdkAskOutcome, type SdkLens, type SdkUserLens } from "./sdk-lens";
+import { DoplError } from "@dopl/sdk";
+import { SdkLensError, classify, type SdkAskOutcome, type SdkLens, type SdkUserLens } from "./sdk-lens";
 import { showDisplay, type ShowInput } from "./service";
 
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -163,10 +164,25 @@ describe("failure classes", () => {
     expect((await showDisplay(ctx, { blocks: STATUS, target: "glasses" }, undefined, st.deps)).glasses_message_id).toBe(st.rows[0].id);
   });
 
+  it("prod 2026-10-30: a router refusal (device_offline, capability_unsupported) is proven non-delivery → prosumer copy", async () => {
+    const refusal = (code: string, status: number) => classify(new DoplError({ type: "device_error" as never, code: code as never, message: code, retryable: true, doc_url: "d", status }));
+    for (const [code, status] of [["device_offline", 409], ["capability_unsupported", 422]] as const) {
+      const sc = setup(fakeSdk({ screenErr: refusal(code, status) }).lens);
+      const r = await showDisplay(ctx, { blocks: STATUS, target: "glasses" }, undefined, sc.deps);
+      expect(r).toMatchObject({ glasses: "shown", glasses_message_id: sc.rows[0].id });
+      expect(JSON.parse(logs.findLast((l) => l.includes('"display_shown"'))!.slice("[display] ".length))).toMatchObject({ path: "prosumer_fallback", fallback_reason: code });
+
+      const ak = setup(fakeSdk({ askErr: refusal(code, status) }).lens);
+      const a = await showDisplay(ctx, { blocks: CHOICE }, undefined, ak.deps);
+      expect(ak.rows).toHaveLength(1);
+      expect(a).toMatchObject({ glasses: "shown", glasses_message_id: ak.rows[0].id });
+    }
+  });
+
   it("🔒 an SDK refusal is reported, never retried on the prosumer path (no second lens copy)", async () => {
-    const t = setup(fakeSdk({ screenErr: new SdkLensError("invalid_request", false) }).lens);
+    const t = setup(fakeSdk({ screenErr: new SdkLensError("idempotency_conflict", false) }).lens);
     const r = await showDisplay(ctx, { blocks: STATUS, target: "glasses" }, undefined, t.deps);
-    expect(r).toMatchObject({ glasses: "skipped:sdk invalid_request", message_id: "m1" });
+    expect(r).toMatchObject({ glasses: "skipped:sdk idempotency_conflict", message_id: "m1" });
     expect(t.rows).toHaveLength(0);
 
     const timedOut = setup(fakeSdk({ stateErr: new SdkLensError("timeout", false) }).lens);
@@ -303,7 +319,7 @@ describe("🔒 ask transport failures (gap #6): a fallback only when nothing was
   });
 
   it("unconfirmed (it may be on the lens) or refused: reported, NO prosumer copy, the channel copy still posts", async () => {
-    for (const err of [new SdkLensError("unconfirmed", false), new SdkLensError("device_offline", false)]) {
+    for (const err of [new SdkLensError("unconfirmed", false), new SdkLensError("needs_confirmation", false)]) {
       const s = fakeSdk({ askErr: err });
       const t = setup(s.lens);
       const r = await showDisplay(ctx, { blocks: CHOICE }, undefined, t.deps);

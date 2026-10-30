@@ -23,7 +23,10 @@ import type { DisplayBlock, Positioned } from "../core/types";
  *     an unreadable 2xx). A write is replayed ONCE with the same idempotency key, which `/api/v1`
  *     dedupes: the replay either returns the first delivery or makes it. Still unknown after that =
  *     a refusal `unconfirmed`, never the prosumer path: a second lens copy is worse than none.
- *   - refusal: the SDK ANSWERED no (device offline, content refused, rate limited). The caller reports
+ *   - a refusal the SDK answered BEFORE any lens copy existed ({@link PROVEN_REFUSALS}: device offline,
+ *     capability unsupported, rate limited, …) is proven non-delivery too: `fallback`. On a REPLAY it
+ *     proves nothing about the first call, so there it is a plain refusal (`deliverOnce`).
+ *   - any other refusal (idempotency conflict, held for confirmation): the caller reports
  *     `skipped:sdk <code>`; never a second copy.
  * A READ (`state`) delivers nothing, so an unconfirmed read is simply unavailable (fallback).
  */
@@ -150,8 +153,19 @@ export function classify(err: unknown, o: { timedOut?: boolean; preSend?: boolea
   if (err.type === "authentication_error" || err.type === "permission_error") return new SdkLensError(String(err.code), true);
   // A 2xx we could not read: it landed.
   if (err.status !== null && err.status < 300) return new SdkLensError(String(err.code), false, true);
+  // Refused before anything reached a lens queue: proven non-delivery, take the prosumer path.
+  if (PROVEN_REFUSALS.has(String(err.code))) return new SdkLensError(String(err.code), true);
   return new SdkLensError(String(err.code), false);
 }
+
+/**
+ * C10 refusals `/api/v1` answers BEFORE a lens copy exists (`delivery-service.ts › deliver`,
+ * `action-service.ts`): rate limit, end user / device lookup, the router (`delivery/router.ts › route`:
+ * presence, capability), the profile, and the even_g2 dispatcher's pre-queue checks. Nothing was
+ * delivered, so the prosumer copy is the ONLY copy. Not here: `idempotency_conflict` (a call under this
+ * key landed before) and anything 5xx (may have landed).
+ */
+export const PROVEN_REFUSALS: ReadonlySet<string> = new Set(["device_offline", "capability_unsupported", "not_found", "rate_limited", "invalid_request", "needs_reauth"]);
 
 /** Positions (`x`/`y`/`w`/`h`) are the app's absolute layout; the contract's blocks are a stack. */
 export function toSdkBlocks(blocks: Positioned<DisplayBlock>[]): SdkBlock[] {
@@ -202,6 +216,9 @@ async function deliverOnce<T>(op: string, fn: (signal: AbortSignal) => Promise<T
       return await timed(`${op}_replay`, fn, (r) => ({ ...extra(r), after: first.code }));
     } catch (again) {
       if (again instanceof SdkLensError && !again.fallback && !again.unconfirmed) throw again;
+      // The SDK answered the REPLAY no ({@link PROVEN_REFUSALS}): the first call may still have landed,
+      // so report that refusal, never the prosumer path.
+      if (again instanceof SdkLensError && PROVEN_REFUSALS.has(again.code)) throw new SdkLensError(again.code, false);
       throw new SdkLensError("unconfirmed", false);
     }
   }
@@ -256,7 +273,9 @@ export function sdkUserLens(dopl: Dopl, userId: string): SdkUserLens {
         deliveryFields,
       );
       // Accepted but not on the lens (over the profile's limits, or held for a confirmation): nothing shows.
-      if (r.status === "failed" || r.status === "needs_confirmation") throw new SdkLensError(r.status, false);
+      // `failed` (overflow callback) is stored before any dispatch: proven nothing shows, so fallback.
+      // `needs_confirmation` may still show once confirmed: a refusal, never a second copy.
+      if (r.status === "failed" || r.status === "needs_confirmation") throw new SdkLensError(r.status, r.status === "failed");
       return { deliveryId: r.delivery_id, deviceId: r.routed_to?.device_id ?? null };
     },
 
@@ -387,7 +406,8 @@ export function sdkUserNotices(dopl: Dopl, userId: string, deviceIds: string[]):
     },
     async action(id) {
       const r = await settle(read("action", (signal) => dopl.actions.get(id, { signal })));
-      if (!r.ok) return r;
+      // An unknown action is an answer, not an unavailable SDK (a read: `fallback` means nothing here).
+      if (!r.ok) return r.code === "not_found" ? { ...r, fallback: false } : r;
       // 🔒 The Dopl App project holds EVERY user's actions; an id on another user's device is unknown here.
       if (!deviceIds.includes(r.value.device_id)) return { ok: false, code: "not_found", fallback: false };
       const a = r.value;

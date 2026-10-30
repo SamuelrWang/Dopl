@@ -11,6 +11,9 @@ vi.mock("@/features/device-sdk/server/sdk-delivery-flag", () => ({ sdkDeliveryFo
 
 import { Dopl } from "@dopl/sdk";
 import { createSdkNotices, sdkUserNotices } from "./sdk-lens";
+import { glassesNotify } from "@/features/glasses/core/messages/service";
+import { createFakeGlassesStore, fakeClock } from "@/features/glasses/core/testing/fake-store";
+import { createFakeDeviceStore } from "@/features/glasses/core/testing/fake-device-store";
 
 const KEY = "sk_test_EXAMPLE0000000000000000";
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -58,9 +61,14 @@ describe("sdkUserNotices.notify", () => {
     expect(await call(() => err(503, "unexpected_response", "api_error"))).toEqual({ ok: false, code: "unconfirmed", fallback: false });
     let n = 0;
     expect(await call(() => (n++ === 0 ? err(502, "bad_gateway", "api_error") : res(202, { action_id: "a1", status: "queued" })))).toEqual({ ok: true, value: { id: "a1", status: "queued" } });
-    // The device answered no.
-    expect(await call(() => err(409, "device_offline", "device_error"))).toEqual({ ok: false, code: "device_offline", fallback: false });
-    expect(await call(() => err(400, "invalid_request"))).toEqual({ ok: false, code: "invalid_request", fallback: false });
+    // Refused before any lens copy existed (router / pre-queue): proven, the prosumer notice is the one copy.
+    expect(await call(() => err(409, "device_offline", "device_error"))).toEqual({ ok: false, code: "device_offline", fallback: true });
+    expect(await call(() => err(400, "invalid_request"))).toEqual({ ok: false, code: "invalid_request", fallback: true });
+    // A refusal on the REPLAY proves nothing about the first call: reported, no prosumer copy.
+    let m = 0;
+    expect(await call(() => (m++ === 0 ? err(503, "unexpected_response", "api_error") : err(409, "device_offline", "device_error")))).toEqual({ ok: false, code: "device_offline", fallback: false });
+    // Another call under this key landed: a refusal, never a second copy.
+    expect(await call(() => err(409, "idempotency_conflict"))).toEqual({ ok: false, code: "idempotency_conflict", fallback: false });
   });
 });
 
@@ -86,5 +94,23 @@ describe("createSdkNotices", () => {
     if (saved !== undefined) process.env.DOPL_APP_SDK_KEY = saved;
     sdkDeliveryFor.mockResolvedValueOnce({ on: true, deviceIds: [DEV] });
     expect((await createSdkNotices({ key: KEY }).forUser(USER))?.deviceIds).toEqual([DEV]);
+  });
+});
+
+describe("prod 2026-10-30 repro: a router refusal reaches the lens through the prosumer path", () => {
+  it("device_offline from /api/v1 → glasses_notify writes the prosumer row (not skipped:sdk)", async () => {
+    const fake = createFakeGlassesStore();
+    const clock = fakeClock();
+    const { devices } = createFakeDeviceStore();
+    const link = await devices.insertDevice({ userId: USER, name: "Even G2 Simulator", platform: "even_g2", now: new Date(clock.now()).toISOString() });
+    await devices.setTokenHash(link.id, "hash-sim");
+    const { n, fetch } = notices(() => err(409, "device_offline", "device_error"));
+    const user = { ...n, deviceIds: [link.id] };
+    const deps = { store: fake.store, devices, now: clock.now, sleep: clock.sleep, sdkNotices: { forUser: async () => user } };
+    const r = await glassesNotify(deps, USER, { title: "Hi", body: "there" });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(r.status).not.toMatch(/^skipped/);
+    expect(fake.rows).toHaveLength(1);
+    expect(fake.rows[0]).toMatchObject({ kind: "notify", payload: { title: "Hi", body: "there" } });
   });
 });

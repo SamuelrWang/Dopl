@@ -118,9 +118,10 @@ export async function glassesNotify(
 
 /**
  * `present.notify` on each migrated device (the prosumer queue reaches every device too). Prosumer
- * fallback ONLY while nothing has landed (SDK unavailable on the first device); after that a device
- * that fails is logged, never re-sent (no double copy). A refusal (offline, refused, our timeout)
- * reports `skipped:sdk <code>` when no device took it.
+ * fallback ONLY while nothing has landed (proven non-delivery on the first device: SDK unavailable, or
+ * refused before any lens copy existed, e.g. `device_offline`); after that a device that fails is
+ * logged, never re-sent (no double copy). A may-have-landed outcome (unconfirmed, our timeout) or any
+ * other refusal reports `skipped:sdk <code>` when no device took it.
  */
 async function notifyOverSdk(
   user: GlassesSdkUser,
