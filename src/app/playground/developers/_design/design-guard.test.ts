@@ -16,6 +16,10 @@ describe("overhauled pages", () => {
     expect(readFileSync(join(SECTIONS, file), "utf8")).not.toMatch(/\.module\.css/);
   });
 
+  it.each(["portal-shell.tsx", "find-anything.tsx"])("the sidebar's %s imports no design CSS", (file) => {
+    expect(readFileSync(join(__dirname, "..", "_components", file), "utf8")).not.toMatch(/_design\/[a-z-]+\.module\.css/);
+  });
+
   it("have no CSS modules of their own", () => {
     expect(readdirSync(SECTIONS).filter((f) => f.endsWith(".module.css"))).toEqual([]);
   });

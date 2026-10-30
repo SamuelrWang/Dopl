@@ -1,18 +1,20 @@
 /* A portal's sidebar. Structure from app-sidebar-core.tsx (identity, nav, foot); rows from .navItem. */
-.sidebar { display: flex; flex-direction: column; flex: none; gap: calc(15 * var(--u)); width: calc(340 * var(--u)); min-height: 0; padding: 0 calc(15 * var(--u)) calc(15 * var(--u)); color: var(--ink); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: geometricPrecision; font-kerning: normal; }
+.sidebar { display: flex; flex-direction: column; flex: none; gap: calc(15 * var(--u)); width: calc(340 * var(--u)); min-height: 0; padding: calc(25 * var(--u)) calc(15 * var(--u)) calc(15 * var(--u)); color: var(--ink); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: geometricPrecision; font-kerning: normal; }
 .sidebar * { box-sizing: border-box; }
+.portal.portal { display: flex; flex-direction: row; height: 100dvh; background: var(--page); }
+.main { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
 .identity { display: flex; flex-direction: column; gap: calc(12.5 * var(--u)); flex: none; }
 .projects { display: flex; flex-direction: column; gap: calc(2.5 * var(--u)); }
 .project { width: 100%; border: 0; background: none; color: var(--muted); text-align: left; cursor: pointer; }
-.project:hover { background: var(--fill); }
-.projectOn { background: var(--fill-strong); font-weight: 500; color: var(--ink); }
-.projectOn:hover { background: var(--fill-strong); }
+.project:hover { background: var(--pale); }
+.projectOn { background: var(--pale); font-weight: 500; color: var(--ink); }
+.projectOn:hover { background: var(--pale); }
 .mark { display: flex; align-items: center; justify-content: center; width: calc(32.5 * var(--u)); height: calc(32.5 * var(--u)); border-radius: calc(7.25 * var(--u)); box-shadow: var(--ring); background: var(--surface); font-size: calc(15.5 * var(--u)); font-weight: 600; letter-spacing: -0.015em; color: var(--muted); flex: none; }
 .projectOn .mark { background: var(--ink); box-shadow: none; color: var(--surface); }
 .nav { display: flex; flex-direction: column; gap: calc(15 * var(--u)); flex: 1; min-height: 0; overflow-y: auto; }
 .group { display: flex; flex-direction: column; gap: calc(1.25 * var(--u)); flex: none; }
 .groupLabel { padding: calc(2.5 * var(--u)) calc(12.5 * var(--u)) calc(3.75 * var(--u)); font-size: calc(14.5 * var(--u)); line-height: calc(20 * var(--u)); letter-spacing: -0.015em; color: var(--faint); }
-.navRow:not([aria-current]):hover { background: var(--fill-strong); }
+.navRow:not([aria-current]):hover { background: var(--pale); }
 .navRow:focus-visible, .project:focus-visible { outline: 0; box-shadow: var(--ring-focus); }
 .navIcon { color: var(--icon-soft); flex: none; }
 [aria-current] > .navIcon { color: inherit; }

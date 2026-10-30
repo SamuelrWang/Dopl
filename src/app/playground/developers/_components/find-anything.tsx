@@ -3,11 +3,8 @@
 /** The sidebar's one search box: a user id, device id, request id or webhook id takes you there. */
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { SearchPill } from "@/shared/ui/search-pill";
-import b from "../_design/base.module.css";
-import { cx } from "../_design/components";
-import side from "../_design/sidebar.module.css";
-import o from "../_design/surfaces.module.css";
+import { SearchField } from "../_design/ui";
+import { SearchEmpty, SearchHit, SearchPanel } from "../_design/ui-sidebar";
 import { ALL_CALLS } from "../_data/activity";
 import { ALL_DEVICES, ALL_USERS } from "../_data/users";
 import { BASE } from "./ui";
@@ -50,31 +47,23 @@ export function FindAnything() {
   const hits = useMemo(() => search(q), [q]);
   const show = open && q.trim().length >= 2;
   return (
-    <div className={side.find} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 120)}>
-      <SearchPill value={q} onChange={setQ} label="Find anything" className="w-full" />
-      {show && (
-        <div className={cx(o.menu, o.popMenu, side.hits)}>
-          {hits.length === 0 ? (
-            <p className={cx(b.muted, side.none)}>No matches</p>
-          ) : (
-            hits.map((h) => (
-              <button
-                key={h.key}
-                type="button"
-                className={cx(o.item, o.itemBtn)}
-                onClick={() => {
-                  setOpen(false);
-                  setQ("");
-                  router.push(h.href);
-                }}
-              >
-                <span className={side.navLabel}>{h.label}</span>
-                <span className={o.itemEnd}>{h.kind}</span>
-              </button>
-            ))
-          )}
-        </div>
+    <SearchPanel open={show} onOpenChange={setOpen} field={<SearchField value={q} placeholder="Find anything" onChange={setQ} />}>
+      {hits.length === 0 ? (
+        <SearchEmpty>No matches</SearchEmpty>
+      ) : (
+        hits.map((h) => (
+          <SearchHit
+            key={h.key}
+            label={h.label}
+            kind={h.kind}
+            onClick={() => {
+              setOpen(false);
+              setQ("");
+              router.push(h.href);
+            }}
+          />
+        ))
       )}
-    </div>
+    </SearchPanel>
   );
 }

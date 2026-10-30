@@ -1,3 +1,6 @@
+"use client";
+
+
 import { AlertTriangle, Glasses, Monitor, Plus, QrCode, SearchX } from "lucide-react";
 import { Section } from "../_design/components";
 import { Badge, Button, Card, ICON, Meter, StatCard } from "../_design/ui";

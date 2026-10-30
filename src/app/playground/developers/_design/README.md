@@ -15,6 +15,8 @@ Pages compose `ui.tsx` and `ui-page.tsx`. A page in `_sections` imports no `_des
 - `ui.tsx`: Button, SplitButton, Badge, StateDot, Chip, Card, Stat, StatCard, Meter, MeterFigure, SearchField, NavRow, DataTable, DataRow, DataCell, TwoLine, plus Segmented, PillMenu, PopMenu.
 - `ui-page.tsx`: Text, Row, Between, Stack, Grow, Page, PageHeader, StatRow, Toolbar, FilterRow, EmptyState, Toast, Mark, CardSection, CardHead, ChipRow, FigureWell, Figure, CardFoot, Spark, AddCard, BoxRow, ListRow, FigureGrid, TableFoot, MenuItem, Pager, SideSheet, FlowDialog, Tiles, Tile, ReviewWell, ConfirmDialog, Alert, TextField, SecretWell, CodeBlock.
 
+- `ui-sidebar.tsx`: Sidebar, NavGroup, ProjectPicker, AccountRow, SearchPanel, SearchHit, SearchEmpty.
+
 ## Adding a variation
 
 Add it as a prop in `_design`, show it in the Playground gallery, then use it. No page-level overrides of height, padding, radius, font size or gap. Components take no `className`.
