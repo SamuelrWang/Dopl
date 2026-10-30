@@ -8,11 +8,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/**
- * `/playground/developers`: a hard-coded DEMO of the Device SDK developer portal for one fictional
- * customer (`./_data`). No DB, no API, no auth: `/playground` is in
- * `shared/auth/public-routes.ts › PUBLIC_ROUTES`. Edits live in `./_components/portal-store.tsx`.
- */
+/** `/playground/developers`: a hard-coded demo of the developer portal. No DB, no API, no auth. */
 export default function Layout({ children }: { children: ReactNode }) {
   return (
     <PortalProvider>
