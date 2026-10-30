@@ -48,7 +48,7 @@ export function IntegrationPageSection({ integrationId, initialTab, initialModel
         lead={<TypeMark kind={category.kind} />}
         meta={<StatusPill>Coming soon</StatusPill>}
         actions={
-          <Link href={`${BASE}/devices/add?integration=${integration.id}`} className={pillButton("ink", "lg")}>
+          <Link href={`${BASE}/devices/add?integration=${integration.id}`} className={pillButton("ink", "lg", { raise: false })}>
             Add integration
           </Link>
         }
@@ -92,7 +92,7 @@ export function IntegrationPageSection({ integrationId, initialTab, initialModel
       }
       actions={
         <SelectMenu
-          variant="raised"
+          variant="outline"
           prefix="Model"
           ariaLabel="Model"
           value={model}

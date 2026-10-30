@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { cn } from "@/shared/lib/utils";
 import { CopyButton } from "@/shared/ui/copy-button";
-import { CreateButton, pillButton } from "@/shared/ui/pill-button";
+import { pillButton } from "@/shared/ui/pill-button";
+import { CreateButton } from "../_components/create-button";
 import { DialogActions, StandardDialog } from "@/shared/ui/standard-dialog";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { toast } from "@/shared/ui/toast";
@@ -113,7 +114,7 @@ export function KeysSection() {
           <button type="button" className={pillButton("quiet", "md")} onClick={() => setCreating(false)}>
             Cancel
           </button>
-          <button type="button" className={pillButton("ink", "md")} onClick={create}>
+          <button type="button" className={pillButton("ink", "md", { raise: false })} onClick={create}>
             Create key
           </button>
         </DialogActions>

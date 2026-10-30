@@ -132,7 +132,7 @@ export function ConnectSection() {
               Published
             </StatusPill>
           )}
-          <button type="button" disabled={!dirty} className={cn(pillButton("ink", "lg"), "disabled:opacity-60")} onClick={() => update((s) => ({ ...s, connect: { ...s.connect, published: s.connect.draft } }))}>
+          <button type="button" disabled={!dirty} className={cn(pillButton("ink", "lg", { raise: false }), "disabled:opacity-60")} onClick={() => update((s) => ({ ...s, connect: { ...s.connect, published: s.connect.draft } }))}>
             Publish
           </button>
         </>

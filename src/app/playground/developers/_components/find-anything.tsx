@@ -4,7 +4,9 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { MenuItem } from "@/shared/ui/popover-menu";
-import { SearchField } from "@/shared/ui/search-field";
+import { Search } from "lucide-react";
+import { cn } from "@/shared/lib/utils";
+import { SEARCH_PILL_FACE, SEARCH_PILL_INPUT } from "@/shared/ui/search-pill";
 import { ALL_CALLS } from "../_data/activity";
 import { ALL_DEVICES, ALL_USERS } from "../_data/users";
 import { BASE } from "./ui";
@@ -48,15 +50,21 @@ export function FindAnything() {
   const show = open && q.trim().length >= 2;
   return (
     <div className="relative">
-      <SearchField
-        size="sm"
-        value={q}
-        onChange={setQ}
-        placeholder="Find anything"
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 120)}
-        onClear={() => setQ("")}
-      />
+      <label className={cn(SEARCH_PILL_FACE, "w-full")}>
+        <Search size={14} strokeWidth={2} aria-hidden="true" />
+        <input
+          className={SEARCH_PILL_INPUT}
+          type="text"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="Find anything"
+          aria-label="Find anything"
+          value={q}
+          onChange={(event) => setQ(event.target.value)}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 120)}
+        />
+      </label>
       {show && (
         <div className="white-card absolute left-0 top-full z-(--layer-menu) mt-1 flex w-90 flex-col gap-0.5 p-1.75">
           {hits.length === 0 ? (

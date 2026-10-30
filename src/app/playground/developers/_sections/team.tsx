@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { cn } from "@/shared/lib/utils";
-import { CreateButton, pillButton } from "@/shared/ui/pill-button";
+import { pillButton } from "@/shared/ui/pill-button";
+import { CreateButton } from "../_components/create-button";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { DialogActions, StandardDialog } from "@/shared/ui/standard-dialog";
 import { RAISED_INPUT } from "@/shared/ui/wells";
@@ -49,7 +50,7 @@ export function TeamSection() {
           <button type="button" className={pillButton("quiet", "md")} onClick={() => setOpen(false)}>
             Cancel
           </button>
-          <button type="button" disabled={!email.includes("@")} className={cn(pillButton("ink", "md"), "disabled:opacity-60")} onClick={invite}>
+          <button type="button" disabled={!email.includes("@")} className={cn(pillButton("ink", "md", { raise: false }), "disabled:opacity-60")} onClick={invite}>
             Send invite
           </button>
         </DialogActions>

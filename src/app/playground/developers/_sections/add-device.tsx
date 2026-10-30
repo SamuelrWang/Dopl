@@ -147,7 +147,7 @@ function TestModel({
           </span>
           <button
             type="button"
-            className={pillButton(paired ? "outline" : "ink", "md")}
+            className={pillButton(paired ? "outline" : "ink", "md", { raise: false })}
             onClick={() => onPaired(`Simulated ${current.name}`)}
           >
             {paired === `Simulated ${current.name}` ? "Running" : "Start simulator"}
@@ -159,7 +159,7 @@ function TestModel({
           <span className="flex min-w-0 flex-col gap-2">
             <span className={ov.rowTitle}>Scan with the {integration.name} companion app</span>
             <span className="font-mono text-title text-text-primary">K7Q2-94</span>
-            <button type="button" className={cn(pillButton(paired ? "outline" : "ink", "md"), "self-start")} onClick={() => onPaired(`Bench ${current.name}`)}>
+            <button type="button" className={cn(pillButton(paired ? "outline" : "ink", "md", { raise: false }), "self-start")} onClick={() => onPaired(`Bench ${current.name}`)}>
               {paired === `Bench ${current.name}` ? "Paired" : "Confirm pairing"}
             </button>
           </span>
@@ -192,7 +192,7 @@ function Tests({ model, results, setResults }: { model: ModelId; results: Partia
   const runAll = () => caps.filter((c) => results[c] !== "passed").forEach((c, i) => run(c, i * 340));
   const passed = caps.filter((c) => results[c] === "passed").length;
   return (
-    <Card title="Capability tests" count={`${passed} of ${caps.length} passed`} aside={<button type="button" className={pillButton("ink", "sm")} onClick={runAll}>Run all</button>}>
+    <Card title="Capability tests" count={`${passed} of ${caps.length} passed`} aside={<button type="button" className={pillButton("ink", "sm", { raise: false })} onClick={runAll}>Run all</button>}>
       <ul className={ov.rows}>
         {caps.map((c) => (
           <li key={c} className={ov.row}>
@@ -260,7 +260,7 @@ export function AddDeviceSection({ initial }: { initial?: string }) {
         </button>
       )}
       {step < 3 && step > 0 && (
-        <button type="button" className={pillButton("ink", "md")} onClick={() => setStep(step + 1)}>
+        <button type="button" className={pillButton("ink", "md", { raise: false })} onClick={() => setStep(step + 1)}>
           Continue
         </button>
       )}
@@ -307,7 +307,7 @@ export function AddDeviceSection({ initial }: { initial?: string }) {
             <button type="button" className={pillButton("outline", "md")} onClick={() => finish("testing")}>
               Keep testing
             </button>
-            <button type="button" className={pillButton("ink", "md")} onClick={() => finish("live")}>
+            <button type="button" className={pillButton("ink", "md", { raise: false })} onClick={() => finish("live")}>
               Go live
             </button>
           </div>

@@ -68,7 +68,7 @@ export function PlaygroundSection({ initialModel }: { initialModel?: string }) {
           </div>
           <textarea aria-label="Message" rows={4} value={text} onChange={(e) => setText(e.target.value)} className={cn(RAISED_INPUT, "resize-none px-3 py-2")} />
           <div className="flex justify-end">
-            <button type="button" className={pillButton("ink", "md")} onClick={send}>
+            <button type="button" className={pillButton("ink", "md", { raise: false })} onClick={send}>
               Send
             </button>
           </div>

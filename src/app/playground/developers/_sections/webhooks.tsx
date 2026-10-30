@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { cn } from "@/shared/lib/utils";
-import { CreateButton, pillButton } from "@/shared/ui/pill-button";
+import { pillButton } from "@/shared/ui/pill-button";
+import { CreateButton } from "../_components/create-button";
 import { DialogActions, StandardDialog } from "@/shared/ui/standard-dialog";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { toast } from "@/shared/ui/toast";
@@ -112,7 +113,7 @@ export function WebhooksSection() {
           <button type="button" className={pillButton("quiet", "md")} onClick={() => setAdding(false)}>
             Cancel
           </button>
-          <button type="button" disabled={!/^https:\/\/\S+\.\S+/.test(url)} className={cn(pillButton("ink", "md"), "disabled:opacity-60")} onClick={add}>
+          <button type="button" disabled={!/^https:\/\/\S+\.\S+/.test(url)} className={cn(pillButton("ink", "md", { raise: false }), "disabled:opacity-60")} onClick={add}>
             Add endpoint
           </button>
         </DialogActions>

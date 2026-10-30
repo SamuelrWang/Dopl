@@ -41,14 +41,14 @@ const KIND_ICON: Record<string, LucideIcon> = {
   watch: Smartphone,
 };
 
-/** A category's mark, the Overview's raised tile. */
+/** A category's mark, a flat tile. */
 export function TypeMark({ kind, size = "m" }: { kind: string; size?: "s" | "m" }) {
   const Icon = KIND_ICON[kind] ?? Bot;
   return (
     <span
       aria-hidden="true"
       className={cn(
-        "raised-tab flex shrink-0 items-center justify-center rounded-md text-text-secondary",
+        "flex shrink-0 items-center bg-surface-raised-1 justify-center rounded-md text-text-secondary",
         size === "m" ? "h-7 w-7" : "h-5 w-5"
       )}
     >

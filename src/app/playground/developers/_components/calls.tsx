@@ -11,7 +11,7 @@ import { cn } from "@/shared/lib/utils";
 import { CopyButton } from "@/shared/ui/copy-button";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
-import { SearchField } from "@/shared/ui/search-field";
+import { SearchPill } from "@/shared/ui/search-pill";
 import { SECTION_TITLE } from "@/shared/ui/section-title";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { DEMO_NOW } from "../_data/company";
@@ -107,7 +107,7 @@ export function CallList({
   return (
     <div className="flex min-w-0 flex-col gap-2.5">
       <div className="flex flex-wrap items-center gap-1.5">
-        <SearchField size="sm" value={q} onChange={setQ} onClear={() => setQ("")} placeholder="Search calls" className="w-48" />
+        <SearchPill value={q} onChange={setQ} label="Search calls" className="w-56" />
         {kinds && (
           <Filter
             label="Type"

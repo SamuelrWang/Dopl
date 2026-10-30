@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { cn } from "@/shared/lib/utils";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { pillButton } from "@/shared/ui/pill-button";
-import { SearchField } from "@/shared/ui/search-field";
+import { SearchPill } from "@/shared/ui/search-pill";
 import { HierarchyFilter, matchesHierarchy } from "../_components/hierarchy-filter";
 import { NO_FILTERS, usePortal, useUsers, type UserFilters } from "../_components/portal-store";
 import { WEEK, activeWithin } from "../_components/stats";
@@ -76,7 +76,7 @@ export function UsersSection() {
         )}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        <SearchField size="sm" value={filters.q} onChange={(q) => set({ q })} onClear={() => set({ q: "" })} placeholder="Search users" className="w-48" />
+        <SearchPill value={filters.q} onChange={(q) => set({ q })} label="Search users" className="w-56" />
         <HierarchyFilter value={filters} onChange={(h) => set(h)} />
         <Filter label="Status" value={filters.status} options={[{ value: "all", label: "All" }, { value: "online", label: "Has a device online" }, { value: "offline", label: "All devices offline" }]} onChange={(status) => set({ status })} />
         <Filter

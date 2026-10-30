@@ -27,7 +27,6 @@ import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import { cn } from "@/shared/lib/utils";
 import { IdentityFace } from "@/shared/ui/identity-face";
 import { QUIET_HEADING_TEXT } from "@/shared/ui/section-heading";
-import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { COMPANY, MEMBERS, PROJECTS, type Env } from "../_data/company";
 import { issuesFor } from "../_data/issues";
@@ -39,9 +38,9 @@ const MARK = "/favicons/android-chrome-512x512.png";
 
 const WORKSPACE = { id: "ws_larkfield", name: COMPANY.name, slug: "larkfield", publicId: "lrkfld", iconUrl: null, role: "owner" as const };
 
-const ENV_OPTIONS: { key: Env; label: string }[] = [
-  { key: "test", label: "Test" },
-  { key: "live", label: "Live" },
+const ENV_OPTIONS: { value: Env; label: string }[] = [
+  { value: "test", label: "Test" },
+  { value: "live", label: "Live" },
 ];
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
@@ -104,21 +103,20 @@ function Sidebar() {
     <div className="flex w-58 shrink-0 flex-col gap-3 px-3 pb-3">
       <div className="flex flex-col gap-2">
         <SelectMenu
-          variant="raised"
+          variant="outline"
           ariaLabel="Project"
           value={state.project}
           options={PROJECTS}
           onChange={(project) => update((s) => ({ ...s, project }))}
           className="w-full justify-between"
         />
-        <SegmentedControl
-          variant="track"
-          size="md"
+        <SelectMenu
+          variant="outline"
           ariaLabel="Environment"
-          options={ENV_OPTIONS}
           value={state.env}
+          options={ENV_OPTIONS}
           onChange={(env) => update((s) => ({ ...s, env }))}
-          className="w-full [&>button]:flex-1"
+          className="w-full justify-between"
         />
         <FindAnything />
       </div>

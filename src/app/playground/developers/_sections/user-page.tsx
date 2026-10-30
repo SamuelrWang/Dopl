@@ -43,7 +43,7 @@ function DeviceCard({ device, onRevoke, onRelink }: { device: OwnedDevice; onRev
           <ModelTrail modelId={device.modelId} />
         </span>
         <span className="flex shrink-0 gap-1.5">
-          <button type="button" className={pillButton(device.state === "needs_relink" ? "ink" : "outline", "sm")} onClick={onRelink}>
+          <button type="button" className={pillButton(device.state === "needs_relink" ? "ink" : "outline", "sm", { raise: false })} onClick={onRelink}>
             Relink
           </button>
           <button type="button" className={pillButton("quiet", "sm")} onClick={onRevoke}>
@@ -224,7 +224,7 @@ function SendTest({ user, open, onClose }: { user: PortalUser; open: boolean; on
         <button type="button" className={pillButton("quiet", "md")} onClick={onClose}>
           Cancel
         </button>
-        <button type="button" className={pillButton("ink", "md")} onClick={send}>
+        <button type="button" className={pillButton("ink", "md", { raise: false })} onClick={send}>
           Send test
         </button>
       </DialogActions>
@@ -261,7 +261,7 @@ export function UserPageSection({ userId, initialTab }: { userId: string; initia
           <button type="button" className={pillButton("outline", "lg")} onClick={relinkLink}>
             Relink link
           </button>
-          <button type="button" className={pillButton("ink", "lg")} onClick={() => setTesting(true)}>
+          <button type="button" className={pillButton("ink", "lg", { raise: false })} onClick={() => setTesting(true)}>
             Send test
           </button>
         </>

@@ -112,7 +112,7 @@ function VersionBar({ editor }: { editor: ReceivesEditor }) {
           <button type="button" disabled={!dirty} className={cn(pillButton("outline", "md"), "disabled:opacity-60")} onClick={publish}>
             Publish to Test
           </button>
-          <button type="button" disabled={!canPromote} className={cn(pillButton("ink", "md"), "disabled:opacity-60")} onClick={promote}>
+          <button type="button" disabled={!canPromote} className={cn(pillButton("ink", "md", { raise: false }), "disabled:opacity-60")} onClick={promote}>
             Promote to Live
           </button>
         </span>
