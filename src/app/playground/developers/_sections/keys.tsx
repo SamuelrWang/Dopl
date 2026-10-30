@@ -174,7 +174,7 @@ export function KeysSection() {
                         }}
                       />
                     ))}
-                    {browsing && <AddKeyCard label={add} env={envLabel} wide={inSection.length === 0} onClick={() => setCreating(kind)} />}
+                    {browsing && inSection.length === 0 && <AddKeyCard label={add} env={envLabel} onClick={() => setCreating(kind)} />}
                   </div>
                 </section>
               );

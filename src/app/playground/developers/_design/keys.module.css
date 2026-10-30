@@ -6,3 +6,4 @@
 .dangerFlat.dangerFlat { background: var(--error); color: var(--surface); box-shadow: none; }
 .confirm.confirm { width: calc(500 * var(--u)); max-width: 100%; }
 .notice { position: absolute; right: calc(25 * var(--u)); bottom: calc(25 * var(--u)); z-index: 50; }
+.top.top { align-items: start; }

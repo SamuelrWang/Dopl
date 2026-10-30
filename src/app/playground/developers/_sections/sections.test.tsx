@@ -163,6 +163,8 @@ describe("API keys", () => {
 
   it("makes a publishable key without asking for permissions, and it stays readable", () => {
     wrap(<KeysSection />);
+    fireEvent.click(within(screen.getByRole("article", { name: "Connect widget" })).getByRole("button", { name: "Revoke" }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Revoke key" }));
     fireEvent.click(screen.getByRole("button", { name: /New publishable key/ }));
     const dialog = () => within(screen.getByRole("dialog"));
     expect(dialog().getByRole("heading", { name: "Name this key" })).toBeTruthy();

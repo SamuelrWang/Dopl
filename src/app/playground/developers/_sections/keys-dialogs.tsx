@@ -123,7 +123,7 @@ function Reveal({ kind, token }: { kind: KeyKind; token: string }) {
               {"curl -X POST https://api.usedopl.com/v1/deliver \\\n  -H "}
               <span className={d.codeStrong}>{`"Authorization: Bearer ${token.slice(0, token.lastIndexOf("_") + 5)}…"`}</span>
               {" \\\n  -d "}
-              <span className={d.codeStrong}>{`'{"target": {"device_id": "dev_g2_77d0"}, "content": {"text": "Hello"}}'`}</span>
+              <span className={d.codeStrong}>{`'{"target": {"device_id": "dev_g2_77d0"},\n       "content": {"text": "Hello"}}'`}</span>
             </div>
           </div>
         </>

@@ -86,10 +86,10 @@ export function KeyCard({ row, onRotate, onRevoke, onCopy }: { row: ApiKeyRow; o
   );
 }
 
-/** Closes a section and starts the flow on that type. */
-export function AddKeyCard({ label, env, wide, onClick }: { label: string; env: string; wide: boolean; onClick: () => void }) {
+/** Stands in for an empty section and starts the flow on that type. */
+export function AddKeyCard({ label, env, onClick }: { label: string; env: string; onClick: () => void }) {
   return (
-    <button type="button" className={cx(c.add, wide && c.addWide)} onClick={onClick}>
+    <button type="button" className={cx(c.add, c.addWide)} onClick={onClick}>
       <span className={c.addHead}>
         <span className={b.tile}>
           <Plus {...ICON_100} aria-hidden="true" />
