@@ -41,6 +41,12 @@ async function ok(p: PromiseLike<{ error: { message: string } | null }>): Promis
 
 const device = async (id: string) =>
   must(admin().from("devices").select("id, user_id, project_id, env, end_user_id, revoked_at").eq("id", id).single());
+/** Not moved into the SDK: a link paired after the A3 backfill has no `devices` row until migrate. */
+const notMigrated = async (id: string) => {
+  const { data, error } = await admin().from("devices").select("user_id, project_id").eq("id", id).maybeSingle();
+  if (error) throw new Error(error.message);
+  expect(data?.project_id ?? null).toBeNull();
+};
 const liveCreds = async (id: string) =>
   must(admin().from("device_credentials").select("hash").eq("device_id", id).eq("kind", "device_token").is("revoked_at", null));
 const liveConnections = async (id: string) =>
@@ -85,13 +91,13 @@ describe.skipIf(!liveRedteamEnabled)("REDTEAM device migration (live)", () => {
       const { error } = await c.rpc(fn, args);
       expect(error, fn).not.toBeNull();
     }
-    expect((await device(linkId)).user_id).toBe(userId);
+    await notMigrated(linkId);
   });
 
   it("🔒 refuses a project whose org is not internal", async () => {
     const { error } = await admin().rpc("migrate_prosumer_device", { p_user_id: userId, p_project_id: customerProjectId });
     expect(error?.message).toMatch(/not an internal/);
-    expect((await device(linkId)).user_id).toBe(userId);
+    await notMigrated(linkId);
   });
 
   it("🔒 the flag cannot go on before a device migrated", async () => {
