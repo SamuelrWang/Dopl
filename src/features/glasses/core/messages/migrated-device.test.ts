@@ -197,4 +197,42 @@ describe("migrated G2 (legacy token, sdk_delivery on)", () => {
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
   });
+
+  it("prod 2026-10-30: a migrated device's poll stamps its SDK row seen (else the router reads device_offline)", async () => {
+    const w = setup();
+    const g2 = await pairLegacy(w);
+    await inbox(w, g2.token);
+    // Same throttled pass: the prosumer link AND the SDK row, by the device's own id.
+    expect(w.port.touch).toHaveBeenCalledTimes(1);
+    expect(w.port.touch).toHaveBeenCalledWith(g2.id, new Date(w.clock.now()).toISOString());
+    expect((await w.dev.devices.listDevices(OWNER))[0].last_seen).toBe(new Date(w.clock.now()).toISOString());
+    // 🔒 A8: the token never went to the SDK credential lookup.
+    expect(w.port.deviceFromTokenHash).not.toHaveBeenCalled();
+    // Throttled with the prosumer touch: a second poll inside the window writes nothing.
+    await inbox(w, g2.token);
+    expect(w.port.touch).toHaveBeenCalledTimes(1);
+    w.clock.advance(31_000);
+    await inbox(w, g2.token);
+    expect(w.port.touch).toHaveBeenCalledTimes(2);
+  });
+
+  it("a device that is NOT migrated never touches an SDK row; a failed lookup or touch never fails the poll", async () => {
+    const off = setup({ migrated: false });
+    const a = await pairLegacy(off);
+    expect((await off.handlers.inbox(req("/api/glasses/device/inbox?wait=0", a.token))).status).toBe(200);
+    expect(off.port.touch).not.toHaveBeenCalled();
+
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const down = setup({ lookupFails: true });
+    const b = await pairLegacy(down);
+    expect((await down.handlers.inbox(req("/api/glasses/device/inbox?wait=0", b.token))).status).toBe(200);
+    expect(down.port.touch).not.toHaveBeenCalled();
+
+    const broken = setup();
+    const c = await pairLegacy(broken);
+    vi.mocked(broken.port.touch).mockRejectedValueOnce(new Error("db down"));
+    expect((await broken.handlers.inbox(req("/api/glasses/device/inbox?wait=0", c.token))).status).toBe(200);
+    expect(spy).toHaveBeenCalledWith("[glasses] sdk presence touch failed for a migrated device", expect.any(Error));
+    spy.mockRestore();
+  });
 });

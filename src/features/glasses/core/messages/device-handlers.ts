@@ -69,7 +69,15 @@ type ResolvedDeps = DeviceHandlerDeps & {
   mirrorThrottle: Throttle<string>;
 };
 
-/** The calling device, stamped as seen (throttled); null → answer 401. */
+/**
+ * The calling device, stamped as seen (throttled); null → answer 401.
+ *
+ * A MIGRATED G2 (W1.2) keeps its legacy token, so it resolves HERE and never through
+ * {@link authedSdkDevice}; its SDK `devices` row is stamped in the same throttled pass, else the SDK
+ * router reads it offline (`device_offline`) while the glasses poll. 🔒 A8 holds: the SDK row is touched
+ * by the prosumer device's own id, only when its owner's `sdk_delivery` lists it; no token ever reaches
+ * `device_credentials`.
+ */
 export async function authedDevice(
   deps: ResolvedDeps,
   request: Request,
@@ -78,8 +86,21 @@ export async function authedDevice(
   const now = nowOf(deps);
   if (device && deps.touchThrottle.tryAcquire(device.id, now)) {
     await deps.devices.touchDevice(device.id, iso(now));
+    await touchMigratedSdkRow(deps, device, iso(now));
   }
   return device;
+}
+
+/** SDK presence for a migrated device. Never fails the poll: a failed lookup or write is logged. */
+async function touchMigratedSdkRow(deps: ResolvedDeps, device: GlassesDevice, now: string): Promise<void> {
+  const port = deps.sdk;
+  if (!port?.migratedDeviceIds) return;
+  try {
+    // Cached per user (30s) by the port; the inbox reads the same cache on every poll.
+    if ((await port.migratedDeviceIds(device.user_id)).includes(device.id)) await port.touch(device.id, now);
+  } catch (err) {
+    console.error("[glasses] sdk presence touch failed for a migrated device", err);
+  }
 }
 
 /**
