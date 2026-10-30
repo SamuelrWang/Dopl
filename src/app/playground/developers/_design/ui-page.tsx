@@ -205,6 +205,11 @@ export function TableFoot({ children }: { children: ReactNode }) {
   return <div className={cx(b.between, b.padRow, p.tableFoot)}>{children}</div>;
 }
 
+/** Over a table in the same card: its title or filters. */
+export function TableHead({ children }: { children: ReactNode }) {
+  return <div className={cx(b.between, b.padRow)}>{children}</div>;
+}
+
 /* Menus and pages */
 export function MenuItem({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (

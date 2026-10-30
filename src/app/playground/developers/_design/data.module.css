@@ -69,3 +69,4 @@
 .dtEnd { text-align: right; }
 .dtEnd .dtInner { justify-content: flex-end; }
 .dtInner { display: flex; align-items: center; gap: var(--cell-pad); min-width: 0; }
+.dtCellOpen { overflow: visible; }

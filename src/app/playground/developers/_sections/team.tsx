@@ -1,60 +1,277 @@
 "use client";
 
+/** Team: who has access, what each role can do, and who needs a look. */
+import { Check, Minus, Plus, RotateCcw, SearchX, Shield, Trash2, UserRound, Code2, Eye, Crown } from "lucide-react";
 import { useState } from "react";
-import { cn } from "@/shared/lib/utils";
-import { pillButton } from "@/shared/ui/pill-button";
-import { CreateButton } from "../_components/create-button";
-import { SelectMenu } from "@/shared/ui/select-menu";
-import { DialogActions, StandardDialog } from "@/shared/ui/standard-dialog";
-import { RAISED_INPUT } from "@/shared/ui/wells";
+import { Badge, Button, Card, DataCell, DataRow, DataTable, ICON, ICON_SM, Initials, PillMenu, SearchField, Segmented, StatCard, TwoLine, initialsOf, type Column } from "../_design/ui";
+import { ConfirmDialog, EmptyState, FlowDialog, Grow, Mark, Page, PageHeader, PlainButton, Row, Stack, StatRow, TableHead, Text, TextField, Tile, Tiles, Toast, Toolbar, Between } from "../_design/ui-page";
 import { minsAgo, type Member } from "../_data/company";
+import { PLAN } from "../_data/misc";
 import { usePortal } from "../_components/portal-store";
-import { PortalPage, RowList, UserFace, ov, since } from "../_components/ui";
+import { fmt, since } from "../_components/ui";
 
-const ROLES: Member["role"][] = ["Owner", "Admin", "Developer", "Viewer"];
+type Role = Member["role"];
+const ROLES: { role: Role; icon: typeof Crown; sub: string }[] = [
+  { role: "Owner", icon: Crown, sub: "Everything, including billing" },
+  { role: "Admin", icon: Shield, sub: "Everything except billing" },
+  { role: "Developer", icon: Code2, sub: "Build and test" },
+  { role: "Viewer", icon: Eye, sub: "Read only" },
+];
+const INVITABLE = ROLES.filter((r) => r.role !== "Owner");
+const POWERS: { name: string; roles: Role[] }[] = [
+  { name: "View activity and usage", roles: ["Owner", "Admin", "Developer", "Viewer"] },
+  { name: "Send test deliveries", roles: ["Owner", "Admin", "Developer"] },
+  { name: "Manage devices and rules", roles: ["Owner", "Admin", "Developer"] },
+  { name: "Manage API keys and webhooks", roles: ["Owner", "Admin"] },
+  { name: "Invite and remove members", roles: ["Owner", "Admin"] },
+  { name: "Change plan and billing", roles: ["Owner"] },
+];
+const QUIET_DAYS = 7;
+const VIEWS = ["All", "Invited"];
+const COLUMNS: Column[] = [
+  { key: "name", label: "Member", width: "36%" },
+  { key: "role", label: "Role", width: "20%" },
+  { key: "keys", label: "API keys", width: "12%" },
+  { key: "active", label: "Last active", width: "14%" },
+  { key: "status", label: "Status", width: "14%" },
+  { key: "actions", srLabel: "Actions", width: "calc(95 * var(--u))" },
+];
+const MATRIX: Column[] = [{ key: "power", label: "Permission", width: "40%" }, ...ROLES.map((r) => ({ key: r.role, label: r.role, width: "15%", align: "center" as const }))];
+
+interface Invite {
+  id: string;
+  email: string;
+  role: Role;
+  sentAt: string;
+}
+const SEED_INVITES: Invite[] = [{ id: "inv_1", email: "sana@larkfield.example", role: "Developer", sentAt: minsAgo(4320) }];
+const quiet = (m: Member) => Date.parse(minsAgo(0)) - Date.parse(m.lastActive) > QUIET_DAYS * 86_400_000;
 
 export function TeamSection() {
   const { state, update } = usePortal();
-  const [open, setOpen] = useState(false);
+  const [invites, setInvites] = useState(SEED_INVITES);
+  const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState<Member | null>(null);
+  const [q, setQ] = useState("");
+  const [view, setView] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
+  const say = (text: string) => {
+    setNotice(text);
+    window.setTimeout(() => setNotice((now) => (now === text ? null : now)), 3200);
+  };
+
+  const needle = q.toLowerCase();
+  const members = view === 0 ? state.members.filter((m) => `${m.name} ${m.email} ${m.role}`.toLowerCase().includes(needle)) : [];
+  const pending = invites.filter((i) => i.email.includes(needle));
+  const keysBy = (name: string) => state.keys.filter((k) => k.createdBy === name && !k.revoked).length;
+  const used = state.members.length + invites.length;
+  const owners = state.members.filter((m) => m.role === "Owner").length;
+  const setRole = (id: string, role: Role) => update((s) => ({ ...s, members: s.members.map((m) => (m.id === id ? { ...m, role } : m)) }));
+
+  return (
+    <Page
+      overlays={
+        <>
+          {adding && (
+            <InviteFlow
+              onClose={() => setAdding(false)}
+              onInvite={(email, role) => {
+                setInvites((all) => [...all, { id: `inv_${email}`, email, role, sentAt: minsAgo(0) }]);
+                say(`Invite sent to ${email}`);
+              }}
+            />
+          )}
+          {removing && (
+            <ConfirmDialog
+              label={`Remove ${removing.name}`}
+              mark={<Mark icon={Trash2} tone="danger" />}
+              title={`Remove ${removing.name}?`}
+              sub={`${removing.role}, ${keysBy(removing.name)} API keys keep working`}
+              onCancel={() => setRemoving(null)}
+              action={
+                <Button
+                  full
+                  variant="dangerFlat"
+                  onClick={() => {
+                    update((s) => ({ ...s, members: s.members.filter((m) => m.id !== removing.id) }));
+                    say(`${removing.name} removed`);
+                    setRemoving(null);
+                  }}
+                >
+                  Remove
+                </Button>
+              }
+            />
+          )}
+          {notice && <Toast>{notice}</Toast>}
+        </>
+      }
+    >
+      <PageHeader
+        title="Team"
+        action={
+          <Button variant="ink" onClick={() => setAdding(true)}>
+            <Plus {...ICON} aria-hidden="true" />
+            Invite member
+          </Button>
+        }
+      />
+
+      <StatRow>
+        <StatCard label="Members" value={fmt(state.members.length)} hint={`${owners} owner, ${state.members.filter((m) => m.role === "Admin").length} admin`} />
+        <StatCard label="Seats" value={`${used} of ${PLAN.seatsIncluded}`} hint={`${PLAN.seatsIncluded - used} left on ${PLAN.name}`} />
+        <StatCard label="Pending invites" value={fmt(invites.length)} hint={invites.length ? `Oldest sent ${since(invites[0].sentAt).toLowerCase()}` : "None waiting"} pressed={view === 1} onClick={() => setView(view === 1 ? 0 : 1)} />
+        <StatCard label="Inactive" value={fmt(state.members.filter(quiet).length)} hint={`Not seen in ${QUIET_DAYS} days`} />
+      </StatRow>
+
+      <Toolbar>
+        <Between>
+          <SearchField hug value={q} placeholder="Search members" onChange={setQ} />
+          <Segmented label="Member views" options={VIEWS} value={view} onChange={setView} />
+        </Between>
+      </Toolbar>
+
+      {members.length === 0 && pending.length === 0 ? (
+        <EmptyState icon={SearchX} title={view === 1 && q === "" ? "No pending invites" : "No members match"} action={<Button onClick={() => { setQ(""); setView(0); }}>Show all members</Button>} />
+      ) : (
+        <Card flush>
+          <DataTable columns={COLUMNS}>
+            {members.map((m) => (
+              <DataRow key={m.id}>
+                <DataCell>
+                  <Initials text={initialsOf(m.name)} />
+                  <TwoLine title={m.name} sub={m.email} />
+                </DataCell>
+                <DataCell open>
+                  {m.role === "Owner" && owners === 1 ? <Text>Owner</Text> : <PillMenu label={m.role} value={m.role} options={ROLES.map((r) => ({ value: r.role, label: r.role }))} onChange={(role) => setRole(m.id, role as Role)} />}
+                </DataCell>
+                <DataCell>
+                  <Text num>{keysBy(m.name)}</Text>
+                </DataCell>
+                <DataCell>
+                  <Text nowrap>{since(m.lastActive)}</Text>
+                </DataCell>
+                <DataCell>
+                  {quiet(m) ? <Badge>Inactive</Badge> : <Badge tone="ok" dot>Active</Badge>}
+                </DataCell>
+                <DataCell align="end">
+                  {!(m.role === "Owner" && owners === 1) && (
+                    <PlainButton label={`Remove ${m.name}`} onClick={() => setRemoving(m)}>
+                      <Trash2 {...ICON} aria-hidden="true" />
+                    </PlainButton>
+                  )}
+                </DataCell>
+              </DataRow>
+            ))}
+            {pending.map((i) => (
+              <DataRow key={i.id}>
+                <DataCell>
+                  <Mark icon={UserRound} />
+                  <TwoLine title={i.email} sub="Invited" />
+                </DataCell>
+                <DataCell>
+                  <Text>{i.role}</Text>
+                </DataCell>
+                <DataCell>
+                  <Text kind="faint">None</Text>
+                </DataCell>
+                <DataCell>
+                  <Text kind="faint">Never</Text>
+                </DataCell>
+                <DataCell>
+                  <Badge tone="warn">Invited</Badge>
+                </DataCell>
+                <DataCell align="end">
+                  <Row>
+                    <PlainButton label={`Resend to ${i.email}`} onClick={() => say(`Invite resent to ${i.email}`)}>
+                      <RotateCcw {...ICON} aria-hidden="true" />
+                    </PlainButton>
+                    <PlainButton label={`Revoke invite to ${i.email}`} onClick={() => setInvites((all) => all.filter((x) => x.id !== i.id))}>
+                      <Trash2 {...ICON} aria-hidden="true" />
+                    </PlainButton>
+                  </Row>
+                </DataCell>
+              </DataRow>
+            ))}
+          </DataTable>
+        </Card>
+      )}
+
+      <Card flush>
+        <TableHead>
+          <Text kind="h3">What each role can do</Text>
+          <Grow />
+        </TableHead>
+        <DataTable columns={MATRIX}>
+          {POWERS.map((p) => (
+            <DataRow key={p.name}>
+              <DataCell>
+                <Text>{p.name}</Text>
+              </DataCell>
+              {ROLES.map((r) => (
+                <DataCell key={r.role} align="center">
+                  {p.roles.includes(r.role) ? <Check {...ICON_SM} aria-label="Allowed" /> : <Minus {...ICON_SM} aria-label="Not allowed" opacity={0.3} />}
+                </DataCell>
+              ))}
+            </DataRow>
+          ))}
+        </DataTable>
+      </Card>
+    </Page>
+  );
+}
+
+function InviteFlow({ onClose, onInvite }: { onClose: () => void; onInvite: (email: string, role: Role) => void }) {
+  const [step, setStep] = useState(0);
   const [email, setEmail] = useState("");
-  const invite = () => {
-    const name = email.split("@")[0];
-    update((s) => ({ ...s, members: [...s.members, { id: `mem_${s.members.length + 1}`, name, email, role: "Developer", lastActive: minsAgo(0) }] }));
-    setOpen(false);
-    setEmail("");
+  const [role, setRole] = useState<Role | null>(null);
+  const valid = /^\S+@\S+\.\S+$/.test(email);
+  const send = () => {
+    if (!role) return;
+    onInvite(email.trim(), role);
+    onClose();
   };
   return (
-    <PortalPage title="Team" meta={<span>{state.members.length} members</span>} actions={<CreateButton onClick={() => setOpen(true)}>Invite member</CreateButton>}>
-      <RowList>
-        {state.members.map((m) => (
-          <li key={m.id} className={cn(ov.row, "border-t border-border-default first:border-t-0")}>
-            <UserFace name={m.name} />
-            <span className={ov.rowMain}>
-              <span className={ov.rowTitle}>{m.name}</span>
-              <span className={ov.rowMeta}>{m.email}</span>
-            </span>
-            <span className={ov.rowAside}>Active {since(m.lastActive)}</span>
-            <SelectMenu
-              variant="outline"
-              ariaLabel={`Role for ${m.name}`}
-              value={m.role}
-              options={ROLES.map((r) => ({ value: r, label: r }))}
-              onChange={(role) => update((s) => ({ ...s, members: s.members.map((x) => (x.id === m.id ? { ...x, role } : x)) }))}
-            />
-          </li>
-        ))}
-      </RowList>
-      <StandardDialog open={open} onClose={() => setOpen(false)} title="Invite member">
-        <input aria-label="Email" placeholder="name@larkfield.example" value={email} onChange={(e) => setEmail(e.target.value)} className={cn(RAISED_INPUT, "h-8 px-3")} />
-        <DialogActions>
-          <button type="button" className={pillButton("quiet", "md")} onClick={() => setOpen(false)}>
-            Cancel
-          </button>
-          <button type="button" disabled={!email.includes("@")} className={cn(pillButton("ink", "md", { raise: false }), "disabled:opacity-60")} onClick={invite}>
-            Send invite
-          </button>
-        </DialogActions>
-      </StandardDialog>
-    </PortalPage>
+    <FlowDialog
+      label="Invite member"
+      eyebrow={`Step ${step + 1} of 2`}
+      title={step === 0 ? "Who are you inviting?" : "Choose a role"}
+      progress={{ step, of: 2 }}
+      onDismiss={onClose}
+      foot={
+        <>
+          {step > 0 && (
+            <Button variant="ghost" onClick={() => setStep(0)}>
+              Back
+            </Button>
+          )}
+          <Grow />
+          {step === 0 ? (
+            <Button variant="ink" disabled={!valid} onClick={() => setStep(1)}>
+              Continue
+            </Button>
+          ) : (
+            <Button variant="ink" disabled={!role} onClick={send}>
+              Send invite
+            </Button>
+          )}
+        </>
+      }
+    >
+      {step === 0 ? (
+        <Stack>
+          <TextField autoFocus label="Email" placeholder="name@larkfield.example" value={email} onChange={setEmail} onEnter={() => valid && setStep(1)} />
+        </Stack>
+      ) : (
+        <Tiles>
+          {INVITABLE.map((r) => (
+            <Tile key={r.role} selected={role === r.role} onClick={() => setRole(r.role)}>
+              <Mark icon={r.icon} />
+              <TwoLine title={r.role} sub={r.sub} />
+            </Tile>
+          ))}
+        </Tiles>
+      )}
+    </FlowDialog>
   );
 }

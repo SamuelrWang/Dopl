@@ -295,9 +295,9 @@ export function DataRow({ selected, onClick, children }: { selected?: boolean; o
   );
 }
 
-export function DataCell({ align, children }: { align?: "center" | "end"; children?: ReactNode }) {
+export function DataCell({ align, open, children }: { align?: "center" | "end"; /** Holds a menu, so nothing clips it. */ open?: boolean; children?: ReactNode }) {
   return (
-    <td className={cx(d.dtCell, align && ALIGN[align])}>
+    <td className={cx(d.dtCell, align && ALIGN[align], open && d.dtCellOpen)}>
       <div className={d.dtInner}>{children}</div>
     </td>
   );

@@ -11,8 +11,8 @@ import { Button } from "./ui";
 import { Text } from "./ui-page";
 
 export const Stage = ({ children }: { children: ReactNode }) => <div className={x.stage}>{children}</div>;
-export const SplitLayout = ({ left, right }: { left: ReactNode; right: ReactNode }) => (
-  <div className={x.split}>
+export const SplitLayout = ({ wide, left, right }: { /** Left takes two thirds. */ wide?: boolean; left: ReactNode; right: ReactNode }) => (
+  <div className={cx(x.split, wide && x.splitWide)}>
     <div className={x.col}>{left}</div>
     <div className={x.col}>{right}</div>
   </div>
