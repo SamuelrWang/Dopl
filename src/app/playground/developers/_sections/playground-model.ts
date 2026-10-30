@@ -57,10 +57,10 @@ export function readRows(c: CapabilityId, model: Model): [string, string][] {
   return [["Power", "On"], ["Volume", "40%"], ["Playing", "Nothing"]];
 }
 
-export function requestOf(c: CapabilityId, deviceId: string, text: string, choice: string, answers: string[]) {
+export function requestOf(c: CapabilityId, deviceId: string, text: string, choice: string, answers: string[], lines?: string[]) {
   const family = familyOf(c);
   const path = family === "act" ? "POST /v1/actions" : family === "read" || family === "capture" ? `GET /v1/devices/${deviceId}/${c}` : "POST /v1/deliver";
-  const body = family === "read" || family === "capture" ? null : { target: { device_id: deviceId }, capability: c, ...(needsText(c) ? { content: { text, ...(family === "ask" ? { options: answers } : {}) } } : {}), ...(choice ? { value: choice } : {}) };
+  const body = family === "read" || family === "capture" ? null : { target: { device_id: deviceId }, capability: c, ...(needsText(c) ? { content: { ...(lines ? { lines } : { text }), ...(family === "ask" ? { options: answers } : {}) } } : {}), ...(choice ? { value: choice } : {}) };
   return `${path}${body ? `\n${JSON.stringify(body, null, 2)}` : ""}`;
 }
 
@@ -80,4 +80,13 @@ export function eventsOf(phase: Phase, answer: string | null): [string, string][
   if (phase === "seen" || phase === "answered") out.push(["action.completed", "860 ms"]);
   if (phase === "answered" && answer) out.push(["ask.answered", answer]);
   return out;
+}
+
+/** The call as SDK code: the editor's starting point and the snippet to copy. */
+export function snippetOf(c: CapabilityId, deviceId: string, text: string, choice: string, answers: string[]) {
+  const family = familyOf(c);
+  if (family === "read" || family === "capture") return `const result = await dopl.read({\n  device: "${deviceId}",\n  capability: "${c}",\n});\nconsole.log(result.status);`;
+  const value = choice ? `\n  value: "${choice}",` : "";
+  const content = needsText(c) ? `\n  content: {\n    text: ${JSON.stringify(text)},${family === "ask" ? `\n    options: ${JSON.stringify(answers)},` : ""}\n  },` : "";
+  return `await dopl.${family === "act" ? "act" : "deliver"}({\n  device: "${deviceId}",\n  capability: "${c}",${value}${content}\n});`;
 }

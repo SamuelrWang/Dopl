@@ -1,5 +1,5 @@
 /* What a device did with a call: one stage, drawn per capability. Shown in the gallery's Device output. */
-.stage { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(17.5 * var(--u)); min-height: calc(420 * var(--u)); padding: calc(25 * var(--u)); border-radius: var(--radius-box); background: var(--fill-strong); }
+.stage { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: calc(17.5 * var(--u)); min-height: calc(260 * var(--u)); overflow: auto; padding: calc(25 * var(--u)); border-radius: var(--radius-box); background: var(--fill-strong); }
 .lens { display: flex; flex-direction: column; justify-content: center; gap: calc(15 * var(--u)); width: min(100%, calc(560 * var(--u))); min-height: calc(200 * var(--u)); padding: calc(25 * var(--u)) calc(30 * var(--u)); border-radius: calc(30 * var(--u)); background: var(--ink); color: var(--surface); }
 .lensText { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(17.5 * var(--u)); line-height: calc(27.5 * var(--u)); white-space: pre; overflow: hidden; }
 .panel { display: flex; flex-direction: column; gap: calc(12.5 * var(--u)); width: min(100%, calc(560 * var(--u))); padding: calc(20 * var(--u)) calc(25 * var(--u)); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-card); }
@@ -19,5 +19,10 @@
 .changeOn { box-shadow: inset 0 0 0 calc(1.25 * var(--u)) var(--ink); }
 .readWell { width: min(100%, calc(560 * var(--u))); padding: calc(20 * var(--u)) calc(25 * var(--u)); border-radius: var(--radius-box); background: var(--surface); box-shadow: var(--ring); }
 .photo { display: flex; align-items: center; justify-content: center; width: min(100%, calc(460 * var(--u))); aspect-ratio: 16 / 10; border-radius: var(--radius-box); background: var(--track); color: var(--muted); }
-.split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: start; gap: calc(20 * var(--u)); }
-@media (max-width: 1100px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.split { display: grid; flex: 1; min-height: 0; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: calc(20 * var(--u)); }
+.col { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.fill { flex: 1; min-height: 0; }
+.fillBody { display: flex; flex: 1; flex-direction: column; gap: calc(20 * var(--u)); min-height: 0; overflow-y: auto; }
+.details { flex: none; height: calc(300 * var(--u)); overflow-y: auto; }
+.editor { flex: 1; width: 100%; min-height: calc(200 * var(--u)); padding: calc(20 * var(--u)); border: 0; border-radius: var(--radius-box); outline: 0; resize: none; background: var(--ink); color: #d9d9d9; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(15.5 * var(--u)); line-height: calc(25 * var(--u)); white-space: pre; overflow: auto; }
+.editor:focus { box-shadow: var(--ring-focus); }

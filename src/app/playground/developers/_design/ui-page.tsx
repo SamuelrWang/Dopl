@@ -41,11 +41,11 @@ export function PlainButton({ label, haspopup, buttonRef, onClick, children }: {
 }
 
 /* Page frame */
-export function Page({ overlays, children }: { overlays?: ReactNode; children: ReactNode }) {
+export function Page({ fit, overlays, children }: { /** Fills the window; its cards scroll inside, the page never does. */ fit?: boolean; overlays?: ReactNode; children: ReactNode }) {
   return (
     <div className={cx(p.root, tokens.scope)}>
-      <div className={p.scroller}>
-        <div className={p.inner}>{children}</div>
+      <div className={cx(p.scroller, fit && p.scrollerFit)}>
+        <div className={cx(p.inner, fit && p.innerFit)}>{children}</div>
       </div>
       {overlays}
     </div>
