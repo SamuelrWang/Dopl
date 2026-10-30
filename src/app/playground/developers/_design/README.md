@@ -17,9 +17,9 @@ Pages compose `ui.tsx` and `ui-page.tsx`. A page in `_sections` imports no `_des
 
 - `ui-sidebar.tsx`: Sidebar, NavGroup, ProjectPicker, AccountRow, SearchPanel, SearchHit, SearchEmpty.
 
-- `ui-output.tsx`: Stage, SplitLayout, LensScreen, PanelScreen, SpeakerOutput, HapticOutput, ChangeOutput, ReadOutput, CaptureOutput. A call draws by capability, never by device. `g2-screen.tsx`: G2Screen, the 576x288 G2 display on Even's font metrics.
+- `ui-output.tsx`: Stage, SplitLayout, LensScreen, PanelScreen, SpeakerOutput, HapticOutput, ChangeOutput, ReadOutput, CaptureOutput. InkPanel, InkQuote, InkPrompt, InkFoot (the black frame), StatStrip, ThreeUp, AvatarStack, PickRow. A call draws by capability, never by device. `g2-screen.tsx`: G2Screen, the 576x288 G2 display on Even's font metrics.
 
-- `ui-data.tsx`: BarChart, Limit.
+- `ui-data.tsx`: BarChart, Limit, Timeline, LineChart, Ring.
 
 ## Adding a variation
 

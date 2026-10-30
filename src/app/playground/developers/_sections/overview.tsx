@@ -1,137 +1,163 @@
 "use client";
 
-import Link from "next/link";
-import { Check, CircleAlert } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
-import { pillButton } from "@/shared/ui/pill-button";
-import { StatusPill } from "@/shared/ui/status-pill";
-import { ThinMeter } from "@/shared/ui/usage-meter";
-import { useRouter } from "next/navigation";
+/**
+ * Overview: is everything working, what should I do next. A project summary leads in the black panel;
+ * setup, trends and the newest users sit around it. Fits the window.
+ */
+import { ArrowRight, Paperclip } from "lucide-react";
 import { useState } from "react";
+import { Badge, Button, Chip, ICON, Initials, Stat, TwoLine, initialsOf } from "../_design/ui";
+import { BarChart, LineChart, Ring, Timeline, type Step } from "../_design/ui-data";
+import { AvatarStack, FillBody, FillCard, FitRows, InkFoot, InkPanel, InkPrompt, InkQuote, SplitLayout, StatStrip, ThreeUp } from "../_design/ui-output";
+import { Between, FilterRow, Grow, ListRow, Page, PageHeader, Row, Text } from "../_design/ui-page";
 import { dailySeries } from "../_data/activity";
 import { issuesFor } from "../_data/issues";
-import { CallRow } from "../_components/calls";
-import { ALL_LEVELS, HierarchyFilter, matchesHierarchy, type Hierarchy } from "../_components/hierarchy-filter";
 import { useCalls, usePortal, useUsers } from "../_components/portal-store";
-import { WEEK, activeWithin, figuresOfDevices } from "../_components/stats";
-import { BASE, Bars, Card, Cell, PortalPage, Strip, fmt, ov } from "../_components/ui";
+import { WEEK, activeWithin, figuresOfUsers } from "../_components/stats";
+import { BASE, fmt, since } from "../_components/ui";
 
-interface Step {
-  key: string;
-  label: string;
-  detail: string;
-  state: "done" | "attention" | "todo";
-  href: string;
-  cta: string;
-}
+const RECENT = 4;
+const QUESTIONS = ["Why are deliveries failing?", "Which users need a relink?", "What changed this week?"];
 
-function useSteps(): Step[] {
+function useSetup(): (Step & { href: string; cta: string })[] {
   const { state } = usePortal();
   const users = useUsers();
   const calls = useCalls();
   const keys = state.keys.filter((k) => k.env === state.env && !k.revoked);
   const added = Object.keys(state.integrations).length;
-  const first = calls.filter((c) => c.kind === "delivery").at(-1);
+  const first = calls.find((c) => c.kind === "delivery");
   const endpoints = state.endpoints.filter((e) => e.env === state.env);
   const failing = endpoints.find((e) => e.state === "failing");
   return [
-    { key: "key", label: "Create an API key", detail: `${keys.length} active keys`, state: keys.length ? "done" : "todo", href: "/keys", cta: "Create key" },
-    { key: "add", label: "Add a device", detail: `${added} added`, state: added ? "done" : "todo", href: "/devices", cta: "Open devices" },
-    { key: "connect", label: "Connect a user", detail: `${users.length} users connected`, state: users.length ? "done" : "todo", href: "/connect", cta: "Open Connect page" },
-    { key: "send", label: "Send a first delivery", detail: first ? `Latest ${first.id}` : "Nothing sent yet", state: first ? "done" : "todo", href: "/playground", cta: "Open playground" },
-    {
-      key: "webhook",
-      label: "Receive a webhook",
-      detail: failing ? `${failing.description} is failing` : `${endpoints.length} endpoints healthy`,
-      state: failing ? "attention" : endpoints.length ? "done" : "todo",
-      href: "/webhooks",
-      cta: "Open webhooks",
-    },
+    { key: "key", label: "Create an API key", detail: `${keys.length} active`, state: keys.length ? "done" : "pending", href: "/keys", cta: "Create key" },
+    { key: "add", label: "Add a device", detail: `${added} added`, state: added ? "done" : "pending", href: "/devices", cta: "Open devices" },
+    { key: "connect", label: "Connect a user", detail: `${users.length} connected`, state: users.length ? "done" : "pending", href: "/connect", cta: "Open Connect" },
+    { key: "send", label: "Send a delivery", detail: first ? "Sent" : "Nothing yet", state: first ? "done" : "pending", href: "/playground", cta: "Open Playground" },
+    { key: "hook", label: "Receive a webhook", detail: failing ? `${failing.description} failing` : `${endpoints.length} healthy`, state: failing ? "failed" : endpoints.length ? "done" : "pending", href: "/webhooks", cta: "Open webhooks" },
   ];
 }
 
-function Checklist() {
-  const steps = useSteps();
-  const done = steps.filter((s) => s.state === "done").length;
-  return (
-    <Card title="First delivery setup" count={`${done} of ${steps.length}`} aside={<ThinMeter used={done} limit={steps.length} className="w-24" />}>
-      <ul className={ov.rows}>
-        {steps.map((s) => (
-          <li key={s.key} className={ov.row}>
-            <span className={ov.mark} data-tone={s.state === "attention" ? "over" : undefined}>
-              {s.state === "done" ? <Check size={12} aria-hidden="true" /> : s.state === "attention" ? <CircleAlert size={12} aria-hidden="true" /> : null}
-            </span>
-            <span className={ov.rowMain}>
-              <span className={ov.rowTitle}>{s.label}</span>
-              <span className={ov.rowMeta}>{s.detail}</span>
-            </span>
-            {s.state !== "done" && (
-              <Link href={BASE + s.href} className={pillButton("outline", "sm")}>
-                {s.cta}
-              </Link>
-            )}
-          </li>
-        ))}
-      </ul>
-    </Card>
-  );
-}
-
 export function OverviewSection() {
-  const router = useRouter();
   const { state } = usePortal();
   const users = useUsers();
-  const calls = useCalls();
-  const [levels, setLevels] = useState<Hierarchy>(ALL_LEVELS);
-  const scopedUsers = users.filter((u) => u.devices.some((d) => matchesHierarchy(d.modelId, levels)));
-  const figures = figuresOfDevices(users.flatMap((u) => u.devices).filter((d) => matchesHierarchy(d.modelId, levels)));
+  const [q, setQ] = useState("");
+  const [asked, setAsked] = useState<string | null>(null);
+  const figures = figuresOfUsers(users);
   const issues = issuesFor(state.env, state.revoked, Object.keys(state.deviceStates)).filter((i) => !state.mutedIssues.includes(i.id));
-  const recent = calls.filter((c) => c.kind === "delivery" && matchesHierarchy(c.modelId, levels)).slice(0, 6);
+  const worst = [...issues].sort((a, b) => b.count - a.count)[0];
+  const steps = useSetup();
+  const done = steps.filter((s) => s.state === "done").length;
+  const next = steps.find((s) => s.state !== "done");
+  const series = dailySeries(figures.deliveries, 14);
+  const rate = series.map((_, i) => figures.rate - 1 + Math.sin(i * 0.9) * 0.9 + (i / series.length) * 1.2);
+  const newest = [...users].sort((a, b) => Date.parse(b.lastDeliveryAt ?? "0") - Date.parse(a.lastDeliveryAt ?? "0")).slice(0, RECENT);
+  const summary = `${fmt(figures.deliveries)} deliveries this week, ${figures.rate}% seen by a device. ${issues.length ? `${issues.length} issues open; ${worst.title.toLowerCase()} is the largest, with ${fmt(worst.count)} ${worst.countLabel}.` : "Nothing needs you."}`;
+  const answer = worst ? `Most of the loss comes from ${worst.title.toLowerCase()}: ${fmt(worst.count)} ${worst.countLabel} across ${worst.userIds.length} users. ${worst.action} to clear it.` : "Nothing is failing this week.";
+
   return (
-    <PortalPage title="Overview" actions={<HierarchyFilter value={levels} onChange={setLevels} />}>
-      <Strip label="Health">
-        <Cell label="Deliveries, 7 days" value={fmt(figures.deliveries)} href={`${BASE}/activity`} />
-        <Cell label="Shown rate" value={`${figures.rate}%`} sub="Seen by device of sent" />
-        <Cell label="Active users, 7 days" value={fmt(activeWithin(scopedUsers, WEEK))} of={`/ ${scopedUsers.length}`} href={`${BASE}/users`} />
-        <Cell label="Devices online" value={fmt(figures.online)} of={`/ ${figures.devices}`} href={`${BASE}/devices`} />
-        <Cell label="Open issues" value={fmt(issues.length)} href={`${BASE}/issues`} />
-      </Strip>
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-start gap-3.5">
-        <Checklist />
-        <div className="flex min-w-0 flex-col gap-3.5">
-          <Card title="Deliveries" count="Last 14 days">
-            <Bars bars={dailySeries(figures.deliveries, 14)} label="Deliveries per day" />
-          </Card>
-          <Card title="Recent issues" count={issues.length} aside={<Link href={`${BASE}/issues`} className={pillButton("quiet", "xs")}>All issues</Link>}>
-            {issues.length === 0 ? (
-              <p className={ov.note}>Nothing needs you.</p>
-            ) : (
-              <ul className={ov.rows}>
-                {issues.slice(0, 3).map((i) => (
-                  <li key={i.id} className={cn(ov.row, ov.openRow)}>
-                    <span className={ov.rowMain}>
-                      <Link href={`${BASE}/issues`} className={cn(ov.open, ov.rowTitle)}>
-                        {i.title}
-                      </Link>
-                      <span className={ov.rowMeta}>
-                        {fmt(i.count)} {i.countLabel}, {i.userIds.length} users
-                      </span>
-                    </span>
-                    <StatusPill tone="attention">{i.code}</StatusPill>
-                  </li>
+    <Page fit>
+      <PageHeader title="Overview" test={state.env === "test"} action={worst && <Button href={`${BASE}/issues`}>{issues.length} open issues<ArrowRight {...ICON} aria-hidden="true" /></Button>} />
+      <StatStrip>
+        <Stat label="Deliveries, 7d" value={fmt(figures.deliveries)} delta="6.1%" />
+        <Stat label="Shown rate" value={`${figures.rate}%`} delta="0.8%" />
+        <Stat label="Active users, 7d" value={fmt(activeWithin(users, WEEK))} delta="3 new" />
+        <Stat label="Devices online" value={`${fmt(figures.online)} of ${fmt(figures.devices)}`} delta="2 fewer" down />
+      </StatStrip>
+      <FitRows>
+        <SplitLayout
+          wide
+          left={
+            <InkPanel fill title="Project summary">
+              <InkQuote>{asked ? answer : summary}</InkQuote>
+              {asked && (
+                <Text kind="smallMuted" clip>
+                  {asked}
+                </Text>
+              )}
+              <InkPrompt
+                value={q}
+                placeholder="Ask about this project"
+                send="Ask"
+                onChange={setQ}
+                onSend={() => {
+                  setAsked(q.trim());
+                  setQ("");
+                }}
+              />
+              <FilterRow>
+                {QUESTIONS.map((question) => (
+                  <Chip key={question} ring onClick={() => setAsked(question)}>
+                    {question}
+                  </Chip>
                 ))}
-              </ul>
-            )}
-          </Card>
-        </div>
-      </div>
-      <Card title="Latest deliveries" aside={<Link href={`${BASE}/activity`} className={pillButton("quiet", "xs")}>All activity</Link>}>
-        <ul className="m-0 flex list-none flex-col">
-          {recent.map((c) => (
-            <CallRow key={c.id} call={c} onOpen={() => router.push(`${BASE}/activity?call=${c.id}`)} />
-          ))}
-        </ul>
-      </Card>
-    </PortalPage>
+              </FilterRow>
+              <InkFoot>
+                <Button size="sm" variant="ghost" href={`${BASE}/activity`}>
+                  <Paperclip {...ICON} aria-hidden="true" />
+                  Use activity logs
+                </Button>
+                <Grow />
+                <Text kind="smallMuted">Last 7 days</Text>
+              </InkFoot>
+            </InkPanel>
+          }
+          right={
+            <FillCard>
+              <Row>
+                <Ring value={Math.round((done / steps.length) * 100)} label={`${done} of ${steps.length} set up`} />
+                <TwoLine title={<Text kind="h3">Setup</Text>} sub={`${done} of ${steps.length} done`} />
+              </Row>
+              <FillBody>
+                <Timeline steps={steps.map((s) => (s.state === "done" ? { ...s, detail: undefined } : s))} />
+              </FillBody>
+              {next && (
+                <Button block href={BASE + next.href}>
+                  {next.cta}
+                </Button>
+              )}
+            </FillCard>
+          }
+        />
+        <ThreeUp>
+          <FillCard>
+            <Between>
+              <Text kind="h3">Deliveries</Text>
+              <Badge tone="ring">14 days</Badge>
+            </Between>
+            <BarChart bars={series} />
+          </FillCard>
+          <FillCard>
+            <Between>
+              <TwoLine title={<Text kind="h3">Shown rate</Text>} sub={`${figures.rate}% this week`} />
+              <Badge tone="ring">14 days</Badge>
+            </Between>
+            <LineChart values={rate} min={85} max={100} label="Shown rate over 14 days" />
+          </FillCard>
+          <FillCard>
+            <Between>
+              <Text kind="h3">Recent users</Text>
+              <AvatarStack>
+                {newest.map((u) => (
+                  <Initials key={u.id} small text={initialsOf(u.name)} />
+                ))}
+              </AvatarStack>
+            </Between>
+            <FillBody>
+              <div>
+                {newest.map((u, i) => (
+                  <ListRow key={u.id} line={i < newest.length - 1}>
+                    <TwoLine title={u.name} sub={u.id} />
+                    <Grow />
+                    <Text kind="smallMuted" nowrap>
+                      {since(u.lastDeliveryAt)}
+                    </Text>
+                  </ListRow>
+                ))}
+              </div>
+            </FillBody>
+          </FillCard>
+        </ThreeUp>
+      </FitRows>
+    </Page>
   );
 }

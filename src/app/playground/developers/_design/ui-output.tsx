@@ -1,7 +1,7 @@
 "use client";
 
 /** What a device did with a call, drawn per capability. A device with no screen still has an output. */
-import { ArrowRight, Image as ImageIcon, Pause, Play } from "lucide-react";
+import { ArrowRight, CornerDownLeft, Image as ImageIcon, Pause, Play } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import b from "./base.module.css";
 import { cx, ICON } from "./components";
@@ -206,5 +206,57 @@ export function RuleRow({ label, children, actions }: { label: string; children:
       <div className={x.ruleActions}>{actions}</div>
       <div className={x.ruleValue}>{children}</div>
     </div>
+  );
+}
+
+/** The black frame: a tab of black on top, a white panel inside it. For the one thing a page leads with. */
+export function InkPanel({ title, icon, action, fill, children }: { title: string; icon?: ReactNode; action?: ReactNode; /** Takes its row's height. */ fill?: boolean; children: ReactNode }) {
+  return (
+    <div className={cx(x.ink, fill && x.fill)}>
+      <div className={x.inkHead}>
+        {title}
+        {icon}
+        {action && <span className={x.inkAction}>{action}</span>}
+      </div>
+      <div className={x.inkBody}>{children}</div>
+    </div>
+  );
+}
+export const InkQuote = ({ children }: { children: ReactNode }) => <div className={x.inkQuote}>{children}</div>;
+export const InkFoot = ({ children }: { children: ReactNode }) => <div className={x.inkFoot}>{children}</div>;
+
+/** A prompt line: type, then send. */
+export function InkPrompt({ value, placeholder, send, onChange, onSend }: { value: string; placeholder: string; send: string; onChange: (next: string) => void; onSend: () => void }) {
+  return (
+    <div className={x.inkPrompt}>
+      <input
+        className={x.inkInput}
+        aria-label={placeholder}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && value.trim()) onSend();
+        }}
+      />
+      <button type="button" className={x.inkSend} disabled={!value.trim()} onClick={onSend}>
+        {send}
+        <CornerDownLeft {...ICON} aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+export const ThreeUp = ({ children }: { children: ReactNode }) => <div className={x.three}>{children}</div>;
+export const StatStrip = ({ children }: { children: ReactNode }) => <div className={cx(b.card, x.statStrip)}>{children}</div>;
+
+export const AvatarStack = ({ children }: { children: ReactNode }) => <div className={x.stack}>{children}</div>;
+
+/** A row in a list of things to pick from. */
+export function PickRow({ selected, dim, onClick, children }: { selected?: boolean; dim?: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button type="button" aria-pressed={selected} className={cx(x.issueRow, selected && x.issueRowOn, dim && x.muted)} onClick={onClick}>
+      {children}
+    </button>
   );
 }

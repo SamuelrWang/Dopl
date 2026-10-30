@@ -101,3 +101,35 @@ export function Timeline({ steps }: { steps: Step[] }) {
     </ol>
   );
 }
+
+/** A trend as one line, on a fixed range when given so small moves stay small. */
+export function LineChart({ values, label, min, max }: { values: number[]; label: string; min?: number; max?: number }) {
+  const low = min ?? Math.min(...values);
+  const high = max ?? Math.max(...values);
+  const span = Math.max(high - low, 1);
+  const points = values.map((v, i) => [(i / Math.max(values.length - 1, 1)) * 100, 92 - ((v - low) / span) * 84] as const);
+  const path = points.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`).join(" ");
+  return (
+    <svg className={c.line} viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={label} fill="none">
+      {[8, 36, 64, 92].map((y) => (
+        <path key={y} d={`M0 ${y}H100`} stroke="#ececec" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+      ))}
+      <path d={path} stroke="#000" strokeWidth={1.8} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+/** Progress as a ring, with its figure inside. */
+export function Ring({ value, label }: { value: number; label: string }) {
+  const r = 34;
+  const around = 2 * Math.PI * r;
+  return (
+    <svg className={c.ring} viewBox="0 0 87.5 87.5" fill="none" role="img" aria-label={label}>
+      <circle cx={43.75} cy={43.75} r={r} stroke="#d9d9d9" strokeWidth={8.75} />
+      <circle cx={43.75} cy={43.75} r={r} stroke="#000" strokeWidth={8.75} strokeLinecap="round" strokeDasharray={`${(value / 100) * around} ${around}`} transform="rotate(-90 43.75 43.75)" />
+      <text x={43.75} y={49.5} textAnchor="middle" fontSize={17.5} fontWeight={600} letterSpacing="-0.03em" fill="#000">
+        {value}%
+      </text>
+    </svg>
+  );
+}

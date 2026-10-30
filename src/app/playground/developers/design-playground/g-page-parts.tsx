@@ -4,12 +4,20 @@
 import { AlertTriangle, Glasses, Monitor, Plus, QrCode, SearchX } from "lucide-react";
 import { Section } from "../_design/components";
 import { Badge, Button, Card, ICON, Meter, StatCard } from "../_design/ui";
+import { InkFoot, InkPanel, InkQuote } from "../_design/ui-output";
+import { Ring } from "../_design/ui-data";
 import { AddCard, Alert, CardFoot, CardHead, CardSection, ChipRow, EmptyState, Figure, FigureWell, Mark, ReviewWell, Spark, StatRow, Text, Tile, Tiles } from "../_design/ui-page";
 
 /** What a real page is built from: header action, stats, a section of item cards, a popup's parts. */
 export function PagePartsGroup() {
   return (
     <Section label="Page parts">
+      <InkPanel title="Project summary">
+        <InkQuote>3,181 deliveries this week, 94.7% seen by a device.</InkQuote>
+        <InkFoot>
+          <Ring value={80} label="4 of 5" />
+        </InkFoot>
+      </InkPanel>
       <div>
         <Button variant="ink">
           <Plus {...ICON} />

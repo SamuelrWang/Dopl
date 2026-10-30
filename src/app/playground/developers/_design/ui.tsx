@@ -4,7 +4,7 @@
  * The design system's components. Pages and the Design Playground both render these, so a page cannot
  * drift from what the Playground shows. Variants are props; none takes a className. See README.md.
  */
-import { ArrowDown, ArrowUp, ChevronsUpDown, Loader2, Search, X, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronsUpDown, Loader2, Search, TrendingDown, TrendingUp, X, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { createElement, type ReactNode, type Ref } from "react";
 import b from "./base.module.css";
@@ -156,7 +156,12 @@ export function Stat({ label, value, hint, delta, down }: { label: string; value
     <span className={d.stat}>
       <span className={b.muted}>{label}</span>
       <span className={b.big}>{value}</span>
-      {delta && <span className={cx(d.delta, down && d.deltaDown)}>{delta}</span>}
+      {delta && (
+        <span className={cx(d.delta, down && d.deltaDown)}>
+          {createElement(down ? TrendingDown : TrendingUp, ICON_SM)}
+          {delta}
+        </span>
+      )}
       {hint && <span className={b.smallMuted}>{hint}</span>}
     </span>
   );
