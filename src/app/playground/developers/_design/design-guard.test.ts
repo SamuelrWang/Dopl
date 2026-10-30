@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const SECTIONS = join(__dirname, "..", "_sections");
-const OVERHAULED = /^(users|devices|keys|add-device)[-.a-z]*\.tsx$/;
+const OVERHAULED = /^(users|devices|keys|add-device|playground)[-.a-z]*\.tsx$/;
 const files = readdirSync(SECTIONS).filter((f) => OVERHAULED.test(f));
 
 describe("overhauled pages", () => {

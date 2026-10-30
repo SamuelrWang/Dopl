@@ -17,6 +17,8 @@ Pages compose `ui.tsx` and `ui-page.tsx`. A page in `_sections` imports no `_des
 
 - `ui-sidebar.tsx`: Sidebar, NavGroup, ProjectPicker, AccountRow, SearchPanel, SearchHit, SearchEmpty.
 
+- `ui-output.tsx`: Stage, SplitLayout, LensScreen, PanelScreen, SpeakerOutput, HapticOutput, ChangeOutput, ReadOutput, CaptureOutput. A call draws by capability, never by device.
+
 ## Adding a variation
 
 Add it as a prop in `_design`, show it in the Playground gallery, then use it. No page-level overrides of height, padding, radius, font size or gap. Components take no `className`.

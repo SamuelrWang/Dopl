@@ -1,0 +1,23 @@
+/* What a device did with a call: one stage, drawn per capability. Shown in the gallery's Device output. */
+.stage { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(17.5 * var(--u)); min-height: calc(420 * var(--u)); padding: calc(25 * var(--u)); border-radius: var(--radius-box); background: var(--fill-strong); }
+.lens { display: flex; flex-direction: column; justify-content: center; gap: calc(15 * var(--u)); width: min(100%, calc(560 * var(--u))); min-height: calc(200 * var(--u)); padding: calc(25 * var(--u)) calc(30 * var(--u)); border-radius: calc(30 * var(--u)); background: var(--ink); color: var(--surface); }
+.lensText { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(17.5 * var(--u)); line-height: calc(27.5 * var(--u)); white-space: pre; overflow: hidden; }
+.panel { display: flex; flex-direction: column; gap: calc(12.5 * var(--u)); width: min(100%, calc(560 * var(--u))); padding: calc(20 * var(--u)) calc(25 * var(--u)); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-card); }
+.answers { display: flex; flex-wrap: wrap; gap: calc(8.75 * var(--u)); }
+.wave { display: flex; align-items: center; gap: calc(5 * var(--u)); width: min(100%, calc(560 * var(--u))); height: calc(100 * var(--u)); }
+.waveBar { flex: 1; min-width: 0; border-radius: calc(3.75 * var(--u)); background: var(--track); }
+.waveOn .waveBar { background: var(--ink); animation: speak 0.9s ease-in-out infinite alternate; }
+.waveOn .waveBar:nth-child(2n) { animation-delay: 0.2s; }
+.waveOn .waveBar:nth-child(3n) { animation-delay: 0.45s; }
+@keyframes speak { from { transform: scaleY(0.55); } to { transform: scaleY(1); } }
+.transcript { width: min(100%, calc(560 * var(--u))); text-align: center; }
+.pulses { display: flex; align-items: center; gap: calc(10 * var(--u)); width: min(100%, calc(560 * var(--u))); height: calc(100 * var(--u)); padding: 0 calc(20 * var(--u)); border-radius: var(--radius-box); background: var(--surface); box-shadow: var(--ring); }
+.pulse { height: calc(35 * var(--u)); border-radius: calc(5 * var(--u)); background: var(--ink); }
+.pulseGap { flex: none; }
+.change { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: calc(17.5 * var(--u)); width: min(100%, calc(560 * var(--u))); }
+.changeTile { display: flex; flex-direction: column; gap: calc(5 * var(--u)); padding: calc(20 * var(--u)); border-radius: var(--radius-box); background: var(--surface); box-shadow: var(--ring); min-width: 0; }
+.changeOn { box-shadow: inset 0 0 0 calc(1.25 * var(--u)) var(--ink); }
+.readWell { width: min(100%, calc(560 * var(--u))); padding: calc(20 * var(--u)) calc(25 * var(--u)); border-radius: var(--radius-box); background: var(--surface); box-shadow: var(--ring); }
+.photo { display: flex; align-items: center; justify-content: center; width: min(100%, calc(460 * var(--u))); aspect-ratio: 16 / 10; border-radius: var(--radius-box); background: var(--track); color: var(--muted); }
+.split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: start; gap: calc(20 * var(--u)); }
+@media (max-width: 1100px) { .split { grid-template-columns: minmax(0, 1fr); } }

@@ -7,6 +7,7 @@ import { InputsGroup } from "./g-inputs";
 import { MenusGroup } from "./g-menus";
 import { NavigationGroup } from "./g-navigation";
 import { OverlaysGroup } from "./g-overlays";
+import { OutputsGroup } from "./g-outputs";
 import { PagePartsGroup } from "./g-page-parts";
 import { SelectionGroup } from "./g-selection";
 import b from "../_design/base.module.css";
@@ -29,6 +30,7 @@ export function Gallery() {
       <ComposedGroup />
       <CredentialsGroup />
       <PagePartsGroup />
+      <OutputsGroup />
     </div>
   );
 }

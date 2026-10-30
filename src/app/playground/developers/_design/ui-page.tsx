@@ -386,6 +386,14 @@ export function TextField({ label, placeholder, value, autoFocus, onChange, onEn
   );
 }
 
+export function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (next: string) => void }) {
+  return (
+    <label className={f.textarea}>
+      <textarea className={f.areaInput} aria-label={label} rows={4} value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}
+
 /** A value to copy, with its button. */
 export function SecretWell({ value, action }: { value: string; action: ReactNode }) {
   return (
