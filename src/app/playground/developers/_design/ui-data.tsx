@@ -65,3 +65,39 @@ export function Limit({ label, used, limit, format = String }: { label: string; 
     </div>
   );
 }
+
+export interface Step {
+  key: string;
+  label: string;
+  detail?: string;
+  /** Right-aligned, such as a duration. */
+  at?: string;
+  state: "done" | "failed" | "pending";
+}
+
+/** Steps in order, on the gallery's timeline recipe. */
+export function Timeline({ steps }: { steps: Step[] }) {
+  return (
+    <ol className={d.timeline}>
+      {steps.map((s, i) => (
+        <li key={s.key} className={d.tItem}>
+          <span className={d.tRail}>
+            <span className={cx(d.tDot, s.state === "done" && d.tDotOn, s.state === "failed" && c.dotFail, s.state === "pending" && c.dotFaint)} />
+            {i < steps.length - 1 && <span className={d.tLine} />}
+          </span>
+          <span className={c.stepBody}>
+            <span className={c.limitHead}>
+              <Text kind={s.state === "pending" ? "faint" : "strong"}>{s.label}</Text>
+              {s.at && (
+                <Text kind="smallMuted" num nowrap>
+                  {s.at}
+                </Text>
+              )}
+            </span>
+            {s.detail && <Text kind="smallMuted">{s.detail}</Text>}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}

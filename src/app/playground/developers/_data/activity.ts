@@ -393,7 +393,7 @@ export function timelineOf(call: Call): TimelineStep[] {
       key: "candidates",
       label: "Candidates",
       state: "done",
-      detail: `${call.candidates.length} of ${user?.devices.length ?? call.candidates.length} devices on this user considered`,
+      detail: `${call.candidates.length} of ${user?.devices.length ?? call.candidates.length} on this user considered`,
     },
     {
       key: "filters",

@@ -37,3 +37,9 @@
 .fieldGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(15 * var(--u)); }
 .tierRow { display: grid; grid-template-columns: calc(120 * var(--u)) minmax(0, 1fr); align-items: start; gap: calc(12.5 * var(--u)); }
 .previewStage { display: flex; justify-content: center; }
+.fillFlush { padding: 0; gap: 0; }
+.scrollArea { flex: 1; min-height: 0; margin: 0 calc(1.25 * var(--u)) calc(1.25 * var(--u)); overflow: auto; border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.scrollArea th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+.dotFail { background: var(--warn); box-shadow: none; }
+.dotFaint { opacity: 0.45; }
+.stepBody { display: flex; flex: 1; flex-direction: column; gap: calc(1 * var(--u)); min-width: 0; }

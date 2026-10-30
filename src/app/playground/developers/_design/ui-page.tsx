@@ -206,8 +206,8 @@ export function TableFoot({ children }: { children: ReactNode }) {
 }
 
 /** Over a table in the same card: its title or filters. */
-export function TableHead({ children }: { children: ReactNode }) {
-  return <div className={cx(b.between, b.padRow)}>{children}</div>;
+export function TableHead({ stacked, children }: { /** Rows, one under another: search, then filters. */ stacked?: boolean; children: ReactNode }) {
+  return <div className={cx(stacked ? b.stack : b.between, b.padRow)}>{children}</div>;
 }
 
 /* Menus and pages */
