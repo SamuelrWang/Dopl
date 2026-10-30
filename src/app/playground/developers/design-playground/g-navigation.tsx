@@ -1,9 +1,9 @@
 import { Archive, Bell, BookOpen, Check, ChevronLeft, ChevronRight, Home, Layers, MoreHorizontal, Search, Settings, Users } from "lucide-react";
-import b from "./sys-base.module.css";
-import f from "./sys-forms.module.css";
-import o from "./sys-surfaces.module.css";
-import { Tabs } from "./sys-interactive";
-import { Card, Face, Section, cx, ICON } from "./sys";
+import b from "../_design/base.module.css";
+import f from "../_design/forms.module.css";
+import o from "../_design/surfaces.module.css";
+import { Tabs } from "../_design/interactive";
+import { Card, Face, Section, cx, ICON } from "../_design/components";
 
 const NAV = [
   { icon: Home, label: "Home" },

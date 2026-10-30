@@ -272,7 +272,7 @@ export function seedCapabilities(model: Model): Partial<Record<CapabilityId, Cap
 }
 
 /** A capability as a function chip: what it lets an agent do. Reads carry no chip. */
-const CAPABILITY_LABEL: Partial<Record<CapabilityId, string>> = {
+export const CAPABILITY_LABEL: Partial<Record<CapabilityId, string>> = {
   "present.notify": "Notify",
   "present.display": "Display",
   "present.speak": "Speak",

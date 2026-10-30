@@ -1,9 +1,9 @@
 import { ArrowDown, ArrowUp, ChevronsUpDown, Copy, FileText, Folder, MoreHorizontal, Music, TrendingDown, TrendingUp } from "lucide-react";
-import b from "./sys-base.module.css";
-import d from "./sys-data.module.css";
-import f from "./sys-forms.module.css";
-import { Accordion, Check } from "./sys-interactive";
-import { Card, Face, Initials, Section, cx, ICON, ICON_SM } from "./sys";
+import b from "../_design/base.module.css";
+import d from "../_design/data.module.css";
+import f from "../_design/forms.module.css";
+import { Accordion, Check } from "../_design/interactive";
+import { Card, Face, Initials, Section, cx, ICON, ICON_SM } from "../_design/components";
 
 const ROWS: { name: string; kind: string; who: "ada" | "terus" | "agus"; owner: string; status: [string, string]; size: string; on?: boolean }[] = [
   { name: "Gamelan Sekaten", kind: "14 recordings", who: "ada", owner: "Ada Komeng", status: ["Published", b.badgeOk], size: "1.2 GB", on: true },

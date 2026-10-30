@@ -1,10 +1,10 @@
 import { AlertCircle, Battery, Bell, Check, ChevronRight, Download, FileText, Globe, Glasses, Lock, MessageCircle, MoreHorizontal, Plus, Trash2, Upload, Wifi } from "lucide-react";
-import b from "./sys-base.module.css";
-import d from "./sys-data.module.css";
-import f from "./sys-forms.module.css";
-import o from "./sys-surfaces.module.css";
-import { Switch } from "./sys-interactive";
-import { Card, Face, Initials, Section, cx, ICON, ICON_SM } from "./sys";
+import b from "../_design/base.module.css";
+import d from "../_design/data.module.css";
+import f from "../_design/forms.module.css";
+import o from "../_design/surfaces.module.css";
+import { Switch } from "../_design/interactive";
+import { Card, Face, Initials, Section, cx, ICON, ICON_SM } from "../_design/components";
 
 const FEATURES = ["Unlimited collections", "20 GB of audio storage", "Version history", "Priority review"];
 const FUNCTIONS = ["Camera", "Microphone", "Display", "Translate", "Navigate"];

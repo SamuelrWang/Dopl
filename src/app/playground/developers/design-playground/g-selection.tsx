@@ -1,8 +1,8 @@
 import { Minus, Monitor, Moon, Plus, Sun } from "lucide-react";
-import b from "./sys-base.module.css";
-import f from "./sys-forms.module.css";
-import { Check, Radios, Segmented, Switch } from "./sys-interactive";
-import { Card, Section, cx, ICON } from "./sys";
+import b from "../_design/base.module.css";
+import f from "../_design/forms.module.css";
+import { Check, Radios, Segmented, Switch } from "../_design/interactive";
+import { Card, Section, cx, ICON } from "../_design/components";
 
 const THEMES = [
   { label: "Light", icon: Sun },

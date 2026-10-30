@@ -1,0 +1,82 @@
+/* Menus, feedback, overlays, navigation */
+.menu { display: flex; flex-direction: column; gap: calc(1.25 * var(--u)); padding: calc(7.5 * var(--u)); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-menu); width: fit-content; min-width: calc(225 * var(--u)); }
+.menuWide { width: 100%; }
+.item { display: flex; align-items: center; gap: calc(11.25 * var(--u)); height: calc(43.75 * var(--u)); padding: 0 calc(11.25 * var(--u)); border-radius: var(--radius-small); font-size: calc(17.5 * var(--u)); letter-spacing: -0.0175em; color: var(--ink); white-space: nowrap; }
+.itemOn { background: var(--fill-strong); font-weight: 500; }
+.itemDanger { color: var(--error); }
+.itemOff { color: #a6a6a6; }
+.itemEnd { margin-left: auto; padding-left: calc(25 * var(--u)); font-size: calc(14.5 * var(--u)); color: var(--faint); letter-spacing: -0.015em; }
+.mark { background: var(--pale); border-radius: calc(2.5 * var(--u)); color: var(--ink); }
+.menuLine { height: calc(1.25 * var(--u)); margin: calc(5 * var(--u)) calc(-7.5 * var(--u)); background: var(--line-tool); }
+.menuHead { padding: calc(7.5 * var(--u)) calc(11.25 * var(--u)) calc(3.75 * var(--u)); font-size: calc(14.5 * var(--u)); line-height: calc(20 * var(--u)); letter-spacing: -0.015em; color: var(--faint); }
+
+.calendar { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: calc(2.5 * var(--u)); }
+.dayName { display: flex; align-items: center; justify-content: center; height: calc(36 * var(--u)); font-size: calc(14.5 * var(--u)); letter-spacing: -0.015em; color: var(--faint); }
+.day { display: flex; align-items: center; justify-content: center; height: calc(45 * var(--u)); font-size: calc(17.5 * var(--u)); letter-spacing: -0.0175em; font-variant-numeric: tabular-nums; color: var(--ink); }
+.dayOut { color: #b5b5b5; }
+.dayRange { background: var(--fill-strong); }
+.dayEnd { border-radius: var(--radius-small); background: var(--ink); color: var(--surface); font-weight: 500; }
+.timeCols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: calc(5 * var(--u)); }
+.timeCell { display: flex; align-items: center; justify-content: center; height: calc(43.75 * var(--u)); border-radius: var(--radius-small); font-size: calc(17.5 * var(--u)); letter-spacing: -0.0175em; font-variant-numeric: tabular-nums; color: var(--muted); }
+.timeOn { background: var(--ink); color: var(--surface); font-weight: 500; }
+
+.toast { display: flex; align-items: flex-start; gap: calc(12.5 * var(--u)); padding: calc(15 * var(--u)) calc(15 * var(--u)) calc(15 * var(--u)) calc(17.5 * var(--u)); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-menu); }
+.toastBlack { background: var(--ink); color: var(--surface); box-shadow: var(--shadow-black); }
+.alert { display: flex; align-items: flex-start; gap: calc(12.5 * var(--u)); padding: calc(15 * var(--u)) calc(17.5 * var(--u)); border-radius: var(--radius-box); font-size: calc(17.5 * var(--u)); line-height: calc(25 * var(--u)); letter-spacing: -0.0175em; }
+.alertInfo { background: var(--fill-strong); color: var(--body); }
+.alertOk { background: var(--ok-fill); color: var(--ok); }
+.alertWarn { background: var(--warn-fill); color: var(--warn); }
+.alertError { background: var(--error-fill); color: var(--error); }
+.banner { display: flex; align-items: center; gap: calc(15 * var(--u)); min-height: calc(62.5 * var(--u)); padding: 0 calc(12.5 * var(--u)) 0 calc(21 * var(--u)); border-radius: var(--radius-panel); background: var(--ink); color: var(--surface); font-size: calc(17.5 * var(--u)); letter-spacing: -0.0175em; }
+.bannerBtn { display: flex; align-items: center; height: calc(40 * var(--u)); padding: 0 calc(16 * var(--u)); border-radius: var(--radius-small); background: var(--surface); color: var(--ink); font-size: calc(15.5 * var(--u)); font-weight: 500; letter-spacing: -0.015em; white-space: nowrap; }
+.tooltip { position: relative; width: fit-content; padding: calc(8.75 * var(--u)) calc(12.5 * var(--u)); border-radius: var(--radius-small); background: var(--ink); color: var(--surface); font-size: calc(15.5 * var(--u)); line-height: calc(20 * var(--u)); letter-spacing: -0.015em; white-space: nowrap; }
+.tooltip::after { content: ""; position: absolute; left: 50%; bottom: calc(-5 * var(--u)); width: calc(12.5 * var(--u)); height: calc(12.5 * var(--u)); margin-left: calc(-6.25 * var(--u)); border-radius: calc(2.5 * var(--u)); background: var(--ink); transform: rotate(45deg); }
+.bar { position: relative; height: calc(8.75 * var(--u)); border-radius: calc(8.75 * var(--u)); background: var(--track); }
+.barFill { position: absolute; left: 0; top: 0; height: 100%; border-radius: calc(8.75 * var(--u)); background: var(--ink); }
+.skeleton { background: var(--pale); border-radius: calc(7.5 * var(--u)); }
+.skeletonRound { border-radius: 50%; flex: none; }
+.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(15 * var(--u)); flex: 1; padding: calc(22 * var(--u)) 0; text-align: center; }
+
+.stage { position: relative; display: flex; flex: 1; min-height: 100%; border-radius: var(--radius-panel); background: #e4e4e4; overflow: hidden; }
+.stageCenter { align-items: center; justify-content: center; padding: calc(30 * var(--u)); }
+.stageRight { justify-content: flex-end; }
+.ghostLines { position: absolute; inset: calc(25 * var(--u)); display: flex; flex-direction: column; gap: calc(15 * var(--u)); }
+.ghostLine { height: calc(18 * var(--u)); border-radius: calc(7.5 * var(--u)); background: #d9d9d9; }
+.dialog { position: relative; display: flex; flex-direction: column; gap: calc(20 * var(--u)); width: 100%; padding: var(--inset); border-radius: var(--radius-card); background: var(--surface); box-shadow: 0 calc(3.75 * var(--u)) 0 #c9c9c9, 0 calc(25 * var(--u)) calc(45 * var(--u)) rgba(0, 0, 0, 0.16); }
+.closeCorner { position: absolute; right: calc(20 * var(--u)); top: calc(20 * var(--u)); color: #808080; }
+.sheet { position: relative; display: flex; flex-direction: column; gap: calc(17.5 * var(--u)); width: 76%; padding: var(--inset); background: var(--surface); box-shadow: calc(-17.5 * var(--u)) 0 calc(35 * var(--u)) rgba(0, 0, 0, 0.12); }
+.popover { position: relative; display: flex; flex-direction: column; gap: calc(12.5 * var(--u)); width: fit-content; max-width: 100%; padding: calc(17.5 * var(--u)); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-menu); }
+.popoverTail { position: absolute; left: calc(44 * var(--u)); top: calc(-6.25 * var(--u)); width: calc(12.5 * var(--u)); height: calc(12.5 * var(--u)); border-radius: calc(2.5 * var(--u)) 0 0 0; background: var(--surface); box-shadow: inset calc(1.25 * var(--u)) calc(1.25 * var(--u)) 0 var(--line-card); transform: rotate(45deg); }
+
+.navItem { display: flex; align-items: center; gap: calc(12.5 * var(--u)); height: calc(46.25 * var(--u)); padding: 0 calc(12.5 * var(--u)); border-radius: var(--radius-small); font-size: calc(17.5 * var(--u)); letter-spacing: -0.0175em; color: var(--body); }
+.navOn { background: var(--ink); color: var(--surface); font-weight: 500; }
+.navCount { margin-left: auto; font-size: calc(14.5 * var(--u)); font-variant-numeric: tabular-nums; color: var(--faint); }
+.navOn .navCount { color: #b8b8b8; }
+.tabs { display: flex; gap: calc(27.5 * var(--u)); box-shadow: inset 0 calc(-1.25 * var(--u)) 0 var(--line); }
+.tab { height: calc(50 * var(--u)); padding: 0; border: 0; background: none; font-size: calc(17.5 * var(--u)); letter-spacing: -0.0175em; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.tabOn { font-weight: 500; color: var(--ink); box-shadow: inset 0 calc(-2.5 * var(--u)) 0 var(--ink); }
+.crumb { display: flex; align-items: center; gap: calc(8.75 * var(--u)); font-size: calc(17.5 * var(--u)); letter-spacing: -0.0175em; color: var(--muted); white-space: nowrap; }
+.crumbNow { color: var(--ink); font-weight: 500; }
+.pager { display: flex; align-items: center; gap: calc(5 * var(--u)); }
+.page { display: flex; align-items: center; justify-content: center; min-width: calc(43.75 * var(--u)); height: calc(43.75 * var(--u)); border-radius: var(--radius-small); font-size: calc(17.5 * var(--u)); letter-spacing: -0.0175em; font-variant-numeric: tabular-nums; color: var(--muted); }
+.pageOn { background: var(--ink); color: var(--surface); font-weight: 500; }
+.pageRing { box-shadow: var(--ring); color: var(--ink-soft); }
+.steps { display: flex; align-items: center; gap: calc(12.5 * var(--u)); }
+.stepDot { display: flex; align-items: center; justify-content: center; width: calc(33.75 * var(--u)); height: calc(33.75 * var(--u)); border-radius: 50%; font-size: calc(15.5 * var(--u)); font-weight: 500; flex: none; box-shadow: var(--ring); color: var(--muted); }
+.stepDone { background: var(--ink); color: var(--surface); box-shadow: none; }
+.stepNow { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 calc(1.25 * var(--u)) var(--ink), 0 0 0 calc(3.75 * var(--u)) var(--pale); }
+.stepLine { flex: 1; height: calc(1.25 * var(--u)); background: var(--line); min-width: calc(22 * var(--u)); }
+.stepLineDone { background: var(--ink); }
+
+.accordionItem { box-shadow: inset 0 calc(-1.25 * var(--u)) 0 var(--line-tool); }
+.accordionItem:last-child { box-shadow: none; }
+.accordionHead { display: flex; align-items: center; justify-content: space-between; width: 100%; height: calc(56.25 * var(--u)); padding: 0; border: 0; background: none; font-size: calc(17.5 * var(--u)); font-weight: 500; letter-spacing: -0.0175em; color: var(--ink); cursor: pointer; text-align: left; }
+.accordionBody { padding: 0 calc(25 * var(--u)) calc(16 * var(--u)) 0; font-size: calc(17.5 * var(--u)); line-height: calc(25 * var(--u)); letter-spacing: -0.0175em; color: var(--muted); }
+.flip { transform: rotate(180deg); }
+.popAnchor { position: relative; display: inline-flex; flex: none; }
+.popMenu { position: absolute; left: 0; top: calc(100% + calc(7.5 * var(--u))); z-index: 30; max-height: calc(375 * var(--u)); overflow-y: auto; }
+.popRight { left: auto; right: 0; }
+.itemBtn { width: 100%; border: 0; background: none; cursor: pointer; text-align: left; flex: none; }
+.itemBtn:hover { background: var(--fill-strong); }
+.pageBtn { border: 0; background: none; cursor: pointer; }
+.pageOff { color: #b5b5b5; cursor: default; }

@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import ada from "./avatar-ada.png";
 import agus from "./avatar-agus.png";
 import terus from "./avatar-terus.png";
-import b from "./sys-base.module.css";
+import b from "./base.module.css";
 
 export function cx(...names: (string | false | undefined)[]) {
   return names.filter(Boolean).join(" ");
@@ -39,3 +39,6 @@ export function Initials({ text, small, ink }: { text: string; small?: boolean; 
 
 export const ICON = { size: 20, strokeWidth: 1.6 } as const;
 export const ICON_SM = { size: 17.5, strokeWidth: 1.6 } as const;
+/** The same icons at true size, for real pages on .u100. */
+export const ICON_100 = { size: 16, strokeWidth: 1.5 } as const;
+export const ICON_100_SM = { size: 14, strokeWidth: 1.5 } as const;

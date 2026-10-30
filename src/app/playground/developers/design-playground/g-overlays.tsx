@@ -1,9 +1,9 @@
 import { AlertTriangle, ChevronDown, Link2, X } from "lucide-react";
-import b from "./sys-base.module.css";
-import f from "./sys-forms.module.css";
-import o from "./sys-surfaces.module.css";
-import { Switch } from "./sys-interactive";
-import { Card, Face, Initials, Section, cx, ICON } from "./sys";
+import b from "../_design/base.module.css";
+import f from "../_design/forms.module.css";
+import o from "../_design/surfaces.module.css";
+import { Switch } from "../_design/interactive";
+import { Card, Face, Initials, Section, cx, ICON } from "../_design/components";
 
 function Ghost({ rows = 7 }: { rows?: number }) {
   return (

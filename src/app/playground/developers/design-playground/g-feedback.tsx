@@ -1,7 +1,7 @@
 import { AlertCircle, AlertTriangle, CheckCircle2, CloudOff, Info, Loader2, Undo2, X } from "lucide-react";
-import b from "./sys-base.module.css";
-import o from "./sys-surfaces.module.css";
-import { Card, Section, cx, ICON } from "./sys";
+import b from "../_design/base.module.css";
+import o from "../_design/surfaces.module.css";
+import { Card, Section, cx, ICON } from "../_design/components";
 
 function Ring({ value }: { value: number }) {
   const r = 34;

@@ -1,8 +1,8 @@
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Download, FolderInput, Link2, LogOut, Pencil, Search, Settings, Trash2, User } from "lucide-react";
-import b from "./sys-base.module.css";
-import f from "./sys-forms.module.css";
-import o from "./sys-surfaces.module.css";
-import { Card, Face, Initials, Section, cx, ICON } from "./sys";
+import b from "../_design/base.module.css";
+import f from "../_design/forms.module.css";
+import o from "../_design/surfaces.module.css";
+import { Card, Face, Initials, Section, cx, ICON } from "../_design/components";
 
 const DAY_NAMES = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const LEAD = [30];

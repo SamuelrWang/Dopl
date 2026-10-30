@@ -1,7 +1,7 @@
 /*
  * The one page that does not use the design kit (Samuel's ask): a literal clone of a reference image.
  * Every value is that image's own pixel coordinate or a colour sampled from it. Nothing here is a Dopl
- * token and nothing leaks: all of it hangs off .canvas, and the font comes from page.tsx alone.
+ * token and nothing leaks: all of it hangs off .canvas, and the font is applied by page.tsx.
  * Rings are box-shadows because Chrome floors a 1.25px border to whole device pixels.
  */
 .fit { width: 100%; overflow: hidden; }
@@ -14,47 +14,6 @@
   overflow: hidden;
   background: #f6f6f6;
   color: #000000;
-
-  /* The clone's recipes, named. The gallery below it is built only from these. */
-  --ink: #000000;
-  --ink-soft: #111111;
-  --body: #333333;
-  --muted: #5c5c5c;
-  --muted-soft: #6a6a6a;
-  --faint: #787878;
-  --icon-soft: #6e6e6e;
-  --surface: #ffffff;
-  --page: #f6f6f6;
-  --fill: #fafafa;
-  --fill-strong: #f7f7f7;
-  --pale: #ececec;
-  --track: #d9d9d9;
-  --line: #d6d6d6;
-  --line-card: #d8d8d8;
-  --line-tool: #e0e0e0;
-  --ring: inset 0 0 0 1.25px var(--line);
-  --ring-focus: inset 0 0 0 1.25px #858585, 0 0 0 5px var(--pale);
-  --shadow-card: inset 0 0 0 1.25px var(--line-card), 0 3.75px 0 #dcdcdc, 0 7.5px 0.5px #e1e1e1;
-  --shadow-black: 0 0 0 1.25px var(--pale), 0 0 0 2.5px #b8b8b8, 0 2.5px 5px 2.5px rgba(0, 0, 0, 0.08);
-  --shadow-menu: inset 0 0 0 1.25px var(--line-card), 0 3.75px 0 #dcdcdc, 0 17.5px 30px rgba(0, 0, 0, 0.09);
-  --radius-card: 22.5px;
-  --radius-panel: 15px;
-  --radius-field: 16.25px;
-  --radius-box: 11.25px;
-  --radius-small: 10px;
-  --height-sm: 43.75px;
-  --height-md: 53.75px;
-  --height-lg: 62.5px;
-  --height-field: 60px;
-  --height-floating: 70.75px;
-  --inset: 23.5px;
-  /* Status, only where meaning demands it */
-  --ok: #2f6b4f;
-  --ok-fill: #eff4f1;
-  --warn: #84672a;
-  --warn-fill: #f7f4ea;
-  --error: #a23b3b;
-  --error-fill: #f8efef;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: geometricPrecision;

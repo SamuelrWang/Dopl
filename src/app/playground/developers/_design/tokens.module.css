@@ -1,0 +1,48 @@
+/*
+ * The Design Playground's recipes, as one source. Put .scope and one unit class on a page's root.
+ * --u is the unit every length in _design multiplies: the reference was drawn at 1.25x, so .u125
+ * renders its literal values (the Playground's canvas) and .u100 renders true size (real pages).
+ */
+.u125 { --u: 1px; }
+.u100 { --u: 0.8px; }
+.scope {
+  --ink: #000000;
+  --ink-soft: #111111;
+  --body: #333333;
+  --muted: #5c5c5c;
+  --muted-soft: #6a6a6a;
+  --faint: #787878;
+  --icon-soft: #6e6e6e;
+  --surface: #ffffff;
+  --page: #f6f6f6;
+  --fill: #fafafa;
+  --fill-strong: #f7f7f7;
+  --pale: #ececec;
+  --track: #d9d9d9;
+  --line: #d6d6d6;
+  --line-card: #d8d8d8;
+  --line-tool: #e0e0e0;
+  --ring: inset 0 0 0 calc(1.25 * var(--u)) var(--line);
+  --ring-focus: inset 0 0 0 calc(1.25 * var(--u)) #858585, 0 0 0 calc(5 * var(--u)) var(--pale);
+  --shadow-card: inset 0 0 0 calc(1.25 * var(--u)) var(--line-card), 0 calc(3.75 * var(--u)) 0 #dcdcdc, 0 calc(7.5 * var(--u)) calc(0.5 * var(--u)) #e1e1e1;
+  --shadow-black: 0 0 0 calc(1.25 * var(--u)) var(--pale), 0 0 0 calc(2.5 * var(--u)) #b8b8b8, 0 calc(2.5 * var(--u)) calc(5 * var(--u)) calc(2.5 * var(--u)) rgba(0, 0, 0, 0.08);
+  --shadow-menu: inset 0 0 0 calc(1.25 * var(--u)) var(--line-card), 0 calc(3.75 * var(--u)) 0 #dcdcdc, 0 calc(17.5 * var(--u)) calc(30 * var(--u)) rgba(0, 0, 0, 0.09);
+  --radius-card: calc(22.5 * var(--u));
+  --radius-panel: calc(15 * var(--u));
+  --radius-field: calc(16.25 * var(--u));
+  --radius-box: calc(11.25 * var(--u));
+  --radius-small: calc(10 * var(--u));
+  --height-sm: calc(43.75 * var(--u));
+  --height-md: calc(53.75 * var(--u));
+  --height-lg: calc(62.5 * var(--u));
+  --height-field: calc(60 * var(--u));
+  --height-floating: calc(70.75 * var(--u));
+  --inset: calc(23.5 * var(--u));
+  /* Status, only where meaning demands it */
+  --ok: #2f6b4f;
+  --ok-fill: #eff4f1;
+  --warn: #84672a;
+  --warn-fill: #f7f4ea;
+  --error: #a23b3b;
+  --error-fill: #f8efef;
+}

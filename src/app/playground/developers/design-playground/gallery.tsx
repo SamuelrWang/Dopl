@@ -7,7 +7,7 @@ import { MenusGroup } from "./g-menus";
 import { NavigationGroup } from "./g-navigation";
 import { OverlaysGroup } from "./g-overlays";
 import { SelectionGroup } from "./g-selection";
-import b from "./sys-base.module.css";
+import b from "../_design/base.module.css";
 
 /** Everything below the clone, built from the recipes named on .canvas. */
 export function Gallery() {

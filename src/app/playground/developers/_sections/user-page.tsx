@@ -12,11 +12,10 @@ import { StatusPill } from "@/shared/ui/status-pill";
 import { toast } from "@/shared/ui/toast";
 import { ThinMeter } from "@/shared/ui/usage-meter";
 import { CallList, CallPanel, CallRow } from "../_components/calls";
+import { testDelivery } from "../_components/test-delivery";
 import { useCalls, usePortal, useUser } from "../_components/portal-store";
 import { BASE, Card, Cell, FactChip, Id, ModelTrail, PortalPage, StatePill, Strip, TierChip, TypeMark, UserFace, fmt, ov, since } from "../_components/ui";
 import { categoryOf, modelById, trail, type ModelId } from "../_data/catalog";
-import { minsAgo } from "../_data/company";
-import type { Call } from "../_data/activity";
 import { LANGUAGE_LABEL, PLAN_LABEL, REGION_LABEL, TONE_LABEL, userDeliveries, userRate, type OwnedDevice, type PortalUser, type UserPrefs } from "../_data/users";
 
 const TABS = [
@@ -179,31 +178,7 @@ function SendTest({ user, open, onClose }: { user: PortalUser; open: boolean; on
   const [device, setDevice] = useState(user.activeDeviceId ?? "auto");
   const send = () => {
     const target = user.devices.find((d) => d.id === device) ?? user.devices[0];
-    const id = `del_${(Date.now() % 0xffffff).toString(16)}`;
-    const call: Call = {
-      id,
-      kind: "delivery",
-      env: user.env,
-      at: minsAgo(0),
-      userId: user.id,
-      deviceId: target?.id ?? null,
-      modelId: target?.modelId ?? null,
-      capability: "present.notify",
-      intent: "notify",
-      status: "seen",
-      errorCode: null,
-      title: "Test message from the developer portal.",
-      requestId: `req_${id.slice(4)}`,
-      rulesVersion: null,
-      segment: null,
-      latencyMs: 212,
-      candidates: target ? [{ deviceId: target.id, verdict: "chosen", reason: device === "auto" ? "Active device, seen within the online window" : "Targeted by id" }] : [],
-      marks: { queued: 40, sent: 212, seen: 860, answered: null },
-      answer: null,
-      truncated: null,
-      http: null,
-      webhook: null,
-    };
+    const call = testDelivery(user, target, device === "auto" ? "Active device, seen within the online window" : "Targeted by id");
     update((s) => ({ ...s, sentCalls: [call, ...s.sentCalls] }));
     toast({ title: `Sent to ${target?.name ?? "the user"}` });
     onClose();

@@ -1,7 +1,7 @@
 import { AlertCircle, CheckCircle2, ChevronDown, Eye, Mail, Paperclip, Search, X } from "lucide-react";
-import b from "./sys-base.module.css";
-import f from "./sys-forms.module.css";
-import { Card, Section, cx, ICON, ICON_SM } from "./sys";
+import b from "../_design/base.module.css";
+import f from "../_design/forms.module.css";
+import { Card, Section, cx, ICON, ICON_SM } from "../_design/components";
 
 const TAGS = ["Batik", "Gamelan", "Wayang", "Oral history"];
 

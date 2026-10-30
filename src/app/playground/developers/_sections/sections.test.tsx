@@ -67,6 +67,20 @@ describe("every page renders on the fixtures", () => {
   });
 });
 
+describe("Users", () => {
+  it("narrows by quick view and opens a user in a sheet with metadata only", () => {
+    wrap(<UsersSection />);
+    expect(screen.queryByText("of 25")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Needs attention" }));
+    expect(screen.getByText("of 25")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: /.+/ }).find((n) => n.getAttribute("aria-haspopup") === "dialog")!);
+    const sheet = screen.getByRole("dialog");
+    expect(within(sheet).getByText("Latest deliveries")).toBeTruthy();
+    expect(within(sheet).getByRole("link", { name: "Open full page" })).toBeTruthy();
+    expect(within(sheet).queryByText(/Test message/)).toBeNull();
+  });
+});
+
 describe("Devices", () => {
   it("groups by category with an add card in each section", () => {
     wrap(<DevicesSection />);

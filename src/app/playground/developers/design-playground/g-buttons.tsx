@@ -1,6 +1,6 @@
 import { ChevronDown, Copy, Download, FileText, Heart, Loader2, MoreHorizontal, Pencil, Plus, Share2, Trash2, Upload } from "lucide-react";
-import b from "./sys-base.module.css";
-import { Card, Section, cx, ICON } from "./sys";
+import b from "../_design/base.module.css";
+import { Card, Section, cx, ICON } from "../_design/components";
 
 const Spin = () => <Loader2 {...ICON} className={b.spinner} />;
 

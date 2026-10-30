@@ -1,7 +1,7 @@
 import Image from "next/image";
-import ada from "./avatar-ada.png";
-import agus from "./avatar-agus.png";
-import terus from "./avatar-terus.png";
+import ada from "../_design/avatar-ada.png";
+import agus from "../_design/avatar-agus.png";
+import terus from "../_design/avatar-terus.png";
 import styles from "./design-playground.module.css";
 import { Chevron, CommandKey, PdfGlyph, SearchGlass } from "./icons";
 import { T } from "./text-run";
