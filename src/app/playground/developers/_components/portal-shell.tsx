@@ -16,6 +16,7 @@ import {
   KeyRound,
   LayoutGrid,
   Link2,
+  Palette,
   Users,
   UsersRound,
   Webhook,
@@ -70,6 +71,7 @@ const GROUPS: { label: string | null; items: NavItem[] }[] = [
       { href: "/webhooks", label: "Webhooks", icon: Webhook },
       { href: "/usage", label: "Usage", icon: BarChart3 },
       { href: "/team", label: "Team", icon: UsersRound },
+      { href: "/design-playground", label: "Design Playground", icon: Palette },
     ],
   },
 ];

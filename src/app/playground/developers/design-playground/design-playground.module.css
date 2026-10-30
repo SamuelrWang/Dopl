@@ -1,0 +1,187 @@
+/*
+ * The one page that does not use the design kit (Samuel's ask): a literal clone of a reference image.
+ * Every value is that image's own pixel coordinate or a colour sampled from it. Nothing here is a Dopl
+ * token and nothing leaks: all of it hangs off .canvas, and the font comes from page.tsx alone.
+ * Rings are box-shadows because Chrome floors a 1.25px border to whole device pixels.
+ */
+.fit { width: 100%; overflow: hidden; }
+.fitInner { transform-origin: 0 0; }
+
+.canvas {
+  position: relative;
+  width: 2000px;
+  height: 1500px;
+  overflow: hidden;
+  background: #f6f6f6;
+  color: #000000;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+  font-kerning: normal;
+}
+.canvas * { box-sizing: border-box; }
+
+.gridV { position: absolute; top: 0; width: 1px; height: 1500px; background: #e4e4e4; }
+.gridH { position: absolute; left: 0; width: 2000px; height: 1.25px; background: #e3e3e3; }
+
+.run { position: absolute; left: 0; width: 0; white-space: pre; }
+.word { position: absolute; top: 0; }
+.svg { position: absolute; display: block; overflow: visible; }
+.photo { position: absolute; display: block; max-width: none; }
+
+/* Cards */
+.card {
+  position: absolute;
+  background: #ffffff;
+  border-radius: 22.5px;
+  box-shadow: inset 0 0 0 1.25px #d8d8d8, 0 3.75px 0 #dcdcdc, 0 7.5px 0.5px #e1e1e1;
+}
+.cardUpload { left: 138.9px; top: 213.9px; width: 505.2px; height: 660.2px; }
+.cardVerify { left: 138.9px; top: 901.8px; width: 505.2px; height: 383.8px; }
+.cardSearch { left: 673.7px; top: 600.3px; width: 520.1px; height: 685.3px; }
+.cardRich { left: 1222.9px; top: 600.4px; width: 637.7px; height: 234.5px; }
+.cardLogin { left: 1222.9px; top: 864.8px; width: 637.7px; height: 420.8px; }
+
+/* Outlined boxes and buttons */
+.box { position: absolute; background: #ffffff; border-radius: 11.25px; box-shadow: inset 0 0 0 1.25px #d6d6d6; }
+.file1 { left: 162.4px; top: 572.4px; width: 458.2px; height: 108.4px; }
+.file2 { left: 162.4px; top: 692.8px; width: 458.2px; height: 81.8px; }
+.btnCancel { left: 162.4px; top: 798.5px; width: 223.2px; height: 53.6px; }
+.otpBox1 { left: 162.4px; top: 1116.5px; width: 105.7px; height: 58.1px; }
+.otpBox2 { left: 279.9px; top: 1116.5px; width: 105.7px; height: 58.1px; }
+.otpBox3 { left: 397.4px; top: 1116.5px; width: 105.7px; height: 58.1px; }
+.otpBox4 { left: 514.9px; top: 1116.5px; width: 105.7px; height: 58.1px; }
+.btnBack { left: 162.4px; top: 1209.6px; width: 223.2px; height: 54.1px; }
+.btnRichBack { left: 1246.4px; top: 764.4px; width: 100.2px; height: 53.2px; }
+.btnGoogle { left: 1246.4px; top: 1214.8px; width: 590.6px; height: 56.8px; border-radius: 12.5px; }
+.field { left: 1246.8px; top: 999.8px; width: 590.4px; height: 70.7px; border-radius: 16.25px; }
+.fieldDivider { position: absolute; left: 1411.9px; top: 1000.4px; width: 1.25px; height: 69px; background: #d6d6d6; }
+.fieldGap { position: absolute; left: 1261px; top: 998.8px; width: 137.5px; height: 3px; background: #ffffff; }
+
+/* Black buttons: black face, pale gap, grey ring, soft drop */
+.black {
+  position: absolute;
+  background: #000000;
+  border-radius: 11.25px;
+  box-shadow: 0 0 0 1.25px #ececec, 0 0 0 2.5px #b8b8b8, 0 2.5px 5px 2.5px rgba(0, 0, 0, 0.08);
+}
+.btnUpload { left: 398.5px; top: 799.4px; width: 220.8px; height: 51.2px; }
+.btnConfirm { left: 398.5px; top: 1210.8px; width: 220.8px; height: 51.6px; }
+.btnSend { left: 1693.4px; top: 765.5px; width: 142.6px; height: 51px; }
+.btnLogin { left: 1247.6px; top: 1140.6px; width: 588.4px; height: 54.9px; }
+.sendDivider { position: absolute; left: 1782.8px; top: 780px; width: 1.25px; height: 22.5px; background: rgba(255, 255, 255, 0.8); }
+.logo {
+  position: absolute;
+  left: 368.6px;
+  top: 925.9px;
+  width: 45.6px;
+  height: 45.6px;
+  border-radius: 50%;
+  background: #000000;
+  box-shadow: 0 0 0 1.25px #f0f0f0, 0 0 0 2.5px #b8b8b8, 0 5px 7.5px 1px rgba(0, 0, 0, 0.22);
+}
+
+/* Upload progress */
+.track { position: absolute; left: 176.8px; top: 657.4px; width: 428.6px; height: 8.75px; border-radius: 8.75px; background: #d9d9d9; }
+.trackFill { position: absolute; left: 176.8px; top: 657.4px; width: 210.8px; height: 8.75px; border-radius: 8.75px; background: #000000; }
+
+/* AI Tools */
+.aiFrame { position: absolute; left: 673.55px; top: 214.2px; width: 1186.95px; height: 356.5px; border-radius: 25px; background: #111111; box-shadow: 0 5.5px 1px #e0e0e0; }
+.aiHeader { position: absolute; left: 679.55px; top: 220px; width: 1174.8px; height: 80px; border-radius: 18.75px 18.75px 0 0; background: #000000; }
+.aiBody { position: absolute; left: 679.55px; top: 281.5px; width: 1174.8px; height: 283.75px; border-radius: 18.75px; background: #ffffff; }
+.aiQuote { position: absolute; left: 685.5px; top: 286.75px; width: 1163px; height: 122.75px; border-radius: 12.5px; background: #f7f7f7; }
+.aiDivider { position: absolute; left: 679.55px; top: 494.4px; width: 1174.8px; height: 1.25px; background: #d8d8d8; }
+.cursor { position: absolute; left: 897.5px; top: 439.4px; width: 2px; height: 25.2px; background: #0f0f0f; }
+
+/* Search and filter */
+.searchInput { position: absolute; left: 691.3px; top: 617.8px; width: 484.7px; height: 60.3px; border-radius: 16.25px; background: #ffffff; box-shadow: inset 0 0 0 1.25px #858585, 0 0 0 5px #ececec; }
+.panel { left: 691.4px; top: 695.8px; width: 484.7px; height: 572.8px; border-radius: 15px; }
+.pill { position: absolute; top: 762px; height: 37.5px; border-radius: 18.75px; background: #fafafa; }
+.pillBox1 { left: 715.5px; width: 76px; }
+.pillBox2 { left: 800px; width: 115.5px; }
+.pillBox3 { left: 921px; width: 86px; }
+.pillBox4 { left: 1014px; width: 121px; }
+.searchDivider { position: absolute; left: 714.75px; top: 1066.9px; width: 437.15px; height: 1.25px; background: #d6d6d6; }
+
+/* Rich text */
+.richDivider { position: absolute; left: 1223.5px; width: 636.5px; height: 1.25px; background: #dadada; }
+.richDivider1 { top: 676.3px; }
+.richDivider2 { top: 745.2px; }
+.swatch { position: absolute; left: 1246.3px; top: 703px; width: 18.2px; height: 18.3px; border-radius: 3.75px; background: #000000; }
+.toolSep { position: absolute; top: 699.5px; width: 2px; height: 23px; background: #e0e0e0; }
+.toolSep1 { left: 1510px; }
+.toolSep2 { left: 1664px; }
+
+/* Photos cropped from the reference */
+.avatar1 { left: 713px; top: 861px; width: 50px; height: 50px; }
+.avatar2 { left: 713px; top: 929px; width: 50px; height: 50px; }
+.avatar3 { left: 713px; top: 996px; width: 50px; height: 50px; }
+.flag { left: 1266px; top: 1022px; width: 38px; height: 28px; }
+
+/* Text runs: top = measured baseline minus the rounded ascent; word lefts live in text-runs.ts */
+.uploadTitle { top: 238px; font-size: 23.75px; line-height: 29px; font-weight: 600; letter-spacing: -0.005em; color: #000000; }
+.uploadSub { top: 275px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.02em; color: #5c5c5c; }
+.dropTitle { top: 411.5px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0375em; color: #000000; }
+.dropSub { top: 444.5px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0375em; color: #787878; }
+.limitType { top: 521px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.02em; color: #6a6a6a; }
+.limitSize { top: 521px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.02em; color: #6a6a6a; }
+.file1Name { top: 587.5px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
+.file1Size { top: 619px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0125em; color: #666666; }
+.file1State { top: 619px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0125em; color: #111111; }
+.file1Pct { top: 603.25px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0475em; color: #000000; }
+.file2Name { top: 708px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
+.file2Size { top: 739.5px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.005em; color: #666666; }
+.file2State { top: 739.5px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0125em; color: #111111; }
+.cancelLabel { top: 815px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
+.uploadLabel { top: 815px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.01em; color: #ffffff; }
+.verifyTitle { top: 1007px; font-size: 23.75px; line-height: 29px; font-weight: 600; letter-spacing: -0.045em; color: #000000; }
+.verifyLine1 { top: 1048.5px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.03em; color: #3a3a3a; }
+.verifyLine2 { top: 1071px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0425em; color: #333333; }
+.verifyRetry { top: 1071px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0375em; color: #000000; }
+.otp1 { top: 1131px; font-size: 23.75px; line-height: 29px; font-weight: 500; color: #000000; }
+.otp2 { top: 1130.75px; font-size: 23.75px; line-height: 29px; font-weight: 500; color: #000000; }
+.otp3 { top: 1130.75px; font-size: 23.75px; line-height: 29px; font-weight: 500; color: #000000; }
+.otp4 { top: 1131px; font-size: 23.75px; line-height: 29px; font-weight: 500; color: #000000; }
+.verifyBack { top: 1226.5px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.015em; color: #000000; }
+.verifyConfirm { top: 1226.5px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.015em; color: #ffffff; }
+.aiTitle { top: 237.5px; font-size: 20.5px; line-height: 25px; font-weight: 600; letter-spacing: -0.0025em; color: #ffffff; }
+.aiLine1 { top: 312.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0175em; color: #383838; }
+.aiLine2 { top: 337.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0175em; color: #383838; }
+.aiLine3 { top: 362.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0175em; color: #383838; }
+.aiPrompt { top: 439.25px; font-size: 20.5px; line-height: 25px; font-weight: 500; letter-spacing: -0.04em; color: #000000; }
+.aiSend { top: 438.75px; font-size: 20.5px; line-height: 25px; font-weight: 600; letter-spacing: 0.005em; color: #000000; }
+.aiAttach { top: 519.5px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.005em; color: #1e1e1e; }
+.aiImage { top: 519.5px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.015em; color: #1e1e1e; }
+.aiModel { top: 519.5px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0075em; color: #1e1e1e; }
+.searchLabel { top: 637.25px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.02em; color: #000000; }
+.searchKey { top: 636.75px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0275em; color: #000000; }
+.filterBy { top: 721px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.015em; color: #000000; }
+.pillAll { top: 769.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.01em; color: #141414; }
+.pillPeople { top: 769.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0075em; color: #141414; }
+.pillFile { top: 769.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0175em; color: #141414; }
+.pillProduct { top: 769.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0075em; color: #141414; }
+.recent { top: 823.25px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.0175em; color: #333333; }
+.p1Name { top: 865px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
+.p1Role { top: 889.75px; font-size: 14.5px; line-height: 17px; font-weight: 400; letter-spacing: -0.015em; color: #333333; }
+.p2Name { top: 932.5px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.02em; color: #000000; }
+.p2Role { top: 957.5px; font-size: 14.5px; line-height: 17px; font-weight: 400; letter-spacing: -0.0125em; color: #333333; }
+.p3Name { top: 1000.25px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
+.p3Role { top: 1025px; font-size: 14.5px; line-height: 17px; font-weight: 400; letter-spacing: -0.0175em; color: #333333; }
+.fileRecent { top: 1081.75px; font-size: 17.5px; line-height: 21px; font-weight: 400; letter-spacing: -0.02em; color: #333333; }
+.r1Name { top: 1123.5px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0175em; color: #000000; }
+.r1Meta { top: 1148.25px; font-size: 14.5px; line-height: 17px; font-weight: 400; letter-spacing: -0.015em; color: #333333; }
+.r2Name { top: 1191px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0225em; color: #000000; }
+.r2Meta { top: 1216px; font-size: 14.5px; line-height: 17px; font-weight: 400; letter-spacing: -0.015em; color: #333333; }
+.richText { top: 625.75px; font-size: 20px; line-height: 24px; font-weight: 500; letter-spacing: -0.015em; color: #0d0d0d; }
+.richBody { top: 702.25px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.015em; color: #000000; }
+.richBack { top: 780.75px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.015em; color: #000000; }
+.richSend { top: 780.75px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.0075em; color: #ffffff; }
+.loginTitle { top: 888px; font-size: 23.75px; line-height: 29px; font-weight: 600; letter-spacing: -0.0375em; color: #000000; }
+.loginSub { top: 929.75px; font-size: 20px; line-height: 24px; font-weight: 400; letter-spacing: -0.015em; color: #5c5c5c; }
+.phoneA { top: 992.75px; font-size: 17px; line-height: 20px; font-weight: 400; letter-spacing: -0.0375em; color: #595959; }
+.phoneB { top: 992.75px; font-size: 17px; line-height: 20px; font-weight: 400; letter-spacing: -0.04em; color: #595959; }
+.dial { top: 1023.5px; font-size: 20px; line-height: 24px; font-weight: 500; letter-spacing: -0.01em; color: #000000; }
+.phone { top: 1023.5px; font-size: 20px; line-height: 24px; font-weight: 500; letter-spacing: -0.0225em; color: #000000; }
+.loginHelp { top: 1080.25px; font-size: 19.25px; line-height: 24px; font-weight: 400; letter-spacing: -0.03em; color: #5a5a5a; }
+.loginBtn { top: 1158px; font-size: 17.5px; line-height: 21px; font-weight: 500; letter-spacing: -0.01em; color: #ffffff; }
+.googleBtn { top: 1233px; font-size: 17.5px; line-height: 21px; font-weight: 600; letter-spacing: -0.015em; color: #000000; }
