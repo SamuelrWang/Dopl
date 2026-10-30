@@ -5,8 +5,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { PortalProvider, usePortal } from "../_components/portal-store";
 import { PortalShell } from "../_components/portal-shell";
 import { ActivitySection } from "./activity";
-import { AddDeviceSection } from "./add-device";
 import { ConnectSection } from "./connect";
+import { AddDeviceDialog } from "./add-device-dialog";
 import { DevicesSection } from "./devices";
 import { IntegrationPageSection } from "./integration-page";
 import { IssuesSection } from "./issues";
@@ -79,21 +79,20 @@ describe("Devices", () => {
   });
 });
 
-describe("Add integration", () => {
-  it("walks to go live, warning about tests that have not passed without blocking", () => {
-    const Probe = () => <output>{usePortal().state.integrations.mentra?.status}</output>;
+describe("Add new device", () => {
+  it("picks a model and goes live, warning about tests that have not passed without blocking", () => {
+    const Probe = () => <output>{usePortal().state.integrations.meta?.status}</output>;
+    const onClose = vi.fn();
     wrap(
       <>
-        <AddDeviceSection initial="mentra" />
+        <AddDeviceDialog initialCategory="glasses" onClose={onClose} />
         <Probe />
       </>
     );
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByText(/capability tests have not passed/)).toBeTruthy();
+    expect(screen.getByText(/tests have not passed/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Go live" }));
     expect(screen.getByRole("status").textContent).toBe("live");
-    expect(push).toHaveBeenCalledWith("/playground/developers/devices/mentra");
+    expect(onClose).toHaveBeenCalled();
   });
 });
 

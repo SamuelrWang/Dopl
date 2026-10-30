@@ -36,7 +36,7 @@ function useSteps(): Step[] {
   const failing = endpoints.find((e) => e.state === "failing");
   return [
     { key: "key", label: "Create an API key", detail: `${keys.length} active keys`, state: keys.length ? "done" : "todo", href: "/keys", cta: "Create key" },
-    { key: "add", label: "Add an integration", detail: `${added} added`, state: added ? "done" : "todo", href: "/devices/add", cta: "Add integration" },
+    { key: "add", label: "Add a device", detail: `${added} added`, state: added ? "done" : "todo", href: "/devices", cta: "Open devices" },
     { key: "connect", label: "Connect a user", detail: `${users.length} users connected`, state: users.length ? "done" : "todo", href: "/connect", cta: "Open Connect page" },
     { key: "send", label: "Send a first delivery", detail: first ? `Latest ${first.id}` : "Nothing sent yet", state: first ? "done" : "todo", href: "/playground", cta: "Open playground" },
     {

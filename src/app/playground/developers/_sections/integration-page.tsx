@@ -48,8 +48,8 @@ export function IntegrationPageSection({ integrationId, initialTab, initialModel
         lead={<TypeMark kind={category.kind} />}
         meta={<StatusPill>Coming soon</StatusPill>}
         actions={
-          <Link href={`${BASE}/devices/add?integration=${integration.id}`} className={pillButton("ink", "lg", { raise: false })}>
-            Add integration
+          <Link href={`${BASE}/devices`} className={pillButton("ink", "lg", { raise: false })}>
+            Open devices
           </Link>
         }
       >
