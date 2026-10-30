@@ -5,12 +5,12 @@
  * tests, review. Adding its model adds its integration. Missing tests warn and never block. A
  * physical device a user owns is a different thing; it arrives through Connect.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
-import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
-import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
-import { cn } from "@/shared/lib/utils";
-import { pillButton } from "@/shared/ui/pill-button";
+import b from "../_design/base.module.css";
+import { cx, ICON_100 } from "../_design/components";
+import flow from "../_design/flow.module.css";
+import tokens from "../_design/tokens.module.css";
 import { useSimulatorSession } from "../_components/device-simulator";
 import { DEMO_NOW } from "../_data/company";
 import { CATEGORIES, INTEGRATIONS, type Category, type CategoryId, type Integration, type Model } from "../_data/catalog";
@@ -25,9 +25,9 @@ function availableIn(state: PortalState, category: CategoryId): { model: Model; 
   return INTEGRATIONS.filter((i) => i.categoryId === category && !state.integrations[i.id]).flatMap((integration) => integration.models.map((model) => ({ model, integration })));
 }
 
-export function AddDeviceDialog({ initialCategory, onClose }: { initialCategory: CategoryId; onClose: () => void }) {
+export function AddDeviceDialog({ initialCategory, onClose }: { initialCategory: CategoryId | null; onClose: () => void }) {
   const { state, update } = usePortal();
-  const startable = availableIn(state, initialCategory).length > 0;
+  const startable = initialCategory !== null && availableIn(state, initialCategory).length > 0;
   const [step, setStep] = useState(startable ? 1 : 0);
   const [category, setCategory] = useState<Category | null>(startable ? CATEGORIES.find((c) => c.id === initialCategory)! : null);
   const [modelId, setModelId] = useState<string | null>(null);
@@ -35,6 +35,16 @@ export function AddDeviceDialog({ initialCategory, onClose }: { initialCategory:
   const [paired, setPaired] = useState(false);
   const sim = useSimulatorSession();
   const [results, setResults] = useState<Results>({});
+
+  const dialog = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    dialog.current?.focus();
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", key);
+    return () => document.removeEventListener("keydown", key);
+  }, [onClose]);
 
   const options = category ? availableIn(state, category.id) : [];
   const chosen = options.find((o) => o.model.id === modelId) ?? null;
@@ -79,53 +89,54 @@ export function AddDeviceDialog({ initialCategory, onClose }: { initialCategory:
   const testDevice = connected && chosen ? `${method === "simulator" ? "Simulated" : "Bench"} ${chosen.model.name}` : "None";
 
   return (
-    <ModalShell open onClose={onClose} label="Add new device" size="narrow">
-      <button type="button" className={modalStyles.close} onClick={onClose} aria-label="Close">
-        <X size={18} />
-      </button>
-      <div className="flex h-[min(76vh,560px)] flex-col">
-        <header className="flex flex-col gap-3 px-6 pt-6">
-          <span className="text-caption tabular-nums text-text-muted">
+    <div className={cx(flow.layer, tokens.scope, tokens.u100)}>
+      <button type="button" className={flow.scrim} aria-label="Dismiss" tabIndex={-1} onClick={onClose} />
+      <div ref={dialog} className={flow.dialog} role="dialog" aria-modal="true" aria-label="Add new device" tabIndex={-1}>
+        <button type="button" className={cx(b.reset, flow.close)} onClick={onClose} aria-label="Close">
+          <X {...ICON_100} />
+        </button>
+        <header className={flow.head}>
+          <span className={cx(b.smallMuted, b.num)}>
             Step {step + 1} of {STEP_TITLES.length}
           </span>
-          <h2 className="text-title font-medium text-text-primary">{STEP_TITLES[step]}</h2>
-          <span className="flex gap-1" aria-hidden="true">
+          <h2 className={b.title}>{STEP_TITLES[step]}</h2>
+          <span className={flow.progress} aria-hidden="true">
             {STEP_TITLES.map((t, i) => (
-              <i key={t} className={cn("h-0.75 flex-1 rounded-full", i <= step ? "bg-surface-cta" : "bg-surface-raised-3")} />
+              <i key={t} className={cx(flow.progressStep, i <= step && flow.progressOn)} />
             ))}
           </span>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <div className={flow.body}>
           {step === 0 && <CategoryStep categories={CATEGORIES} availableCount={(c) => availableIn(state, c.id).length} value={category?.id ?? null} onPick={pickCategory} />}
-          {step === 1 && category && <ModelStep kind={category.kind} options={options} value={modelId} onPick={pickModel} />}
+          {step === 1 && category && <ModelStep category={category} options={options} value={modelId} onPick={pickModel} />}
           {step === 2 && <MethodStep value={method} onPick={pickMethod} />}
           {step === 3 && chosen && method && <ConnectStep method={method} model={chosen.model} sim={sim} connected={paired} onConnect={() => setPaired(true)} />}
           {step === 4 && chosen && <TestsStep model={chosen.model} sim={sim} results={results} setResults={setResults} />}
-          {step === 5 && chosen && category && <ReviewStep kind={category.kind} model={chosen.model} integration={chosen.integration} testDevice={testDevice} passed={passed} />}
+          {step === 5 && chosen && category && <ReviewStep category={category} model={chosen.model} integration={chosen.integration} testDevice={testDevice} passed={passed} />}
         </div>
-        <footer className="flex items-center gap-2 border-t border-border-default px-6 py-3.5">
+        <footer className={flow.foot}>
           {step > 0 && (
-            <button type="button" className={pillButton("quiet", "md")} onClick={() => setStep(step - 1)}>
+            <button type="button" className={cx(b.btn, b.ghost)} onClick={() => setStep(step - 1)}>
               Back
             </button>
           )}
-          <span className="flex-1" />
+          <span className={b.grow} />
           {step < LAST ? (
-            <button type="button" disabled={!canContinue} className={cn(pillButton("ink", "md", { raise: false }), "disabled:opacity-60")} onClick={() => setStep(step + 1)}>
+            <button type="button" disabled={!canContinue} className={cx(b.btn, canContinue ? b.ink : b.off)} onClick={() => setStep(step + 1)}>
               Continue
             </button>
           ) : (
             <>
-              <button type="button" className={pillButton("outline", "md")} onClick={() => finish("testing")}>
+              <button type="button" className={b.btn} onClick={() => finish("testing")}>
                 Keep testing
               </button>
-              <button type="button" className={pillButton("ink", "md", { raise: false })} onClick={() => finish("live")}>
+              <button type="button" className={cx(b.btn, b.ink)} onClick={() => finish("live")}>
                 Go live
               </button>
             </>
           )}
         </footer>
       </div>
-    </ModalShell>
+    </div>
   );
 }

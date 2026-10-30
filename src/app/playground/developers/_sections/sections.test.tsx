@@ -96,6 +96,17 @@ describe("Devices", () => {
     expect(within(glasses).queryByText("Coming soon")).toBeNull();
     expect(screen.queryByText("Simulator")).toBeNull();
   });
+
+  it("filters the catalog and keeps the stats and add cards honest", () => {
+    wrap(<DevicesSection />);
+    expect(screen.getAllByRole("button", { name: /Add new device/ }).length).toBe(6);
+    fireEvent.click(screen.getByRole("button", { name: /^Glasses/ }));
+    expect(screen.queryByRole("region", { name: "Desktop" })).toBeNull();
+    fireEvent.change(screen.getByPlaceholderText("Search models"), { target: { value: "nothing like this" } });
+    expect(screen.getByText("No models match")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(screen.getByRole("region", { name: "Desktop" })).toBeTruthy();
+  });
 });
 
 describe("Add new device", () => {

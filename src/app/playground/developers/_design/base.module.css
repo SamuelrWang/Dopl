@@ -101,3 +101,4 @@
 .noGrowFull { width: auto; align-self: stretch; }
 .pillBtn { border: 0; cursor: pointer; }
 .reset { padding: 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-align: left; cursor: pointer; }
+.ink { background: var(--ink); color: var(--surface); box-shadow: none; }

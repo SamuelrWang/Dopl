@@ -1,0 +1,12 @@
+/* A real page's frame on the design scope: gray canvas, one scroller, stat row. */
+.root { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; background: var(--page); color: var(--ink); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: geometricPrecision; font-kerning: normal; }
+.root * { box-sizing: border-box; }
+.scroller { flex: 1; min-width: 0; overflow-y: auto; padding: calc(25 * var(--u)) calc(30 * var(--u)) calc(40 * var(--u)); }
+.inner { display: flex; flex-direction: column; gap: calc(20 * var(--u)); max-width: calc(1600 * var(--u)); margin: 0 auto; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: calc(20 * var(--u)); }
+.stats .stat { gap: calc(2.5 * var(--u)); }
+.statBtn { border: 0; text-align: left; cursor: pointer; font: inherit; }
+.stats .statOn { box-shadow: inset 0 0 0 calc(1.25 * var(--u)) var(--ink), 0 calc(3.75 * var(--u)) 0 #dcdcdc, 0 calc(7.5 * var(--u)) calc(0.5 * var(--u)) #e1e1e1; }
+.toolbar.toolbar { gap: calc(17.5 * var(--u)); }
+.filterRow { display: flex; flex-wrap: wrap; align-items: center; gap: calc(10 * var(--u)); min-width: 0; }
+.chip.chip { gap: calc(7.5 * var(--u)); }

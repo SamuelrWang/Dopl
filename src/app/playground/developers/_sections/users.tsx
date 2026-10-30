@@ -5,6 +5,7 @@ import { Download, SearchX, UserRoundX } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import b from "../_design/base.module.css";
 import { cx, ICON_100 } from "../_design/components";
+import p from "../_design/page.module.css";
 import o from "../_design/surfaces.module.css";
 import tokens from "../_design/tokens.module.css";
 import { NO_FILTERS, useCalls, usePortal, useUsers, type SavedView, type UserFilters } from "../_components/portal-store";
@@ -89,9 +90,9 @@ export function UsersSection() {
   const hasFilter = quick !== "all" || Object.entries(filters).some(([k, v]) => v !== NO_FILTERS[k as keyof UserFilters]);
 
   return (
-    <div className={cx(s.root, tokens.scope, tokens.u100)}>
-      <div className={s.scroller}>
-        <div className={s.inner}>
+    <div className={cx(p.root, tokens.scope, tokens.u100)}>
+      <div className={p.scroller}>
+        <div className={p.inner}>
           <header className={b.between}>
             <div className={b.row}>
               <h1 className={b.title}>Users</h1>
@@ -103,25 +104,25 @@ export function UsersSection() {
             </button>
           </header>
 
-          <div className={s.stats}>
-            <div className={cx(b.card, s.stat)}>
+          <div className={p.stats}>
+            <div className={cx(b.card, p.stat)}>
               <span className={b.muted}>Total users</span>
               <span className={b.big}>{fmt(rows.length)}</span>
               <span className={b.smallMuted}>{rows.length === users.length ? plans.map(([p, n]) => `${n} ${p[0].toUpperCase()}${p.slice(1)}`).join(", ") : `of ${fmt(users.length)}`}</span>
             </div>
-            <div className={cx(b.card, s.stat)}>
+            <div className={cx(b.card, p.stat)}>
               <span className={b.muted}>Active 7d</span>
               <span className={b.big}>{fmt(activeWithin(rows, WEEK))}</span>
               <span className={b.smallMuted}>{fmt(activeWithin(rows, 1440))} today</span>
             </div>
-            <div className={cx(b.card, s.stat)}>
+            <div className={cx(b.card, p.stat)}>
               <span className={b.muted}>Devices per user</span>
               <span className={b.big}>{rows.length ? (devices.length / rows.length).toFixed(1) : "0"}</span>
               <span className={b.smallMuted}>
                 {fmt(devices.length)} devices, {fmt(online)} online
               </span>
             </div>
-            <button type="button" aria-pressed={quick === "attention"} className={cx(b.card, s.stat, s.statBtn, quick === "attention" && s.statOn)} onClick={() => pickQuick(quick === "attention" ? "all" : "attention")}>
+            <button type="button" aria-pressed={quick === "attention"} className={cx(b.card, p.stat, p.statBtn, quick === "attention" && p.statOn)} onClick={() => pickQuick(quick === "attention" ? "all" : "attention")}>
               <span className={b.muted}>Users with issues</span>
               <span className={b.big}>{fmt(issues)}</span>
               <span className={b.smallMuted}>

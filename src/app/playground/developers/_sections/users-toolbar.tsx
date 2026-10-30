@@ -7,6 +7,7 @@ import b from "../_design/base.module.css";
 import { cx, ICON_100, ICON_100_SM } from "../_design/components";
 import f from "../_design/forms.module.css";
 import { PillMenu, PopMenu, Segmented, type PillOption } from "../_design/interactive";
+import p from "../_design/page.module.css";
 import o from "../_design/surfaces.module.css";
 import { ALL_MODELS, CATEGORIES, INTEGRATIONS, categoryById, integrationById, modelById, type CategoryId, type ModelId } from "../_data/catalog";
 import type { PortalUser } from "../_data/users";
@@ -86,7 +87,7 @@ export function UsersToolbar({
   const filtered = chips.length > 0 || filters.q !== "";
 
   return (
-    <div className={cx(b.card, s.toolbar)}>
+    <div className={cx(b.card, p.toolbar)}>
       <div className={b.row}>
         <label className={cx(f.field, s.search)}>
           <Search {...ICON_100} className={b.iconInk} />
@@ -101,7 +102,7 @@ export function UsersToolbar({
         </label>
         <Segmented label="Quick views" options={QUICK.map((q) => q.label)} value={QUICK.findIndex((q) => q.key === quick)} onChange={(i) => onQuick(QUICK[i].key)} />
       </div>
-      <div className={s.filterRow}>
+      <div className={p.filterRow}>
         <span className={b.muted}>Filter by</span>
         <PillMenu
           label="Category"
@@ -171,9 +172,9 @@ export function UsersToolbar({
         </PopMenu>
       </div>
       {chips.length > 0 && (
-        <div className={s.filterRow}>
+        <div className={p.filterRow}>
           {chips.map((chip) => (
-            <span key={chip.key} className={cx(f.tag, s.chip)}>
+            <span key={chip.key} className={cx(f.tag, p.chip)}>
               {chip.label}
               <button type="button" className={b.reset} aria-label={`Remove ${chip.label}`} onClick={() => onFilters(chip.clear)}>
                 <X {...ICON_100_SM} className={b.iconSoft} />
