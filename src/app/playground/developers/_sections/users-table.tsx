@@ -4,12 +4,12 @@
 import { ArrowDown, ArrowUp, Bot, Car, ChevronLeft, ChevronRight, ChevronsUpDown, Glasses, Home, Monitor, Smartphone, type LucideIcon } from "lucide-react";
 import { createElement } from "react";
 import b from "../_design/base.module.css";
-import { cx, ICON_100, ICON_100_SM, Initials } from "../_design/components";
+import { cx, ICON_100, ICON_100_SM, Initials, initialsOf } from "../_design/components";
 import o from "../_design/surfaces.module.css";
 import { modelById, type CategoryId } from "../_data/catalog";
 import { ownedDevice, userDeliveries, userRate, type DeviceState, type OwnedDevice, type PortalUser } from "../_data/users";
 import { since } from "../_components/ui";
-import { FIRST_DIR, STATUS_LABELS, categoryIdOf, devicesInOrder, initialsOf, statusOf, type Sort, type SortKey, type Status } from "./users-model";
+import { FIRST_DIR, STATUS_LABELS, categoryIdOf, devicesInOrder, statusOf, type Sort, type SortKey, type Status } from "./users-model";
 import s from "./users.module.css";
 
 export const PAGE_SIZE = 10;

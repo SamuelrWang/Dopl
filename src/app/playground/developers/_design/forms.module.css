@@ -32,7 +32,7 @@
 .knob { position: absolute; top: calc(3.75 * var(--u)); left: calc(3.75 * var(--u)); width: calc(22.5 * var(--u)); height: calc(22.5 * var(--u)); border-radius: 50%; background: var(--surface); transition: left 0.15s; }
 .switchOn .knob { left: calc(23.75 * var(--u)); }
 
-.segmented { display: inline-flex; gap: calc(2.5 * var(--u)); padding: calc(3.75 * var(--u)); border-radius: calc(13.75 * var(--u)); background: var(--fill-strong); width: fit-content; }
+.segmented { flex: none; display: inline-flex; gap: calc(2.5 * var(--u)); padding: calc(3.75 * var(--u)); border-radius: calc(13.75 * var(--u)); background: var(--fill-strong); width: fit-content; }
 .segment { height: calc(43.75 * var(--u)); padding: 0 calc(20 * var(--u)); border: 0; border-radius: var(--radius-small); background: transparent; font-size: calc(17.5 * var(--u)); letter-spacing: -0.015em; color: var(--muted); cursor: pointer; white-space: nowrap; }
 .segmentOn { background: var(--surface); box-shadow: var(--ring); font-weight: 500; color: var(--ink); }
 

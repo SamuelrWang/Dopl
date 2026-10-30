@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { designFont } from "./_design/font";
 import { PortalShell } from "./_components/portal-shell";
 import { PortalProvider } from "./_components/portal-store";
 
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
 export default function Layout({ children }: { children: ReactNode }) {
   return (
     <PortalProvider>
-      <PortalShell>{children}</PortalShell>
+      <PortalShell fontClass={designFont.className}>{children}</PortalShell>
     </PortalProvider>
   );
 }

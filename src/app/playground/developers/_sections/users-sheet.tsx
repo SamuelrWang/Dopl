@@ -5,13 +5,13 @@ import { Send, Link2, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import b from "../_design/base.module.css";
-import { cx, ICON_100, Initials } from "../_design/components";
+import { cx, ICON_100, Initials, initialsOf } from "../_design/components";
 import { CAPABILITY_LABEL, modelById } from "../_data/catalog";
 import { STATUS_LABEL as CALL_STATUS, type Call, type CallStatus } from "../_data/activity";
 import { PLAN_LABEL, REGION_LABEL, STATE_LABEL, needsRelink, ownedDevice, userDeliveries, userRate, userSeen, type DeviceState, type PortalUser } from "../_data/users";
 import { BASE, fmt, since } from "../_components/ui";
 import { DOT, DeviceGlyph, StatusBadge } from "./users-table";
-import { devicesInOrder, initialsOf, statusOf } from "./users-model";
+import { devicesInOrder, statusOf } from "./users-model";
 import s from "./users.module.css";
 
 const STATE_BADGE: Record<DeviceState, string | undefined> = { online: b.badgeOk, offline: undefined, stale: b.badgeWarn, needs_relink: b.badgeError };

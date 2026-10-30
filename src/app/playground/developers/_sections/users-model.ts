@@ -89,10 +89,3 @@ export function usersCsv(users: PortalUser[]): string {
   const rows = users.map((u) => [u.name, u.id, u.devices.length, activeName(u), u.lastDeliveryAt ?? "", userDeliveries(u) ? `${userRate(u)}%` : "", STATUS_LABELS[statusOf(u)]]);
   return [head, ...rows].map((r) => r.map(cell).join(",")).join("\n");
 }
-
-export const initialsOf = (name: string) =>
-  name
-    .split(/[\s-]+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");

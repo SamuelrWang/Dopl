@@ -2,7 +2,7 @@
 
 /**
  * The portal's frame IS /home's: the account rail, then one panel holding the sidebar and the record
- * pane (`HomeFrame`). Nav rows take /home's selected face, the ink row.
+ * pane (`HomeFrame`). The sidebar follows `app-sidebar-core.tsx`'s order, on the `_design` recipes.
  */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -25,23 +25,26 @@ import {
 import { HomeFrame } from "@/features/home/components/shell/home-frame";
 import { AccountRailCore } from "@/shared/layout/app-shell/account-rail-core";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
-import { cn } from "@/shared/lib/utils";
-import { IdentityFace } from "@/shared/ui/identity-face";
-import { QUIET_HEADING_TEXT } from "@/shared/ui/section-heading";
-import { SelectMenu } from "@/shared/ui/select-menu";
+import b from "../_design/base.module.css";
+import { Initials, ICON_100, cx, initialsOf } from "../_design/components";
+import { Segmented } from "../_design/interactive";
+import side from "../_design/sidebar.module.css";
+import o from "../_design/surfaces.module.css";
+import tokens from "../_design/tokens.module.css";
 import { COMPANY, MEMBERS, PROJECTS, type Env } from "../_data/company";
 import { issuesFor } from "../_data/issues";
+import { hasIssues } from "../_data/users";
 import { FindAnything } from "./find-anything";
-import { usePortal } from "./portal-store";
+import { usePortal, useUsers } from "./portal-store";
 import { BASE } from "./ui";
 
 const MARK = "/favicons/android-chrome-512x512.png";
 
 const WORKSPACE = { id: "ws_larkfield", name: COMPANY.name, slug: "larkfield", publicId: "lrkfld", iconUrl: null, role: "owner" as const };
 
-const ENV_OPTIONS: { value: Env; label: string }[] = [
-  { value: "test", label: "Test" },
+const ENVS: { value: Env; label: string }[] = [
   { value: "live", label: "Live" },
+  { value: "test", label: "Test" },
 ];
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
@@ -76,76 +79,72 @@ const GROUPS: { label: string | null; items: NavItem[] }[] = [
   },
 ];
 
-function NavRow({ item, active, badge }: { item: NavItem; active: boolean; badge?: number }) {
+function NavRow({ item, active, alert, alertLabel }: { item: NavItem; active: boolean; alert?: number; alertLabel?: string }) {
   const Icon = item.icon;
   return (
-    <Link
-      href={BASE + item.href}
-      aria-current={active ? "page" : undefined}
-      className={cn(
-        "flex h-8 items-center gap-2.5 rounded-field px-2.5 text-body transition-colors",
-        active ? "bg-surface-cta font-medium text-text-on-cta" : "text-text-secondary hover:bg-menu-item-hover-bg hover:text-text-primary"
-      )}
-    >
-      <Icon size={14} strokeWidth={1.8} aria-hidden="true" className={active ? undefined : "text-text-muted"} />
-      <span className="min-w-0 flex-1 truncate">{item.label}</span>
-      {badge ? (
-        <span className={cn("text-micro tabular-nums", active ? "text-text-on-cta" : "text-warning")}>{badge}</span>
+    <Link href={BASE + item.href} aria-current={active ? "page" : undefined} className={cx(o.navItem, side.navRow, active && o.navOn)}>
+      <Icon {...ICON_100} aria-hidden="true" className={side.navIcon} />
+      <span className={side.navLabel}>{item.label}</span>
+      {alert ? (
+        <span className={cx(o.navCount, side.alert)} title={alertLabel}>
+          <span className={b.dot} />
+          {alert}
+        </span>
       ) : null}
     </Link>
   );
 }
 
-function Sidebar() {
+function Sidebar({ fontClass }: { fontClass?: string }) {
   const pathname = usePathname();
   const { state, update } = usePortal();
+  const users = useUsers();
   const openIssues = issuesFor(state.env, state.revoked, Object.keys(state.deviceStates)).filter((i) => !state.mutedIssues.includes(i.id)).length;
+  const attention = users.filter(hasIssues).length;
   const me = MEMBERS[2];
   return (
-    <div className="flex w-58 shrink-0 flex-col gap-3 px-3 pb-3">
-      <div className="flex flex-col gap-2">
-        <SelectMenu
-          variant="outline"
-          ariaLabel="Project"
-          value={state.project}
-          options={PROJECTS}
-          onChange={(project) => update((s) => ({ ...s, project }))}
-          className="w-full justify-between"
-        />
-        <SelectMenu
-          variant="outline"
-          ariaLabel="Environment"
-          value={state.env}
-          options={ENV_OPTIONS}
-          onChange={(env) => update((s) => ({ ...s, env }))}
-          className="w-full justify-between"
-        />
+    <aside className={cx(side.sidebar, tokens.scope, tokens.u100, fontClass)}>
+      <div className={side.identity}>
+        <div className={side.projects} role="radiogroup" aria-label="Project">
+          {PROJECTS.map((project) => {
+            const on = state.project === project.value;
+            return (
+              <button key={project.value} type="button" role="radio" aria-checked={on} className={cx(side.project, on && side.projectOn)} onClick={() => update((s) => ({ ...s, project: project.value }))}>
+                <span className={side.mark}>{project.label.split(" ").at(-1)?.[0]}</span>
+                <span className={side.navLabel}>{project.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        <Segmented label="Environment" options={ENVS.map((e) => e.label)} value={ENVS.findIndex((e) => e.value === state.env)} onChange={(i) => update((s) => ({ ...s, env: ENVS[i].value }))} />
         <FindAnything />
       </div>
-      <nav aria-label="Developer portal" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+      <nav aria-label="Developer portal" className={side.nav}>
         {GROUPS.map((group) => (
-          <div key={group.label ?? "top"} className="flex flex-col gap-0.5">
-            {group.label && <span className={cn(QUIET_HEADING_TEXT, "px-2.5 pb-1 pt-0.5")}>{group.label}</span>}
+          <div key={group.label ?? "top"} className={side.group}>
+            {group.label && <span className={side.groupLabel}>{group.label}</span>}
             {group.items.map((item) => {
               const href = BASE + item.href;
               const active = item.href === "" ? pathname === BASE : pathname.startsWith(href);
-              return <NavRow key={item.href} item={item} active={active} badge={item.href === "/issues" ? openIssues : undefined} />;
+              const alert = item.href === "/issues" ? openIssues : item.href === "/users" ? attention : undefined;
+              const alertLabel = item.href === "/issues" ? "Open issues" : "Users needing attention";
+              return <NavRow key={item.href} item={item} active={active} alert={alert} alertLabel={alertLabel} />;
             })}
           </div>
         ))}
       </nav>
-      <div className="flex items-center gap-2 px-1 pt-1">
-        <IdentityFace size="s" name={me.name} />
-        <span className="flex min-w-0 flex-col">
-          <span className="truncate text-caption font-medium text-text-primary">{me.name}</span>
-          <span className="truncate text-micro text-text-muted">{COMPANY.name}</span>
+      <div className={side.foot}>
+        <Initials text={initialsOf(me.name)} small />
+        <span className={b.tight}>
+          <span className={cx(b.strong, side.ellipsis)}>{me.name}</span>
+          <span className={cx(b.smallMuted, side.ellipsis)}>{COMPANY.name}</span>
         </span>
       </div>
-    </div>
+    </aside>
   );
 }
 
-export function PortalShell({ children }: { children: ReactNode }) {
+export function PortalShell({ fontClass, children }: { fontClass?: string; children: ReactNode }) {
   return (
     <div className={shell.root} style={{ "--shell-rail-w": "54px" } as CSSProperties}>
       <HomeFrame
@@ -161,7 +160,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
           />
         }
         header={<div className="h-3 shrink-0" />}
-        list={<Sidebar />}
+        list={<Sidebar fontClass={fontClass} />}
       >
         {children}
       </HomeFrame>

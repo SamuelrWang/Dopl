@@ -42,3 +42,10 @@ export const ICON_SM = { size: 17.5, strokeWidth: 1.6 } as const;
 /** The same icons at true size, for real pages on .u100. */
 export const ICON_100 = { size: 16, strokeWidth: 1.5 } as const;
 export const ICON_100_SM = { size: 14, strokeWidth: 1.5 } as const;
+
+export const initialsOf = (name: string) =>
+  name
+    .split(/[\s-]+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");

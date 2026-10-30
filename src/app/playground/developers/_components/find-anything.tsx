@@ -3,10 +3,11 @@
 /** The sidebar's one search box: a user id, device id, request id or webhook id takes you there. */
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { MenuItem } from "@/shared/ui/popover-menu";
-import { Search } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
-import { SEARCH_PILL_FACE, SEARCH_PILL_INPUT } from "@/shared/ui/search-pill";
+import { SearchPill } from "@/shared/ui/search-pill";
+import b from "../_design/base.module.css";
+import { cx } from "../_design/components";
+import side from "../_design/sidebar.module.css";
+import o from "../_design/surfaces.module.css";
 import { ALL_CALLS } from "../_data/activity";
 import { ALL_DEVICES, ALL_USERS } from "../_data/users";
 import { BASE } from "./ui";
@@ -49,39 +50,31 @@ export function FindAnything() {
   const hits = useMemo(() => search(q), [q]);
   const show = open && q.trim().length >= 2;
   return (
-    <div className="relative">
-      <label className={cn(SEARCH_PILL_FACE, "w-full")}>
-        <Search size={14} strokeWidth={2} aria-hidden="true" />
-        <input
-          className={SEARCH_PILL_INPUT}
-          type="text"
-          autoComplete="off"
-          spellCheck={false}
-          placeholder="Find anything"
-          aria-label="Find anything"
-          value={q}
-          onChange={(event) => setQ(event.target.value)}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 120)}
-        />
-      </label>
+    <div className={side.find} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 120)}>
+      <SearchPill value={q} onChange={setQ} label="Find anything" className="w-full" />
       {show && (
-        <div className="white-card absolute left-0 top-full z-(--layer-menu) mt-1 flex w-90 flex-col gap-0.5 p-1.75">
+        <div className={cx(o.menu, o.popMenu, side.hits)}>
           {hits.length === 0 ? (
-            <p className="px-2 py-2 text-caption text-text-muted">No user, device, request or webhook matches.</p>
+            <p className={cx(b.muted, side.none)}>No matches</p>
           ) : (
             hits.map((h) => (
-              <MenuItem
+              <button
                 key={h.key}
-                description={`${h.kind}, ${h.id}`}
-                onSelect={() => {
+                type="button"
+                className={cx(o.item, o.itemBtn, side.hit)}
+                onClick={() => {
                   setOpen(false);
                   setQ("");
                   router.push(h.href);
                 }}
               >
-                {h.label}
-              </MenuItem>
+                <span className={b.tight}>
+                  <span className={cx(b.strong, side.ellipsis)}>{h.label}</span>
+                  <span className={cx(b.smallMuted, side.ellipsis)}>
+                    {h.kind}, {h.id}
+                  </span>
+                </span>
+              </button>
             ))
           )}
         </div>
@@ -89,4 +82,3 @@ export function FindAnything() {
     </div>
   );
 }
-

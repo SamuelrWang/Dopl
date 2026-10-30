@@ -64,6 +64,10 @@ describe("every page renders on the fixtures", () => {
     );
     for (const name of ["Build", "Operate", "Configure"]) expect(screen.getByText(name)).toBeTruthy();
     expect(screen.getByPlaceholderText("Find anything")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Design Playground" }).getAttribute("href")).toBe("/playground/developers/design-playground");
+    const test = screen.getByRole("tab", { name: "Test" });
+    fireEvent.click(test);
+    expect(test.getAttribute("aria-selected")).toBe("true");
   });
 });
 
