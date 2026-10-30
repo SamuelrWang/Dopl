@@ -40,7 +40,7 @@ export function PanelScreen({ app, lines, children }: { app: string; lines: stri
 const barsOf = (text: string) => Array.from({ length: 44 }, (_, i) => 22 + ((text.charCodeAt(i % Math.max(text.length, 1)) || 60) * (i + 3) * 37) % 78);
 
 /** A card that fills its column, for pages that fit the window. */
-export const FillCard = ({ flush, hug, children }: { flush?: boolean; /** As tall as its content, shrinking and scrolling only when the window is short. */ hug?: boolean; children: ReactNode }) => <div className={cx(b.card, hug ? x.hug : x.fill, flush && x.fillFlush)}>{children}</div>;
+export const FillCard = ({ flush, children }: { flush?: boolean; children: ReactNode }) => <div className={cx(b.card, x.fill, flush && x.fillFlush)}>{children}</div>;
 /** Scrolls inside a FillCard, with any table's header held at the top. */
 export const ScrollArea = ({ areaRef, children }: { areaRef?: Ref<HTMLDivElement>; children: ReactNode }) => (
   <div ref={areaRef} className={x.scrollArea}>
@@ -67,7 +67,9 @@ export function useFitRows(fallback: number) {
   }, []);
   return { ref, count };
 }
-export const FillBody = ({ children }: { children: ReactNode }) => <div className={x.fillBody}>{children}</div>;
+export const FillBody = ({ even, children }: { /** Shares the card's height out between its rows. */ even?: boolean; children: ReactNode }) => <div className={cx(x.fillBody, even && x.fillEven)}>{children}</div>;
+/** Stacked rows that share a fit page's height equally. */
+export const FitRows = ({ children }: { children: ReactNode }) => <div className={x.fitRows}>{children}</div>;
 export const DetailsPane = ({ children }: { children: ReactNode }) => <div className={x.details}>{children}</div>;
 
 export function CodeEditor({ label, value, onChange }: { label: string; value: string; onChange: (next: string) => void }) {

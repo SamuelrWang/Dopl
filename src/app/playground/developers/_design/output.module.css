@@ -30,7 +30,7 @@
 .splitEven { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
 .splitWide { grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); }
 .chart { display: flex; flex: 1; flex-direction: column; gap: calc(12.5 * var(--u)); min-height: 0; }
-.chartBars { flex: 1; min-height: calc(187.5 * var(--u)); gap: calc(5 * var(--u)); }
+.chartBars { flex: 1; height: auto; min-height: calc(80 * var(--u)); gap: calc(5 * var(--u)); }
 .chartTicks { display: flex; justify-content: space-between; gap: calc(10 * var(--u)); }
 .limit { display: flex; flex-direction: column; gap: calc(8.75 * var(--u)); }
 .limitHead { display: flex; align-items: center; justify-content: space-between; gap: calc(12.5 * var(--u)); }
@@ -39,7 +39,7 @@
 .tierRow { display: grid; grid-template-columns: calc(120 * var(--u)) minmax(0, 1fr); align-items: start; gap: calc(12.5 * var(--u)); }
 .previewStage { display: flex; justify-content: center; }
 .fillFlush { padding: 0; gap: 0; }
-.scrollArea { flex: 1; min-height: 0; margin: 0 calc(1.25 * var(--u)) calc(1.25 * var(--u)); overflow: auto; border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.scrollArea { flex: 1; min-height: 0; margin: 0 calc(1.75 * var(--u)) calc(1.75 * var(--u)); overflow: auto; border-radius: 0 0 var(--radius-card) var(--radius-card); }
 .scrollArea th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
 .dotFail { background: var(--warn); box-shadow: none; }
 .dotFaint { opacity: 0.45; }
@@ -50,6 +50,9 @@
 .ruleActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: calc(7.5 * var(--u)); }
 .sticky { position: sticky; top: 0; }
 .ruleValue { grid-column: 1 / -1; min-width: 0; }
-.scrollArea:first-child { margin-top: calc(1.25 * var(--u)); border-radius: var(--radius-card); }
-.hug { flex: 0 1 auto; min-height: 0; }
-.hug .scrollArea { flex: 0 1 auto; }
+.scrollArea:first-child { margin-top: calc(1.75 * var(--u)); border-radius: var(--radius-card); }
+.fill .scrollArea table { height: 100%; }
+.fill .scrollArea thead tr { height: var(--cell-head-h); }
+.fitRows { display: flex; flex: 1; flex-direction: column; gap: calc(20 * var(--u)); min-height: 0; }
+.fitRows > * { flex: 1 1 0; min-height: 0; }
+.fillEven { justify-content: space-evenly; }

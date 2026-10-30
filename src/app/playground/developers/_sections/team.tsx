@@ -119,7 +119,7 @@ export function TeamSection() {
       <SplitLayout
         lead
         left={
-          <FillCard flush hug>
+          <FillCard flush>
             <TableHead>
               <SearchField hug value={q} placeholder="Search members" onChange={setQ} />
               <Segmented label="Member views" options={VIEWS} value={view} onChange={setView} />
@@ -186,7 +186,7 @@ export function TeamSection() {
           </FillCard>
         }
         right={
-          <FillCard flush hug>
+          <FillCard flush>
         <TableHead>
           <Text kind="h3">What each role can do</Text>
           <Grow />

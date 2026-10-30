@@ -6,10 +6,10 @@
  */
 import { CreditCard, Download } from "lucide-react";
 import { useState } from "react";
-import { Button, Card, DataCell, DataRow, DataTable, ICON, MeterFigure, PillMenu, Segmented, StatCard, TwoLine, type Column } from "../_design/ui";
+import { Button, DataCell, DataRow, DataTable, ICON, ICON_SM, MeterFigure, PillMenu, Segmented, StatCard, TwoLine, type Column } from "../_design/ui";
 import { BarChart, Limit } from "../_design/ui-data";
-import { FillCard, SplitLayout } from "../_design/ui-output";
-import { Between, Grow, Page, PageHeader, Stack, StatRow, TableHead, Text, Toast, Toolbar } from "../_design/ui-page";
+import { FillBody, FillCard, FitRows, ScrollArea, SplitLayout, useFitRows } from "../_design/ui-output";
+import { Between, Page, PageHeader, Row, StatRow, TableHead, Text, Toast } from "../_design/ui-page";
 import { dailySeries } from "../_data/activity";
 import { ALL_MODELS, CATEGORIES, categoryOf, modelById, trail, type ModelId } from "../_data/catalog";
 import { PLAN } from "../_data/misc";
@@ -20,7 +20,6 @@ import { fmt } from "../_components/ui";
 
 const RANGES = [{ label: "7 days", days: 7 }, { label: "30 days", days: 30 }, { label: "90 days", days: 90 }];
 const BREAKDOWNS = ["Model", "User", "API key"];
-const TOP = 8;
 const KEY_LIMIT = 20;
 const ENDPOINT_LIMIT = 10;
 /** The demo is 29 days into a 30-day period. */
@@ -40,6 +39,7 @@ export function UsageSection() {
   const [range, setRange] = useState(1);
   const [by, setBy] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
+  const fit = useFitRows(4);
 
   const inFilter = (id: ModelId) => (category === "all" || categoryOf(id).id === category) && (modelId === "all" || id === modelId);
   const devices = users.flatMap((u) => u.devices).filter((d) => inFilter(d.modelId));
@@ -77,7 +77,7 @@ export function UsageSection() {
   const endpoints = state.endpoints.filter((e) => e.env === state.env).length;
 
   return (
-    <Page overlays={notice && <Toast>{notice}</Toast>}>
+    <Page fit overlays={notice && <Toast>{notice}</Toast>}>
       <PageHeader
         title="Usage"
         test={state.env === "test"}
@@ -96,71 +96,72 @@ export function UsageSection() {
         <StatCard label="Next bill" value={PLAN.price.split(" ")[0]} hint={`${PLAN.name}, renews ${PLAN.renewsOn}`} />
       </StatRow>
 
-      <Toolbar>
-        <Between>
-          <Between>
-            <PillMenu stable label={category === "all" ? "All categories" : CATEGORIES.find((c) => c.id === category)!.name} value={category} options={[{ value: "all", label: "All categories" }, ...CATEGORIES.map((c) => ({ value: c.id, label: c.name }))]} onChange={(v) => { setCategory(v); setModelId("all"); }} />
-            <PillMenu stable label={modelId === "all" ? "All models" : modelById(modelId as ModelId).name} value={modelId} options={[{ value: "all", label: "All models" }, ...models.filter((m) => category === "all" || categoryOf(m.id).id === category).map((m) => ({ value: m.id, label: m.name }))]} onChange={setModelId} />
-          </Between>
-          <Segmented label="Range" options={RANGES.map((r) => r.label)} value={range} onChange={setRange} />
-        </Between>
-      </Toolbar>
-
-      <SplitLayout
-        wide
-        left={
-          <FillCard>
-            <Text kind="h3">Deliveries</Text>
-            <BarChart bars={series} />
-          </FillCard>
-        }
-        right={
-          <FillCard>
-            <TwoLine title={<Text kind="h3">{PLAN.name} plan</Text>} sub={`${PLAN.price}, renews ${PLAN.renewsOn}`} />
-            <Stack>
-              <Limit label="Deliveries" used={month} limit={PLAN.deliveriesIncluded} format={fmt} />
-              <Limit label="Seats" used={state.members.length} limit={PLAN.seatsIncluded} />
-              <Limit label="API keys" used={keys} limit={KEY_LIMIT} />
-              <Limit label="Webhook endpoints" used={endpoints} limit={ENDPOINT_LIMIT} />
-            </Stack>
-            <Grow />
-            <Button block onClick={() => setNotice("Demo: would open billing")}>
-              <CreditCard {...ICON} aria-hidden="true" />
-              Manage plan
-            </Button>
-          </FillCard>
-        }
-      />
-
-      <Card flush>
-        <TableHead>
-          <Text kind="h3">Top by</Text>
-          <Segmented label="Break down by" options={BREAKDOWNS} value={by} onChange={setBy} />
-        </TableHead>
-        <DataTable columns={COLUMNS}>
-          {sorted.slice(0, TOP).map((r) => {
-            const share = Math.round((r.calls / total) * 100);
-            return (
-              <DataRow key={r.id}>
-                <DataCell>
-                  <TwoLine title={r.name} sub={r.sub} />
-                </DataCell>
-                <DataCell>
-                  <Text num>{fmt(r.calls)}</Text>
-                </DataCell>
-                <DataCell>
-                  <Text kind="muted" nowrap>
-                    {r.detail}
-                  </Text>
-                </DataCell>
-                <DataCell>
-                  <MeterFigure value={share} />
-                </DataCell>
-              </DataRow>
-            );
-          })}
-        </DataTable>
-      </Card>
+      <FitRows>
+        <SplitLayout
+          wide
+          left={
+            <FillCard>
+              <Between>
+                <Row>
+                  <Text kind="h3">Deliveries</Text>
+                  <PillMenu stable label={category === "all" ? "All categories" : CATEGORIES.find((c) => c.id === category)!.name} value={category} options={[{ value: "all", label: "All categories" }, ...CATEGORIES.map((c) => ({ value: c.id, label: c.name }))]} onChange={(v) => { setCategory(v); setModelId("all"); }} />
+                  <PillMenu stable label={modelId === "all" ? "All models" : modelById(modelId as ModelId).name} value={modelId} options={[{ value: "all", label: "All models" }, ...models.filter((m) => category === "all" || categoryOf(m.id).id === category).map((m) => ({ value: m.id, label: m.name }))]} onChange={setModelId} />
+                </Row>
+                <Segmented label="Range" options={RANGES.map((r) => r.label)} value={range} onChange={setRange} />
+              </Between>
+              <BarChart bars={series} />
+            </FillCard>
+          }
+          right={
+            <FillCard>
+              <Between>
+                <TwoLine title={<Text kind="h3">{PLAN.name} plan</Text>} sub={`${PLAN.price}, renews ${PLAN.renewsOn}`} />
+                <Button size="sm" onClick={() => setNotice("Demo: would open billing")}>
+                  <CreditCard {...ICON_SM} aria-hidden="true" />
+                  Manage
+                </Button>
+              </Between>
+              <FillBody even>
+                <Limit label="Deliveries" used={month} limit={PLAN.deliveriesIncluded} format={fmt} />
+                <Limit label="Seats" used={state.members.length} limit={PLAN.seatsIncluded} />
+                <Limit label="API keys" used={keys} limit={KEY_LIMIT} />
+                <Limit label="Webhook endpoints" used={endpoints} limit={ENDPOINT_LIMIT} />
+              </FillBody>
+            </FillCard>
+          }
+        />
+        <FillCard flush>
+          <TableHead>
+            <Text kind="h3">Top by</Text>
+            <Segmented label="Break down by" options={BREAKDOWNS} value={by} onChange={setBy} />
+          </TableHead>
+          <ScrollArea areaRef={fit.ref}>
+            <DataTable columns={COLUMNS}>
+              {sorted.slice(0, fit.count).map((r) => {
+                const share = Math.round((r.calls / total) * 100);
+                return (
+                  <DataRow key={r.id}>
+                    <DataCell>
+                      <TwoLine title={r.name} sub={r.sub} />
+                    </DataCell>
+                    <DataCell>
+                      <Text num>{fmt(r.calls)}</Text>
+                    </DataCell>
+                    <DataCell>
+                      <Text kind="muted" nowrap>
+                        {r.detail}
+                      </Text>
+                    </DataCell>
+                    <DataCell>
+                      <MeterFigure value={share} />
+                    </DataCell>
+                  </DataRow>
+                );
+              })}
+            </DataTable>
+          </ScrollArea>
+        </FillCard>
+      </FitRows>
     </Page>
   );
 }
