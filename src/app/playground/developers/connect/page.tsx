@@ -1,13 +1,5 @@
-import { PORTAL_METADATA } from "../_components/metadata";
-import { PortalShell } from "../_components/portal-shell";
-import { ConnectPreviewSection } from "../_sections/connect-preview";
-
-export const metadata = PORTAL_METADATA;
+import { ConnectSection } from "../_sections/connect";
 
 export default function Page() {
-  return (
-    <PortalShell>
-      <ConnectPreviewSection />
-    </PortalShell>
-  );
+  return <ConnectSection />;
 }

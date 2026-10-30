@@ -1,183 +1,123 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
-import type { ApiKey } from "@dopl/device-contracts";
-import { API_KEY_SCOPES } from "@dopl/device-contracts";
 import { cn } from "@/shared/lib/utils";
 import { CopyButton } from "@/shared/ui/copy-button";
-import { PILL_ICON, pillButton } from "@/shared/ui/pill-button";
-import { SegmentedControl } from "@/shared/ui/segmented-control";
+import { CreateButton, pillButton } from "@/shared/ui/pill-button";
+import { DialogActions, StandardDialog } from "@/shared/ui/standard-dialog";
 import { StatusPill } from "@/shared/ui/status-pill";
-import { usePortal } from "../_components/portal-context";
-import { rotate, setLogFilter } from "../_components/portal-actions";
-import { PORTAL_BASE } from "../_components/portal-shell";
-import { ROTATE_GRACE_HOURS, isStale } from "../_data/keys";
-import { Card, Chip, PageHeader, Chips, Table, ov, since } from "../_components/ui";
+import { toast } from "@/shared/ui/toast";
+import { RAISED_INPUT } from "@/shared/ui/wells";
+import { minsAgo } from "../_data/company";
+import { ALL_KEY_SCOPES, type ApiKeyRow } from "../_data/misc";
+import { usePortal } from "../_components/portal-store";
+import { Cell, FactChip, Id, PortalPage, RowList, Strip, ov, since } from "../_components/ui";
 
-const KIND_OPTIONS = [
-  { key: "secret", label: "Secret" },
-  { key: "publishable", label: "Publishable" },
-] as const;
+const STALE_MINS = 30 * 1440;
 
-const masked = (k: ApiKey) => `${k.prefix}${"•".repeat(12)}`;
-
-function keyStatus(k: ApiKey) {
-  if (k.revoked_at) return <StatusPill>Revoked</StatusPill>;
-  if (k.expires_at) return <StatusPill tone="attention">Expires {since(k.expires_at)}</StatusPill>;
-  if (isStale(k)) return <StatusPill>Unused 30d</StatusPill>;
-  return (
-    <StatusPill tone="live" dot bare>
-      Active
-    </StatusPill>
-  );
-}
+const tail = (n: number) => Array.from({ length: n }, (_, i) => "abcdefghjkmnpqrstuvwxyz23456789"[(n * 7 + i * 13) % 31]).join("");
 
 export function KeysSection() {
-  const router = useRouter();
-  const { env, keys, log, createKey, revokeKey } = usePortal();
+  const { state, update } = usePortal();
+  const keys = state.keys.filter((k) => k.env === state.env);
   const [creating, setCreating] = useState(false);
-  const [kind, setKind] = useState<ApiKey["kind"]>("secret");
-  const [scopes, setScopes] = useState<ApiKey["scopes"]>([...API_KEY_SCOPES]);
-  const [revealed, setRevealed] = useState<string | null>(null);
-  const [rotated, setRotated] = useState(false);
-  const active = keys.filter((k) => !k.revoked_at).length;
+  const [name, setName] = useState("");
+  const [scopes, setScopes] = useState<string[]>(["deliver"]);
+  const [secret, setSecret] = useState<string | null>(null);
 
-  const toggle = (s: ApiKey["scopes"][number]) =>
-    setScopes((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+  const create = () => {
+    const prefix = `sk_${state.env}_`;
+    const full = `${prefix}${tail(24)}`;
+    const row: ApiKeyRow = { id: `key_${state.keys.length + 1}`, name: name || "Untitled key", kind: "secret", env: state.env, prefix: full.slice(0, prefix.length + 4), scopes, createdAt: minsAgo(0), lastUsedAt: null, revoked: false };
+    update((s) => ({ ...s, keys: [row, ...s.keys] }));
+    setSecret(full);
+    setCreating(false);
+    setName("");
+  };
+  const rotate = (id: string) => {
+    update((s) => ({ ...s, keys: s.keys.map((k) => (k.id === id ? { ...k, prefix: `${k.prefix.slice(0, -4)}${tail(4)}`, createdAt: minsAgo(0) } : k)) }));
+    toast({ title: "Key rotated", description: "The old secret keeps working for 24 hours." });
+  };
+  const revoke = (id: string) => update((s) => ({ ...s, keys: s.keys.map((k) => (k.id === id ? { ...k, revoked: true } : k)) }));
+  const active = keys.filter((k) => !k.revoked);
+  const stale = active.filter((k) => !k.lastUsedAt || Date.parse(minsAgo(0)) - Date.parse(k.lastUsedAt) > STALE_MINS * 60_000);
 
   return (
-    <>
-      <PageHeader
-        title="API keys"
-        action={
-          <button type="button" className={pillButton("ink", "lg")} onClick={() => setCreating((v) => !v)}>
-            <Plus size={PILL_ICON.lg} aria-hidden="true" />
-            Create key
+    <PortalPage title="API keys" actions={<CreateButton onClick={() => setCreating(true)}>Create key</CreateButton>}>
+      <Strip label="Summary">
+        <Cell label="Active keys" value={String(active.length)} />
+        <Cell label="Unused for 30 days" value={String(stale.length)} />
+        <Cell label="Environment" value={state.env === "live" ? "Live" : "Test"} />
+      </Strip>
+      {secret && (
+        <section className="white-card flex items-center gap-2 px-3.5 py-3" aria-label="New secret">
+          <span className={ov.rowMain}>
+            <span className={ov.rowTitle}>Copy this secret now, it is shown once</span>
+            <Id className="text-caption">{secret}</Id>
+          </span>
+          <CopyButton text={secret} label="Copy secret" />
+          <button type="button" className={pillButton("quiet", "sm")} onClick={() => setSecret(null)}>
+            Done
           </button>
-        }
-      />
-      {revealed && (
-        <Card
-          title={rotated ? "Rotated key" : "New key"}
-          aside={
-            <button
-              type="button"
-              className={pillButton("outline", "sm")}
-              onClick={() => {
-                setRevealed(null);
-                setRotated(false);
-              }}
-            >
-              Done
-            </button>
-          }
-        >
-          <div className="card-well flex items-center justify-between gap-3 px-3 py-2.5">
-            <code className="truncate font-mono text-body text-text-primary">{revealed}</code>
-            <CopyButton text={revealed} />
-          </div>
-          <p className={ov.note}>{rotated ? `Shown once · old key works for ${ROTATE_GRACE_HOURS}h` : "Shown once"}</p>
-        </Card>
+        </section>
       )}
-
-      {creating && !revealed && (
-        <Card title={`New ${env} key`}>
-          <SegmentedControl options={KIND_OPTIONS} value={kind} onChange={setKind} ariaLabel="Key kind" />
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Scopes">
-            {(kind === "publishable" ? (["connect"] as const) : API_KEY_SCOPES).map((s) => {
-              const on = kind === "publishable" || scopes.includes(s);
+      <RowList>
+        {keys.map((k) => {
+          const isStale = stale.includes(k);
+          return (
+            <li key={k.id} className={cn(ov.row, "min-h-13 border-t border-border-default first:border-t-0", k.revoked && "opacity-60")}>
+              <span className={ov.rowMain}>
+                <span className={ov.rowTitle}>
+                  {k.name}
+                  <Id>{k.prefix}...</Id>
+                </span>
+                <span className="flex flex-wrap gap-1 pt-0.5">
+                  {k.scopes.map((s) => (
+                    <FactChip key={s}>{s}</FactChip>
+                  ))}
+                </span>
+              </span>
+              {k.revoked ? <StatusPill>Revoked</StatusPill> : isStale ? <StatusPill tone="attention">Unused for 30 days</StatusPill> : null}
+              <span className={ov.rowAside}>{k.lastUsedAt ? `Used ${since(k.lastUsedAt)}` : "Never used"}</span>
+              {!k.revoked && (
+                <span className="flex shrink-0 gap-1.5">
+                  {k.kind === "secret" && (
+                    <button type="button" className={pillButton("outline", "xs")} onClick={() => rotate(k.id)}>
+                      Rotate
+                    </button>
+                  )}
+                  <button type="button" className={pillButton("quiet", "xs")} onClick={() => revoke(k.id)}>
+                    Revoke
+                  </button>
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </RowList>
+      <StandardDialog open={creating} onClose={() => setCreating(false)} title="Create key">
+        <div className="flex flex-col gap-3">
+          <input aria-label="Key name" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} className={cn(RAISED_INPUT, "h-8 px-3")} />
+          <span className="flex flex-wrap gap-1.5">
+            {ALL_KEY_SCOPES.map((s) => {
+              const on = scopes.includes(s);
               return (
-                <button
-                  key={s}
-                  type="button"
-                  aria-pressed={on}
-                  disabled={kind === "publishable"}
-                  onClick={() => toggle(s)}
-                  className={cn(pillButton(on ? "ink" : "outline", "xs", { raise: false }), "font-mono disabled:opacity-60")}
-                >
+                <button key={s} type="button" aria-pressed={on} onClick={() => setScopes(on ? scopes.filter((x) => x !== s) : [...scopes, s])} className={pillButton(on ? "ink" : "outline", "xs", { raise: false })}>
                   {s}
                 </button>
               );
             })}
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className={cn(pillButton("ink", "md"), "disabled:opacity-60")}
-              disabled={kind === "secret" && scopes.length === 0}
-              onClick={() => {
-                setRevealed(createKey(kind, scopes));
-                setCreating(false);
-              }}
-            >
-              Create
-            </button>
-            <button type="button" className={pillButton("quiet", "md")} onClick={() => setCreating(false)}>
-              Cancel
-            </button>
-          </div>
-        </Card>
-      )}
-
-      <Card title={env === "test" ? "Test keys" : "Live keys"} count={active}>
-        <Table columns={["Key", "Kind", "Scopes", { label: "Requests", num: true }, "Created", "Last used", "Status", ""]}>
-          {keys.map((k) => (
-            <tr key={k.id} className={cn(k.revoked_at && "opacity-50")}>
-              <td className="whitespace-nowrap font-mono text-small">{masked(k)}</td>
-              <td>{k.kind === "secret" ? "Secret" : "Publishable"}</td>
-              <td>
-                <Chips>
-                  {k.scopes.map((s) => (
-                    <Chip key={s}>{s}</Chip>
-                  ))}
-                </Chips>
-              </td>
-              <td className={cn(ov.num, "font-mono text-small")}>{log.filter((r) => r.key_id === k.id).length}</td>
-              <td className="whitespace-nowrap text-text-muted">{since(k.created_at)}</td>
-              <td className="whitespace-nowrap text-text-muted">{since(k.last_used_at)}</td>
-              <td className="whitespace-nowrap">{keyStatus(k)}</td>
-              <td>
-                <span className="flex justify-end gap-1">
-                  {k.kind === "secret" && (
-                    <button
-                      type="button"
-                      className={pillButton("quiet", "xs")}
-                      onClick={() => {
-                        setLogFilter({ key_id: k.id, type: "request" });
-                        router.push(`${PORTAL_BASE}/events`);
-                      }}
-                    >
-                      View requests
-                    </button>
-                  )}
-                  {!k.revoked_at && !k.expires_at && (
-                    <button
-                      type="button"
-                      className={pillButton("quiet", "xs")}
-                      onClick={() => {
-                        const secret = rotate(k.id);
-                        if (secret) {
-                          setRevealed(secret);
-                          setRotated(true);
-                        }
-                      }}
-                    >
-                      Rotate
-                    </button>
-                  )}
-                  {!k.revoked_at && (
-                    <button type="button" className={pillButton("quiet", "xs")} onClick={() => revokeKey(k.id)}>
-                      Revoke
-                    </button>
-                  )}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </Table>
-      </Card>
-    </>
+          </span>
+        </div>
+        <DialogActions>
+          <button type="button" className={pillButton("quiet", "md")} onClick={() => setCreating(false)}>
+            Cancel
+          </button>
+          <button type="button" className={pillButton("ink", "md")} onClick={create}>
+            Create key
+          </button>
+        </DialogActions>
+      </StandardDialog>
+    </PortalPage>
   );
 }

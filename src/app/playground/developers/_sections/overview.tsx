@@ -1,95 +1,137 @@
 "use client";
 
 import Link from "next/link";
-import { DeviceKindIcon } from "@/features/devices/components/device-glyph";
+import { Check, CircleAlert } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { pillButton } from "@/shared/ui/pill-button";
-import { usePortal } from "../_components/portal-context";
-import { PORTAL_BASE } from "../_components/portal-shell";
-import { Bars, Card, Cell, PageHeader, Strip, glyphKind, ov } from "../_components/ui";
-import { ADDABLE_TYPES } from "../_data/device-types";
-import { TypeStatusPill, typeHref } from "./devices";
-import { ConnectFunnel, ErrorGroups } from "./overview-insights";
-import type { DayPoint } from "../_data/activity";
+import { StatusPill } from "@/shared/ui/status-pill";
+import { ThinMeter } from "@/shared/ui/usage-meter";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { dailySeries } from "../_data/activity";
+import { issuesFor } from "../_data/issues";
+import { CallRow } from "../_components/calls";
+import { ALL_LEVELS, HierarchyFilter, matchesHierarchy, type Hierarchy } from "../_components/hierarchy-filter";
+import { useCalls, usePortal, useUsers } from "../_components/portal-store";
+import { WEEK, activeWithin, figuresOfDevices } from "../_components/stats";
+import { BASE, Bars, Card, Cell, PortalPage, Strip, fmt, ov } from "../_components/ui";
 
-const fmt = new Intl.NumberFormat("en-US");
-const dayFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-const tick = (day: string) => dayFmt.format(new Date(`${day}T00:00:00Z`));
-
-function bars(series: DayPoint[], pick: (d: DayPoint) => number, unit: string) {
-  return series.map((d) => ({ key: d.day, value: pick(d), label: `${tick(d.day)} · ${fmt.format(pick(d))} ${unit}`, tick: tick(d.day) }));
+interface Step {
+  key: string;
+  label: string;
+  detail: string;
+  state: "done" | "attention" | "todo";
+  href: string;
+  cta: string;
 }
 
-const TWO_COLS = "grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3.5";
+function useSteps(): Step[] {
+  const { state } = usePortal();
+  const users = useUsers();
+  const calls = useCalls();
+  const keys = state.keys.filter((k) => k.env === state.env && !k.revoked);
+  const added = Object.keys(state.integrations).length;
+  const first = calls.filter((c) => c.kind === "delivery").at(-1);
+  const endpoints = state.endpoints.filter((e) => e.env === state.env);
+  const failing = endpoints.find((e) => e.state === "failing");
+  return [
+    { key: "key", label: "Create an API key", detail: `${keys.length} active keys`, state: keys.length ? "done" : "todo", href: "/keys", cta: "Create key" },
+    { key: "add", label: "Add an integration", detail: `${added} added`, state: added ? "done" : "todo", href: "/devices/add", cta: "Add integration" },
+    { key: "connect", label: "Connect a user", detail: `${users.length} users connected`, state: users.length ? "done" : "todo", href: "/connect", cta: "Open Connect page" },
+    { key: "send", label: "Send a first delivery", detail: first ? `Latest ${first.id}` : "Nothing sent yet", state: first ? "done" : "todo", href: "/playground", cta: "Open playground" },
+    {
+      key: "webhook",
+      label: "Receive a webhook",
+      detail: failing ? `${failing.description} is failing` : `${endpoints.length} endpoints healthy`,
+      state: failing ? "attention" : endpoints.length ? "done" : "todo",
+      href: "/webhooks",
+      cta: "Open webhooks",
+    },
+  ];
+}
+
+function Checklist() {
+  const steps = useSteps();
+  const done = steps.filter((s) => s.state === "done").length;
+  return (
+    <Card title="First delivery setup" count={`${done} of ${steps.length}`} aside={<ThinMeter used={done} limit={steps.length} className="w-24" />}>
+      <ul className={ov.rows}>
+        {steps.map((s) => (
+          <li key={s.key} className={ov.row}>
+            <span className={ov.mark} data-tone={s.state === "attention" ? "over" : undefined}>
+              {s.state === "done" ? <Check size={12} aria-hidden="true" /> : s.state === "attention" ? <CircleAlert size={12} aria-hidden="true" /> : null}
+            </span>
+            <span className={ov.rowMain}>
+              <span className={ov.rowTitle}>{s.label}</span>
+              <span className={ov.rowMeta}>{s.detail}</span>
+            </span>
+            {s.state !== "done" && (
+              <Link href={BASE + s.href} className={pillButton("outline", "sm")}>
+                {s.cta}
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
 
 export function OverviewSection() {
-  const { fx, activity, sessions, typeState } = usePortal();
-  const { series, events } = activity;
-  const last = series[series.length - 1];
-  const total = series.reduce((n, d) => n + d.requests, 0);
-  const errors = series.reduce((n, d) => n + d.errors, 0);
-  const users = new Set(fx.connections.filter((c) => c.status === "active").map((c) => c.external_user_id));
-  const online = fx.devices.filter((d) => d.online).length;
-  const deliveries = events.filter((e) => e.intent !== null);
-  const delivered = deliveries.filter((e) => e.outcome === "ok").length;
-  const types = ADDABLE_TYPES.map((t) => ({ type: t, state: typeState(t.id, null) }));
-  const compatible = types.filter((t) => t.state.status === "connected").length;
-
+  const router = useRouter();
+  const { state } = usePortal();
+  const users = useUsers();
+  const calls = useCalls();
+  const [levels, setLevels] = useState<Hierarchy>(ALL_LEVELS);
+  const scopedUsers = users.filter((u) => u.devices.some((d) => matchesHierarchy(d.modelId, levels)));
+  const figures = figuresOfDevices(users.flatMap((u) => u.devices).filter((d) => matchesHierarchy(d.modelId, levels)));
+  const issues = issuesFor(state.env, state.revoked, Object.keys(state.deviceStates)).filter((i) => !state.mutedIssues.includes(i.id));
+  const recent = calls.filter((c) => c.kind === "delivery" && matchesHierarchy(c.modelId, levels)).slice(0, 6);
   return (
-    <>
-      <PageHeader title="Overview" />
-      <Strip label="Summary">
-        <Cell label="Requests today" value={fmt.format(last.requests)} sub={`${fmt.format(total)} in 30 days`} />
-        <Cell label="Connected users" value={fmt.format(users.size)} sub={`${fx.connections.length} connections`} />
-        <Cell label="Device types connected" value={String(compatible)} of={`/ ${types.length}`} sub={`${online} of ${fx.devices.length} devices online`} />
-        <Cell
-          label="Delivery success"
-          value={`${((delivered / Math.max(1, deliveries.length)) * 100).toFixed(1)}%`}
-          sub={`${(100 - (errors / Math.max(1, total)) * 100).toFixed(1)}% of requests ok`}
-        />
+    <PortalPage title="Overview" actions={<HierarchyFilter value={levels} onChange={setLevels} />}>
+      <Strip label="Health">
+        <Cell label="Deliveries, 7 days" value={fmt(figures.deliveries)} href={`${BASE}/activity`} />
+        <Cell label="Shown rate" value={`${figures.rate}%`} sub="Seen by device of sent" />
+        <Cell label="Active users, 7 days" value={fmt(activeWithin(scopedUsers, WEEK))} of={`/ ${scopedUsers.length}`} href={`${BASE}/users`} />
+        <Cell label="Devices online" value={fmt(figures.online)} of={`/ ${figures.devices}`} href={`${BASE}/devices`} />
+        <Cell label="Open issues" value={fmt(issues.length)} href={`${BASE}/issues`} />
       </Strip>
-
-      <ConnectFunnel sessions={sessions} />
-
-      <div className={TWO_COLS}>
-        <Card title="Requests" aside={<span className="text-text-muted">30 days</span>}>
-          <span className={ov.figure}>{fmt.format(total)}</span>
-          <Bars bars={bars(series, (d) => d.requests, "requests")} label="Requests per day, last 30 days" />
-        </Card>
-        <Card title="Errors" aside={<span className="text-text-muted">30 days</span>}>
-          <span className={ov.figure}>{fmt.format(errors)}</span>
-          <Bars bars={bars(series, (d) => d.errors, "errors")} label="Errors per day, last 30 days" dim />
-        </Card>
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-start gap-3.5">
+        <Checklist />
+        <div className="flex min-w-0 flex-col gap-3.5">
+          <Card title="Deliveries" count="Last 14 days">
+            <Bars bars={dailySeries(figures.deliveries, 14)} label="Deliveries per day" />
+          </Card>
+          <Card title="Recent issues" count={issues.length} aside={<Link href={`${BASE}/issues`} className={pillButton("quiet", "xs")}>All issues</Link>}>
+            {issues.length === 0 ? (
+              <p className={ov.note}>Nothing needs you.</p>
+            ) : (
+              <ul className={ov.rows}>
+                {issues.slice(0, 3).map((i) => (
+                  <li key={i.id} className={cn(ov.row, ov.openRow)}>
+                    <span className={ov.rowMain}>
+                      <Link href={`${BASE}/issues`} className={cn(ov.open, ov.rowTitle)}>
+                        {i.title}
+                      </Link>
+                      <span className={ov.rowMeta}>
+                        {fmt(i.count)} {i.countLabel}, {i.userIds.length} users
+                      </span>
+                    </span>
+                    <StatusPill tone="attention">{i.code}</StatusPill>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
       </div>
-
-      <div className={TWO_COLS}>
-        <ErrorGroups events={activity.events} />
-        <Card
-          title="Device types"
-          count={compatible}
-          aside={
-            <Link href={`${PORTAL_BASE}/devices`} className={pillButton("outline", "sm")}>
-              Open devices
-            </Link>
-          }
-        >
-          <ul className={ov.rows}>
-            {types.map(({ type, state }) => (
-              <li key={type.id} className={cn(ov.row, ov.openRow)}>
-                <span className={ov.mark} data-shape="tile" aria-hidden="true">
-                  <DeviceKindIcon kind={glyphKind(type.kind)} size={13} strokeWidth={1.8} />
-                </span>
-                <span className={ov.rowMain}>
-                  <Link href={typeHref(type.id)} className={cn(ov.open, ov.rowTitle)}>
-                    {type.name}
-                  </Link>
-                </span>
-                <TypeStatusPill state={state} />
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
-    </>
+      <Card title="Latest deliveries" aside={<Link href={`${BASE}/activity`} className={pillButton("quiet", "xs")}>All activity</Link>}>
+        <ul className="m-0 flex list-none flex-col">
+          {recent.map((c) => (
+            <CallRow key={c.id} call={c} onOpen={() => router.push(`${BASE}/activity?call=${c.id}`)} />
+          ))}
+        </ul>
+      </Card>
+    </PortalPage>
   );
 }

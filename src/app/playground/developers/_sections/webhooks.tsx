@@ -1,212 +1,122 @@
 "use client";
 
-import { Fragment, useState } from "react";
-import { Plus } from "lucide-react";
-import type { WebhookEventName } from "@dopl/device-contracts";
+import { useState } from "react";
 import { cn } from "@/shared/lib/utils";
-import { CopyButton } from "@/shared/ui/copy-button";
-import { PILL_ICON, pillButton } from "@/shared/ui/pill-button";
-import { SearchField } from "@/shared/ui/search-field";
-import { SegmentedControl } from "@/shared/ui/segmented-control";
+import { CreateButton, pillButton } from "@/shared/ui/pill-button";
+import { DialogActions, StandardDialog } from "@/shared/ui/standard-dialog";
 import { StatusPill } from "@/shared/ui/status-pill";
+import { toast } from "@/shared/ui/toast";
+import { ThinMeter } from "@/shared/ui/usage-meter";
 import { RAISED_INPUT } from "@/shared/ui/wells";
-import { usePortal } from "../_components/portal-context";
-import { addEndpoint, sendTestEvent } from "../_components/portal-actions";
-import { ALL_WEBHOOK_EVENTS } from "../_components/portal-store";
-import { Card, Json, Muted, PageHeader, RowOpen, Table, clock, ov, since } from "../_components/ui";
-import type { WebhookOutboxRow } from "../_data/activity";
-
-type StatusFilter = "all" | WebhookOutboxRow["status"];
-const STATUSES: ReadonlyArray<{ key: StatusFilter; label: string }> = [
-  { key: "all", label: "All" },
-  { key: "delivered", label: "Delivered" },
-  { key: "pending", label: "Pending" },
-  { key: "failed", label: "Failed" },
-];
-
-/** Attempts after the first, with exponential backoff; the eighth attempt is the last. */
-export const RETRY_SCHEDULE = ["1m", "5m", "30m", "2h", "5h", "10h", "24h"] as const;
-const MAX_ATTEMPTS = RETRY_SCHEDULE.length + 1;
-
-/** Events grouped by their resource, the WorkOS picker's groups. */
-const GROUPS = Object.entries(
-  ALL_WEBHOOK_EVENTS.reduce<Record<string, WebhookEventName[]>>((acc, e) => {
-    const g = e.split(".")[0];
-    return { ...acc, [g]: [...(acc[g] ?? []), e] };
-  }, {})
-);
-
-function statusPill(row: WebhookOutboxRow) {
-  if (row.status === "delivered")
-    return (
-      <StatusPill tone="live" dot bare>
-        Delivered
-      </StatusPill>
-    );
-  if (row.status === "pending") return <StatusPill tone="attention">Retry {since(row.next_attempt_at)}</StatusPill>;
-  return <StatusPill>Failed</StatusPill>;
-}
+import { minsAgo } from "../_data/company";
+import { ALL_WEBHOOK_EVENTS, type EndpointRow } from "../_data/misc";
+import { CallPanel, CallRow } from "../_components/calls";
+import { useCalls, usePortal } from "../_components/portal-store";
+import { Cell, FactChip, Id, PortalPage, Strip, fmt, ov, since } from "../_components/ui";
 
 export function WebhooksSection() {
-  const { env, activity, store } = usePortal();
-  const [status, setStatus] = useState<StatusFilter>("all");
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [replayed, setReplayed] = useState<Set<string>>(new Set());
+  const { state, update } = usePortal();
+  const calls = useCalls();
+  const endpoints = state.endpoints.filter((e) => e.env === state.env);
+  const [openCall, setOpenCall] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const rows = activity.webhooks.filter((r) => status === "all" || r.status === status);
-  const endpoints = store.endpoints[env];
-
+  const [url, setUrl] = useState("");
+  const [events, setEvents] = useState<string[]>(["ask.answered"]);
+  const call = openCall ? calls.find((c) => c.id === openCall) : null;
+  const add = () => {
+    const row: EndpointRow = { id: `wh_${state.endpoints.length + 1}`, env: state.env, url, description: "New endpoint", events, state: "healthy", successRate: 100, sent7d: 0, lastAt: minsAgo(0) };
+    update((s) => ({ ...s, endpoints: [...s.endpoints, row] }));
+    setAdding(false);
+    setUrl("");
+  };
+  const sent = endpoints.reduce((n, e) => n + e.sent7d, 0);
   return (
-    <>
-      <PageHeader
-        title="Webhooks"
-        action={
-          <button type="button" className={pillButton("ink", "lg")} onClick={() => setAdding((v) => !v)}>
-            <Plus size={PILL_ICON.lg} aria-hidden="true" />
+    <PortalPage
+      title="Webhooks"
+      actions={<CreateButton onClick={() => setAdding(true)}>Add endpoint</CreateButton>}
+      aside={call ? <CallPanel call={call} onClose={() => setOpenCall(null)} /> : undefined}
+    >
+      <Strip label="Summary">
+        <Cell label="Endpoints" value={String(endpoints.length)} />
+        <Cell label="Sent, 7 days" value={fmt(sent)} />
+        <Cell label="Failing" value={String(endpoints.filter((e) => e.state === "failing").length)} />
+      </Strip>
+      {endpoints.map((e) => {
+        const recent = calls.filter((c) => c.webhook?.endpointId === e.id).slice(0, 4);
+        return (
+          <section key={e.id} className={cn("white-card", ov.card)} aria-label={e.description}>
+            <div className="flex items-center gap-3">
+              <span className={ov.rowMain}>
+                <span className="flex items-center gap-2">
+                  <span className="text-title font-medium text-text-primary">{e.description}</span>
+                  {e.state === "failing" ? (
+                    <StatusPill tone="attention" dot>
+                      Failing
+                    </StatusPill>
+                  ) : e.state === "paused" ? (
+                    <StatusPill>Paused</StatusPill>
+                  ) : (
+                    <StatusPill tone="live" dot bare>
+                      Healthy
+                    </StatusPill>
+                  )}
+                </span>
+                <Id className="text-caption">{e.url}</Id>
+              </span>
+              <span className="flex w-32 items-center gap-2">
+                <span className="text-caption font-medium tabular-nums text-text-primary">{e.successRate}%</span>
+                <ThinMeter used={e.successRate} limit={100} className="flex-1" />
+              </span>
+              <span className={ov.rowAside}>Last {since(e.lastAt)}</span>
+              <button type="button" className={pillButton("outline", "sm")} onClick={() => toast({ title: `Test event sent to ${e.description}` })}>
+                Send test
+              </button>
+              <button
+                type="button"
+                className={pillButton("quiet", "sm")}
+                onClick={() => update((s) => ({ ...s, endpoints: s.endpoints.map((x) => (x.id === e.id ? { ...x, state: x.state === "paused" ? "healthy" : "paused" } : x)) }))}
+              >
+                {e.state === "paused" ? "Resume" : "Pause"}
+              </button>
+            </div>
+            <span className="flex flex-wrap gap-1">
+              {e.events.map((name) => (
+                <FactChip key={name}>{name}</FactChip>
+              ))}
+            </span>
+            {recent.length > 0 && (
+              <ul className="m-0 flex list-none flex-col">
+                {recent.map((c) => (
+                  <CallRow key={c.id} call={c} selected={c.id === openCall} onOpen={() => setOpenCall(c.id)} />
+                ))}
+              </ul>
+            )}
+          </section>
+        );
+      })}
+      <StandardDialog open={adding} onClose={() => setAdding(false)} title="Add endpoint">
+        <div className="flex flex-col gap-3">
+          <input aria-label="Endpoint URL" placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} className={cn(RAISED_INPUT, "h-8 px-3 font-mono")} />
+          <span className="flex flex-wrap gap-1.5">
+            {ALL_WEBHOOK_EVENTS.map((name) => {
+              const on = events.includes(name);
+              return (
+                <button key={name} type="button" aria-pressed={on} onClick={() => setEvents(on ? events.filter((x) => x !== name) : [...events, name])} className={pillButton(on ? "ink" : "outline", "xs", { raise: false })}>
+                  {name}
+                </button>
+              );
+            })}
+          </span>
+        </div>
+        <DialogActions>
+          <button type="button" className={pillButton("quiet", "md")} onClick={() => setAdding(false)}>
+            Cancel
+          </button>
+          <button type="button" disabled={!/^https:\/\/\S+\.\S+/.test(url)} className={cn(pillButton("ink", "md"), "disabled:opacity-60")} onClick={add}>
             Add endpoint
           </button>
-        }
-      />
-      {adding && <AddEndpoint onDone={() => setAdding(false)} />}
-
-      <Card title="Endpoints" count={endpoints.length}>
-        <ul className={ov.rows}>
-          {endpoints.map((e) => (
-            <li key={e.id} className={ov.row}>
-              <span className={ov.rowMain}>
-                <span className={cn(ov.rowTitle, "font-mono")}>{e.url}</span>
-                <span className={cn(ov.rowMeta, "font-mono")}>
-                  {e.events.length} events · whsec_{env}_••••{e.secret_tail}
-                </span>
-              </span>
-              <CopyButton text={e.url} />
-              <button type="button" className={pillButton("outline", "sm")} onClick={() => sendTestEvent(e)}>
-                Send test event
-              </button>
-            </li>
-          ))}
-        </ul>
-      </Card>
-
-      <Card
-        title="Deliveries"
-        count={rows.length}
-        aside={<SegmentedControl options={STATUSES} value={status} onChange={setStatus} ariaLabel="Delivery status" />}
-      >
-        <span className={cn(ov.rowMeta, "font-mono")}>Retries {RETRY_SCHEDULE.join(" → ")}</span>
-        <Table columns={["Created", "Event", "Status", { label: "Attempts", num: true }, "Next retry", ""]}>
-          {rows.map((r) => {
-            const open = openId === r.id;
-            return (
-              <Fragment key={r.id}>
-                <tr>
-                  <td className="font-mono text-small text-text-muted">
-                    <RowOpen label={`Delivery ${r.id}`} expanded={open} onClick={() => setOpenId(open ? null : r.id)}>
-                      {clock(r.created_at)}
-                    </RowOpen>
-                  </td>
-                  <td className="font-mono text-small">{r.event_type}</td>
-                  <td className="whitespace-nowrap">{statusPill(r)}</td>
-                  <td className={`${ov.num} font-mono text-small`}>
-                    {r.attempts} / {MAX_ATTEMPTS}
-                  </td>
-                  <td className="whitespace-nowrap font-mono text-small text-text-muted">
-                    {r.status === "pending" ? RETRY_SCHEDULE[Math.min(r.attempts - 1, RETRY_SCHEDULE.length - 1)] : "—"}
-                  </td>
-                  <td className="text-right">
-                    {replayed.has(r.id) ? (
-                      <Muted>Queued</Muted>
-                    ) : (
-                      <button
-                        type="button"
-                        className={`${pillButton("quiet", "xs")} relative`}
-                        onClick={() => setReplayed((prev) => new Set(prev).add(r.id))}
-                      >
-                        Replay
-                      </button>
-                    )}
-                  </td>
-                </tr>
-                {open && (
-                  <tr>
-                    <td colSpan={6} className="pb-2.5">
-                      <Json value={{ id: r.id, type: r.event_type, created_at: r.created_at, attempts: r.attempts, data: r.payload }} />
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            );
-          })}
-        </Table>
-      </Card>
-    </>
-  );
-}
-
-/** WorkOS's create form: the URL, then a searchable picker of events grouped by resource. */
-function AddEndpoint({ onDone }: { onDone: () => void }) {
-  const [url, setUrl] = useState("https://");
-  const [q, setQ] = useState("");
-  const [picked, setPicked] = useState<Set<WebhookEventName>>(new Set());
-  const valid = /^https:\/\/[^\s/]+\.[^\s]+/.test(url) && picked.size > 0;
-  const toggle = (e: WebhookEventName) =>
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (next.has(e)) next.delete(e);
-      else next.add(e);
-      return next;
-    });
-
-  return (
-    <Card title="New endpoint">
-      <label className="flex flex-col gap-1.5">
-        <span className={ov.cellLabel}>URL</span>
-        <input value={url} onChange={(e) => setUrl(e.target.value)} className={cn(RAISED_INPUT, "h-8 px-3 font-mono")} />
-      </label>
-      <SearchField value={q} onChange={setQ} placeholder="Search events" size="sm" />
-      <div className="grid grid-cols-2 gap-3">
-        {GROUPS.map(([group, events]) => {
-          const shown = events.filter((e) => e.includes(q.trim()));
-          if (shown.length === 0) return null;
-          const all = events.every((e) => picked.has(e));
-          return (
-            <div key={group} className="card-well flex flex-col gap-1.5 px-3 py-2.5">
-              <span className="flex items-center justify-between">
-                <span className={cn(ov.rowTitle, "capitalize")}>{group}</span>
-                <button
-                  type="button"
-                  className={pillButton("quiet", "xs")}
-                  onClick={() => setPicked((prev) => new Set(all ? [...prev].filter((e) => !events.includes(e)) : [...prev, ...events]))}
-                >
-                  {all ? "None" : "All"}
-                </button>
-              </span>
-              {shown.map((e) => (
-                <label key={e} className="flex items-center gap-2 font-mono text-small text-text-primary">
-                  <input type="checkbox" checked={picked.has(e)} onChange={() => toggle(e)} />
-                  {e}
-                </label>
-              ))}
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          disabled={!valid}
-          className={cn(pillButton("ink", "md"), "disabled:opacity-60")}
-          onClick={() => {
-            addEndpoint(url, [...picked]);
-            onDone();
-          }}
-        >
-          Create with {picked.size} events
-        </button>
-        <button type="button" className={pillButton("quiet", "md")} onClick={onDone}>
-          Cancel
-        </button>
-      </div>
-    </Card>
+        </DialogActions>
+      </StandardDialog>
+    </PortalPage>
   );
 }

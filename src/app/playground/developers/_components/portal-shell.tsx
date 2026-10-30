@@ -1,139 +1,170 @@
 "use client";
 
 /**
- * The developer portal's own layout: a full-page white app with a left nav (org / project, the
- * test/live switch, the sections), a top bar, and the section's page below. Built from the kit
- * (tokens, `SelectMenu` for the env beside the project name, `StatusPill`, the menu-row highlight); it is a standalone portal,
- * not the desktop /home frame.
+ * The portal's frame IS /home's: the account rail, then one panel holding the sidebar and the record
+ * pane (`HomeFrame`). Nav rows take /home's selected face, the ink row.
  */
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
   Activity,
+  AlertCircle,
+  BarChart3,
   Cpu,
   FlaskConical,
   KeyRound,
   LayoutGrid,
   Link2,
-  SlidersHorizontal,
   Users,
+  UsersRound,
   Webhook,
   type LucideIcon,
 } from "lucide-react";
-import type { Environment } from "@dopl/device-contracts";
+import { HomeFrame } from "@/features/home/components/shell/home-frame";
+import { AccountRailCore } from "@/shared/layout/app-shell/account-rail-core";
+import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import { cn } from "@/shared/lib/utils";
-import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
+import { IdentityFace } from "@/shared/ui/identity-face";
+import { QUIET_HEADING_TEXT } from "@/shared/ui/section-heading";
+import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { SelectMenu } from "@/shared/ui/select-menu";
-import { StatusPill } from "@/shared/ui/status-pill";
-import { DEMO_ORG, DEMO_PROJECT } from "../_data/fixtures";
-import { usePortal } from "./portal-context";
+import { COMPANY, MEMBERS, PROJECTS, type Env } from "../_data/company";
+import { issuesFor } from "../_data/issues";
+import { FindAnything } from "./find-anything";
+import { usePortal } from "./portal-store";
+import { BASE } from "./ui";
 
-export const PORTAL_BASE = "/playground/developers";
+const MARK = "/favicons/android-chrome-512x512.png";
 
-/** Every portal section, in nav order. `connect` is the end user's screen, not a console page. */
-export const PORTAL_SECTIONS: ReadonlyArray<{ href: string; label: string; icon: LucideIcon }> = [
-  { href: "", label: "Overview", icon: LayoutGrid },
-  { href: "/keys", label: "API keys", icon: KeyRound },
-  { href: "/users", label: "End users", icon: Users },
-  { href: "/devices", label: "Devices", icon: Cpu },
-  { href: "/profiles", label: "Context profiles", icon: SlidersHorizontal },
-  { href: "/events", label: "Events", icon: Activity },
-  { href: "/webhooks", label: "Webhooks", icon: Webhook },
-  { href: "/test-mode", label: "Test mode", icon: FlaskConical },
-  { href: "/connect", label: "Connect customization", icon: Link2 },
+const WORKSPACE = { id: "ws_larkfield", name: COMPANY.name, slug: "larkfield", publicId: "lrkfld", iconUrl: null, role: "owner" as const };
+
+const ENV_OPTIONS: { key: Env; label: string }[] = [
+  { key: "test", label: "Test" },
+  { key: "live", label: "Live" },
 ];
 
-const ENV_OPTIONS = [
-  { value: "test", label: "Test" },
-  { value: "live", label: "Live" },
-] as const satisfies ReadonlyArray<{ value: Environment; label: string }>;
+type NavItem = { href: string; label: string; icon: LucideIcon };
 
-function useSection() {
-  const pathname = usePathname();
-  // A sub-route (`/devices/even_g2`) keeps its section selected.
-  return PORTAL_SECTIONS.find((s) => s.href && pathname.startsWith(PORTAL_BASE + s.href)) ?? PORTAL_SECTIONS[0];
+const GROUPS: { label: string | null; items: NavItem[] }[] = [
+  { label: null, items: [{ href: "", label: "Overview", icon: LayoutGrid }] },
+  {
+    label: "Build",
+    items: [
+      { href: "/devices", label: "Devices", icon: Cpu },
+      { href: "/connect", label: "Connect page", icon: Link2 },
+      { href: "/playground", label: "Playground", icon: FlaskConical },
+    ],
+  },
+  {
+    label: "Operate",
+    items: [
+      { href: "/users", label: "Users", icon: Users },
+      { href: "/activity", label: "Activity", icon: Activity },
+      { href: "/issues", label: "Issues", icon: AlertCircle },
+    ],
+  },
+  {
+    label: "Configure",
+    items: [
+      { href: "/keys", label: "API keys", icon: KeyRound },
+      { href: "/webhooks", label: "Webhooks", icon: Webhook },
+      { href: "/usage", label: "Usage", icon: BarChart3 },
+      { href: "/team", label: "Team", icon: UsersRound },
+    ],
+  },
+];
+
+function NavRow({ item, active, badge }: { item: NavItem; active: boolean; badge?: number }) {
+  const Icon = item.icon;
+  return (
+    <Link
+      href={BASE + item.href}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex h-8 items-center gap-2.5 rounded-field px-2.5 text-body transition-colors",
+        active ? "bg-surface-cta font-medium text-text-on-cta" : "text-text-secondary hover:bg-menu-item-hover-bg hover:text-text-primary"
+      )}
+    >
+      <Icon size={14} strokeWidth={1.8} aria-hidden="true" className={active ? undefined : "text-text-muted"} />
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      {badge ? (
+        <span className={cn("text-micro tabular-nums", active ? "text-text-on-cta" : "text-warning")}>{badge}</span>
+      ) : null}
+    </Link>
+  );
 }
 
-export function PortalShell({ children }: { children: ReactNode }) {
+function Sidebar() {
+  const pathname = usePathname();
+  const { state, update } = usePortal();
+  const openIssues = issuesFor(state.env, state.revoked, Object.keys(state.deviceStates)).filter((i) => !state.mutedIssues.includes(i.id)).length;
+  const me = MEMBERS[2];
   return (
-    // Fixed full-viewport white surface: the shell paints the dark frame on <body> for
-    // non-workspace roots (the `/connect/[token]` pattern).
-    <div className="fixed inset-0 z-50 flex bg-bg-overlay text-body text-text-secondary">
-      <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar />
-        <main className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-3.5 px-8 pb-16 pt-7">{children}</div>
-        </main>
+    <div className="flex w-58 shrink-0 flex-col gap-3 px-3 pb-3">
+      <div className="flex flex-col gap-2">
+        <SelectMenu
+          variant="raised"
+          ariaLabel="Project"
+          value={state.project}
+          options={PROJECTS}
+          onChange={(project) => update((s) => ({ ...s, project }))}
+          className="w-full justify-between"
+        />
+        <SegmentedControl
+          variant="track"
+          size="md"
+          ariaLabel="Environment"
+          options={ENV_OPTIONS}
+          value={state.env}
+          onChange={(env) => update((s) => ({ ...s, env }))}
+          className="w-full [&>button]:flex-1"
+        />
+        <FindAnything />
+      </div>
+      <nav aria-label="Developer portal" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+        {GROUPS.map((group) => (
+          <div key={group.label ?? "top"} className="flex flex-col gap-0.5">
+            {group.label && <span className={cn(QUIET_HEADING_TEXT, "px-2.5 pb-1 pt-0.5")}>{group.label}</span>}
+            {group.items.map((item) => {
+              const href = BASE + item.href;
+              const active = item.href === "" ? pathname === BASE : pathname.startsWith(href);
+              return <NavRow key={item.href} item={item} active={active} badge={item.href === "/issues" ? openIssues : undefined} />;
+            })}
+          </div>
+        ))}
+      </nav>
+      <div className="flex items-center gap-2 px-1 pt-1">
+        <IdentityFace size="s" name={me.name} />
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-caption font-medium text-text-primary">{me.name}</span>
+          <span className="truncate text-micro text-text-muted">{COMPANY.name}</span>
+        </span>
       </div>
     </div>
   );
 }
 
-function Sidebar() {
-  const { env, setEnv } = usePortal();
-  const current = useSection();
+export function PortalShell({ children }: { children: ReactNode }) {
   return (
-    <aside className="flex w-60 shrink-0 flex-col gap-5 border-r border-border-default bg-home-card px-3 py-4">
-      <div className="flex flex-col gap-0.5 px-2">
-        <span className="text-caption text-text-muted">{DEMO_ORG.name}</span>
-        <span className="flex min-w-0 items-center justify-between gap-2">
-          <span className={cn(IDENTITY_NAME_TEXT, "truncate")}>{DEMO_PROJECT.name}</span>
-          <SelectMenu variant="outline" options={ENV_OPTIONS} value={env} onChange={setEnv} ariaLabel="Environment" />
-        </span>
-      </div>
-      <nav aria-label="Developer portal" className="flex flex-col gap-0.5">
-        {PORTAL_SECTIONS.map((s) => {
-          const active = s === current;
-          const Icon = s.icon;
-          return (
-            <Link
-              key={s.href}
-              href={PORTAL_BASE + s.href}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "flex h-8 items-center gap-2.5 rounded-field px-2 text-body transition-colors",
-                active
-                  ? "bg-menu-item-hover-bg font-medium text-text-primary"
-                  : "text-text-secondary hover:bg-menu-item-hover-bg hover:text-text-primary"
-              )}
-            >
-              <Icon size={15} strokeWidth={1.8} aria-hidden="true" className={active ? "text-text-primary" : "text-text-muted"} />
-              {s.label}
-            </Link>
-          );
-        })}
-      </nav>
-    </aside>
-  );
-}
-
-function TopBar() {
-  const { env } = usePortal();
-  const current = useSection();
-  return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border-default px-8">
-      <div className="flex min-w-0 items-center gap-2 text-body">
-        <span className="text-text-muted">{DEMO_ORG.name}</span>
-        <span className="text-text-disabled">/</span>
-        <span className="text-text-muted">{DEMO_PROJECT.name}</span>
-        <span className="text-text-disabled">/</span>
-        <span className="font-medium text-text-primary">{current.label}</span>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="font-mono text-micro text-text-muted">API {DEMO_PROJECT.api_version}</span>
-        {env === "test" ? (
-          <StatusPill tone="attention" dot>
-            Test data
-          </StatusPill>
-        ) : (
-          <StatusPill tone="live" dot bare>
-            Live
-          </StatusPill>
-        )}
-      </div>
-    </header>
+    <div className={shell.root} style={{ "--shell-rail-w": "54px" } as CSSProperties}>
+      <HomeFrame
+        face="overview"
+        rail={
+          <AccountRailCore
+            workspaces={[WORKSPACE]}
+            activeWorkspacePublicId={WORKSPACE.publicId}
+            markSrc={MARK}
+            onNavigate={(path) => {
+              if (path === "/home") window.location.assign("/playground/overview");
+            }}
+          />
+        }
+        header={<div className="h-3 shrink-0" />}
+        list={<Sidebar />}
+      >
+        {children}
+      </HomeFrame>
+    </div>
   );
 }

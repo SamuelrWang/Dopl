@@ -1,51 +1,124 @@
 /**
- * The portal's presentational bits, composed from kit components and recipes: `OverviewCard` /
- * `Bars` and the Overview's row and table classes (`home/components/overview/overview.module.css`),
- * `StatusPill`, `.card-well`. Components only; no colour, size or shadow is declared here.
+ * The portal's page chrome and small bits, all composed from kit parts: the /home Overview's card,
+ * strip and row classes, `.rail-layout`, `Breadcrumb`, underline tabs, `StatusPill`. Components
+ * only; no colour, size or shadow is declared here.
  */
-import type { ReactNode } from "react";
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import type { CSSProperties, ReactNode } from "react";
 import type { RiskTier } from "@dopl/device-contracts";
-import { RISK_TIER_DEFAULT_POLICY } from "@dopl/device-contracts";
+import { Bot, Car, Glasses, House, Laptop, Smartphone, type LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { Breadcrumb, type BreadcrumbItem } from "@/shared/ui/breadcrumb";
+import { IdentityFace } from "@/shared/ui/identity-face";
+import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { SECTION_HEADING_TEXT } from "@/shared/ui/section-heading";
+import { SelectMenu } from "@/shared/ui/select-menu";
 import { StatusPill } from "@/shared/ui/status-pill";
 import ov from "@/features/home/components/overview/overview.module.css";
-import { DEMO_NOW } from "../_data/fixtures";
+import { DEMO_NOW } from "../_data/company";
+import { POLICY_LABEL, TIER_LABEL, trail, type IntegrationStatus, type ModelId } from "../_data/catalog";
+import { RISK_TIER_DEFAULT_POLICY } from "@dopl/device-contracts";
+import type { DeviceState } from "../_data/users";
+import { STATE_LABEL } from "../_data/users";
+import { usePortal } from "./portal-store";
 
 export { OverviewCard as Card, Bars } from "@/features/home/components/overview/overview-card";
 export { ov };
 
-/** The section's page title and its actions. */
-export function PageHeader({ title, action }: { title: string; action?: ReactNode }) {
-  return (
-    <div className="flex min-h-9 items-center justify-between gap-4 pb-1">
-      <h1 className={SECTION_HEADING_TEXT}>{title}</h1>
-      {action && <div className="flex items-center gap-2">{action}</div>}
-    </div>
-  );
-}
+export const BASE = "/playground/developers";
 
-/** A grey kit pill holding an identifier: a scope, a capability, a limit. */
-export function Chip({ children, mono = true }: { children: ReactNode; mono?: boolean }) {
-  return <StatusPill className={cn(mono && "font-mono")}>{children}</StatusPill>;
-}
+const KIND_ICON: Record<string, LucideIcon> = {
+  glasses: Glasses,
+  desktop: Laptop,
+  phone: Smartphone,
+  home_hub: House,
+  home_device: House,
+  vehicle: Car,
+  robot: Bot,
+  watch: Smartphone,
+};
 
-/** T3 and T4 ask the user on their device, so they take the "needs you" tone; the rest stay grey. */
-export function TierChip({ tier }: { tier: RiskTier }) {
+/** A category's mark, the Overview's raised tile. */
+export function TypeMark({ kind, size = "m" }: { kind: string; size?: "s" | "m" }) {
+  const Icon = KIND_ICON[kind] ?? Bot;
   return (
-    <span title={RISK_TIER_DEFAULT_POLICY[tier]}>
-      <StatusPill tone={tier === "T3" || tier === "T4" ? "attention" : "neutral"} className="font-mono">
-        {tier}
-      </StatusPill>
+    <span
+      aria-hidden="true"
+      className={cn(
+        "raised-tab flex shrink-0 items-center justify-center rounded-md text-text-secondary",
+        size === "m" ? "h-7 w-7" : "h-5 w-5"
+      )}
+    >
+      <Icon size={size === "m" ? 15 : 12} strokeWidth={1.8} />
     </span>
   );
 }
 
-export function Chips({ children }: { children: ReactNode }) {
-  return <span className="flex flex-wrap items-center gap-1 py-1.5">{children}</span>;
+export interface PortalPageProps {
+  crumbs?: { label: string; href?: string }[];
+  title: ReactNode;
+  lead?: ReactNode;
+  meta?: ReactNode;
+  actions?: ReactNode;
+  tabs?: { key: string; label: string; count?: number }[];
+  tab?: string;
+  onTab?: (key: string) => void;
+  /** The right rail: a live preview, or the side panel for one call. */
+  aside?: ReactNode;
+  asideWidth?: number;
+  children: ReactNode;
 }
 
-/** The Overview's summary strip: one white card, cells split by hairlines. */
+/** One page: crumbs, title, tabs on a hairline, then a body and an optional rail that scroll apart. */
+export function PortalPage({ crumbs, title, lead, meta, actions, tabs, tab, onTab, aside, asideWidth = 400, children }: PortalPageProps) {
+  const router = useRouter();
+  const { state } = usePortal();
+  const items: BreadcrumbItem[] | null = crumbs
+    ? crumbs.map((c) => ({ key: c.label, label: c.label, onSelect: c.href ? () => router.push(c.href!) : undefined }))
+    : null;
+  return (
+    <div className="flex min-w-0 flex-1 flex-col">
+      <header className={cn("flex shrink-0 flex-col gap-2 px-5 pt-4", !tabs && "pb-1")}>
+        {items && <Breadcrumb items={items} />}
+        <div className="flex min-h-9 items-center gap-3">
+          {lead}
+          <div className="flex min-w-0 flex-col">
+            <h1 className={cn(SECTION_HEADING_TEXT, "truncate")}>{title}</h1>
+            {meta && <div className="flex min-w-0 items-center gap-2 text-caption text-text-muted">{meta}</div>}
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {state.env === "test" && (
+              <StatusPill tone="attention" dot>
+                Test data
+              </StatusPill>
+            )}
+            {actions}
+          </div>
+        </div>
+        {tabs && tab && onTab && (
+          <SegmentedControl variant="underline" options={tabs} value={tab} onChange={onTab} ariaLabel="Sections" className="border-b border-border-default" />
+        )}
+      </header>
+      <div className="rail-layout">
+        <div
+          className="rail-layout-cols"
+          data-rail={aside ? undefined : "off"}
+          style={aside ? ({ "--rail-layout-w": `${asideWidth}px` } as CSSProperties) : undefined}
+        >
+          <div className="rail-layout-main">
+            <div className="mx-auto flex w-full max-w-270 flex-col gap-3.5 px-2 pb-5 pt-1">{children}</div>
+          </div>
+          {aside && <div aria-hidden="true" />}
+          {aside && <aside className="rail-layout-aside">{aside}</aside>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Strip({ label, children }: { label: string; children: ReactNode }) {
   return (
     <section className={cn("white-card", ov.card, ov.strip)} aria-label={label}>
@@ -54,110 +127,157 @@ export function Strip({ label, children }: { label: string; children: ReactNode 
   );
 }
 
-export function Cell({ label, value, of, sub }: { label: string; value: string; of?: string; sub?: string }) {
-  return (
-    <div className={ov.cell}>
+export function Cell({ label, value, of, sub, href }: { label: string; value: string; of?: string; sub?: ReactNode; href?: string }) {
+  const body = (
+    <>
       <span className={ov.cellLabel}>{label}</span>
       <span className={ov.figure}>
         {value}
         {of && <span className={ov.of}>{of}</span>}
       </span>
       {sub && <span className={ov.rowMeta}>{sub}</span>}
-    </div>
+    </>
+  );
+  return href ? (
+    <Link href={href} className={cn(ov.cell, "transition-colors hover:bg-menu-item-hover-bg")}>
+      {body}
+    </Link>
+  ) : (
+    <div className={ov.cell}>{body}</div>
   );
 }
 
-/** Label-over-value facts in a well. */
-export function Facts({ facts, cols = 3 }: { facts: Array<[string, string]>; cols?: 2 | 3 }) {
+/** Label-over-value facts in a grey well inside a white card. */
+export function Facts({ facts, cols = 4 }: { facts: [string, ReactNode][]; cols?: 2 | 3 | 4 }) {
+  const grid = { 2: "grid-cols-2", 3: "grid-cols-3", 4: "grid-cols-4" }[cols];
   return (
-    <dl className={cn("card-well grid gap-x-4 gap-y-2.5 px-3.5 py-3", cols === 3 ? "grid-cols-3" : "grid-cols-2")}>
+    <dl className={cn("card-well grid gap-x-4 gap-y-2.5 px-3.5 py-3", grid)}>
       {facts.map(([k, v]) => (
         <div key={k} className="flex min-w-0 flex-col gap-0.5">
           <dt className={ov.cellLabel}>{k}</dt>
-          <dd className="truncate font-mono text-small text-text-primary">{v}</dd>
+          <dd className="truncate text-small font-medium text-text-primary">{v}</dd>
         </div>
       ))}
     </dl>
   );
 }
 
-/** A JSON body in a well. */
-export function Json({ value }: { value: unknown }) {
+/** An id is small secondary text: human names lead. */
+export function Id({ children, className }: { children: ReactNode; className?: string }) {
+  return <span className={cn("truncate font-mono text-micro text-text-muted", className)}>{children}</span>;
+}
+
+/** The identity card's one-concept fact chip: a device, a grant, a scope. */
+export function FactChip({ icon, children, tone, title }: { icon?: ReactNode; children: ReactNode; tone?: "attention"; title?: string }) {
   return (
-    <pre className="card-well overflow-x-auto px-3.5 py-3 font-mono text-caption leading-relaxed text-text-secondary">
-      {JSON.stringify(value, null, 2)}
-    </pre>
+    <span
+      title={title}
+      className={cn(
+        "inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-tile border border-border-default bg-bg-elevated px-2 text-caption text-text-primary",
+        tone === "attention" && "text-warning"
+      )}
+    >
+      {icon}
+      <span className="min-w-0 truncate">{children}</span>
+    </span>
   );
 }
 
-/** The Overview's table: caption headers on a hairline, 36px rows split by hairlines. */
-export function Table({ columns, children }: { columns: Array<string | { label: string; num?: boolean }>; children: ReactNode }) {
+/** A dot in the device's state colour: green only for online, amber only when it needs attention. */
+export function StateDot({ state }: { state: DeviceState }) {
+  const needs = state === "stale" || state === "needs_relink";
   return (
-    <div className="min-w-0 overflow-x-auto">
-      <table className={ov.table}>
-        <thead>
-          <tr>
-            {columns.map((c) => {
-              const col = typeof c === "string" ? { label: c } : c;
-              return (
-                <th key={col.label || "actions"} scope="col" className={cn("whitespace-nowrap", col.num && ov.num)}>
-                  {col.label}
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
-    </div>
+    <span className="status-pill" data-tone={state === "online" ? "live" : needs ? "attention" : "neutral"} data-bare="true" title={STATE_LABEL[state]}>
+      <span className="status-pill-dot" aria-hidden="true" />
+    </span>
   );
 }
 
-/** A table cell's button that opens its row: the Overview's `.open`, whose `::after` covers the row. */
-export function RowOpen({ label, expanded, onClick, children }: { label: string; expanded: boolean; onClick: () => void; children: ReactNode }) {
+export function StatePill({ state }: { state: DeviceState }) {
+  if (state === "online") {
+    return (
+      <StatusPill tone="live" dot bare>
+        Online
+      </StatusPill>
+    );
+  }
+  if (state === "offline") return <StatusPill>Offline</StatusPill>;
   return (
-    <button type="button" className={cn(ov.open, "whitespace-nowrap")} aria-label={label} aria-expanded={expanded} onClick={onClick}>
-      {children}
-    </button>
+    <StatusPill tone="attention" dot>
+      {STATE_LABEL[state]}
+    </StatusPill>
   );
 }
 
-export function Muted({ children }: { children: ReactNode }) {
-  return <span className="text-caption text-text-muted">{children}</span>;
+/** Category › Integration › Model, under a physical device's name. */
+export function ModelTrail({ modelId, className }: { modelId: ModelId; className?: string }) {
+  return <span className={cn("truncate text-caption text-text-muted", className)}>{trail(modelId).join(" › ")}</span>;
 }
 
-/** "3m ago" / "2d ago" / "in 4d", measured from the demo clock. */
+export function IntegrationStatusPill({ status }: { status: IntegrationStatus }) {
+  return status === "live" ? (
+    <StatusPill tone="live" dot bare>
+      Live
+    </StatusPill>
+  ) : (
+    <StatusPill>Testing</StatusPill>
+  );
+}
+
+export function TierChip({ tier }: { tier: RiskTier }) {
+  return (
+    <span title={`${TIER_LABEL[tier]}. ${POLICY_LABEL[RISK_TIER_DEFAULT_POLICY[tier]]}`}>
+      <StatusPill tone={tier === "T4" ? "attention" : "neutral"} className="font-mono">
+        {tier}
+      </StatusPill>
+    </span>
+  );
+}
+
+export function UserFace({ name, online }: { name: string; online?: boolean }) {
+  return <IdentityFace size="s" name={name} online={online} />;
+}
+
+/** A hairline list inside a white card with no title, the Tasks list. */
+export function RowList({ children, className }: { children: ReactNode; className?: string }) {
+  return <ul className={cn("white-card m-0 flex min-w-0 list-none flex-col px-3", className)}>{children}</ul>;
+}
+
+/** A small filter: the Overview's outlined select with its name as a muted prefix. */
+export function Filter<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  onChange: (next: T) => void;
+}) {
+  return <SelectMenu variant="outline" prefix={label} ariaLabel={label} value={value} options={options} onChange={onChange} />;
+}
+
+/** "3m ago" / "2d ago", measured from the demo clock. */
 export function since(iso: string | null): string {
   if (!iso) return "Never";
-  const diff = Date.parse(DEMO_NOW) - Date.parse(iso);
-  const future = diff < 0;
-  const m = Math.abs(diff) / 60_000;
-  const word = m < 1 ? "now" : m < 60 ? `${Math.round(m)}m` : m < 60 * 24 ? `${Math.round(m / 60)}h` : `${Math.round(m / (60 * 24))}d`;
-  if (word === "now") return "Just now";
-  return future ? `in ${word}` : `${word} ago`;
+  const m = (Date.parse(DEMO_NOW) - Date.parse(iso)) / 60_000;
+  if (m < 1) return "Just now";
+  if (m < 60) return `${Math.round(m)}m ago`;
+  if (m < 60 * 24) return `${Math.round(m / 60)}h ago`;
+  return `${Math.round(m / (60 * 24))}d ago`;
 }
+
+export const fmt = (n: number) => n.toLocaleString("en-US");
 
 export function clock(iso: string): string {
-  return iso.slice(5, 10) + " " + iso.slice(11, 19);
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", timeZone: "UTC" });
+  return `${date}, ${time}`;
 }
 
-export const KIND_LABEL: Record<string, string> = {
-  glasses: "Glasses",
-  phone: "Phone",
-  desktop: "Desktop",
-  watch: "Watch",
-  home_hub: "Home hub",
-  home_device: "Home device",
-  vehicle: "Vehicle",
-  robot: "Robot",
-};
-
-/** The SDK's device kind as the product's glyph kind (`DeviceKindIcon`): a desktop is a computer. */
-export const glyphKind = (kind: string): string => (kind === "desktop" ? "computer" : kind);
-
-export function deviceName(d: { adapter_id: string; kind: string; model: string }): string {
-  if (d.adapter_id === "simulator") return `Simulated ${KIND_LABEL[d.kind]?.toLowerCase() ?? d.kind}`;
-  if (d.model === "even_g2") return "Even G2";
-  if (d.kind === "desktop") return "Dopl desktop";
-  return d.model;
+export function ms(n: number | null | undefined): string {
+  if (n === null || n === undefined) return "";
+  return n < 1000 ? `+${n} ms` : `+${(n / 1000).toFixed(1)} s`;
 }
