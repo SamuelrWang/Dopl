@@ -129,8 +129,8 @@ export function UsersToolbar({
           right
           label="Saved views"
           trigger={(open, toggle) => (
-            <button type="button" aria-haspopup="menu" aria-expanded={open} className={cx(b.btn, b.sm, s.viewsBtn)} onClick={toggle}>
-              <Bookmark {...ICON_100_SM} />
+            <button type="button" aria-haspopup="menu" aria-expanded={open} className={cx(b.btn, b.sm)} onClick={toggle}>
+              <Bookmark {...ICON_100} />
               Views
             </button>
           )}

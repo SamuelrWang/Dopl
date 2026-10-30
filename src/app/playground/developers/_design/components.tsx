@@ -39,9 +39,9 @@ export function Initials({ text, small, ink }: { text: string; small?: boolean; 
 
 export const ICON = { size: 20, strokeWidth: 1.6 } as const;
 export const ICON_SM = { size: 17.5, strokeWidth: 1.6 } as const;
-/** The same icons at true size, for real pages on .u100. */
-export const ICON_100 = { size: 16, strokeWidth: 1.5 } as const;
-export const ICON_100_SM = { size: 14, strokeWidth: 1.5 } as const;
+/** The same icons on .u100: reference size x 0.72 to a whole pixel, stroke 0.08 of size. */
+export const ICON_100 = { size: 14, strokeWidth: 1.12 } as const;
+export const ICON_100_SM = { size: 13, strokeWidth: 1.04 } as const;
 
 export const initialsOf = (name: string) =>
   name

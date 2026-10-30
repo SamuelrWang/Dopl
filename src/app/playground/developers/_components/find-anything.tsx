@@ -61,19 +61,15 @@ export function FindAnything() {
               <button
                 key={h.key}
                 type="button"
-                className={cx(o.item, o.itemBtn, side.hit)}
+                className={cx(o.item, o.itemBtn)}
                 onClick={() => {
                   setOpen(false);
                   setQ("");
                   router.push(h.href);
                 }}
               >
-                <span className={b.tight}>
-                  <span className={cx(b.strong, side.ellipsis)}>{h.label}</span>
-                  <span className={cx(b.smallMuted, side.ellipsis)}>
-                    {h.kind}, {h.id}
-                  </span>
-                </span>
+                <span className={side.navLabel}>{h.label}</span>
+                <span className={o.itemEnd}>{h.kind}</span>
               </button>
             ))
           )}

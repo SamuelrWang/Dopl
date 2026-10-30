@@ -1,9 +1,8 @@
-/* The Users page's own layout, at true size. Frame, colours and recipes come from _design. */
+/* The Users page's own layout, on .u100; lengths multiply --u. Frame, colours and recipes come from _design. */
 .ellipsis { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 
 .search { flex: 1; cursor: text; }
-.viewsBtn.viewsBtn { color: var(--muted); }
 
 .table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .colUser { width: 23%; }
@@ -12,44 +11,34 @@
 .colDelivery { width: 10%; }
 .colSuccess { width: 11%; }
 .colStatus { width: 11%; }
-.colEnd { width: 2%; min-width: 34px; }
-.th { height: 44px; padding: 0 12px; text-align: left; box-shadow: inset 0 -1px 0 var(--line-tool); }
-.th:first-child { padding-left: 18px; }
-.sortBtn { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: none; font: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: -0.015em; color: var(--muted); white-space: nowrap; cursor: pointer; }
+.colEnd { width: 2%; min-width: calc(42.5 * var(--u)); }
+.th { height: var(--cell-head-h); padding: 0 var(--cell-pad); text-align: left; box-shadow: inset 0 calc(-1.25 * var(--u)) 0 var(--line-tool); }
+.th:first-child { padding-left: var(--inset); }
+.sortBtn { display: inline-flex; align-items: center; gap: var(--cell-pad); padding: 0; border: 0; background: none; font: inherit; font-size: calc(15.5 * var(--u)); font-weight: 500; letter-spacing: -0.015em; color: var(--muted); white-space: nowrap; cursor: pointer; }
 .sortOn { color: var(--ink); }
-.row { cursor: pointer; box-shadow: inset 0 -1px 0 var(--line-tool); }
+.row { cursor: pointer; box-shadow: inset 0 calc(-1.25 * var(--u)) 0 var(--line-tool); }
 .row:hover { background: var(--fill); }
 .rowOpen { background: var(--fill-strong); }
-.td { height: 60px; padding: 0 12px; overflow: hidden; }
-.td:first-child { padding-left: 18px; }
-.tdEnd { padding: 0 12px 0 0; }
-.name { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.devices { display: flex; align-items: center; gap: 5px; min-width: 0; }
-.deviceChip { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border-radius: 8px; background: var(--fill-strong); min-width: 0; font-size: 12.5px; font-weight: 500; letter-spacing: -0.015em; color: var(--ink-soft); }
-.deviceChipName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 92px; }
-.moreChip { display: inline-flex; align-items: center; height: 26px; padding: 0 7px; border-radius: 8px; box-shadow: var(--ring); font-size: 12px; font-weight: 500; color: var(--muted); flex: none; }
-.stateDot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
-.inlineDot { display: inline-block; margin-left: 6px; vertical-align: middle; }
-.dotOnline { background: var(--ok); }
-.dotOffline { background: var(--track); }
-.dotWarn { background: var(--warn); }
-.dotError { background: var(--error); }
-.success { display: flex; flex-direction: column; gap: 4px; }
-.success > span:last-child { display: block; height: 4px; }
+.td { height: var(--cell-h); padding: 0 var(--cell-pad); overflow: hidden; }
+.td:first-child { padding-left: var(--inset); }
+.tdEnd { padding: 0 var(--cell-pad) 0 0; }
+.name { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.devices { display: flex; align-items: center; gap: calc(8.75 * var(--u)); min-width: 0; }
+.deviceChipName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: calc(115 * var(--u)); }
+.inlineDot { display: inline-block; margin-left: calc(7.5 * var(--u)); vertical-align: middle; }
+.dotOnline { color: var(--ok); }
+.dotOffline { color: var(--track); }
+.dotWarn { color: var(--warn); }
+.dotError { color: var(--error); }
 .barLow { background: var(--error); }
-.tableFoot { display: flex; align-items: center; justify-content: space-between; min-height: 56px; padding: 8px 18px; }
 
 .sheetLayer { position: absolute; inset: 0; z-index: 40; display: flex; justify-content: flex-end; }
 .scrim { position: absolute; inset: 0; padding: 0; border: 0; background: rgba(0, 0, 0, 0.14); cursor: default; }
-.sheet { position: relative; display: flex; flex-direction: column; width: 464px; max-width: 100%; height: 100%; background: var(--surface); box-shadow: -14px 0 28px rgba(0, 0, 0, 0.12); }
-.sheetBody { display: flex; flex-direction: column; gap: 18px; flex: 1; min-height: 0; overflow-y: auto; padding: 20px; }
-.sheetFoot { display: flex; align-items: center; gap: 8px; padding: 14px 20px; box-shadow: inset 0 1px 0 var(--line-tool); }
-.figures { display: grid; grid-template-columns: repeat(3, 1fr); padding: 12px 14px; margin: 0; }
-.figure { display: flex; flex-direction: column; gap: 2px; margin: 0; }
-.figure dd { margin: 0; }
-.deviceRow { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
-.deviceEnd { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: none; }
-.deliveryRow { display: flex; align-items: center; gap: 10px; padding: 9px 0; }
-.deliveryLine { box-shadow: inset 0 -1px 0 var(--line-tool); }
-.deliveryTime { width: 58px; flex: none; text-align: right; white-space: nowrap; }
-.notice.notice { position: absolute; right: 20px; bottom: 20px; z-index: 50; padding: 10px 14px; }
+.sheet { position: relative; display: flex; flex-direction: column; width: calc(580 * var(--u)); max-width: 100%; height: 100%; background: var(--surface); box-shadow: calc(-17.5 * var(--u)) 0 calc(35 * var(--u)) rgba(0, 0, 0, 0.12); }
+.sheetBody { display: flex; flex-direction: column; gap: calc(17.5 * var(--u)); flex: 1; min-height: 0; overflow-y: auto; padding: var(--inset); }
+.sheetFoot { display: flex; align-items: center; gap: calc(10 * var(--u)); padding: calc(15 * var(--u)) var(--inset); box-shadow: inset 0 calc(1.25 * var(--u)) 0 var(--line-tool); }
+.figures { display: grid; grid-template-columns: repeat(3, 1fr); padding: calc(15 * var(--u)) calc(17.5 * var(--u)); margin: 0; }
+.figures dd { margin: 0; }
+.deviceEnd { display: flex; flex-direction: column; align-items: flex-end; gap: calc(5 * var(--u)); flex: none; }
+.deliveryTime { width: calc(72.5 * var(--u)); flex: none; text-align: right; white-space: nowrap; }
+.notice { position: absolute; right: calc(25 * var(--u)); bottom: calc(25 * var(--u)); z-index: 50; }

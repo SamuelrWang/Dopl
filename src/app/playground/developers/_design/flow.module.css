@@ -19,11 +19,11 @@
 .tileOff:hover { background: var(--surface); }
 .tileCheck { position: absolute; right: calc(12.5 * var(--u)); top: calc(12.5 * var(--u)); color: var(--ink); }
 .pair { display: flex; align-items: center; gap: calc(25 * var(--u)); padding: calc(20 * var(--u)); border-radius: var(--radius-box); background: var(--fill-strong); }
-.qr { display: grid; grid-template-columns: repeat(11, 1fr); gap: 1px; width: calc(180 * var(--u)); height: calc(180 * var(--u)); padding: calc(10 * var(--u)); border-radius: var(--radius-small); background: var(--surface); flex: none; }
+.qr { display: grid; grid-template-columns: repeat(11, 1fr); gap: calc(1.25 * var(--u)); width: calc(180 * var(--u)); height: calc(180 * var(--u)); padding: calc(10 * var(--u)); border-radius: var(--radius-small); background: var(--surface); flex: none; }
 .qrOn { background: var(--ink); }
 .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(25 * var(--u)); letter-spacing: -0.01em; color: var(--ink); }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(15.5 * var(--u)); color: var(--ink); }
-.testRow { display: flex; align-items: center; gap: calc(12.5 * var(--u)); padding: calc(11.25 * var(--u)) calc(15 * var(--u)); box-shadow: inset 0 calc(-1.25 * var(--u)) 0 var(--line-tool); }
+.testRow { display: flex; align-items: center; gap: calc(12.5 * var(--u)); padding: calc(13.75 * var(--u)) calc(15 * var(--u)); box-shadow: inset 0 calc(-1.25 * var(--u)) 0 var(--line-tool); }
 .testRow:last-child { box-shadow: none; }
 .warning { display: flex; align-items: center; gap: calc(7.5 * var(--u)); color: var(--warn); }
 .reviewWell { padding: calc(15 * var(--u)); }

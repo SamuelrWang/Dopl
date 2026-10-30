@@ -9,6 +9,7 @@ import { useMemo, useState } from "react";
 import b from "../_design/base.module.css";
 import c from "../_design/catalog.module.css";
 import { cx, ICON_100 } from "../_design/components";
+import d from "../_design/data.module.css";
 import p from "../_design/page.module.css";
 import o from "../_design/surfaces.module.css";
 import tokens from "../_design/tokens.module.css";
@@ -56,30 +57,38 @@ export function DevicesSection() {
           </header>
 
           <div className={p.stats}>
-            <div className={cx(b.card, p.stat)}>
-              <span className={b.muted}>Models</span>
-              <span className={b.big}>{fmt(rows.length)}</span>
-              <span className={b.smallMuted}>
-                {live} live{rows.length > live ? `, ${rows.length - live} testing` : ""}
-              </span>
+            <div className={b.card}>
+              <div className={d.stat}>
+                <span className={b.muted}>Models</span>
+                <span className={b.big}>{fmt(rows.length)}</span>
+                <span className={b.smallMuted}>
+                  {live} live{rows.length > live ? `, ${rows.length - live} testing` : ""}
+                </span>
+              </div>
             </div>
-            <div className={cx(b.card, p.stat)}>
-              <span className={b.muted}>Connected devices</span>
-              <span className={b.big}>{fmt(figures.devices)}</span>
-              <span className={b.smallMuted}>
-                {fmt(figures.online)} online, {fmt(figures.users)} users
-              </span>
+            <div className={b.card}>
+              <div className={d.stat}>
+                <span className={b.muted}>Connected devices</span>
+                <span className={b.big}>{fmt(figures.devices)}</span>
+                <span className={b.smallMuted}>
+                  {fmt(figures.online)} online, {fmt(figures.users)} users
+                </span>
+              </div>
             </div>
-            <div className={cx(b.card, p.stat)}>
-              <span className={b.muted}>Shown, 7d</span>
-              <span className={b.big}>{figures.deliveries ? `${figures.rate}%` : "None"}</span>
-              <span className={b.smallMuted}>{fmt(figures.deliveries)} calls</span>
+            <div className={b.card}>
+              <div className={d.stat}>
+                <span className={b.muted}>Shown, 7d</span>
+                <span className={b.big}>{figures.deliveries ? `${figures.rate}%` : "None"}</span>
+                <span className={b.smallMuted}>{fmt(figures.deliveries)} calls</span>
+              </div>
             </div>
-            <button type="button" aria-pressed={filters.quick === "attention"} className={cx(b.card, p.stat, p.statBtn, filters.quick === "attention" && p.statOn)} onClick={() => patch({ quick: filters.quick === "attention" ? "all" : "attention" })}>
-              <span className={b.muted}>Devices with issues</span>
-              <span className={b.big}>{fmt(rows.reduce((n, r) => n + attentionOf(r), 0))}</span>
-              <span className={b.smallMuted}>
-                {relink} relink, {stale} stale
+            <button type="button" aria-pressed={filters.quick === "attention"} className={cx(b.card, p.statBtn, filters.quick === "attention" && p.statOn)} onClick={() => patch({ quick: filters.quick === "attention" ? "all" : "attention" })}>
+              <span className={d.stat}>
+                <span className={b.muted}>Devices with issues</span>
+                <span className={b.big}>{fmt(rows.reduce((n, r) => n + attentionOf(r), 0))}</span>
+                <span className={b.smallMuted}>
+                  {relink} relink, {stale} stale
+                </span>
               </span>
             </button>
           </div>

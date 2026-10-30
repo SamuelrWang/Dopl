@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 import b from "../_design/base.module.css";
 import { cx, ICON_100, Initials, initialsOf } from "../_design/components";
+import d from "../_design/data.module.css";
 import { CAPABILITY_LABEL, modelById } from "../_data/catalog";
 import { STATUS_LABEL as CALL_STATUS, type Call, type CallStatus } from "../_data/activity";
 import { PLAN_LABEL, REGION_LABEL, STATE_LABEL, needsRelink, ownedDevice, userDeliveries, userRate, userSeen, type DeviceState, type PortalUser } from "../_data/users";
@@ -66,7 +67,7 @@ export function UserSheet({ user, calls, onClose, onSendTest, onRelink }: { user
               ["Seen, 7d", fmt(userSeen(user))],
               ["Success", sent ? `${userRate(user)}%` : "None"],
             ].map(([label, value]) => (
-              <div key={label} className={s.figure}>
+              <div key={label} className={d.stat}>
                 <dt className={b.smallMuted}>{label}</dt>
                 <dd className={cx(b.h3, b.num)}>{value}</dd>
               </div>
@@ -77,12 +78,12 @@ export function UserSheet({ user, calls, onClose, onSendTest, onRelink }: { user
             <h3 className={b.strong}>Devices</h3>
             {user.devices.length === 0 && <span className={b.faint}>None</span>}
             {devicesInOrder(user).map((d) => (
-                <div key={d.id} className={cx(b.box, s.deviceRow)}>
+                <div key={d.id} className={cx(b.box, d.fileRow)}>
                   <DeviceGlyph device={d} size={ICON_100} />
                   <div className={cx(b.tight, b.grow)}>
                     <span className={cx(b.strong, s.ellipsis)}>
                       {d.name}
-                      {d.id === user.activeDeviceId && <span className={cx(s.stateDot, DOT.online, s.inlineDot)} />}
+                      {d.id === user.activeDeviceId && <span className={cx(b.dot, DOT.online, s.inlineDot)} />}
                     </span>
                     <span className={cx(b.smallMuted, s.ellipsis)}>
                       {modelById(d.modelId).name}, firmware {d.firmware}
@@ -101,7 +102,7 @@ export function UserSheet({ user, calls, onClose, onSendTest, onRelink }: { user
             {deliveries.length === 0 && <span className={b.faint}>None</span>}
             <div>
               {deliveries.map((c, i) => (
-                <div key={c.id} className={cx(s.deliveryRow, i < deliveries.length - 1 && s.deliveryLine)}>
+                <div key={c.id} className={cx(d.listRow, i < deliveries.length - 1 && d.rowLine)}>
                   <div className={cx(b.tight, b.grow)}>
                     <span className={cx(b.text, s.ellipsis)}>{capabilityOf(c)}</span>
                     <span className={cx(b.smallMuted, s.ellipsis)}>{c.deviceId ? (ownedDevice(c.deviceId)?.name ?? c.deviceId) : "No device"}</span>

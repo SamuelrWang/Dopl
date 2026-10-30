@@ -4,6 +4,7 @@
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ChevronsUpDown } from "lucide-react";
 import b from "../_design/base.module.css";
 import { cx, ICON_100, ICON_100_SM, Initials, initialsOf } from "../_design/components";
+import d from "../_design/data.module.css";
 import o from "../_design/surfaces.module.css";
 import { modelById } from "../_data/catalog";
 import { ownedDevice, userDeliveries, userRate, type DeviceState, type OwnedDevice, type PortalUser } from "../_data/users";
@@ -32,10 +33,10 @@ export function StatusBadge({ status }: { status: Status }) {
 
 function DeviceChip({ device }: { device: OwnedDevice }) {
   return (
-    <span className={s.deviceChip} title={device.name}>
+    <span className={b.badge} title={device.name}>
       <DeviceGlyph device={device} size={ICON_100_SM} />
       <span className={s.deviceChipName}>{modelById(device.modelId).name}</span>
-      <span className={cx(s.stateDot, DOT[device.state])} />
+      <span className={cx(b.dot, DOT[device.state])} />
     </span>
   );
 }
@@ -72,7 +73,7 @@ function Row({ user, open, onOpen }: { user: PortalUser; open: boolean; onOpen: 
           {devices.slice(0, 2).map((d) => (
             <DeviceChip key={d.id} device={d} />
           ))}
-          {devices.length > 2 && <span className={s.moreChip}>+{devices.length - 2}</span>}
+          {devices.length > 2 && <span className={cx(b.badge, b.badgeRing)}>+{devices.length - 2}</span>}
           {devices.length === 0 && <span className={b.faint}>None</span>}
         </div>
       </td>
@@ -84,7 +85,7 @@ function Row({ user, open, onOpen }: { user: PortalUser; open: boolean; onOpen: 
       </td>
       <td className={s.td}>
         {delivered ? (
-          <div className={s.success}>
+          <div className={d.meter}>
             <span className={cx(b.strong, b.num)}>{rate}%</span>
             <span className={o.bar}>
               <span className={cx(o.barFill, rate < 90 && s.barLow)} style={{ width: `${rate}%` }} />
@@ -182,7 +183,7 @@ export function UsersTable({
           ))}
         </tbody>
       </table>
-      <div className={s.tableFoot}>
+      <div className={cx(b.between, b.padRow)}>
         <span className={cx(b.muted, b.num)}>
           {first + 1} to {first + visible.length} of {rows.length}
         </span>

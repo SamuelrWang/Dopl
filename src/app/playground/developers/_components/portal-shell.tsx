@@ -109,7 +109,7 @@ function Sidebar({ fontClass }: { fontClass?: string }) {
           {PROJECTS.map((project) => {
             const on = state.project === project.value;
             return (
-              <button key={project.value} type="button" role="radio" aria-checked={on} className={cx(side.project, on && side.projectOn)} onClick={() => update((s) => ({ ...s, project: project.value }))}>
+              <button key={project.value} type="button" role="radio" aria-checked={on} className={cx(o.navItem, side.project, on && side.projectOn)} onClick={() => update((s) => ({ ...s, project: project.value }))}>
                 <span className={side.mark}>{project.label.split(" ").at(-1)?.[0]}</span>
                 <span className={side.navLabel}>{project.label}</span>
               </button>

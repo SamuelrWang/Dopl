@@ -5,7 +5,7 @@ import { ChevronRight, Plus } from "lucide-react";
 import Link from "next/link";
 import b from "../_design/base.module.css";
 import c from "../_design/catalog.module.css";
-import { cx, ICON_100, ICON_100_SM } from "../_design/components";
+import { cx, ICON_100 } from "../_design/components";
 import o from "../_design/surfaces.module.css";
 import type { Category, Model } from "../_data/catalog";
 import { CategoryGlyph } from "../_components/category-glyph";
@@ -67,7 +67,7 @@ export function ModelCard({ row }: { row: ModelRow }) {
       <span className={c.well}>
         <Figure label="Shown, 7d" value={delivered ? `${figures.rate}%` : "None"}>
           {delivered && (
-            <span className={cx(o.bar, c.meter)}>
+            <span className={o.bar}>
               <span className={cx(o.barFill, low && c.meterLow)} style={{ width: `${figures.rate}%` }} />
             </span>
           )}
@@ -94,7 +94,7 @@ export function ModelCard({ row }: { row: ModelRow }) {
         </span>
         <span className={cx(b.btn, b.sm, action.ink && b.ink)}>
           {action.label}
-          <ChevronRight {...ICON_100_SM} />
+          <ChevronRight {...ICON_100} />
         </span>
       </span>
     </Link>

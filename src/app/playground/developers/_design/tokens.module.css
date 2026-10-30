@@ -1,11 +1,14 @@
 /*
  * The Design Playground's recipes, as one source. Put .scope and one unit class on a page's root.
  * --u is the unit every length in _design multiplies: the reference was drawn at 1.25x, so .u125
- * renders its literal values (the Playground's canvas) and .u100 renders true size (real pages).
+ * renders its literal values (the Playground's canvas) and .u100 renders real pages at the size the
+ * canvas reads at once ScaleToFit has fitted it to a typical content width.
  */
 .u125 { --u: 1px; }
-.u100 { --u: 0.8px; }
+.u100 { --u: 0.72px; }
 .scope {
+  /* A recipe whose text would fall below this scales up whole (its own --fu); on .u125 none does. */
+  --text-floor: 11px;
   --ink: #000000;
   --ink-soft: #111111;
   --body: #333333;
@@ -32,6 +35,9 @@
   --radius-field: calc(16.25 * var(--u));
   --radius-box: calc(11.25 * var(--u));
   --radius-small: calc(10 * var(--u));
+  --cell-h: calc(66 * var(--u));
+  --cell-head-h: calc(50 * var(--u));
+  --cell-pad: calc(12.5 * var(--u));
   --height-sm: calc(43.75 * var(--u));
   --height-md: calc(53.75 * var(--u));
   --height-lg: calc(62.5 * var(--u));

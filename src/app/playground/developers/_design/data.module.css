@@ -1,7 +1,7 @@
 /* Data display and composed cards */
 .table { display: grid; grid-template-columns: calc(62.5 * var(--u)) minmax(0, 2.6fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) calc(62.5 * var(--u)); }
-.cell { display: flex; align-items: center; gap: calc(12.5 * var(--u)); min-height: calc(66 * var(--u)); padding: 0 calc(12.5 * var(--u)); box-shadow: inset 0 calc(-1.25 * var(--u)) 0 var(--line-tool); min-width: 0; font-size: calc(17.5 * var(--u)); letter-spacing: -0.0175em; color: var(--body); }
-.cellHead { min-height: calc(50 * var(--u)); font-size: calc(15.5 * var(--u)); font-weight: 500; letter-spacing: -0.015em; color: var(--muted); }
+.cell { display: flex; align-items: center; gap: calc(12.5 * var(--u)); min-height: var(--cell-h); padding: 0 var(--cell-pad); box-shadow: inset 0 calc(-1.25 * var(--u)) 0 var(--line-tool); min-width: 0; font-size: calc(17.5 * var(--u)); letter-spacing: -0.0175em; color: var(--body); }
+.cellHead { min-height: var(--cell-head-h); font-size: calc(15.5 * var(--u)); font-weight: 500; letter-spacing: -0.015em; color: var(--muted); }
 .cellEnd { justify-content: flex-end; }
 .cellCenter { justify-content: center; padding: 0; }
 .cellOn { background: var(--fill); }
@@ -9,7 +9,7 @@
 .listRow { display: flex; align-items: center; gap: calc(12.5 * var(--u)); padding: calc(11.25 * var(--u)) 0; }
 .rowLine { box-shadow: inset 0 calc(-1.25 * var(--u)) 0 var(--line-tool); }
 .stat { display: flex; flex-direction: column; gap: calc(5 * var(--u)); }
-.delta { display: inline-flex; align-items: center; gap: calc(3.75 * var(--u)); font-size: calc(14.5 * var(--u)); font-weight: 500; letter-spacing: -0.015em; color: var(--ok); }
+.delta { --fu: max(var(--u), calc(var(--text-floor) / 14.5)); display: inline-flex; align-items: center; gap: calc(3.75 * var(--fu)); font-size: calc(14.5 * var(--fu)); font-weight: 500; letter-spacing: -0.015em; color: var(--ok); }
 .deltaDown { color: var(--error); }
 .statGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: calc(30 * var(--u)); }
 .bars { display: flex; align-items: flex-end; gap: calc(15 * var(--u)); height: calc(187.5 * var(--u)); }
