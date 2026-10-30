@@ -42,17 +42,17 @@ const KIND_ICON: Record<string, LucideIcon> = {
 };
 
 /** A category's mark, a flat tile. */
-export function TypeMark({ kind, size = "m" }: { kind: string; size?: "s" | "m" }) {
+export function TypeMark({ kind, size = "m" }: { kind: string; size?: "s" | "m" | "l" }) {
   const Icon = KIND_ICON[kind] ?? Bot;
   return (
     <span
       aria-hidden="true"
       className={cn(
         "flex shrink-0 items-center bg-surface-raised-1 justify-center rounded-md text-text-secondary",
-        size === "m" ? "h-7 w-7" : "h-5 w-5"
+        size === "l" ? "h-10 w-10" : size === "m" ? "h-7 w-7" : "h-5 w-5"
       )}
     >
-      <Icon size={size === "m" ? 15 : 12} strokeWidth={1.8} />
+      <Icon size={size === "l" ? 20 : size === "m" ? 15 : 12} strokeWidth={1.7} />
     </span>
   );
 }

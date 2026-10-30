@@ -71,7 +71,7 @@ describe("Devices", () => {
   it("groups by category with an add card in each section", () => {
     wrap(<DevicesSection />);
     const robots = screen.getByRole("region", { name: "Robots" });
-    expect(within(robots).getByRole("button", { name: "Add new device" })).toBeTruthy();
+    expect(within(robots).getByRole("button", { name: /Add new device/ })).toBeTruthy();
     const glasses = screen.getByRole("region", { name: "Glasses" });
     expect(within(glasses).getByText("Even Realities")).toBeTruthy();
     expect(within(glasses).getByText("G2")).toBeTruthy();
@@ -90,7 +90,18 @@ describe("Add new device", () => {
         <Probe />
       </>
     );
-    expect(await screen.findByText(/tests have not passed/)).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Choose a device" })).toBeTruthy();
+    const next = () => fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /Meta glasses/ }));
+    next();
+    fireEvent.click(screen.getByRole("button", { name: /Simulator/ }));
+    next();
+    next();
+    next();
+    expect(screen.getByText(/tests have not passed/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByRole("heading", { name: "Run capability tests" })).toBeTruthy();
+    next();
     fireEvent.click(screen.getByRole("button", { name: "Go live" }));
     expect(screen.getByRole("status").textContent).toBe("live");
     expect(onClose).toHaveBeenCalled();

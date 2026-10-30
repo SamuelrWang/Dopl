@@ -243,3 +243,22 @@ export function seedCapabilities(model: Model): Partial<Record<CapabilityId, Cap
   }
   return out;
 }
+
+/** A capability as a function chip: what it lets an agent do. Reads carry no chip. */
+const CAPABILITY_LABEL: Partial<Record<CapabilityId, string>> = {
+  "present.notify": "Notify",
+  "present.display": "Display",
+  "present.speak": "Speak",
+  "present.haptic": "Haptics",
+  "ask.choice": "Ask",
+  "ask.confirm": "Confirm",
+  "ask.text": "Text reply",
+  "input.utterance": "Voice",
+  "input.tap": "Tap",
+  "capture.photo": "Camera",
+  "act.navigate": "Navigate",
+  "act.lock": "Lock",
+  "act.set": "Control",
+};
+
+export const functionsOf = (model: Model): string[] => model.capabilities.flatMap((c) => CAPABILITY_LABEL[c] ?? []);

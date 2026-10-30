@@ -139,3 +139,15 @@ list device types as if they were the only ones. Headings two balanced lines max
   together, and delete the demo face.
 - Match a real product screen when designing a mockup; simplify it, don't invent.
 - No screenshots as sign-off; Samuel reviews live.
+
+## 8. Judgment rules (Samuel, 2026-10-30)
+
+Check all of these before showing any UI. *"I don't want to have to correct every single issue."*
+
+1. **Choice control by option count.** Eight or fewer options that matter are visible buttons or tiles, each with a glyph and name. A dropdown is for long lists and secondary filters. Two dropdowns are never a whole screen.
+2. **Pills hug content.** Never stretch a pill or dropdown across a popup. Full width belongs to tiles, wells and inputs.
+3. **One decision per page in a flow.** Each step is its own page with progress, and Back and Continue in a fixed footer that does not move. Selections survive going back.
+4. **A card earns its space.** Identity (glyph, name, owner), state, what it does (function chips), the number that matters, a next action. Structure it with a well and a hairline footer.
+5. **Copy the best surface.** Start from the thread card, identity cards or onboarding, and name the reference. Kit tokens alone do not make good design.
+6. **Critique first.** Ask what looks lazy, unbalanced or generic, and fix it before Samuel sees it.
+7. **Standing bans.** No elevated buttons. No indented search field: use `SearchPill`. No explainer copy.
