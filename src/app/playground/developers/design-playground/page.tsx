@@ -1,6 +1,7 @@
 import localFont from "next/font/local";
 import { SECTION_HEADING_TEXT } from "@/shared/ui/section-heading";
 import { AiToolsCard } from "./ai-tools-card";
+import { Gallery } from "./gallery";
 import styles from "./design-playground.module.css";
 import { LoginCard } from "./login-card";
 import { RichTextCard } from "./rich-text-card";
@@ -13,7 +14,8 @@ import { VerifyCard } from "./verify-card";
 const inter = localFont({ src: "../../../fonts/inter-latin.woff2", weight: "100 900", style: "normal", display: "block" });
 
 const GRID_X = [174, 424, 674, 924, 1174, 1424, 1674, 1924];
-const GRID_Y = [250.1, 501.35, 752.6, 1003.85, 1255.1];
+/** The clone's five lines, then the same 251.25 pitch on down through the gallery. */
+const GRID_Y = Array.from({ length: 48 }, (_, i) => 250.1 + 251.25 * i);
 
 export default function Page() {
   return (
@@ -36,6 +38,7 @@ export default function Page() {
             <SearchCard />
             <RichTextCard />
             <LoginCard />
+            <Gallery />
           </div>
         </ScaleToFit>
       </div>
