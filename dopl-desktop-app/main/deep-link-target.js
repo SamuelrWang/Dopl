@@ -60,6 +60,8 @@ const WEB_ONLY_ROOTS = new Set([
   'authenticate',
   'signup',
   'get-started',
+  // `/devices` — the public Devices SDK landing page (2026-10-29).
+  'devices',
 ]);
 
 const SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
