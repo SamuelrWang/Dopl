@@ -47,7 +47,7 @@
 .reply { margin-left: calc(62.5 * var(--u)); }
 .device { display: flex; align-items: center; justify-content: center; height: calc(137.5 * var(--u)); border-radius: var(--radius-panel); background: var(--fill-strong); color: var(--ink-soft); }
 .fnGrid { display: flex; flex-wrap: wrap; gap: calc(8.75 * var(--u)); }
-.meter { display: flex; flex-direction: column; gap: calc(8.75 * var(--u)); }
+.meter { display: flex; flex: 1; flex-direction: column; gap: calc(8.75 * var(--u)); min-width: 0; }
 .fileRow { display: flex; align-items: center; gap: calc(12.5 * var(--u)); padding: calc(13.75 * var(--u)) calc(15 * var(--u)); }
 .checkDash { width: calc(12.5 * var(--u)); height: calc(2 * var(--u)); background: var(--surface); }
 

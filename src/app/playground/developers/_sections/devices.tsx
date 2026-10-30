@@ -6,20 +6,15 @@
  */
 import { Plus, SearchX } from "lucide-react";
 import { useMemo, useState } from "react";
-import b from "../_design/base.module.css";
-import c from "../_design/catalog.module.css";
-import { cx, ICON_100 } from "../_design/components";
-import d from "../_design/data.module.css";
-import p from "../_design/page.module.css";
-import o from "../_design/surfaces.module.css";
-import tokens from "../_design/tokens.module.css";
+import { Button, ICON, StatCard } from "../_design/ui";
+import { CardSection, EmptyState, Page, PageHeader, StatRow } from "../_design/ui-page";
 import { CATEGORIES, type CategoryId } from "../_data/catalog";
 import { CategoryGlyph } from "../_components/category-glyph";
 import { usePortal, useUsers } from "../_components/portal-store";
 import { figuresOfDevices } from "../_components/stats";
 import { fmt } from "../_components/ui";
 import { AddDeviceDialog } from "./add-device-dialog";
-import { AddCard, ModelCard } from "./devices-card";
+import { AddModelCard, ModelCard } from "./devices-card";
 import { NO_DEVICE_FILTERS, attentionOf, availableModels, keeps, modelRows, type DeviceFilters } from "./devices-model";
 import { DevicesToolbar } from "./devices-toolbar";
 
@@ -42,97 +37,49 @@ export function DevicesSection() {
   const categories = CATEGORIES.filter((category) => (filters.category === "all" || filters.category === category.id) && (browsing || rows.some((r) => r.category.id === category.id)));
 
   return (
-    <div className={cx(p.root, tokens.scope, tokens.u100)}>
-      <div className={p.scroller}>
-        <div className={p.inner}>
-          <header className={b.between}>
-            <div className={b.row}>
-              <h1 className={b.title}>Devices</h1>
-              {state.env === "test" && <span className={cx(b.badge, b.badgeWarn)}>Test data</span>}
-            </div>
-            <button type="button" className={cx(b.btn, b.ink)} onClick={() => setAdding("any")}>
-              <Plus {...ICON_100} />
-              Add device
-            </button>
-          </header>
+    <Page overlays={adding && <AddDeviceDialog initialCategory={adding === "any" ? null : adding} onClose={() => setAdding(null)} />}>
+      <PageHeader
+        title="Devices"
+        test={state.env === "test"}
+        action={
+          <Button variant="ink" onClick={() => setAdding("any")}>
+            <Plus {...ICON} />
+            Add device
+          </Button>
+        }
+      />
 
-          <div className={p.stats}>
-            <div className={b.card}>
-              <div className={d.stat}>
-                <span className={b.muted}>Models</span>
-                <span className={b.big}>{fmt(rows.length)}</span>
-                <span className={b.smallMuted}>
-                  {live} live{rows.length > live ? `, ${rows.length - live} testing` : ""}
-                </span>
-              </div>
-            </div>
-            <div className={b.card}>
-              <div className={d.stat}>
-                <span className={b.muted}>Connected devices</span>
-                <span className={b.big}>{fmt(figures.devices)}</span>
-                <span className={b.smallMuted}>
-                  {fmt(figures.online)} online, {fmt(figures.users)} users
-                </span>
-              </div>
-            </div>
-            <div className={b.card}>
-              <div className={d.stat}>
-                <span className={b.muted}>Shown, 7d</span>
-                <span className={b.big}>{figures.deliveries ? `${figures.rate}%` : "None"}</span>
-                <span className={b.smallMuted}>{fmt(figures.deliveries)} calls</span>
-              </div>
-            </div>
-            <button type="button" aria-pressed={filters.quick === "attention"} className={cx(b.card, p.statBtn, filters.quick === "attention" && p.statOn)} onClick={() => patch({ quick: filters.quick === "attention" ? "all" : "attention" })}>
-              <span className={d.stat}>
-                <span className={b.muted}>Devices with issues</span>
-                <span className={b.big}>{fmt(rows.reduce((n, r) => n + attentionOf(r), 0))}</span>
-                <span className={b.smallMuted}>
-                  {relink} relink, {stale} stale
-                </span>
-              </span>
-            </button>
-          </div>
+      <StatRow>
+        <StatCard label="Models" value={fmt(rows.length)} hint={`${live} live${rows.length > live ? `, ${rows.length - live} testing` : ""}`} />
+        <StatCard label="Connected devices" value={fmt(figures.devices)} hint={`${fmt(figures.online)} online, ${fmt(figures.users)} users`} />
+        <StatCard label="Shown, 7d" value={figures.deliveries ? `${figures.rate}%` : "None"} hint={`${fmt(figures.deliveries)} calls`} />
+        <StatCard
+          label="Devices with issues"
+          value={fmt(rows.reduce((n, r) => n + attentionOf(r), 0))}
+          hint={`${relink} relink, ${stale} stale`}
+          pressed={filters.quick === "attention"}
+          onClick={() => patch({ quick: filters.quick === "attention" ? "all" : "attention" })}
+        />
+      </StatRow>
 
-          <DevicesToolbar rows={all} filters={filters} onChange={patch} />
+      <DevicesToolbar rows={all} filters={filters} onChange={patch} />
 
-          {categories.length === 0 ? (
-            <div className={b.card}>
-              <div className={o.empty}>
-                <span className={b.tile}>
-                  <SearchX {...ICON_100} />
-                </span>
-                <span className={b.h3}>No models match</span>
-                <button type="button" className={b.btn} onClick={() => setFilters(NO_DEVICE_FILTERS)}>
-                  Clear filters
-                </button>
-              </div>
-            </div>
-          ) : (
-            categories.map((category) => {
-              const inSection = rows.filter((r) => r.category.id === category.id);
-              const devices = inSection.reduce((n, r) => n + r.figures.devices, 0);
-              return (
-                <section key={category.id} className={c.section} aria-label={category.name}>
-                  <h2 className={c.sectionHead}>
-                    <span className={c.sectionMark}>
-                      <CategoryGlyph id={category.id} size={ICON_100} />
-                    </span>
-                    <span className={b.h3}>{category.name}</span>
-                    {devices > 0 && <span className={cx(b.smallMuted, c.sectionMeta)}>{fmt(devices)} devices</span>}
-                  </h2>
-                  <div className={c.grid}>
-                    {inSection.map((row) => (
-                      <ModelCard key={row.model.id} row={row} />
-                    ))}
-                    {browsing && <AddCard category={category} available={availableModels(state, category.id)} wide={inSection.length === 0} onClick={() => setAdding(category.id)} />}
-                  </div>
-                </section>
-              );
-            })
-          )}
-        </div>
-      </div>
-      {adding && <AddDeviceDialog initialCategory={adding === "any" ? null : adding} onClose={() => setAdding(null)} />}
-    </div>
+      {categories.length === 0 ? (
+        <EmptyState icon={SearchX} title="No models match" action={<Button onClick={() => setFilters(NO_DEVICE_FILTERS)}>Clear filters</Button>} />
+      ) : (
+        categories.map((category) => {
+          const inSection = rows.filter((r) => r.category.id === category.id);
+          const devices = inSection.reduce((n, r) => n + r.figures.devices, 0);
+          return (
+            <CardSection key={category.id} icon={<CategoryGlyph id={category.id} size={ICON} />} title={category.name} meta={devices > 0 && `${fmt(devices)} devices`}>
+              {inSection.map((row) => (
+                <ModelCard key={row.model.id} row={row} />
+              ))}
+              {browsing && <AddModelCard category={category} available={availableModels(state, category.id)} wide={inSection.length === 0} onClick={() => setAdding(category.id)} />}
+            </CardSection>
+          );
+        })
+      )}
+    </Page>
   );
 }

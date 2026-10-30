@@ -1,20 +1,15 @@
 "use client";
 
 /** Search, the quick views, the filter pills and the chips for what is on. */
-import { Bookmark, Search, X } from "lucide-react";
+import { Bookmark } from "lucide-react";
 import { useEffect, useRef } from "react";
-import b from "../_design/base.module.css";
-import { cx, ICON_100, ICON_100_SM } from "../_design/components";
-import f from "../_design/forms.module.css";
-import { PillMenu, PopMenu, Segmented, type PillOption } from "../_design/interactive";
-import p from "../_design/page.module.css";
-import o from "../_design/surfaces.module.css";
+import { Button, Chip as Tag, ICON, PillMenu, PopMenu, SearchField, Segmented, type PillOption } from "../_design/ui";
+import { FilterRow, Grow, MenuItem, MenuLine, Row, Text, Toolbar } from "../_design/ui-page";
 import { ALL_MODELS, CATEGORIES, INTEGRATIONS, categoryById, integrationById, modelById, type CategoryId, type ModelId } from "../_data/catalog";
 import type { PortalUser } from "../_data/users";
 import { matchesHierarchy } from "../_components/hierarchy-filter";
 import { NO_FILTERS, type SavedView, type UserFilters } from "../_components/portal-store";
 import { QUICK, type Quick } from "./users-model";
-import s from "./users.module.css";
 
 const ACTIVE_OPTIONS = [
   { value: "today", label: "Today" },
@@ -87,23 +82,13 @@ export function UsersToolbar({
   const filtered = chips.length > 0 || filters.q !== "";
 
   return (
-    <div className={cx(b.card, p.toolbar)}>
-      <div className={b.row}>
-        <label className={cx(f.field, s.search)}>
-          <Search {...ICON_100} className={b.iconInk} />
-          <input ref={search} className={f.fieldInput} placeholder="Search" aria-label="Search users" value={filters.q} onChange={(e) => onFilters({ q: e.target.value })} />
-          {filters.q ? (
-            <button type="button" className={b.reset} aria-label="Clear search" onClick={() => onFilters({ q: "" })}>
-              <X {...ICON_100} className={b.iconSoft} />
-            </button>
-          ) : (
-            <span className={b.kbd}>⌘ K</span>
-          )}
-        </label>
+    <Toolbar>
+      <Row>
+        <SearchField inputRef={search} value={filters.q} placeholder="Search" label="Search users" hint="⌘ K" onChange={(q) => onFilters({ q })} />
         <Segmented label="Quick views" options={QUICK.map((q) => q.label)} value={QUICK.findIndex((q) => q.key === quick)} onChange={(i) => onQuick(QUICK[i].key)} />
-      </div>
-      <div className={p.filterRow}>
-        <span className={b.muted}>Filter by</span>
+      </Row>
+      <FilterRow>
+        <Text kind="muted">Filter by</Text>
         <PillMenu
           label="Category"
           value={filters.category}
@@ -124,68 +109,59 @@ export function UsersToolbar({
         />
         <PillMenu label="Firmware" value={filters.firmware} options={withAll(firmware.map((v) => ({ value: v, label: v })))} onChange={(v) => onFilters({ firmware: v })} />
         <PillMenu label="Last active" value={filters.active} options={withAll(ACTIVE_OPTIONS)} onChange={(active) => onFilters({ active })} />
-        <span className={b.grow} />
+        <Grow />
         <PopMenu
           right
           label="Saved views"
           trigger={(open, toggle) => (
-            <button type="button" aria-haspopup="menu" aria-expanded={open} className={cx(b.btn, b.sm)} onClick={toggle}>
-              <Bookmark {...ICON_100} />
+            <Button size="sm" haspopup="menu" expanded={open} onClick={toggle}>
+              <Bookmark {...ICON} />
               Views
-            </button>
+            </Button>
           )}
         >
           {(close) => (
             <>
               {views.map((view) => (
-                <button
+                <MenuItem
                   key={view.id}
-                  type="button"
-                  role="menuitem"
-                  className={cx(o.item, o.itemBtn)}
                   onClick={() => {
                     onView(view);
                     close();
                   }}
                 >
                   {view.name}
-                </button>
+                </MenuItem>
               ))}
               {filtered && (
                 <>
-                  <div className={o.menuLine} />
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={cx(o.item, o.itemBtn)}
+                  <MenuLine />
+                  <MenuItem
                     onClick={() => {
                       onSaveView();
                       close();
                     }}
                   >
                     Save current
-                  </button>
+                  </MenuItem>
                 </>
               )}
             </>
           )}
         </PopMenu>
-      </div>
+      </FilterRow>
       {chips.length > 0 && (
-        <div className={p.filterRow}>
+        <FilterRow>
           {chips.map((chip) => (
-            <span key={chip.key} className={cx(f.tag, p.chip)}>
+            <Tag key={chip.key} kind="tag" removeLabel={`Remove ${chip.label}`} onRemove={() => onFilters(chip.clear)}>
               {chip.label}
-              <button type="button" className={b.reset} aria-label={`Remove ${chip.label}`} onClick={() => onFilters(chip.clear)}>
-                <X {...ICON_100_SM} className={b.iconSoft} />
-              </button>
-            </span>
+            </Tag>
           ))}
-          <button type="button" className={cx(b.btn, b.ghost, b.sm)} onClick={() => onFilters({ ...NO_FILTERS, q: filters.q })}>
+          <Button variant="ghost" size="sm" onClick={() => onFilters({ ...NO_FILTERS, q: filters.q })}>
             Clear
-          </button>
-        </div>
+          </Button>
+        </FilterRow>
       )}
-    </div>
+    </Toolbar>
   );
 }

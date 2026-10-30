@@ -1,18 +1,10 @@
 "use client";
 
 /** Everything that interrupts the list: the create flow, the once-only reveal, rotate and revoke. */
-import { Activity, AlertTriangle, Check, Copy, Cpu, RefreshCw, Send, SlidersHorizontal, Users, Webhook, X, type LucideIcon } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import b from "../_design/base.module.css";
-import c from "../_design/catalog.module.css";
-import { cx, ICON_100, ICON_100_SM } from "../_design/components";
-import d from "../_design/data.module.css";
-import flow from "../_design/flow.module.css";
-import f from "../_design/forms.module.css";
-import { Segmented } from "../_design/interactive";
-import k from "../_design/keys.module.css";
-import o from "../_design/surfaces.module.css";
-import tokens from "../_design/tokens.module.css";
+import { Activity, AlertTriangle, Check, Copy, Cpu, RefreshCw, Send, SlidersHorizontal, Users, Webhook, type LucideIcon } from "lucide-react";
+import { useState } from "react";
+import { Badge, Button, ICON_SM, Segmented, TwoLine } from "../_design/ui";
+import { Alert, ChipRow, CodeBlock, CodeDim, CodeStrong, ConfirmDialog, FlowDialog, Grow, Mark, ReviewWell, Row, SecretWell, Stack, Text, TextField, Tile, Tiles } from "../_design/ui-page";
 import type { Env } from "../_data/company";
 import { KEY_SCOPES, type ApiKeyRow } from "../_data/misc";
 import { fmt, since } from "../_components/ui";
@@ -29,128 +21,65 @@ const STEP_NAME = "Name this key";
 
 export const copyText = (text: string) => void navigator.clipboard?.writeText(text)?.catch(() => {});
 
-function useEscape(onEscape: (() => void) | null) {
-  useEffect(() => {
-    if (!onEscape) return;
-    const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onEscape();
-    };
-    document.addEventListener("keydown", key);
-    return () => document.removeEventListener("keydown", key);
-  }, [onEscape]);
-}
-
-/** The popup's frame. Without onDismiss it only closes through its footer: a secret stays until copied. */
-function Frame({ label, eyebrow, title, progress, onDismiss, children, foot }: { label: string; eyebrow: string; title: string; progress?: { step: number; of: number }; onDismiss: (() => void) | null; children: ReactNode; foot: ReactNode }) {
-  const dialog = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!dialog.current?.contains(document.activeElement)) dialog.current?.focus();
-  }, []);
-  useEscape(onDismiss);
-  return (
-    <div className={cx(flow.layer, tokens.scope, tokens.u100)}>
-      <button type="button" className={flow.scrim} aria-label="Dismiss" tabIndex={-1} onClick={onDismiss ?? undefined} />
-      <div ref={dialog} className={flow.dialog} role="dialog" aria-modal="true" aria-label={label} tabIndex={-1}>
-        {onDismiss && (
-          <button type="button" className={cx(b.reset, flow.close)} onClick={onDismiss} aria-label="Close">
-            <X {...ICON_100} />
-          </button>
-        )}
-        <header className={flow.head}>
-          <span className={cx(b.smallMuted, b.num)}>{eyebrow}</span>
-          <h2 className={b.title}>{title}</h2>
-          {progress && (
-            <span className={flow.progress} aria-hidden="true">
-              {Array.from({ length: progress.of }, (_, i) => (
-                <i key={i} className={cx(flow.progressStep, i <= progress.step && flow.progressOn)} />
-              ))}
-            </span>
-          )}
-        </header>
-        <div className={flow.body}>{children}</div>
-        <footer className={flow.foot}>{foot}</footer>
-      </div>
-    </div>
-  );
-}
-
-function Tile({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button type="button" aria-pressed={selected} onClick={onClick} className={cx(flow.tile, selected && flow.tileOn)}>
-      {selected && <Check {...ICON_100_SM} aria-hidden="true" className={flow.tileCheck} />}
-      {children}
-    </button>
-  );
-}
-
 function CopyWell({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className={cx(b.well, k.secret)}>
-      <span className={cx(flow.mono, k.secretValue)}>{value}</span>
-      <button
-        type="button"
-        className={cx(b.btn, b.sm)}
-        aria-label={label}
-        onClick={() => {
-          copyText(value);
-          setCopied(true);
-        }}
-      >
-        {copied ? <Check {...ICON_100_SM} aria-hidden="true" /> : <Copy {...ICON_100_SM} aria-hidden="true" />}
-        {copied ? "Copied" : "Copy"}
-      </button>
-    </div>
+    <SecretWell
+      value={value}
+      action={
+        <Button
+          size="sm"
+          label={label}
+          onClick={() => {
+            copyText(value);
+            setCopied(true);
+          }}
+        >
+          {copied ? <Check {...ICON_SM} aria-hidden="true" /> : <Copy {...ICON_SM} aria-hidden="true" />}
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      }
+    />
   );
 }
 
 function Reveal({ kind, token }: { kind: KeyKind; token: string }) {
   return (
-    <div className={b.stack}>
+    <Stack>
       <CopyWell value={token} label={kind === "secret" ? "Copy secret" : "Copy key"} />
       {kind === "secret" && (
         <>
-          <div className={cx(o.alert, o.alertWarn)}>
-            <AlertTriangle {...ICON_100} aria-hidden="true" />
+          <Alert tone="warn" icon={AlertTriangle}>
             Shown once. Store it now.
-          </div>
-          <div className={d.code}>
-            <div className={d.codeHead}>
-              <span className={b.onInk}>Send a first delivery</span>
-            </div>
-            <div className={cx(d.codeBody, k.codeBody)}>
-              <span className={d.codeDim}>{"# POST /v1/deliver\n"}</span>
-              {"curl -X POST https://api.usedopl.com/v1/deliver \\\n  -H "}
-              <span className={d.codeStrong}>{`"Authorization: Bearer ${token.slice(0, token.lastIndexOf("_") + 5)}…"`}</span>
-              {" \\\n  -d "}
-              <span className={d.codeStrong}>{`'{"target": {"device_id": "dev_g2_77d0"},\n       "content": {"text": "Hello"}}'`}</span>
-            </div>
-          </div>
+          </Alert>
+          <CodeBlock title="Send a first delivery">
+            <CodeDim>{"# POST /v1/deliver\n"}</CodeDim>
+            {"curl -X POST https://api.usedopl.com/v1/deliver \\\n  -H "}
+            <CodeStrong>{`"Authorization: Bearer ${token.slice(0, token.lastIndexOf("_") + 5)}…"`}</CodeStrong>
+            {" \\\n  -d "}
+            <CodeStrong>{`'{"target": {"device_id": "dev_g2_77d0"},\n       "content": {"text": "Hello"}}'`}</CodeStrong>
+          </CodeBlock>
         </>
       )}
-    </div>
+    </Stack>
   );
 }
+
+const DoneFoot = ({ onDone }: { onDone: () => void }) => (
+  <>
+    <Grow />
+    <Button variant="ink" onClick={onDone}>
+      Done
+    </Button>
+  </>
+);
 
 /** A rotation's new secret, on its own. */
 export function RevealDialog({ row, token, onDone }: { row: ApiKeyRow; token: string; onDone: () => void }) {
   return (
-    <Frame
-      label="Copy your new secret"
-      eyebrow={`${row.name}, ${ENV_LABEL[row.env]}`}
-      title="Copy your new secret"
-      onDismiss={null}
-      foot={
-        <>
-          <span className={b.grow} />
-          <button type="button" className={cx(b.btn, b.ink)} onClick={onDone}>
-            Done
-          </button>
-        </>
-      }
-    >
+    <FlowDialog label="Copy your new secret" eyebrow={`${row.name}, ${ENV_LABEL[row.env]}`} title="Copy your new secret" onDismiss={null} foot={<DoneFoot onDone={onDone} />}>
       <Reveal kind={row.kind} token={token} />
-    </Frame>
+    </FlowDialog>
   );
 }
 
@@ -163,23 +92,9 @@ export function CreateKeyFlow({ env, initialKind, onCreate, onClose }: { env: En
 
   if (token && kind) {
     return (
-      <Frame
-        key="reveal"
-        label="Key created"
-        eyebrow={`${name.trim()}, ${ENV_LABEL[env]}`}
-        title={kind === "secret" ? "Copy your secret key" : "Copy your publishable key"}
-        onDismiss={null}
-        foot={
-          <>
-            <span className={b.grow} />
-            <button type="button" className={cx(b.btn, b.ink)} onClick={onClose}>
-              Done
-            </button>
-          </>
-        }
-      >
+      <FlowDialog key="reveal" label="Key created" eyebrow={`${name.trim()}, ${ENV_LABEL[env]}`} title={kind === "secret" ? "Copy your secret key" : "Copy your publishable key"} onDismiss={null} foot={<DoneFoot onDone={onClose} />}>
         <Reveal kind={kind} token={token} />
-      </Frame>
+      </FlowDialog>
     );
   }
 
@@ -191,23 +106,15 @@ export function CreateKeyFlow({ env, initialKind, onCreate, onClose }: { env: En
     if (!kind || !canContinue) return;
     setToken(onCreate({ name: name.trim(), kind, scopes }));
   };
-  const typeTile = (value: KeyKind, sub: string) => {
-    const Glyph = KIND_GLYPH[value];
-    return (
-      <Tile selected={kind === value} onClick={() => setKind(value)}>
-        <span className={b.tile}>
-          <Glyph {...ICON_100} aria-hidden="true" />
-        </span>
-        <span className={b.tight}>
-          <span className={b.strong}>{KIND_LABEL[value]}</span>
-          <span className={b.smallMuted}>{sub}</span>
-        </span>
-      </Tile>
-    );
-  };
+  const typeTile = (value: KeyKind, sub: string) => (
+    <Tile selected={kind === value} onClick={() => setKind(value)}>
+      <Mark icon={KIND_GLYPH[value]} />
+      <TwoLine title={KIND_LABEL[value]} sub={sub} />
+    </Tile>
+  );
 
   return (
-    <Frame
+    <FlowDialog
       label="Create key"
       eyebrow={`Step ${step + 1} of ${steps.length}`}
       title={title}
@@ -216,105 +123,57 @@ export function CreateKeyFlow({ env, initialKind, onCreate, onClose }: { env: En
       foot={
         <>
           {step > 0 && (
-            <button type="button" className={cx(b.btn, b.ghost)} onClick={() => setStep(step - 1)}>
+            <Button variant="ghost" onClick={() => setStep(step - 1)}>
               Back
-            </button>
+            </Button>
           )}
-          <span className={b.grow} />
-          <button type="button" disabled={!canContinue} className={cx(b.btn, canContinue ? b.ink : b.off)} onClick={last ? create : () => setStep(step + 1)}>
+          <Grow />
+          <Button variant="ink" disabled={!canContinue} onClick={last ? create : () => setStep(step + 1)}>
             {last ? "Create key" : "Continue"}
-          </button>
+          </Button>
         </>
       }
     >
       {title === STEP_TYPE && (
-        <div className={flow.tiles2}>
+        <Tiles>
           {typeTile("secret", "Server only")}
           {typeTile("publishable", "Client code")}
-        </div>
+        </Tiles>
       )}
       {title === STEP_SCOPES && (
-        <div className={flow.tiles2}>
+        <Tiles>
           {KEY_SCOPES.map(({ id, name: scopeName }) => {
-            const Glyph = SCOPE_GLYPH[id];
             const on = scopes.includes(id);
             return (
               <Tile key={id} selected={on} onClick={() => setScopes(on ? scopes.filter((s) => s !== id) : [...scopes, id])}>
-                <span className={b.row}>
-                  <span className={b.tile}>
-                    <Glyph {...ICON_100} aria-hidden="true" />
-                  </span>
-                  <span className={b.tight}>
-                    <span className={b.strong}>{scopeName}</span>
-                    <span className={k.token}>{id}</span>
-                  </span>
-                </span>
+                <Row>
+                  <Mark icon={SCOPE_GLYPH[id]} />
+                  <TwoLine title={scopeName} sub={id} />
+                </Row>
               </Tile>
             );
           })}
-        </div>
+        </Tiles>
       )}
       {title === STEP_NAME && (
-        <div className={b.stack}>
-          <label className={f.field}>
-            <input
-              autoFocus
-              className={f.fieldInput}
-              aria-label="Key name"
-              placeholder="Production backend"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") create();
-              }}
-            />
-          </label>
-          <div className={cx(b.well, flow.tiles2, flow.reviewWell)}>
-            <span className={b.tight}>
-              <span className={b.smallMuted}>Environment</span>
-              <span className={b.strong}>{ENV_LABEL[env]}</span>
-            </span>
-            <span className={b.tight}>
-              <span className={b.smallMuted}>Type</span>
-              <span className={b.strong}>{kind ? KIND_LABEL[kind] : ""}</span>
-            </span>
-          </div>
-          <div className={c.chips}>
+        <Stack>
+          <TextField autoFocus label="Key name" placeholder="Production backend" value={name} onChange={setName} onEnter={create} />
+          <ReviewWell
+            items={[
+              ["Environment", ENV_LABEL[env]],
+              ["Type", kind ? KIND_LABEL[kind] : ""],
+            ]}
+          />
+          <ChipRow>
             {(kind === "publishable" ? ["connect"] : scopes).map((scope) => (
-              <span key={scope} className={cx(b.badge, b.badgeRing)}>
+              <Badge key={scope} tone="ring">
                 {scope}
-              </span>
+              </Badge>
             ))}
-          </div>
-        </div>
+          </ChipRow>
+        </Stack>
       )}
-    </Frame>
-  );
-}
-
-/** A short question over the page, from the gallery's confirm dialog. Cancel holds focus. */
-function Confirm({ label, mark, title, sub, children, cancel, onCancel, action }: { label: string; mark: ReactNode; title: string; sub: string; children?: ReactNode; cancel: string; onCancel: () => void; action: ReactNode }) {
-  const first = useRef<HTMLButtonElement>(null);
-  useEffect(() => first.current?.focus(), []);
-  useEscape(onCancel);
-  return (
-    <div className={cx(flow.layer, tokens.scope, tokens.u100)}>
-      <button type="button" className={flow.scrim} aria-label="Dismiss" tabIndex={-1} onClick={onCancel} />
-      <div className={cx(o.dialog, k.confirm)} role="alertdialog" aria-modal="true" aria-label={label}>
-        {mark}
-        <div className={b.tight}>
-          <span className={b.title}>{title}</span>
-          <span className={b.muted}>{sub}</span>
-        </div>
-        {children}
-        <div className={b.row}>
-          <button ref={first} type="button" className={cx(b.btn, b.full)} onClick={onCancel}>
-            {cancel}
-          </button>
-          {action}
-        </div>
-      </div>
-    </div>
+    </FlowDialog>
   );
 }
 
@@ -322,57 +181,46 @@ const usage = (row: ApiKeyRow) => `${row.prefix}, ${row.lastUsedAt ? `used ${sin
 
 export function RevokeDialog({ row, onCancel, onConfirm }: { row: ApiKeyRow; onCancel: () => void; onConfirm: () => void }) {
   return (
-    <Confirm
+    <ConfirmDialog
       label={`Revoke ${row.name}`}
-      mark={
-        <div className={cx(b.tile, b.tileDanger)}>
-          <AlertTriangle {...ICON_100} aria-hidden="true" />
-        </div>
-      }
+      mark={<Mark icon={AlertTriangle} tone="danger" />}
       title={`Revoke ${row.name}?`}
       sub={usage(row)}
-      cancel="Cancel"
       onCancel={onCancel}
       action={
-        <button type="button" className={cx(b.btn, b.full, k.dangerFlat)} onClick={onConfirm}>
+        <Button full variant="dangerFlat" onClick={onConfirm}>
           Revoke key
-        </button>
+        </Button>
       }
     >
       {inUse(row) && (
-        <div className={cx(o.alert, o.alertError)}>
-          <AlertTriangle {...ICON_100} aria-hidden="true" />
+        <Alert tone="error" icon={AlertTriangle}>
           In use. Its calls fail at once.
-        </div>
+        </Alert>
       )}
-    </Confirm>
+    </ConfirmDialog>
   );
 }
 
 export function RotateDialog({ row, onCancel, onConfirm }: { row: ApiKeyRow; onCancel: () => void; onConfirm: (graceHours: number) => void }) {
   const [grace, setGrace] = useState(GRACE.length - 1);
   return (
-    <Confirm
+    <ConfirmDialog
       label={`Rotate ${row.name}`}
-      mark={
-        <div className={b.tile}>
-          <RefreshCw {...ICON_100} aria-hidden="true" />
-        </div>
-      }
+      mark={<Mark icon={RefreshCw} />}
       title={`Rotate ${row.name}?`}
       sub={usage(row)}
-      cancel="Cancel"
       onCancel={onCancel}
       action={
-        <button type="button" className={cx(b.btn, b.ink, b.full)} onClick={() => onConfirm(GRACE[grace].hours)}>
+        <Button full variant="ink" onClick={() => onConfirm(GRACE[grace].hours)}>
           Rotate key
-        </button>
+        </Button>
       }
     >
-      <div className={b.stack}>
-        <span className={b.strong}>Old secret stops working</span>
+      <Stack>
+        <Text kind="strong">Old secret stops working</Text>
         <Segmented label="Old secret stops working" options={GRACE.map((g) => g.label)} value={grace} onChange={setGrace} />
-      </div>
-    </Confirm>
+      </Stack>
+    </ConfirmDialog>
   );
 }

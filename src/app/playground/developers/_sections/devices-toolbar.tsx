@@ -1,14 +1,8 @@
 "use client";
 
 /** Find a model: search, quick views, every category as a pill, two secondary filters. */
-import { X } from "lucide-react";
-import { SearchPill } from "@/shared/ui/search-pill";
-import b from "../_design/base.module.css";
-import c from "../_design/catalog.module.css";
-import { cx, ICON_100_SM } from "../_design/components";
-import f from "../_design/forms.module.css";
-import { PillMenu, Segmented } from "../_design/interactive";
-import p from "../_design/page.module.css";
+import { Button, Chip, PillMenu, SearchField, Segmented } from "../_design/ui";
+import { Between, FilterRow, Grow, Toolbar } from "../_design/ui-page";
 import { CATEGORIES } from "../_data/catalog";
 import { DEVICE_QUICK, NO_DEVICE_FILTERS, integrationName, type DeviceFilters, type ModelRow } from "./devices-model";
 
@@ -23,44 +17,39 @@ export function DevicesToolbar({ rows, filters, onChange }: { rows: ModelRow[]; 
     filters.fn !== "all" && { key: "fn", label: filters.fn, clear: { fn: "all" } },
   ].filter((chip) => chip !== false);
   return (
-    <div className={cx(b.card, p.toolbar)}>
-      <div className={b.between}>
-        <SearchPill value={filters.q} onChange={(q) => onChange({ q })} label="Search models" />
+    <Toolbar>
+      <Between>
+        <SearchField hug value={filters.q} placeholder="Search models" onChange={(q) => onChange({ q })} />
         <Segmented label="Quick views" options={DEVICE_QUICK.map((q) => q.label)} value={DEVICE_QUICK.findIndex((q) => q.key === filters.quick)} onChange={(i) => onChange({ quick: DEVICE_QUICK[i].key })} />
-      </div>
-      <div className={p.filterRow}>
-        <button type="button" aria-pressed={filters.category === "all"} className={cx(b.pill, b.pillBtn, filters.category === "all" && b.pillOn)} onClick={() => onChange({ category: "all", integration: "all" })}>
+      </Between>
+      <FilterRow>
+        <Chip on={filters.category === "all"} pressed={filters.category === "all"} onClick={() => onChange({ category: "all", integration: "all" })}>
           All
-        </button>
+        </Chip>
         {CATEGORIES.map((category) => {
           const on = filters.category === category.id;
-          const n = rows.filter((r) => r.category.id === category.id).length;
           return (
-            <button key={category.id} type="button" aria-pressed={on} className={cx(b.pill, b.pillBtn, on && b.pillOn)} onClick={() => onChange({ category: on ? "all" : category.id, integration: "all" })}>
+            <Chip key={category.id} on={on} pressed={on} count={rows.filter((r) => r.category.id === category.id).length} onClick={() => onChange({ category: on ? "all" : category.id, integration: "all" })}>
               {category.name}
-              {n > 0 && <span className={cx(c.pillCount, on && c.pillOnCount)}>{n}</span>}
-            </button>
+            </Chip>
           );
         })}
-        <span className={b.grow} />
+        <Grow />
         <PillMenu label="Integration" value={filters.integration} options={withAll(integrations.map((id) => ({ value: id, label: integrationName(id) })))} onChange={(integration) => onChange({ integration })} />
         <PillMenu label="Function" value={filters.fn} options={withAll(functions.map((fn) => ({ value: fn, label: fn })))} onChange={(fn) => onChange({ fn })} />
-      </div>
+      </FilterRow>
       {chips.length > 0 && (
-        <div className={p.filterRow}>
+        <FilterRow>
           {chips.map((chip) => (
-            <span key={chip.key} className={cx(f.tag, p.chip)}>
+            <Chip key={chip.key} kind="tag" removeLabel={`Remove ${chip.label}`} onRemove={() => onChange(chip.clear)}>
               {chip.label}
-              <button type="button" className={b.reset} aria-label={`Remove ${chip.label}`} onClick={() => onChange(chip.clear)}>
-                <X {...ICON_100_SM} className={b.iconSoft} />
-              </button>
-            </span>
+            </Chip>
           ))}
-          <button type="button" className={cx(b.btn, b.ghost, b.sm)} onClick={() => onChange({ ...NO_DEVICE_FILTERS, q: filters.q, quick: filters.quick, category: filters.category })}>
+          <Button variant="ghost" size="sm" onClick={() => onChange({ ...NO_DEVICE_FILTERS, q: filters.q, quick: filters.quick, category: filters.category })}>
             Clear
-          </button>
-        </div>
+          </Button>
+        </FilterRow>
       )}
-    </div>
+    </Toolbar>
   );
 }

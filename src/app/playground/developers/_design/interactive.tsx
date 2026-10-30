@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import b from "./base.module.css";
 import f from "./forms.module.css";
 import o from "./surfaces.module.css";
-import { cx, ICON, ICON_100 } from "./components";
+import { cx, ICON } from "./components";
 
 export function Check({ label, on = false, children }: { label?: string; on?: boolean; children?: ReactNode }) {
   const [checked, set] = useState(on);
@@ -140,7 +140,7 @@ export function PillMenu({ label, value, options, onChange }: { label: string; v
       trigger={(open, toggle) => (
         <button type="button" aria-haspopup="menu" aria-expanded={open} className={cx(b.pill, b.pillBtn)} onClick={toggle}>
           {label}
-          <ChevronDown size={ICON_100.size} strokeWidth={ICON_100.strokeWidth} className={b.iconSoft} />
+          <ChevronDown size={ICON.size} strokeWidth={ICON.strokeWidth} className={b.iconSoft} />
         </button>
       )}
     >
@@ -160,7 +160,7 @@ export function PillMenu({ label, value, options, onChange }: { label: string; v
             {option.label}
             {value === option.value ? (
               <span className={o.itemEnd}>
-                <CheckIcon {...ICON_100} className={b.iconInk} />
+                <CheckIcon {...ICON} className={b.iconInk} />
               </span>
             ) : (
               option.count !== undefined && <span className={o.itemEnd}>{option.count}</span>

@@ -5,12 +5,9 @@
  * tests, review. Adding its model adds its integration. Missing tests warn and never block. A
  * physical device a user owns is a different thing; it arrives through Connect.
  */
-import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
-import b from "../_design/base.module.css";
-import { cx, ICON_100 } from "../_design/components";
-import flow from "../_design/flow.module.css";
-import tokens from "../_design/tokens.module.css";
+import { useState } from "react";
+import { Button } from "../_design/ui";
+import { FlowDialog, Grow } from "../_design/ui-page";
 import { useSimulatorSession } from "../_components/device-simulator";
 import { DEMO_NOW } from "../_data/company";
 import { CATEGORIES, INTEGRATIONS, type Category, type CategoryId, type Integration, type Model } from "../_data/catalog";
@@ -35,16 +32,6 @@ export function AddDeviceDialog({ initialCategory, onClose }: { initialCategory:
   const [paired, setPaired] = useState(false);
   const sim = useSimulatorSession();
   const [results, setResults] = useState<Results>({});
-
-  const dialog = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    dialog.current?.focus();
-    const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", key);
-    return () => document.removeEventListener("keydown", key);
-  }, [onClose]);
 
   const options = category ? availableIn(state, category.id) : [];
   const chosen = options.find((o) => o.model.id === modelId) ?? null;
@@ -89,54 +76,41 @@ export function AddDeviceDialog({ initialCategory, onClose }: { initialCategory:
   const testDevice = connected && chosen ? `${method === "simulator" ? "Simulated" : "Bench"} ${chosen.model.name}` : "None";
 
   return (
-    <div className={cx(flow.layer, tokens.scope, tokens.u100)}>
-      <button type="button" className={flow.scrim} aria-label="Dismiss" tabIndex={-1} onClick={onClose} />
-      <div ref={dialog} className={flow.dialog} role="dialog" aria-modal="true" aria-label="Add new device" tabIndex={-1}>
-        <button type="button" className={cx(b.reset, flow.close)} onClick={onClose} aria-label="Close">
-          <X {...ICON_100} />
-        </button>
-        <header className={flow.head}>
-          <span className={cx(b.smallMuted, b.num)}>
-            Step {step + 1} of {STEP_TITLES.length}
-          </span>
-          <h2 className={b.title}>{STEP_TITLES[step]}</h2>
-          <span className={flow.progress} aria-hidden="true">
-            {STEP_TITLES.map((t, i) => (
-              <i key={t} className={cx(flow.progressStep, i <= step && flow.progressOn)} />
-            ))}
-          </span>
-        </header>
-        <div className={flow.body}>
-          {step === 0 && <CategoryStep categories={CATEGORIES} availableCount={(c) => availableIn(state, c.id).length} value={category?.id ?? null} onPick={pickCategory} />}
-          {step === 1 && category && <ModelStep category={category} options={options} value={modelId} onPick={pickModel} />}
-          {step === 2 && <MethodStep value={method} onPick={pickMethod} />}
-          {step === 3 && chosen && method && <ConnectStep method={method} model={chosen.model} sim={sim} connected={paired} onConnect={() => setPaired(true)} />}
-          {step === 4 && chosen && <TestsStep model={chosen.model} sim={sim} results={results} setResults={setResults} />}
-          {step === 5 && chosen && category && <ReviewStep category={category} model={chosen.model} integration={chosen.integration} testDevice={testDevice} passed={passed} />}
-        </div>
-        <footer className={flow.foot}>
+    <FlowDialog
+      label="Add new device"
+      eyebrow={`Step ${step + 1} of ${STEP_TITLES.length}`}
+      title={STEP_TITLES[step]}
+      progress={{ step, of: STEP_TITLES.length }}
+      onDismiss={onClose}
+      foot={
+        <>
           {step > 0 && (
-            <button type="button" className={cx(b.btn, b.ghost)} onClick={() => setStep(step - 1)}>
+            <Button variant="ghost" onClick={() => setStep(step - 1)}>
               Back
-            </button>
+            </Button>
           )}
-          <span className={b.grow} />
+          <Grow />
           {step < LAST ? (
-            <button type="button" disabled={!canContinue} className={cx(b.btn, canContinue ? b.ink : b.off)} onClick={() => setStep(step + 1)}>
+            <Button variant="ink" disabled={!canContinue} onClick={() => setStep(step + 1)}>
               Continue
-            </button>
+            </Button>
           ) : (
             <>
-              <button type="button" className={b.btn} onClick={() => finish("testing")}>
-                Keep testing
-              </button>
-              <button type="button" className={cx(b.btn, b.ink)} onClick={() => finish("live")}>
+              <Button onClick={() => finish("testing")}>Keep testing</Button>
+              <Button variant="ink" onClick={() => finish("live")}>
                 Go live
-              </button>
+              </Button>
             </>
           )}
-        </footer>
-      </div>
-    </div>
+        </>
+      }
+    >
+      {step === 0 && <CategoryStep categories={CATEGORIES} availableCount={(c) => availableIn(state, c.id).length} value={category?.id ?? null} onPick={pickCategory} />}
+      {step === 1 && category && <ModelStep category={category} options={options} value={modelId} onPick={pickModel} />}
+      {step === 2 && <MethodStep value={method} onPick={pickMethod} />}
+      {step === 3 && chosen && method && <ConnectStep method={method} model={chosen.model} sim={sim} connected={paired} onConnect={() => setPaired(true)} />}
+      {step === 4 && chosen && <TestsStep model={chosen.model} sim={sim} results={results} setResults={setResults} />}
+      {step === 5 && chosen && category && <ReviewStep category={category} model={chosen.model} integration={chosen.integration} testDevice={testDevice} passed={passed} />}
+    </FlowDialog>
   );
 }

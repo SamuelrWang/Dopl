@@ -43,9 +43,6 @@ export const U = 0.72;
 /** Stroke is in the icon's own 24-unit viewBox, so it scales with size and never changes. */
 export const ICON = { size: 20 * U, strokeWidth: 1.6 } as const;
 export const ICON_SM = { size: 17.5 * U, strokeWidth: 1.6 } as const;
-/** Old names; remove once _sections/keys* moves to ui.tsx. */
-export const ICON_100 = ICON;
-export const ICON_100_SM = ICON_SM;
 /** A length on the scale, for an inline style. */
 export const u = (n: number) => `calc(${n} * var(--u))`;
 

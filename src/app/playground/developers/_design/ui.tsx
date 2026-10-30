@@ -14,11 +14,13 @@ import f from "./forms.module.css";
 import side from "./sidebar.module.css";
 import o from "./surfaces.module.css";
 
-export { Segmented } from "./interactive";
+export { PillMenu, PopMenu, Segmented, type PillOption } from "./interactive";
+export { Initials, cx, initialsOf, ICON, ICON_SM } from "./components";
 
 /* Buttons */
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "dangerOutline";
-const BUTTON: Record<ButtonVariant, string | undefined> = { primary: b.primary, secondary: undefined, ghost: b.ghost, danger: b.danger, dangerOutline: b.dangerOutline };
+/** `ink` and `dangerFlat` are the flat page actions; `primary` and `danger` carry the raised ring. */
+export type ButtonVariant = "primary" | "ink" | "secondary" | "ghost" | "danger" | "dangerFlat" | "dangerOutline";
+const BUTTON: Record<ButtonVariant, string | undefined> = { primary: b.primary, ink: b.ink, secondary: undefined, ghost: b.ghost, danger: b.danger, dangerFlat: b.dangerFlat, dangerOutline: b.dangerOutline };
 
 export interface ButtonProps {
   variant?: ButtonVariant;
@@ -38,11 +40,12 @@ export interface ButtonProps {
   pressed?: boolean;
   expanded?: boolean;
   haspopup?: "menu" | "dialog";
+  buttonRef?: Ref<HTMLButtonElement>;
   onClick?: () => void;
   children: ReactNode;
 }
 
-export function Button({ variant = "secondary", size = "md", square, full, block, loading, disabled, inert, href, label, title, pressed, expanded, haspopup, onClick, children }: ButtonProps) {
+export function Button({ variant = "secondary", size = "md", square, full, block, loading, disabled, inert, href, label, title, pressed, expanded, haspopup, buttonRef, onClick, children }: ButtonProps) {
   const className = cx(b.btn, !disabled && BUTTON[variant], disabled && b.off, size === "sm" && b.sm, size === "lg" && b.lg, square && b.square, (full || block) && b.full, block && b.noGrow);
   const body = (
     <>
@@ -59,7 +62,7 @@ export function Button({ variant = "secondary", size = "md", square, full, block
     );
   }
   return (
-    <button type="button" className={className} aria-label={label} aria-pressed={pressed} aria-expanded={expanded} aria-haspopup={haspopup} title={title} disabled={disabled} onClick={onClick}>
+    <button ref={buttonRef} type="button" className={className} aria-label={label} aria-pressed={pressed} aria-expanded={expanded} aria-haspopup={haspopup} title={title} disabled={disabled} onClick={onClick}>
       {body}
     </button>
   );
@@ -122,7 +125,7 @@ export function Chip({ kind = "pill", on, ring, count, pressed, expanded, haspop
 }
 
 /* Cards */
-export function Card({ flush, spread, tight, href, onClick, pressed, children }: { flush?: boolean; spread?: boolean; tight?: boolean; href?: string; onClick?: () => void; pressed?: boolean; children: ReactNode }) {
+export function Card({ flush, spread, tight, href, onClick, pressed, label, children }: { flush?: boolean; spread?: boolean; tight?: boolean; href?: string; onClick?: () => void; pressed?: boolean; /** Makes it an article with this name. */ label?: string; children: ReactNode }) {
   const className = cx(b.card, flush && b.flush, spread && b.spread, tight && b.stageCard, (href || onClick) && b.cardLink, pressed && b.cardOn);
   if (href) {
     return (
@@ -136,6 +139,13 @@ export function Card({ flush, spread, tight, href, onClick, pressed, children }:
       <button type="button" className={className} aria-pressed={pressed} onClick={onClick}>
         {children}
       </button>
+    );
+  }
+  if (label) {
+    return (
+      <article className={className} aria-label={label}>
+        {children}
+      </article>
     );
   }
   return <div className={className}>{children}</div>;
@@ -166,6 +176,16 @@ export function Meter({ value, tone = "ink" }: { value: number; tone?: "ink" | "
     <span className={o.bar}>
       <span className={cx(o.barFill, tone === "error" && o.barFillError)} style={{ width: `${value}%` }} />
     </span>
+  );
+}
+
+/** A percentage over its meter. */
+export function MeterFigure({ value, low }: { value: number; low?: boolean }) {
+  return (
+    <div className={d.meter}>
+      <span className={cx(b.strong, b.num)}>{value}%</span>
+      <Meter value={value} tone={low ? "error" : "ink"} />
+    </div>
   );
 }
 

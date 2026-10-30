@@ -3,12 +3,8 @@
 /** Users: the figures for what is on screen, then find anyone, then one row per user. */
 import { Download, SearchX, UserRoundX } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import b from "../_design/base.module.css";
-import { cx, ICON_100 } from "../_design/components";
-import d from "../_design/data.module.css";
-import p from "../_design/page.module.css";
-import o from "../_design/surfaces.module.css";
-import tokens from "../_design/tokens.module.css";
+import { Button, ICON, StatCard } from "../_design/ui";
+import { EmptyState, Page, PageHeader, StatRow, Toast } from "../_design/ui-page";
 import { NO_FILTERS, useCalls, usePortal, useUsers, type SavedView, type UserFilters } from "../_components/portal-store";
 import { WEEK, activeWithin } from "../_components/stats";
 import { testDelivery } from "../_components/test-delivery";
@@ -18,7 +14,6 @@ import { UserSheet } from "./users-sheet";
 import { UsersTable } from "./users-table";
 import { UsersToolbar } from "./users-toolbar";
 import { inQuick, matches, sortUsers, usersCsv, type Quick, type Sort } from "./users-model";
-import s from "./users.module.css";
 
 const LOW_SUCCESS = 90;
 
@@ -91,87 +86,54 @@ export function UsersSection() {
   const hasFilter = quick !== "all" || Object.entries(filters).some(([k, v]) => v !== NO_FILTERS[k as keyof UserFilters]);
 
   return (
-    <div className={cx(p.root, tokens.scope, tokens.u100)}>
-      <div className={p.scroller}>
-        <div className={p.inner}>
-          <header className={b.between}>
-            <div className={b.row}>
-              <h1 className={b.title}>Users</h1>
-              {state.env === "test" && <span className={cx(b.badge, b.badgeWarn)}>Test data</span>}
-            </div>
-            <button type="button" className={cx(b.btn, rows.length === 0 && b.off)} onClick={exportCsv} disabled={rows.length === 0}>
-              <Download {...ICON_100} />
-              Export
-            </button>
-          </header>
+    <Page
+      overlays={
+        <>
+          {open && <UserSheet user={open} calls={calls} onClose={closeSheet} onSendTest={sendTest} onRelink={relinkLink} />}
+          {notice && <Toast>{notice}</Toast>}
+        </>
+      }
+    >
+      <PageHeader
+        title="Users"
+        test={state.env === "test"}
+        action={
+          <Button disabled={rows.length === 0} onClick={exportCsv}>
+            <Download {...ICON} />
+            Export
+          </Button>
+        }
+      />
 
-          <div className={p.stats}>
-            <div className={b.card}>
-              <div className={d.stat}>
-                <span className={b.muted}>Total users</span>
-                <span className={b.big}>{fmt(rows.length)}</span>
-                <span className={b.smallMuted}>{rows.length === users.length ? plans.map(([p, n]) => `${n} ${p[0].toUpperCase()}${p.slice(1)}`).join(", ") : `of ${fmt(users.length)}`}</span>
-              </div>
-            </div>
-            <div className={b.card}>
-              <div className={d.stat}>
-                <span className={b.muted}>Active 7d</span>
-                <span className={b.big}>{fmt(activeWithin(rows, WEEK))}</span>
-                <span className={b.smallMuted}>{fmt(activeWithin(rows, 1440))} today</span>
-              </div>
-            </div>
-            <div className={b.card}>
-              <div className={d.stat}>
-                <span className={b.muted}>Devices per user</span>
-                <span className={b.big}>{rows.length ? (devices.length / rows.length).toFixed(1) : "0"}</span>
-                <span className={b.smallMuted}>
-                  {fmt(devices.length)} devices, {fmt(online)} online
-                </span>
-              </div>
-            </div>
-            <button type="button" aria-pressed={quick === "attention"} className={cx(b.card, p.statBtn, quick === "attention" && p.statOn)} onClick={() => pickQuick(quick === "attention" ? "all" : "attention")}>
-              <span className={d.stat}>
-                <span className={b.muted}>Users with issues</span>
-                <span className={b.big}>{fmt(issues)}</span>
-                <span className={b.smallMuted}>
-                  {relinks} relink, {stale} stale, {low} low success
-                </span>
-              </span>
-            </button>
-          </div>
+      <StatRow>
+        <StatCard label="Total users" value={fmt(rows.length)} hint={rows.length === users.length ? plans.map(([p, n]) => `${n} ${p[0].toUpperCase()}${p.slice(1)}`).join(", ") : `of ${fmt(users.length)}`} />
+        <StatCard label="Active 7d" value={fmt(activeWithin(rows, WEEK))} hint={`${fmt(activeWithin(rows, 1440))} today`} />
+        <StatCard label="Devices per user" value={rows.length ? (devices.length / rows.length).toFixed(1) : "0"} hint={`${fmt(devices.length)} devices, ${fmt(online)} online`} />
+        <StatCard label="Users with issues" value={fmt(issues)} hint={`${relinks} relink, ${stale} stale, ${low} low success`} pressed={quick === "attention"} onClick={() => pickQuick(quick === "attention" ? "all" : "attention")} />
+      </StatRow>
 
-          <UsersToolbar users={users} filters={filters} quick={quick} views={state.savedViews} onFilters={patch} onQuick={pickQuick} onView={pickView} onSaveView={saveView} />
+      <UsersToolbar users={users} filters={filters} quick={quick} views={state.savedViews} onFilters={patch} onQuick={pickQuick} onView={pickView} onSaveView={saveView} />
 
-          {rows.length === 0 ? (
-            <div className={b.card}>
-              <div className={o.empty}>
-                <span className={b.tile}>{hasFilter ? <SearchX {...ICON_100} /> : <UserRoundX {...ICON_100} />}</span>
-                <span className={b.h3}>{hasFilter ? "No users match" : "No users yet"}</span>
-                {hasFilter && (
-                  <button
-                    type="button"
-                    className={b.btn}
-                    onClick={() => {
-                      setFilters(NO_FILTERS);
-                      pickQuick("all");
-                    }}
-                  >
-                    Clear filters
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <UsersTable rows={rows} sort={sort} page={page} openId={openId} onSort={setSort} onPage={setPage} onOpen={setOpenId} />
-          )}
-        </div>
-      </div>
-      {open && <UserSheet user={open} calls={calls} onClose={closeSheet} onSendTest={sendTest} onRelink={relinkLink} />}
-      {notice && (
-        <div role="status" className={cx(o.toast, o.toastBlack, s.notice)}>
-          <span className={b.onInk}>{notice}</span>
-        </div>
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={hasFilter ? SearchX : UserRoundX}
+          title={hasFilter ? "No users match" : "No users yet"}
+          action={
+            hasFilter && (
+              <Button
+                onClick={() => {
+                  setFilters(NO_FILTERS);
+                  pickQuick("all");
+                }}
+              >
+                Clear filters
+              </Button>
+            )
+          }
+        />
+      ) : (
+        <UsersTable rows={rows} sort={sort} page={page} openId={openId} onSort={setSort} onPage={setPage} onOpen={setOpenId} />
       )}
-    </div>
+    </Page>
   );
 }

@@ -26,7 +26,7 @@ import { HomeFrame } from "@/features/home/components/shell/home-frame";
 import { AccountRailCore } from "@/shared/layout/app-shell/account-rail-core";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import b from "../_design/base.module.css";
-import { Initials, ICON_100, cx, initialsOf } from "../_design/components";
+import { Initials, ICON, cx, initialsOf } from "../_design/components";
 import { Segmented } from "../_design/interactive";
 import side from "../_design/sidebar.module.css";
 import o from "../_design/surfaces.module.css";
@@ -83,7 +83,7 @@ function NavRow({ item, active, alert, alertLabel }: { item: NavItem; active: bo
   const Icon = item.icon;
   return (
     <Link href={BASE + item.href} aria-current={active ? "page" : undefined} className={cx(o.navItem, side.navRow, active && o.navOn)}>
-      <Icon {...ICON_100} aria-hidden="true" className={side.navIcon} />
+      <Icon {...ICON} aria-hidden="true" className={side.navIcon} />
       <span className={side.navLabel}>{item.label}</span>
       {alert ? (
         <span className={cx(o.navCount, side.alert)} title={alertLabel}>
@@ -103,7 +103,7 @@ function Sidebar({ fontClass }: { fontClass?: string }) {
   const attention = users.filter(hasIssues).length;
   const me = MEMBERS[2];
   return (
-    <aside className={cx(side.sidebar, tokens.scope, tokens.u100, fontClass)}>
+    <aside className={cx(side.sidebar, tokens.scope, fontClass)}>
       <div className={side.identity}>
         <div className={side.projects} role="radiogroup" aria-label="Project">
           {PROJECTS.map((project) => {
