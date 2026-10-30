@@ -137,7 +137,7 @@ describe("POST /api/developers/playground", () => {
       [live, 400],
       [pk, 400],
       [other, 403],
-      ["sk_test_not-a-real-key-unknown", 403],
+      ["sk_test_" + "0".repeat(24), 403],
     ];
     for (const [key, status] of cases) {
       const res = await run({ project_id: P1, key, operation: "getContext", path_params: { external_user_id: "u" } });
