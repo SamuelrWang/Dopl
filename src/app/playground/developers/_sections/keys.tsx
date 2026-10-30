@@ -7,15 +7,15 @@
  */
 import { CheckCircle2, Globe, KeyRound, Plus, SearchX } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Button, ICON, SearchField, Segmented, StatCard } from "../_design/ui";
-import { Between, CardSection, EmptyState, Page, PageHeader, StatRow, Toast, Toolbar } from "../_design/ui-page";
+import { Button, ICON, SearchField, Segmented } from "../_design/ui";
+import { Between, CardSection, EmptyState, Page, PageHeader, Toast, Toolbar } from "../_design/ui-page";
 import { MEMBERS, minsAgo } from "../_data/company";
 import type { ApiKeyRow } from "../_data/misc";
 import { usePortal } from "../_components/portal-store";
 import { fmt } from "../_components/ui";
 import { AddKeyCard, KeyCard } from "./keys-card";
 import { CreateKeyFlow, RevealDialog, RevokeDialog, RotateDialog, copyText } from "./keys-dialogs";
-import { KEY_VIEWS, days, isUnused, keepsKey, newKey, rotated, type KeyKind, type KeyView } from "./keys-model";
+import { KEY_VIEWS, keepsKey, newKey, rotated, type KeyKind, type KeyView } from "./keys-model";
 
 const SECTIONS = [
   { kind: "secret", label: "Secret keys", add: "New secret key", Glyph: KeyRound },
@@ -36,12 +36,6 @@ export function KeysSection() {
 
   const all = useMemo(() => state.keys.filter((key) => key.env === state.env), [state.keys, state.env]);
   const rows = useMemo(() => all.filter((key) => keepsKey(key, view, q)), [all, view, q]);
-  const active = all.filter((key) => !key.revoked);
-  const secrets = active.filter((key) => key.kind === "secret");
-  const calls = active.reduce((n, key) => n + key.calls7d, 0);
-  const busiest = active.reduce<ApiKeyRow | null>((top, key) => (!top || key.calls7d > top.calls7d ? key : top), null);
-  const oldest = secrets.reduce<ApiKeyRow | null>((top, key) => (!top || key.createdAt < top.createdAt ? key : top), null);
-  const unused = active.filter(isUnused).length;
   const envLabel = state.env === "live" ? "Live" : "Test";
   const browsing = q === "" && view === "active";
   const sections = SECTIONS.filter((section) => browsing || rows.some((key) => key.kind === section.kind));
@@ -97,13 +91,6 @@ export function KeysSection() {
           </Button>
         }
       />
-
-      <StatRow>
-        <StatCard label="Active keys" value={fmt(active.length)} hint={`${secrets.length} secret, ${active.length - secrets.length} publishable`} />
-        <StatCard label="Calls, 7d" value={fmt(calls)} hint={busiest && calls > 0 ? `${Math.round((busiest.calls7d / calls) * 100)}% from ${busiest.name}` : "None yet"} />
-        <StatCard label="Oldest secret" value={oldest ? `${days(oldest.createdAt)}d` : "None"} hint={oldest ? oldest.name : "No secret keys"} />
-        <StatCard label="Needs review" value={fmt(unused)} hint="Unused for 30 days" pressed={view === "review"} onClick={() => setView(view === "review" ? "active" : "review")} />
-      </StatRow>
 
       <Toolbar>
         <Between>

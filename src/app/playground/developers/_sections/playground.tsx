@@ -11,6 +11,7 @@ import type { CapabilityId } from "@dopl/device-contracts";
 import { Badge, Button, Chip, ICON, PillMenu, Segmented, TwoLine, type Tone } from "../_design/ui";
 import { Alert, Between, CodeBlock, ConfirmDialog, FilterRow, Grow, ListRow, Mark, Page, PageHeader, Stack, Text, TextArea, TextField, WarnNote } from "../_design/ui-page";
 import { CaptureOutput, ChangeOutput, CodeEditor, DetailsPane, FillBody, FillCard, HapticOutput, LensScreen, PanelScreen, ReadOutput, SpeakerOutput, SplitLayout, Stage } from "../_design/ui-output";
+import { G2, G2Screen, g2Wrap } from "../_design/g2-screen";
 import { CATEGORIES, ALL_MODELS, categoryOf, modelById, type CategoryId, type Model, type ModelId } from "../_data/catalog";
 import { wrapLines } from "../_data/receives";
 import { usePortal, useUsers } from "../_components/portal-store";
@@ -56,6 +57,38 @@ function Output({ model, shown, phase, error, answer, onAnswer }: { model: Model
   if (family === "read") return <Stage><ReadOutput rows={readRows(capability, model)} /></Stage>;
   if (family === "capture") return <Stage><CaptureOutput /></Stage>;
 
+  if (model.id === "g2") {
+    const choices = family === "ask" && capability !== "ask.text" ? answers.slice(0, model.floor.maxOptions) : [];
+    const body = shown.lines ?? g2Wrap(text);
+    const room = G2.maxLines - choices.length;
+    const picked = answer ? [`> ${answer}`] : choices.map((a, i) => `${i === 0 ? ">" : " "} ${a}`);
+    return (
+      <Stage>
+        <G2Screen lines={[...body.slice(0, room), ...picked]} />
+        {body.length > room && (
+          <WarnNote>
+            <CircleAlert {...ICON} aria-hidden="true" />
+            {body.length - room} lines cut, this display fits {G2.maxLines}
+          </WarnNote>
+        )}
+        {family === "ask" && !answer && (
+          <FilterRow>
+            {capability === "ask.text" ? (
+              <Button size="sm" onClick={() => onAnswer("Text reply")}>
+                Reply as user
+              </Button>
+            ) : (
+              choices.map((a) => (
+                <Button key={a} size="sm" onClick={() => onAnswer(a)}>
+                  {a}
+                </Button>
+              ))
+            )}
+          </FilterRow>
+        )}
+      </Stage>
+    );
+  }
   const all = shown.lines ?? wrapLines(text, model.floor.lineWidth);
   const lines = model.surface === "lens" ? all.slice(0, model.floor.maxLines) : all;
   const cut = all.length - lines.length;

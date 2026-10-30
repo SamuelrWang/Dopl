@@ -43,3 +43,4 @@
 .dotFail { background: var(--warn); box-shadow: none; }
 .dotFaint { opacity: 0.45; }
 .stepBody { display: flex; flex: 1; flex-direction: column; gap: calc(1 * var(--u)); min-width: 0; }
+.g2 { flex: none; width: 576px; max-width: 100%; aspect-ratio: 2 / 1; background: #000; image-rendering: pixelated; }

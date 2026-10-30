@@ -1,6 +1,7 @@
 "use client";
 
 import { Section } from "../_design/components";
+import { G2Screen } from "../_design/g2-screen";
 import { Button, Card } from "../_design/ui";
 import { CaptureOutput, ChangeOutput, HapticOutput, LensScreen, PanelScreen, ReadOutput, SpeakerOutput, Stage } from "../_design/ui-output";
 
@@ -9,6 +10,9 @@ export function OutputsGroup() {
   return (
     <Section label="Device output">
       <Card>
+        <Stage>
+          <G2Screen lines={["Pump 4 at Site 12 is over pressure.", "Close valve B before restart.", "", "> Yes", "  No"]} />
+        </Stage>
         <Stage>
           <LensScreen lines={["Pump 4 at Site 12 is over", "pressure. Close valve B."]}>
             <Button size="sm">Yes</Button>
