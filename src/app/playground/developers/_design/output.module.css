@@ -27,6 +27,7 @@
 .editorWrap { display: flex; flex: 1 0 calc(260 * var(--u)); flex-direction: column; gap: calc(12.5 * var(--u)); min-height: 0; }
 .editor { flex: 1; width: 100%; min-height: 0; padding: calc(20 * var(--u)); border: 0; border-radius: var(--radius-box); outline: 0; resize: none; background: var(--ink); color: #d9d9d9; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(15.5 * var(--u)); line-height: calc(25 * var(--u)); white-space: pre; overflow: auto; }
 .editor:focus { box-shadow: var(--ring-focus); }
+.splitEven { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
 .splitWide { grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); }
 .chart { display: flex; flex: 1; flex-direction: column; gap: calc(12.5 * var(--u)); min-height: 0; }
 .chartBars { flex: 1; min-height: calc(187.5 * var(--u)); gap: calc(5 * var(--u)); }
@@ -49,3 +50,6 @@
 .ruleActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: calc(7.5 * var(--u)); }
 .sticky { position: sticky; top: 0; }
 .ruleValue { grid-column: 1 / -1; min-width: 0; }
+.scrollArea:first-child { margin-top: calc(1.25 * var(--u)); border-radius: var(--radius-card); }
+.hug { flex: 0 1 auto; min-height: 0; }
+.hug .scrollArea { flex: 0 1 auto; }

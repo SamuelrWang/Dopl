@@ -3,6 +3,7 @@
 /** One row per user: who they are, what they own, how delivery is going. Row opens the sheet. */
 import { ChevronRight } from "lucide-react";
 import { Badge, Card, DataCell, DataRow, DataTable, ICON, ICON_SM, Initials, MeterFigure, StateDot, TwoLine, initialsOf, type Column, type Tone } from "../_design/ui";
+import { FillCard, ScrollArea, useFitRows } from "../_design/ui-output";
 import { Pager, PlainButton, TableFoot, Text } from "../_design/ui-page";
 import { modelById } from "../_data/catalog";
 import { ownedDevice, userDeliveries, userRate, type DeviceState, type OwnedDevice, type PortalUser } from "../_data/users";
@@ -85,6 +86,7 @@ function UserRow({ user, open, onOpen }: { user: PortalUser; open: boolean; onOp
 }
 
 export function UsersTable({
+  fill,
   rows,
   sort,
   page,
@@ -93,6 +95,8 @@ export function UsersTable({
   onPage,
   onOpen,
 }: {
+  /** Fills a fit page: the rows scroll, the pager stays. */
+  fill?: boolean;
   rows: PortalUser[];
   sort: Sort;
   page: number;
@@ -101,27 +105,43 @@ export function UsersTable({
   onPage: (page: number) => void;
   onOpen: (id: string) => void;
 }) {
-  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const fit = useFitRows(PAGE_SIZE);
+  const size = fill ? fit.count : PAGE_SIZE;
+  const pages = Math.max(1, Math.ceil(rows.length / size));
   const current = Math.min(page, pages);
-  const first = (current - 1) * PAGE_SIZE;
-  const visible = rows.slice(first, first + PAGE_SIZE);
+  const first = (current - 1) * size;
+  const visible = rows.slice(first, first + size);
   const toggle = (key: string) => {
     const k = key as SortKey;
     onSort({ key: k, dir: sort.key === k ? (sort.dir === 1 ? -1 : 1) : FIRST_DIR[k] });
   };
+  const table = (
+    <DataTable columns={COLUMNS} sort={sort} onSort={toggle}>
+      {visible.map((u) => (
+        <UserRow key={u.id} user={u} open={openId === u.id} onOpen={() => onOpen(u.id)} />
+      ))}
+    </DataTable>
+  );
+  const foot = (
+    <TableFoot>
+      <Text kind="muted" num>
+        {first + 1} to {first + visible.length} of {rows.length}
+      </Text>
+      {pages > 1 && <Pager page={current} pages={pages} onPage={onPage} />}
+    </TableFoot>
+  );
+  if (fill) {
+    return (
+      <FillCard flush>
+        <ScrollArea areaRef={fit.ref}>{table}</ScrollArea>
+        {foot}
+      </FillCard>
+    );
+  }
   return (
     <Card flush>
-      <DataTable columns={COLUMNS} sort={sort} onSort={toggle}>
-        {visible.map((u) => (
-          <UserRow key={u.id} user={u} open={openId === u.id} onOpen={() => onOpen(u.id)} />
-        ))}
-      </DataTable>
-      <TableFoot>
-        <Text kind="muted" num>
-          {first + 1} to {first + visible.length} of {rows.length}
-        </Text>
-        {pages > 1 && <Pager page={current} pages={pages} onPage={onPage} />}
-      </TableFoot>
+      {table}
+      {foot}
     </Card>
   );
 }

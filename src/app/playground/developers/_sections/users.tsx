@@ -87,6 +87,7 @@ export function UsersSection() {
 
   return (
     <Page
+      fit
       overlays={
         <>
           {open && <UserSheet user={open} calls={calls} onClose={closeSheet} onSendTest={sendTest} onRelink={relinkLink} />}
@@ -132,7 +133,7 @@ export function UsersSection() {
           }
         />
       ) : (
-        <UsersTable rows={rows} sort={sort} page={page} openId={openId} onSort={setSort} onPage={setPage} onOpen={setOpenId} />
+        <UsersTable fill rows={rows} sort={sort} page={page} openId={openId} onSort={setSort} onPage={setPage} onOpen={setOpenId} />
       )}
     </Page>
   );

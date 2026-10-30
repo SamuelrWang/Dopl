@@ -3,8 +3,9 @@
 /** Team: who has access, what each role can do, and who needs a look. */
 import { Check, Minus, Plus, RotateCcw, SearchX, Shield, Trash2, UserRound, Code2, Eye, Crown } from "lucide-react";
 import { useState } from "react";
-import { Badge, Button, Card, DataCell, DataRow, DataTable, ICON, ICON_SM, Initials, PillMenu, SearchField, Segmented, TwoLine, initialsOf, type Column } from "../_design/ui";
-import { ConfirmDialog, EmptyState, FlowDialog, Grow, Mark, Page, PageHeader, PlainButton, Row, Stack, TableHead, Text, TextField, Tile, Tiles, Toast, Toolbar, Between } from "../_design/ui-page";
+import { Badge, Button, DataCell, DataRow, DataTable, ICON, ICON_SM, Initials, PillMenu, SearchField, Segmented, TwoLine, initialsOf, type Column } from "../_design/ui";
+import { FillCard, ScrollArea, SplitLayout } from "../_design/ui-output";
+import { ConfirmDialog, EmptyState, FlowDialog, Grow, Mark, Page, PageHeader, PlainButton, Row, Stack, TableHead, Text, TextField, Tile, Tiles, Toast } from "../_design/ui-page";
 import { minsAgo, type Member } from "../_data/company";
 import { usePortal } from "../_components/portal-store";
 import { since } from "../_components/ui";
@@ -28,14 +29,13 @@ const POWERS: { name: string; roles: Role[] }[] = [
 const QUIET_DAYS = 7;
 const VIEWS = ["All", "Invited"];
 const COLUMNS: Column[] = [
-  { key: "name", label: "Member", width: "36%" },
-  { key: "role", label: "Role", width: "20%" },
-  { key: "keys", label: "API keys", width: "12%" },
-  { key: "active", label: "Last active", width: "14%" },
-  { key: "status", label: "Status", width: "14%" },
+  { key: "name", label: "Member", width: "42%" },
+  { key: "role", label: "Role", width: "24%" },
+  { key: "active", label: "Last active", width: "17%" },
+  { key: "status", label: "Status", width: "17%" },
   { key: "actions", srLabel: "Actions", width: "calc(95 * var(--u))" },
 ];
-const MATRIX: Column[] = [{ key: "power", label: "Permission", width: "40%" }, ...ROLES.map((r) => ({ key: r.role, label: r.role, width: "15%", align: "center" as const }))];
+const MATRIX: Column[] = [{ key: "power", label: "Permission", width: "44%" }, ...ROLES.map((r) => ({ key: r.role, label: r.role, width: "14%", align: "center" as const }))];
 
 interface Invite {
   id: string;
@@ -68,6 +68,7 @@ export function TeamSection() {
 
   return (
     <Page
+      fit
       overlays={
         <>
           {adding && (
@@ -115,17 +116,18 @@ export function TeamSection() {
         }
       />
 
-      <Toolbar>
-        <Between>
-          <SearchField hug value={q} placeholder="Search members" onChange={setQ} />
-          <Segmented label="Member views" options={VIEWS} value={view} onChange={setView} />
-        </Between>
-      </Toolbar>
-
-      {members.length === 0 && pending.length === 0 ? (
-        <EmptyState icon={SearchX} title={view === 1 && q === "" ? "No pending invites" : "No members match"} action={<Button onClick={() => { setQ(""); setView(0); }}>Show all members</Button>} />
-      ) : (
-        <Card flush>
+      <SplitLayout
+        lead
+        left={
+          <FillCard flush hug>
+            <TableHead>
+              <SearchField hug value={q} placeholder="Search members" onChange={setQ} />
+              <Segmented label="Member views" options={VIEWS} value={view} onChange={setView} />
+            </TableHead>
+            {members.length === 0 && pending.length === 0 ? (
+              <EmptyState icon={SearchX} title={view === 1 && q === "" ? "No pending invites" : "No members match"} action={<Button onClick={() => { setQ(""); setView(0); }}>Show all members</Button>} />
+            ) : (
+              <ScrollArea>
           <DataTable columns={COLUMNS}>
             {members.map((m) => (
               <DataRow key={m.id}>
@@ -135,9 +137,6 @@ export function TeamSection() {
                 </DataCell>
                 <DataCell open>
                   {m.role === "Owner" && owners === 1 ? <Text>Owner</Text> : <PillMenu stable label={m.role} value={m.role} options={ROLES.map((r) => ({ value: r.role, label: r.role }))} onChange={(role) => setRole(m.id, role as Role)} />}
-                </DataCell>
-                <DataCell>
-                  <Text num>{keysBy(m.name)}</Text>
                 </DataCell>
                 <DataCell>
                   <Text nowrap>{since(m.lastActive)}</Text>
@@ -164,9 +163,6 @@ export function TeamSection() {
                   <Text>{i.role}</Text>
                 </DataCell>
                 <DataCell>
-                  <Text kind="faint">None</Text>
-                </DataCell>
-                <DataCell>
                   <Text kind="faint">Never</Text>
                 </DataCell>
                 <DataCell>
@@ -185,14 +181,17 @@ export function TeamSection() {
               </DataRow>
             ))}
           </DataTable>
-        </Card>
-      )}
-
-      <Card flush>
+              </ScrollArea>
+            )}
+          </FillCard>
+        }
+        right={
+          <FillCard flush hug>
         <TableHead>
           <Text kind="h3">What each role can do</Text>
           <Grow />
         </TableHead>
+        <ScrollArea>
         <DataTable columns={MATRIX}>
           {POWERS.map((p) => (
             <DataRow key={p.name}>
@@ -207,7 +206,10 @@ export function TeamSection() {
             </DataRow>
           ))}
         </DataTable>
-      </Card>
+        </ScrollArea>
+          </FillCard>
+        }
+      />
     </Page>
   );
 }

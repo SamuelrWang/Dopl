@@ -2,7 +2,7 @@
 
 /** What a device did with a call, drawn per capability. A device with no screen still has an output. */
 import { ArrowRight, Image as ImageIcon, Pause, Play } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import b from "./base.module.css";
 import { cx, ICON } from "./components";
 import d from "./data.module.css";
@@ -11,8 +11,8 @@ import { Button } from "./ui";
 import { Text } from "./ui-page";
 
 export const Stage = ({ children }: { children: ReactNode }) => <div className={x.stage}>{children}</div>;
-export const SplitLayout = ({ wide, left, right }: { /** Left takes two thirds. */ wide?: boolean; left: ReactNode; right: ReactNode }) => (
-  <div className={cx(x.split, wide && x.splitWide)}>
+export const SplitLayout = ({ wide, lead, left, right }: { /** Left takes two thirds. */ wide?: boolean; /** Left takes a little over half. */ lead?: boolean; left: ReactNode; right: ReactNode }) => (
+  <div className={cx(x.split, wide && x.splitWide, lead && x.splitEven)}>
     <div className={x.col}>{left}</div>
     <div className={x.col}>{right}</div>
   </div>
@@ -40,9 +40,33 @@ export function PanelScreen({ app, lines, children }: { app: string; lines: stri
 const barsOf = (text: string) => Array.from({ length: 44 }, (_, i) => 22 + ((text.charCodeAt(i % Math.max(text.length, 1)) || 60) * (i + 3) * 37) % 78);
 
 /** A card that fills its column, for pages that fit the window. */
-export const FillCard = ({ flush, children }: { flush?: boolean; children: ReactNode }) => <div className={cx(b.card, x.fill, flush && x.fillFlush)}>{children}</div>;
+export const FillCard = ({ flush, hug, children }: { flush?: boolean; /** As tall as its content, shrinking and scrolling only when the window is short. */ hug?: boolean; children: ReactNode }) => <div className={cx(b.card, hug ? x.hug : x.fill, flush && x.fillFlush)}>{children}</div>;
 /** Scrolls inside a FillCard, with any table's header held at the top. */
-export const ScrollArea = ({ children }: { children: ReactNode }) => <div className={x.scrollArea}>{children}</div>;
+export const ScrollArea = ({ areaRef, children }: { areaRef?: Ref<HTMLDivElement>; children: ReactNode }) => (
+  <div ref={areaRef} className={x.scrollArea}>
+    {children}
+  </div>
+);
+
+/** How many table rows fit a ScrollArea right now, so a page of them never needs to scroll. */
+export function useFitRows(fallback: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [count, setCount] = useState(fallback);
+  useLayoutEffect(() => {
+    const area = ref.current;
+    if (!area) return;
+    const measure = () => {
+      const row = area.querySelector("tbody tr")?.getBoundingClientRect().height;
+      const head = area.querySelector("thead")?.getBoundingClientRect().height ?? 0;
+      if (row) setCount(Math.max(3, Math.floor((area.clientHeight - head) / row)));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(area);
+    return () => observer.disconnect();
+  }, []);
+  return { ref, count };
+}
 export const FillBody = ({ children }: { children: ReactNode }) => <div className={x.fillBody}>{children}</div>;
 export const DetailsPane = ({ children }: { children: ReactNode }) => <div className={x.details}>{children}</div>;
 
