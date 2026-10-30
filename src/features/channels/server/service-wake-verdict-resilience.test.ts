@@ -11,6 +11,8 @@ vi.mock("./repository", async (importOriginal) => ({
   findUnaddressedResponder: vi.fn(),
 }));
 
+import * as repo from "./repository";
+import * as repoMessages from "./repository-messages";
 import * as repoSessions from "./repository-sessions";
 import {
   NOW,
@@ -222,7 +224,14 @@ describe("`to=@agent` — the union resolver's half of the verdict", () => {
     roomProjection(sessionRow({ name: "m8q1zzzz" }));
     const out = await resolve("hi", {}, { toAgentId: "k3v7d2mq" });
     expect(out.verdict).toBe("agent");
-    expect(vi.mocked(repoSessions.listChannelSessionStates)).not.toHaveBeenCalled();
+    // ⚠ NO ARM RAN: RR3's own reads (the author's setting, the recency read) never fire.
+    expect(vi.mocked(repo.findUnaddressedResponder)).not.toHaveBeenCalled();
+    expect(vi.mocked(repoMessages.listRecentRoomTagsBy)).not.toHaveBeenCalled();
+    // The ONE projection read is the reach check (`service-wake-verdict-reach.ts`, 2026-10-29),
+    // which asks whether the named agent works this scope — fenced to THIS channel, once.
+    expect(vi.mocked(repoSessions.listChannelSessionStates).mock.calls).toEqual([
+      ["ws-1", "chan-1"],
+    ]);
   });
 
   it("is never `unreachable` — an unresolved `to` was refused at the door", async () => {

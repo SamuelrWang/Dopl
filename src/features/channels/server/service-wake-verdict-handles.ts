@@ -143,7 +143,10 @@ export async function resolveAgentRecipients(
    * ⚠ **EMPTY MEANS "NO MEMBER NAMESPACE TO RESPECT", NOT "NO MEMBERS"** — every caller without
    * a roster in hand (the harness, `service-directions.ts`) is unchanged.
    */
-  reservedHandles: readonly string[] = []
+  reservedHandles: readonly string[] = [],
+  /** The ROOM read, when the caller already holds one (the verdict shares it with its
+   *  reach check, so a person's post reads the projection once). Absent = read here. */
+  roomRows: () => Promise<SessionStateRow[]> = () => liveChannelSessions(ctx, channelId)
 ): Promise<string[] | null> {
   const handles = mentionTokensOf(body)
     .map(mentionHandleOf)
@@ -175,7 +178,7 @@ export async function resolveAgentRecipients(
   const rows =
     authorKind === "agent"
       ? await ownSessions(ctx, channelId)
-      : await liveChannelSessions(ctx, channelId);
+      : await roomRows();
   // ⚠ **THE INDEX IS MINTED AROUND `reserved`, NOT AROUND `reservedHandles`** —
   // the set the line above just widened. Handing the raw parameter here would
   // reserve `desktop` for the `resolvedAny` bookkeeping and leave the INDEX free

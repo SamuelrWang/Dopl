@@ -93,12 +93,15 @@ export async function unreachableAddressees(
   ctx: ChannelContext,
   channelId: string,
   metadata: Record<string, unknown>,
-  agentIds: readonly string[]
+  agentIds: readonly string[],
+  /** The channel projection, when the verdict already read it — one read per post. */
+  roomRows: () => Promise<SessionStateRow[]> = () =>
+    repoSessions.listChannelSessionStates(ctx.workspaceId, channelId)
 ): Promise<string[]> {
   if (CROSS_SCOPE_WAKE || agentIds.length === 0) return [];
   let rows: SessionStateRow[] | null = null;
   try {
-    rows = await repoSessions.listChannelSessionStates(ctx.workspaceId, channelId);
+    rows = await roomRows();
   } catch {
     return [];
   }
