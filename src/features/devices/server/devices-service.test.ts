@@ -1,5 +1,4 @@
-import { describe, expect, it } from "vitest";
-import { vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   COMPUTER_ONLINE_WINDOW_MS,
   heartbeat,

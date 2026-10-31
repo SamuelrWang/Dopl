@@ -40,11 +40,11 @@ export interface BridgePort {
 /** Above this age the next poll writes `last_seen` again. The online window is 60s; a poll comes every few. */
 export const TOUCH_EVERY_MS = 20_000;
 
+/** Decoration only: a name the schema refuses must never stop a bridge getting its messages. */
 const PollSchema = z.object({ name: z.string().trim().min(1).max(64).optional(), model: z.string().trim().min(1).max(64).optional() });
 const AckSchema = z.object({ id: z.uuid(), ok: z.boolean(), error: z.string().max(500).optional() });
 
 const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
-const UNAUTHORIZED = () => reply({ error: "unauthorized" }, 401);
 
 const hashOf = (token: string) => createHash("sha256").update(token).digest("hex");
 
@@ -61,15 +61,15 @@ async function bodyOf(request: Request): Promise<unknown> {
   }
 }
 
+/** The one line a queued row speaks. */
+export const bridgeMessageText = (row: GlassesMessage): string => ("body" in row.payload ? row.payload.body : "");
+
 export function createBridgeHandlers(port: BridgePort, clock: () => number = Date.now) {
-  const authed = async (request: Request): Promise<BridgeDevice | null> => {
-    const token = bearer(request);
-    return token ? port.deviceFromTokenHash(hashOf(token)) : null;
-  };
   const guarded = (label: string, fn: (request: Request, device: BridgeDevice) => Promise<Response>) => async (request: Request): Promise<Response> => {
     try {
-      const device = await authed(request);
-      return device ? await fn(request, device) : UNAUTHORIZED();
+      const token = bearer(request);
+      const device = token ? await port.deviceFromTokenHash(hashOf(token)) : null;
+      return device ? await fn(request, device) : reply({ error: "unauthorized" }, 401);
     } catch (err) {
       console.error(`[device-bridge] ${label} failed`, err);
       return reply({ error: `${label} failed` }, 500);
@@ -78,17 +78,17 @@ export function createBridgeHandlers(port: BridgePort, clock: () => number = Dat
 
   return {
     poll: guarded("poll", async (request, device) => {
-      const parsed = PollSchema.safeParse((await bodyOf(request)) ?? {});
-      if (!parsed.success) return reply({ error: "invalid body" }, 400);
+      const parsed = PollSchema.safeParse(await bodyOf(request));
+      const identity = parsed.success ? parsed.data : {};
       const t = clock();
       const now = new Date(t).toISOString();
       const stale = device.lastSeen === null || t - Date.parse(device.lastSeen) >= TOUCH_EVERY_MS;
       await Promise.all([
         stale ? port.touch(device.id, now) : null,
-        parsed.data.name || parsed.data.model ? port.rename(device.id, parsed.data) : null,
+        identity.name || identity.model ? port.rename(device.id, identity) : null,
       ]);
       const rows = await port.pending(device.id, now);
-      return reply({ messages: rows.map((r) => ({ id: r.id, text: "body" in r.payload ? r.payload.body : "" })) });
+      return reply({ messages: rows.map((r) => ({ id: r.id, text: bridgeMessageText(r) })) });
     }),
     ack: guarded("ack", async (request, device) => {
       const parsed = AckSchema.safeParse(await bodyOf(request));

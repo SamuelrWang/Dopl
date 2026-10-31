@@ -138,6 +138,14 @@ describe("bridge routes", () => {
     expect(stale.rename).not.toHaveBeenCalled();
   });
 
+  it("a speaker name the schema refuses still gets its messages", async () => {
+    const { port, typed } = fakePort();
+    const res = await createBridgeHandlers(typed, () => T0).poll(req({ name: "x".repeat(65) }));
+    expect(res.status).toBe(200);
+    expect(port.rename).not.toHaveBeenCalled();
+    expect(port.pending).toHaveBeenCalledTimes(1);
+  });
+
   it("ack settles once with the Cast outcome; a repeat is a 404 and settles nothing", async () => {
     const { port, typed, row } = fakePort();
     const h = createBridgeHandlers(typed, () => T0);

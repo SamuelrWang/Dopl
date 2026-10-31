@@ -442,8 +442,8 @@ export async function postMessage(
     stored[ESCALATION_ANSWER_METADATA_KEY] ? onAnswerInserted(ctx, channel.id, row) : null,
     hydrateOne(row),
   ]);
-  // The portal's log of what a person sent from a device. After the response; a replay never gets here.
-  if (authorKind === "user" && ctx.messageSource && (input.kind ?? "message") === "message") {
+  // A pressed decision option is not something the person said, so it is not an inbound message.
+  if (authorKind === "user" && ctx.messageSource && (input.kind ?? "message") === "message" && !input.escalationAnswer) {
     logInboundMessage({ userId: ctx.userId, source: ctx.messageSource, body: input.body, channelId: channel.id, messageId: row.id });
   }
   const hint =

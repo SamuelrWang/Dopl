@@ -12,7 +12,7 @@ import { GOOGLE_HOME_SPEAK_MAX_CHARS } from "../../adapters/google-home";
 import { failed, type Dispatcher } from "../../adapters/shared";
 
 /** A spoken line is worth nothing a minute late: the row expires rather than talk over the room later. */
-export const BRIDGE_MESSAGE_TTL_S = 60;
+const BRIDGE_MESSAGE_TTL_S = 60;
 
 export function createBridgeDispatcher(deps: { store: Pick<GlassesStore, "insert">; now?: () => number }): Dispatcher {
   const now = deps.now ?? Date.now;

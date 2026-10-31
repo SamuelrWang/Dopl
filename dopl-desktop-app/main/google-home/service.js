@@ -178,4 +178,4 @@ const IMAGE_TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', w
 const imageType = (url) => IMAGE_TYPES[(/\.([a-z]+)$/i.exec(new URL(url).pathname) || [])[1]?.toLowerCase()] || 'image/png';
 const names = (list) => list.map((d) => `${d.name}${d.display ? ' (screen)' : ''}${d.group ? ' (group)' : ''}`).join(', ');
 
-module.exports = { createGoogleHome, GoogleHomeError, LIMITS };
+module.exports = { createGoogleHome, GoogleHomeError, LIMITS, matches };

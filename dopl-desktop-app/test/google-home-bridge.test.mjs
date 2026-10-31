@@ -2,10 +2,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 const require = createRequire(import.meta.url);
-const { createClient, pass, run } = require('../main/google-home/bridge.js');
+const { createClient, pass, readConfig, run } = require('../main/google-home/bridge.js');
 
 const fakeClient = (batches) => {
   const acks = [];
@@ -19,12 +22,69 @@ const fakeClient = (batches) => {
 };
 
 test('a cast is acked ok, a failed cast is acked with its reason, and both are finished', async () => {
-  const client = fakeClient([[{ id: 'a', text: 'hello' }, { id: 'b', text: 'boom' }]]);
+  const client = fakeClient([[{ id: 'b', text: 'boom' }, { id: 'a', text: 'hello' }]]);
   const spoken = [];
   const home = { notify: async ({ text }) => { if (text === 'boom') throw new Error('speaker gone'); spoken.push(text); return {}; } };
-  await pass({ client, home, identity: () => ({}), log: () => {} });
+  await pass({ client, home, identity: {}, log: () => {} });
   assert.deepEqual(spoken, ['hello']);
-  assert.deepEqual(client.acks, [{ id: 'a', ok: true }, { id: 'b', ok: false, error: 'speaker gone' }]);
+  assert.deepEqual(client.acks, [{ id: 'b', ok: false, error: 'speaker gone' }, { id: 'a', ok: true }]);
+});
+
+test('a lost ack is sent again and the speaker does not repeat itself', async () => {
+  const m = { id: 'a', text: 'hello' };
+  const client = fakeClient([[m], [m]]);
+  const realAck = client.ack;
+  client.ack = async (a) => { client.ack = realAck; throw Object.assign(new Error('down'), { status: 500 }); };
+  const spoken = [];
+  const home = { notify: async ({ text }) => { spoken.push(text); return {}; } };
+  const state = { unacked: new Map(), busyUntil: 0 };
+  await assert.rejects(() => pass({ client, home, identity: {}, log: () => {}, state }));
+  await pass({ client, home, identity: {}, log: () => {}, state });
+  assert.deepEqual(spoken, ['hello']);
+  assert.deepEqual(client.acks, [{ id: 'a', ok: true }]);
+});
+
+test('an ack answered 404 is finished, not an outage', async () => {
+  const client = fakeClient([[{ id: 'a', text: 'one' }]]);
+  client.ack = async () => { throw Object.assign(new Error('gone'), { status: 404 }); };
+  const state = { unacked: new Map(), busyUntil: 0 };
+  await pass({ client, home: { notify: async () => ({}) }, identity: {}, log: () => {}, state });
+  assert.equal(state.unacked.size, 0);
+});
+
+test('a message waits for the one still speaking, and polls keep coming', async () => {
+  const client = fakeClient([[{ id: 'a', text: 'one' }, { id: 'b', text: 'two' }], [{ id: 'b', text: 'two' }], [{ id: 'b', text: 'two' }]]);
+  const spoken = [];
+  const home = { notify: async ({ text }) => { spoken.push(text); return {}; } };
+  const state = { unacked: new Map(), busyUntil: 0 };
+  let t = 0;
+  const go = () => pass({ client, home, identity: {}, log: () => {}, state, now: () => t });
+  await go();
+  assert.deepEqual(spoken, ['one']);
+  t = 3000;
+  await go();
+  assert.deepEqual(spoken, ['one']);
+  t = 8000;
+  await go();
+  assert.deepEqual(spoken, ['one', 'two']);
+  assert.equal(client.polls.length, 3);
+});
+
+test('the config must be private, parseable and https', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'bridge-'));
+  const file = path.join(dir, 'c.json');
+  const write = (body, mode) => { writeFileSync(file, body); chmodSync(file, mode); };
+  write(JSON.stringify({ apiUrl: 'https://x.test/', token: 't' }), 0o600);
+  assert.deepEqual(readConfig(file), { apiUrl: 'https://x.test', token: 't' });
+  chmodSync(file, 0o644);
+  assert.throws(() => readConfig(file), /chmod 600/);
+  write(JSON.stringify({ apiUrl: 'http://x.test', token: 't' }), 0o600);
+  assert.throws(() => readConfig(file), /must be https/);
+  write(JSON.stringify({ apiUrl: 'http://localhost:3000', token: 't' }), 0o600);
+  assert.equal(readConfig(file).apiUrl, 'http://localhost:3000');
+  write('{"token":"secret', 0o600);
+  assert.throws(() => readConfig(file), (err) => !err.message.includes('secret'));
+  rmSync(dir, { recursive: true });
 });
 
 test('the client sends the bearer, and a refusal carries its status', async () => {

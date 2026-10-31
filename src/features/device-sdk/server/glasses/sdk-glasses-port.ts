@@ -24,7 +24,7 @@ import { emitActionSettled } from "../webhooks/action-events";
 
 const db = () => supabaseAdmin();
 
-function must<T>(res: { data: T; error: { message: string } | null }, op: string): T {
+export function must<T>(res: { data: T; error: { message: string } | null }, op: string): T {
   if (res.error) throw new Error(`[device-sdk] sdk glasses ${op} failed: ${res.error.message}`);
   return res.data;
 }
@@ -56,6 +56,7 @@ export const supabaseLensActions: LensActionStore = {
       if (patch.result) update.result = { ...(r.result ?? {}), ...patch.result };
       if (patch.delivered_at) update.delivered_at = patch.delivered_at;
       if (patch.settled_at) update.settled_at = patch.settled_at;
+      if (patch.error) update.error = patch.error;
       const write = (row: Record<string, unknown>) =>
         db().from("dev_actions").update(row).eq("id", r.id).eq("device_id", deviceId).in("status", from).select(ACTION_COLS);
       let res = await write(actionTimeColumns.shape(update));
@@ -67,20 +68,26 @@ export const supabaseLensActions: LensActionStore = {
   },
 };
 
+/** The device behind a live `device_token` credential. The caller still checks that device's adapter. */
+export async function deviceIdFromTokenHash(hash: string): Promise<string | null> {
+  const cred = must(
+    await db().from("device_credentials").select("device_id").eq("hash", hash).eq("kind", "device_token").is("revoked_at", null).maybeSingle(),
+    "credential lookup"
+  ) as { device_id: string } | null;
+  return cred?.device_id ?? null;
+}
+
 export const sdkGlassesPort: SdkGlassesPort = {
   store: sdkGlassesStore,
 
   async deviceFromTokenHash(hash) {
-    const cred = must(
-      await db().from("device_credentials").select("device_id").eq("hash", hash).eq("kind", "device_token").is("revoked_at", null).maybeSingle(),
-      "credential lookup"
-    ) as { device_id: string } | null;
-    if (!cred) return null;
+    const deviceId = await deviceIdFromTokenHash(hash);
+    if (!deviceId) return null;
     const device = must(
       await db()
         .from("devices")
         .select("id, project_id, env")
-        .eq("id", cred.device_id)
+        .eq("id", deviceId)
         .eq("adapter_id", EVEN_G2_INFO.id)
         .not("project_id", "is", null)
         .is("revoked_at", null)

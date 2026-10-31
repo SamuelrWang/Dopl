@@ -100,6 +100,8 @@ export const PUBLIC_ROUTES = [
   "/api/glasses/device/",
   // Glasses Hey-Even shim: an OpenAI-style client authenticating with a per-device Hey Even key.
   "/api/glasses/hey-even",
+  // The local Cast bridge: a per-device bearer, checked by the route itself.
+  "/api/device-bridge/",
   // The desktop minimum-version floor. It MUST answer a signed-out caller: a
   // build below the floor may be too old to complete a sign-in at all, and the
   // whole point is to tell it to upgrade before it tries. Left out of this list
@@ -125,6 +127,7 @@ export const SELF_AUTH_ROUTES = [
   // Glasses device API + Hey-Even shim: per-device bearers, checked by the route itself.
   "/api/glasses/device/",
   "/api/glasses/hey-even",
+  "/api/device-bridge/",
   // Device SDK `/v1`: developer API keys, checked by `withDeveloperKey`, which answers a missing key
   // with the C10 error shape (the proxy's own 401 body is not C10).
   "/api/v1/",

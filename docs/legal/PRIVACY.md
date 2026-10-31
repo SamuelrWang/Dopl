@@ -6,7 +6,7 @@ privacy violation.
 
 # Dopl Privacy Policy
 
-Last updated: October 14, 2026
+Last updated: October 31, 2026
 
 This Privacy Policy ("**Policy**") describes how Dopl collects, uses, discloses, retains, and protects Personal Information of you or the entity you represent ("**You**") and of other individuals in connection with the Services. This Policy is informational and does not form part of the Services Agreement. Capitalized terms not defined in this Policy have the meanings given in the Dopl Services Agreement at usedopl.com/services-agreement (the "**Agreement**").
 
@@ -95,6 +95,10 @@ Dopl retains correspondence You send to Dopl, including attachments.
 
 (d) **Sensitive Information.** Dopl does not request health, biometric, financial account, government identification, or precise geolocation information. Any such information You include in Content is processed as Content.
 
+### 2.13. Device Message Logs
+
+If Your Dopl Account is connected to Dopl's own project on the Dopl developer platform, Dopl keeps a log entry each time You send a message from the Desktop App or Glasses, an Agent's reply is sent to Your Glasses, or a message is spoken through a Google Home speaker connected to that project. Each entry includes the text of the message (up to 2,000 characters), the Channel, the device, and the time. Because Channels may be shared, the text may include Content that relates to other Members. These logs can be read only by members of that Dopl project, and Dopl's own webhooks for that project may receive the text of messages You speak to Your Glasses. They are not available through the public developer API.
+
 ---
 
 ## 3. AI Providers
@@ -164,7 +168,7 @@ Dopl does not sell Personal Information and does not disclose Personal Informati
 
 ### 6.2. Members and Agents
 
-Content provided in a Shared Space is available to its Members and the Agents they run there. Workspace Admins may view member lists, roles, and Workspace Content. Your display name and profile photo are visible to individuals with whom You share a Workspace or Channel. Saved chats marked public are available to the Members of their Workspace. Workspace icons and thumbnails are stored at public web addresses accessible to anyone with the address.
+Content provided in a Shared Space is available to its Members and the Agents they run there. Workspace Admins may view member lists, roles, and Workspace Content. Your display name and profile photo are visible to individuals with whom You share a Workspace or Channel. Saved chats marked public are available to the Members of their Workspace. Device message logs are available as described in Section 2.13. Workspace icons and thumbnails are stored at public web addresses accessible to anyone with the address.
 
 ### 6.3. Subcontractors
 
@@ -240,6 +244,7 @@ Dopl is located in the United States, and its subcontractors store and process P
 | Content | Until deleted by You or a Workspace Admin, or until the Dopl Account is deleted, subject to Section 10.1(e) |
 | Guest (Playground) accounts | Deleted automatically approximately 10 minutes after the session |
 | Agent session information | For the life of the related Channel |
+| Device message logs | 30 days, after which they are deleted. Deleting a Dopl Account does not delete them sooner |
 | MCP activity records | 90 days, after which they are deleted. On deletion of a Dopl Account, arguments and result summaries in that account's records are deleted |
 | Credit and usage records | Until the Dopl Account is deleted, then retained only in de-identified form |
 | Billing records | As required for tax and accounting purposes, generally up to 7 years |

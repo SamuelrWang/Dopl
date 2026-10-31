@@ -77,8 +77,54 @@ Works today: it touches no server. Add `--device "name"` if the network has seve
 - **Audible speech:** untested. This session's discovery found 0 speakers with `en0` on `192.168.86.228`. `dns-sd` printed nothing either, and that may be the sandbox, so it does not show the speaker is absent.
 - **`bonjour-service` is not installed in any checkout.** The bridge's first run installs 1.4.4, the lockfile's version, into `~/.dopl/google-home-bridge-deps` with scripts off. That needs network once. It was run here only against a scratch directory.
 - **Speech-to-text on production** (`OPENAI_API_KEY` or `GROQ_API_KEY`) is still unverified; dictation needs it.
-- **Privacy copy not updated.** Ruling 10 said to update it first. Text is stored only for users with a Dopl App end user, which is Samuel alone today. Those rows hold channel text from shared channels too, readable by internal org members. Fix before `sdk_delivery` reaches anyone else.
+- **Privacy copy:** updated in the review below. Text is stored only for users with a Dopl App end user, which is Samuel alone today. Those rows hold channel text from shared channels too, readable by internal org members.
 - **Speech only.** A Nest Hub would speak but show no card; that needs `present.display` and per-model descriptors.
 - **A removed computer stays listed.** Settings' remove does not reach the linked `devices` row, which goes offline but remains. A new Mac is not linked automatically; run `link_desktop_device`. Account deletion also leaves the row, since the glasses' sync trigger has no desktop twin.
 - **Local gates again ran with the uncommitted docs restyle in the tree,** the same condition that hid two CI failures in Phase 1. CI is the check for that, and it runs at the final push.
 - **Step 15 (daily real traffic) is Samuel's** and cannot start until the push.
+
+### Review of 14bc3ca73 (independent read of the diff, no new migration)
+
+**Bugs fixed**
+
+- **Double speech.** A cast whose ack failed stayed pending, so the next poll spoke it again. The bridge now keeps the outcome and re-sends only the ack.
+- **Speech cut off.** A second message cast straight after the first replaced it. The bridge now casts one spoken message at a time, for the length `speechMs` estimates, and keeps polling meanwhile, so a long line cannot take the speaker offline.
+- **Wrong hint on ack 404.** It stopped the pass and told the user the server was not deployed. It now means the row is finished.
+- **Hung requests.** A stalled `fetch` froze the bridge for good. Each call now times out at 15s.
+- **Bad speaker name stopped delivery.** A name over 64 characters made every poll a 400, forever. The name is decoration now: refused, it is ignored and messages still flow.
+- **Logging could fail an ack.** After the row and action had moved, a failed project or end user read returned 500 to the bridge. `internal-events.ts › logBridgeCast` catches its own failures, and one joined read replaces the two.
+- **Text outside the internal project.** `bridge.cast` stored text for any project with a speaker, against the migration's own claim. Text is now kept only when the project's org is internal. Nothing outside it could reach this yet, since Connect has no pairing style for `google_home`.
+- **A tap logged as speech.** A decision press from glasses posts through `postMessage`, so it wrote `message.from_glasses` and fired `input.utterance`. Presses (`escalationAnswer`) now write no inbound row, from any device. The typed door is unchanged.
+- **Log table layout.** A message of up to 2000 characters in a `whitespace-nowrap` cell and the card title stretched the page. Both show 80 characters; the full text stays under Message and in the JSON.
+- **Token file.** `readConfig` now refuses a config readable by group or others, refuses an `apiUrl` that is not https (localhost excepted), and no longer echoes file contents through a JSON parse error. The real file is mode 600 in a 700 directory.
+- **`--device` naming a speaker group:** the startup line said none was found although casting worked. It now uses the same match as casting.
+
+**Checked, no change**
+
+- **Migration on production:** md5 still `2c786e34...`. `dev_events` has RLS on, no policies, and grants only to `postgres` and `service_role`, so `message_text` has no anon or authenticated path. It is in no realtime publication. `dev_billable_events` carries none of the three columns. `link_desktop_device` runs only as `service_role` or `postgres`. Additive, so safe with old code. No new migration needed.
+- **Queries:** the credential hash, `dev_device_messages` and `dev_actions` lookups all sit on existing indexes.
+- **Cross-org read:** `/v1/events` drops the fields; the portal reads by the caller's orgs.
+- **Eslint fence for `src/app/api/device-bridge/**`:** kept. It is two thin route files of the same class as `/api/connect`, and these routes must reach `device-sdk/server/bridge`. The fence comment now names it. `logMirroredReply` left the `sdk-lens.ts` seam, since nothing used it there.
+
+**Cleaned**
+
+- `bridge/port.ts` no longer has its own action read and move: it uses `supabaseLensActions.move`, which gained an optional `error`. It also reuses `sdkGlassesPort.touch`, a shared `deviceIdFromTokenHash` and `must`.
+- `internal-events.ts`: one `logMessageRow` replaces the two copied row writers; `flushLater` reuses `afterResponse`.
+- `/api/device-bridge/` added to `PUBLIC_ROUTES` and `SELF_AUTH_ROUTES` beside the glasses device routes, so a 3s poll skips the proxy's session read.
+- Removed unused exports, comments restating code, a duplicate `vitest` import and the `as [string, string][]` casts in the logs page.
+
+**Privacy copy, for Samuel to read** (`docs/legal/PRIVACY.md`, dated October 31, 2026)
+
+- New section 2.13 "Device Message Logs": what is logged, that the text is kept up to 2,000 characters, that shared Channels mean it can include other Members' Content, who can read it, and that the public API does not return it.
+- New retention row: 30 days, and account deletion does not delete them sooner.
+- One sentence in 6.2 pointing to 2.13.
+- **Section 19 promises notice before a material change takes effect.** Whether this counts, and any notice, is Samuel's call. The file's top note says it is a draft that needs counsel.
+- **Goes beyond ruling 10's wording:** the ruling says "only where it's stored (G2 today)". The build also stores Mac and speaker text, so the copy describes what is actually stored.
+
+**Still wrong or unverified**
+
+- **An action can stay `queued` for good.** If the bridge stops inside the 60s window, the row lapses with no ack; nothing sweeps it. Same if the action move fails after the row is taken: the ack returns 500 and the retry finds no pending row. The G2 path has the same gap and F-784 is its neighbour. It needs a sweep, not a bridge patch.
+- **The bridge reads online with no speaker found.** A message then fails quickly with `vendor_error` and the reason, rather than being refused as offline.
+- **`dev_device_messages` and `dev_actions` also hold message text and have no retention.** The new privacy row covers only the log entries.
+- **Audible speech** is still untested. Bridge changes ran only against fakes.
+- **Gates:** typecheck, lint on touched paths, 38 targeted vitest files (584 tests), 8 bridge tests and root build passed, with the docs restyle still in the tree. Not pushed, no CI. The dev server on :3000 runs from this worktree and answered 200 after the build.

@@ -107,7 +107,7 @@ const eslintConfig = defineConfig([
   },
 
   // SDK SPLIT FENCE 2 — Device SDK server imports. Allowlist = what stays in the platform with it
-  // (Plan §2): the `/api/v1` routes, Connect, the events-prune + webhooks-send crons, the developer portal, the
+  // (Plan §2): the `/api/v1` routes, Connect, the device bridge routes, the events-prune + webhooks-send crons, the developer portal, the
   // docs, plus `glasses-runtime.ts` (the composition root that wires the SDK glasses ports).
   {
     files: ["src/**/*.{ts,tsx,mts}"],
@@ -131,7 +131,7 @@ const eslintConfig = defineConfig([
   },
 
   // FENCE 2, the seam's one exception (W1.2): `display/server/sdk-lens.ts` reads the per-user
-  // `sdk_delivery` flag and re-exports the prosumer-fallback log row (2026-10-31), and NOTHING else of
+  // `sdk_delivery` flag and re-exports the fallback and inbound log rows (2026-10-31), and NOTHING else of
   // the Device SDK server. It reaches devices over `@dopl/sdk`.
   {
     files: ["src/features/display/server/sdk-lens.ts"],

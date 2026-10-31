@@ -19,7 +19,7 @@ vi.mock("@/shared/supabase/admin", () => {
 vi.mock("./connect/store", () => ({ connectStore: { insertOutbox: (r: unknown) => outbox(r) } }));
 
 const pending: Promise<void>[] = [];
-const { logInboundMessage, logMirroredReply, messageTextForRow, MESSAGE_TEXT_MAX_CHARS } = await import("./internal-events");
+const { logBridgeCast, logInboundMessage, logMirroredReply, messageTextForRow, MESSAGE_TEXT_MAX_CHARS } = await import("./internal-events");
 
 const rows: DeviceEventRow[] = [];
 const settle = async () => {
@@ -86,5 +86,26 @@ describe("message rows", () => {
   it("text is capped and blank is null", () => {
     expect(messageTextForRow("   ")).toBeNull();
     expect(messageTextForRow("x".repeat(MESSAGE_TEXT_MAX_CHARS + 5))).toHaveLength(MESSAGE_TEXT_MAX_CHARS);
+  });
+});
+
+describe("bridge cast row", () => {
+  const cast = { device: { id: "d1", projectId: "p1", env: "live" as const, endUserId: "e1", kind: "home_hub" as const }, ok: true, actionId: "a1", latencyMs: 5, body: "hello" };
+  const owner = (internal: boolean) => ({ data: { external_user_id: "u1", dev_projects: { org_id: "o1", dev_orgs: { internal } } }, error: null });
+
+  it("keeps the text only under an internal project", async () => {
+    lookup.mockResolvedValueOnce(owner(true));
+    await logBridgeCast(cast);
+    lookup.mockResolvedValueOnce(owner(false));
+    await logBridgeCast(cast);
+    await settle();
+    expect(rows.map((r) => r.message_text)).toEqual(["hello", null]);
+  });
+
+  it("a failed lookup never reaches the ack", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    lookup.mockResolvedValueOnce({ data: null, error: { message: "down" } });
+    await expect(logBridgeCast(cast)).resolves.toBeUndefined();
+    warn.mockRestore();
   });
 });

@@ -9,7 +9,7 @@
  * Every move is conditional on the action's current status, so a late hop never regresses a settled row.
  */
 import type { GlassesMessage } from "@/features/glasses/core/messages/types";
-import type { ActionStatus } from "../../types";
+import type { ActionStatus, ErrorBody } from "../../types";
 import { isAsk } from "../../delivery/intents";
 import type { CapabilityId } from "../../types";
 import type { StoredAction } from "../delivery-store";
@@ -21,6 +21,7 @@ export interface LensActionPatch {
   result?: Record<string, unknown>;
   delivered_at?: string;
   settled_at?: string;
+  error?: ErrorBody;
   /** Only rows of this class move (absent = both). */
   only?: "ask" | "not_ask";
 }
@@ -89,6 +90,7 @@ export function memoryLensActions(store: MemoryDeliveryStore): LensActionStore {
         a.status = patch.status;
         if (patch.delivered_at) a.delivered_at = patch.delivered_at;
         if (patch.settled_at) a.settled_at = patch.settled_at;
+        if (patch.error) a.error = patch.error;
         if (patch.result) a.result = { ...(a.result ?? {}), ...patch.result };
         a.response = withStatus(a.response, patch.status);
         a.updated_at = new Date(store.now()).toISOString();

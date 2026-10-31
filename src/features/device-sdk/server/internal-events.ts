@@ -1,26 +1,29 @@
 import "server-only";
 import { after } from "next/server";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import type { CapabilityId, ErrorCode, EventOutcome } from "../types";
+import type { CapabilityId, DeviceKind, ErrorCode, EventOutcome } from "../types";
 import { connectStore } from "./connect/store";
 import { enqueueWebhookEvent } from "./connect/webhooks";
-import { flushDevEvents, logDevEvent } from "./events";
+import { flushDevEvents, logDevEvent, type DevEventInput } from "./events";
 
 /**
  * `dev_events` rows for traffic that never crosses `withDeveloperKey`, so the portal log tells the
  * whole story: a notice that fell back to the prosumer queue, the hosted Connect steps, a person's
- * message from a device, and an agent reply mirrored to a lens.
+ * message from a device, an agent reply mirrored to a lens, and a local bridge's Cast outcome.
  * Fire-and-forget like every event: nothing here throws, and nothing fails the call it describes.
  */
 
-/** Flush once the response is sent; outside a request scope (tests) the batch's own timer flushes it. */
-function flushLater(): void {
+/** Work that must never slow the request. Outside a request scope (a script, a suite) it does not run. */
+function afterResponse(work: () => Promise<void>): void {
   try {
-    after(() => flushDevEvents());
+    after(work);
   } catch {
     // No request scope.
   }
 }
+
+/** Flush once the response is sent; outside a request scope the batch's own timer flushes it. */
+const flushLater = () => afterResponse(flushDevEvents);
 
 /**
  * A lens copy that went through the prosumer queue because the SDK could not take it. Logged under the
@@ -74,110 +77,127 @@ export function messageTextForRow(body: string): string | null {
   return text ? text.slice(0, MESSAGE_TEXT_MAX_CHARS) : null;
 }
 
-/** Work that must never slow the request. Outside a request scope (a script, a suite) it does not run. */
-function afterResponse(work: () => Promise<void>): void {
-  try {
-    after(work);
-  } catch {
-    // No request scope.
-  }
-}
-
-/** Where an inbound message came from. Structural: the channels stamp (`message-source-stamp.ts`) fits it. */
-export interface InboundSource {
-  kind: string;
-  device_id?: string;
+/** One row for a Dopl user's message, written after the response. A user with no Dopl App end user writes nothing. */
+function logMessageRow(
+  userId: string,
+  label: string,
+  row: Omit<DevEventInput, "org_id" | "project_id" | "env" | "outcome" | "external_user_id">,
+  afterWrite?: (owner: { projectId: string }) => Promise<void>
+): void {
+  afterResponse(async () => {
+    try {
+      const owner = await doplAppEndUser(userId);
+      if (!owner) return;
+      logDevEvent({ org_id: owner.orgId, project_id: owner.projectId, env: "live", outcome: "ok", external_user_id: userId, ...row });
+      await flushDevEvents();
+      await afterWrite?.(owner);
+    } catch (err) {
+      console.warn(`[device-sdk] ${label} row failed:`, err);
+    }
+  });
 }
 
 /** Only a Mac and glasses are logged sources (PLAN step 11); a web post is not a device. */
 const INBOUND_DEVICE_KIND: Record<string, "desktop" | "glasses"> = { computer: "desktop", glasses: "glasses" };
 
-/**
- * A person's message from a device, as one row with its text. Written after the response and only for a
- * user who has a Dopl App end user, so nobody else's channels reach this table.
- * Glasses speech also fires `input.utterance`, whose `data` carries the text.
- */
+/** A person's message from a device, as one row with its text. Glasses speech also fires `input.utterance`. */
 export function logInboundMessage(a: {
   userId: string;
-  source: InboundSource;
+  source: { kind: string; device_id?: string };
   body: string;
   channelId: string;
   messageId: string;
 }): void {
   const deviceKind = INBOUND_DEVICE_KIND[a.source.kind];
   if (!deviceKind) return;
-  afterResponse(async () => {
-    try {
-      const owner = await doplAppEndUser(a.userId);
-      if (!owner) return;
-      const text = messageTextForRow(a.body);
-      logDevEvent({
-        org_id: owner.orgId,
-        project_id: owner.projectId,
-        env: "live",
-        outcome: "ok",
-        external_user_id: a.userId,
-        device_id: a.source.device_id ?? null,
-        device_kind: deviceKind,
-        capability: deviceKind === "glasses" ? "input.utterance" : null,
-        operation: deviceKind === "glasses" ? "message.from_glasses" : "message.from_desktop",
-        message_text: text,
-        channel_id: a.channelId,
-        message_id: a.messageId,
-      });
-      await flushDevEvents();
-      if (deviceKind === "glasses") {
-        await enqueueWebhookEvent(connectStore, { projectId: owner.projectId, env: "live" }, "input.utterance", {
-          type: "input.utterance",
-          device_id: a.source.device_id ?? null,
-          external_user_id: a.userId,
-          ts: new Date().toISOString(),
-          data: { text, channel_id: a.channelId, message_id: a.messageId },
-        });
-      }
-    } catch (err) {
-      console.warn("[device-sdk] inbound message row failed:", err);
-    }
+  const glasses = deviceKind === "glasses";
+  const deviceId = a.source.device_id ?? null;
+  const text = messageTextForRow(a.body);
+  logMessageRow(
+    a.userId,
+    "inbound message",
+    {
+      device_id: deviceId,
+      device_kind: deviceKind,
+      capability: glasses ? "input.utterance" : null,
+      operation: glasses ? "message.from_glasses" : "message.from_desktop",
+      message_text: text,
+      channel_id: a.channelId,
+      message_id: a.messageId,
+    },
+    glasses
+      ? (owner) =>
+          enqueueWebhookEvent(connectStore, { projectId: owner.projectId, env: "live" }, "input.utterance", {
+            type: "input.utterance",
+            device_id: deviceId,
+            external_user_id: a.userId,
+            ts: new Date().toISOString(),
+            data: { text, channel_id: a.channelId, message_id: a.messageId },
+          })
+      : undefined
+  );
+}
+
+/** An agent's reply the mirror put on a lens. It uses the prosumer queue, so no `/v1` call logs it, and no router chose the device. */
+export function logMirroredReply(a: { userId: string; deviceId: string; channelId: string; messageId: string; body: string }): void {
+  const reason = "agent reply mirrored to the device reading this channel";
+  logMessageRow(a.userId, "mirrored reply", {
+    device_id: a.deviceId,
+    device_kind: "glasses",
+    capability: "present.display",
+    intent: "message",
+    operation: "message.reply_mirror",
+    route_decision: {
+      target: a.deviceId,
+      reason,
+      candidates: [a.deviceId],
+      considered: [{ device_id: a.deviceId, kind: "glasses", verdict: "chosen", reason }],
+    },
+    message_text: messageTextForRow(a.body),
+    channel_id: a.channelId,
+    message_id: a.messageId,
   });
 }
 
-/**
- * An agent's reply the mirror put on a lens (`glasses/core/messages/reply-mirror.ts`). The mirror uses
- * the prosumer queue, so no `/v1` call ever logs it. There is no router here: the device is the one
- * whose inbox ran the pass, and `considered` says so.
- */
-export function logMirroredReply(a: { userId: string; deviceId: string; channelId: string; messageId: string; body: string }): void {
-  const reason = "agent reply mirrored to the device reading this channel";
-  afterResponse(async () => {
-    try {
-      const owner = await doplAppEndUser(a.userId);
-      if (!owner) return;
-      logDevEvent({
-        org_id: owner.orgId,
-        project_id: owner.projectId,
-        env: "live",
-        outcome: "ok",
-        external_user_id: a.userId,
-        device_id: a.deviceId,
-        device_kind: "glasses",
-        capability: "present.display",
-        intent: "message",
-        operation: "message.reply_mirror",
-        route_decision: {
-          target: a.deviceId,
-          reason,
-          candidates: [a.deviceId],
-          considered: [{ device_id: a.deviceId, kind: "glasses", verdict: "chosen", reason }],
-        },
-        message_text: messageTextForRow(a.body),
-        channel_id: a.channelId,
-        message_id: a.messageId,
-      });
-      await flushDevEvents();
-    } catch (err) {
-      console.warn("[device-sdk] mirrored reply row failed:", err);
-    }
-  });
+/** One Cast outcome from a local bridge. Its text is kept only under an internal project. */
+export async function logBridgeCast(a: {
+  device: { id: string; projectId: string; env: "test" | "live"; endUserId: string; kind: DeviceKind };
+  ok: boolean;
+  actionId: string | null;
+  latencyMs: number;
+  body: string;
+}): Promise<void> {
+  try {
+    const { data, error } = await supabaseAdmin()
+      .from("dev_end_users")
+      .select("external_user_id, dev_projects!inner(org_id, dev_orgs!inner(internal))")
+      .eq("id", a.device.endUserId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const owner = data as unknown as { external_user_id: string; dev_projects: { org_id: string; dev_orgs: { internal: boolean } } } | null;
+    if (!owner) return;
+    logDevEvent({
+      org_id: owner.dev_projects.org_id,
+      project_id: a.device.projectId,
+      env: a.device.env,
+      outcome: a.ok ? "ok" : "error",
+      error_code: a.ok ? null : "vendor_error",
+      external_user_id: owner.external_user_id,
+      device_id: a.device.id,
+      device_kind: a.device.kind,
+      capability: "present.speak",
+      action_id: a.actionId,
+      operation: "bridge.cast",
+      route: "/api/device-bridge/ack",
+      http_method: "POST",
+      http_status: 200,
+      latency_ms: { device_delivery: Math.max(0, a.latencyMs) },
+      message_text: owner.dev_projects.dev_orgs.internal ? messageTextForRow(a.body) : null,
+    });
+    flushLater();
+  } catch (err) {
+    console.warn("[device-sdk] bridge cast row failed:", err);
+  }
 }
 
 /** One hosted Connect step. The token is the credential, so `route` carries `:token`, never its value. */

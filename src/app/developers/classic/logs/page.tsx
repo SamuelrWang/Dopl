@@ -19,6 +19,9 @@ import { KIND_LABEL, OUTCOME_LABEL, clock } from "../../_lib/format";
 import { LogFilterBar } from "./log-filters";
 
 const PATH = "/developers/classic/logs";
+const MESSAGE_PREVIEW_CHARS = 80;
+
+const optionalFact = (label: string, value: string | null | undefined): [string, string][] => (value ? [[label, value]] : []);
 
 function Outcome({ row }: { row: DeviceEventRow }) {
   if (row.outcome === "ok") {
@@ -37,7 +40,7 @@ function Outcome({ row }: { row: DeviceEventRow }) {
 
 /** What the call was, in one line: capability or intent, then where it routed. */
 function describe(row: DeviceEventRow): string {
-  if (row.message_text) return row.message_text;
+  if (row.message_text) return row.message_text.length > MESSAGE_PREVIEW_CHARS ? `${row.message_text.slice(0, MESSAGE_PREVIEW_CHARS)}…` : row.message_text;
   const what = row.capability ?? row.intent ?? "call";
   const where = row.route_decision?.target ?? row.device_kind;
   return where ? `${what} → ${where}` : what;
@@ -142,9 +145,9 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
             <Facts
               facts={[
                 ["Project", projects.find((p) => p.id === open.project_id)?.name ?? open.project_id],
-                ...(open.message_text ? ([["Message", open.message_text]] as [string, string][]) : []),
-                ...(open.operation ? ([["Operation", open.operation]] as [string, string][]) : []),
-                ...(open.channel_id ? ([["Channel", open.channel_id]] as [string, string][]) : []),
+                ...optionalFact("Message", open.message_text),
+                ...optionalFact("Operation", open.operation),
+                ...optionalFact("Channel", open.channel_id),
                 ["User", open.external_user_id ?? "None"],
                 ["Device", open.device_id ?? "None"],
                 ["Risk tier", open.risk_tier ?? "None"],
