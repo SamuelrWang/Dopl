@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import { NavRow, Segmented } from "../_design/ui";
-import { AccountRow, NavGroup, PortalFrame, ProjectPicker, Sidebar } from "../_design/ui-sidebar";
+import { AccountRow, NavGroup, PortalFrame, ProjectSwitcher, Sidebar } from "../_design/ui-sidebar";
 import { COMPANY, MEMBERS, PROJECTS, type Env } from "../_data/company";
 import { issuesFor } from "../_data/issues";
 import { hasIssues } from "../_data/users";
@@ -78,7 +78,7 @@ function PortalSidebar({ fontClass }: { fontClass?: string }) {
       label="Developer portal"
       identity={
         <>
-          <ProjectPicker label="Project" options={PROJECTS} value={state.project} onChange={(project) => update((s) => ({ ...s, project }))} />
+          <ProjectSwitcher label="Project" options={PROJECTS} value={state.project} onChange={(project) => update((s) => ({ ...s, project }))} />
           <Segmented label="Environment" options={ENVS.map((e) => e.label)} value={ENVS.findIndex((e) => e.value === state.env)} onChange={(i) => update((s) => ({ ...s, env: ENVS[i].value }))} />
           <FindAnything />
         </>

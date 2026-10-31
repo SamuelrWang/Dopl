@@ -1,12 +1,13 @@
 "use client";
 
 /** A portal's sidebar on the design system: identity on top, nav that scrolls, account at the foot. */
+import { Check, ChevronsUpDown } from "lucide-react";
 import type { ReactNode } from "react";
-import { cx } from "./components";
+import { cx, ICON, ICON_SM } from "./components";
 import side from "./sidebar.module.css";
 import o from "./surfaces.module.css";
 import tokens from "./tokens.module.css";
-import { Initials, NavRow, TwoLine, initialsOf } from "./ui";
+import { Initials, PopMenu, TwoLine, initialsOf } from "./ui";
 import { Text } from "./ui-page";
 
 /** One surface: sidebar, then content. `rootClass` keeps the app's reset for pages not yet moved. */
@@ -41,15 +42,42 @@ export function NavGroup({ label, children }: { label?: string | null; children:
   );
 }
 
-/** The projects as visible rows. A choice, so the quiet selected row rather than the ink one. */
-export function ProjectPicker({ label, options, value, onChange }: { label: string; options: { value: string; label: string }[]; value: string; onChange: (value: string) => void }) {
+/** The current project in one box; press it to switch. */
+export function ProjectSwitcher({ label, options, value, onChange }: { label: string; options: readonly { value: string; label: string }[]; value: string; onChange: (value: string) => void }) {
+  const current = options.find((o) => o.value === value) ?? options[0];
+  const mark = (name: string, on: boolean) => <span className={cx(side.mark, on && side.markOn)}>{name.split(" ").at(-1)?.[0]}</span>;
   return (
-    <div className={side.projects} role="radiogroup" aria-label={label}>
-      {options.map((option) => {
-        const on = value === option.value;
-        return <NavRow key={option.value} role="radio" checked={on} soft={on} label={option.label} leading={<span className={side.mark}>{option.label.split(" ").at(-1)?.[0]}</span>} onClick={() => onChange(option.value)} />;
-      })}
-    </div>
+    <PopMenu
+      block
+      label={label}
+      trigger={(open, toggle) => (
+        <button type="button" aria-haspopup="menu" aria-expanded={open} aria-label={`${label}: ${current.label}`} className={side.switcher} onClick={toggle}>
+          {mark(current.label, true)}
+          <span className={side.navLabel}>{current.label}</span>
+          <ChevronsUpDown {...ICON_SM} aria-hidden="true" className={side.navIcon} />
+        </button>
+      )}
+    >
+      {(close) =>
+        options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            role="menuitemradio"
+            aria-checked={option.value === value}
+            className={cx(o.item, o.itemBtn, option.value === value && o.itemOn)}
+            onClick={() => {
+              onChange(option.value);
+              close();
+            }}
+          >
+            {mark(option.label, option.value === value)}
+            <span className={side.navLabel}>{option.label}</span>
+            {option.value === value && <Check {...ICON} aria-hidden="true" />}
+          </button>
+        ))
+      }
+    </PopMenu>
   );
 }
 

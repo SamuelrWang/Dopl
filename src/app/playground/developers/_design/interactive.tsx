@@ -107,7 +107,7 @@ export function Accordion({ items, start = 0 }: { items: { q: string; a: string 
 }
 
 /** A hugging trigger with a menu under it. Closes on an outside press or Escape. */
-export function PopMenu({ trigger, right, tall, label, children }: { trigger: (open: boolean, toggle: () => void) => ReactNode; right?: boolean; /** Holds a panel rather than a list, so it never scrolls. */ tall?: boolean; label: string; children: (close: () => void) => ReactNode }) {
+export function PopMenu({ trigger, right, tall, block, label, children }: { trigger: (open: boolean, toggle: () => void) => ReactNode; right?: boolean; /** Takes its row, and the menu takes the same width. */ block?: boolean; /** Holds a panel rather than a list, so it never scrolls. */ tall?: boolean; label: string; children: (close: () => void) => ReactNode }) {
   const [open, set] = useState(false);
   const anchor = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -126,10 +126,10 @@ export function PopMenu({ trigger, right, tall, label, children }: { trigger: (o
     };
   }, [open]);
   return (
-    <div ref={anchor} className={o.popAnchor}>
+    <div ref={anchor} className={cx(o.popAnchor, block && o.popBlock)}>
       {trigger(open, () => set(!open))}
       {open && (
-        <div role="menu" aria-label={label} className={cx(o.menu, o.popMenu, right && o.popRight, tall && o.popTall)}>
+        <div role="menu" aria-label={label} className={cx(o.menu, o.popMenu, right && o.popRight, tall && o.popTall, block && o.popFull)}>
           {children(() => set(false))}
         </div>
       )}

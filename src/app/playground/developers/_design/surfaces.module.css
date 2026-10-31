@@ -77,6 +77,8 @@
 .popMenu { position: absolute; left: 0; top: calc(100% + calc(7.5 * var(--u))); z-index: 30; max-height: calc(375 * var(--u)); overflow-y: auto; }
 .popRight { left: auto; right: 0; }
 .popTall { max-height: none; overflow: visible; }
+.popBlock { display: flex; width: 100%; }
+.popFull { left: 0; right: 0; width: auto; }
 .itemBtn { width: 100%; border: 0; background: none; cursor: pointer; text-align: left; flex: none; }
 .itemBtn:hover { background: var(--fill-strong); }
 .pageBtn { border: 0; background: none; cursor: pointer; }

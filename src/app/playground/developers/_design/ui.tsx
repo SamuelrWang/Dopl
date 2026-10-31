@@ -212,8 +212,8 @@ export function SearchField({ value, onChange, placeholder, label, hint, hug, in
 }
 
 /* Navigation */
-export function NavRow({ href, onClick, icon, leading, label, active, soft, count, alert, alertLabel, role, checked }: { href?: string; onClick?: () => void; icon?: LucideIcon; /** Replaces the icon, such as a project mark. */ leading?: ReactNode; label: string; /** The ink row. `soft` is the quiet selected row, for a choice rather than a place. */ active?: boolean; soft?: boolean; count?: ReactNode; alert?: number; alertLabel?: string; role?: "radio"; checked?: boolean }) {
-  const className = cx(o.navItem, side.navRow, active && o.navOn, onClick && side.project, soft && side.projectOn);
+export function NavRow({ href, onClick, icon, leading, label, active, count, alert, alertLabel, role, checked }: { href?: string; onClick?: () => void; icon?: LucideIcon; /** Replaces the icon. */ leading?: ReactNode; label: string; /** The ink row. */ active?: boolean; count?: ReactNode; alert?: number; alertLabel?: string; role?: "radio"; checked?: boolean }) {
+  const className = cx(o.navItem, side.navRow, active && o.navOn);
   const body = (
     <>
       {leading ?? (icon && createElement(icon, { ...ICON, "aria-hidden": true, className: side.navIcon }))}
