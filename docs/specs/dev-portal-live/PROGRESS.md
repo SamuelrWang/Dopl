@@ -8,7 +8,7 @@ Phases 0 and 1 of [PLAN.md](PLAN.md), built 2026-10-31. Later phases belong to o
 - **`deliver` ran once on production** with target by id, intent `message`, to `a5a061e6`: 202, event `ae2c30bb-89c6-40f8-b69d-af87b29f3d92`, delivery `e9d765ca-10af-4993-9bce-69dce0925cde`, capability `present.display`, status reached `delivered`. It put the text "Dopl SDK deliver check" on the simulator's lens. The simulator was not restarted or re-paired.
 - **A temporary live key was minted for that call.** `DOPL_APP_SDK_KEY` is only in Vercel, so `keys.ts › mintApiKey` made key `382a00ab-c59f-419d-b2dc-f69833be1648`, scope `actions:write`, held in process memory, revoked seconds later (measured `revoked_at` set). Not asked for by name. `DOPL_APP_SDK_KEY` itself was not touched.
 - **Google Home:** not touched. Samuel tests it.
-- **Hosted Connect rehearsal:** see the end of this file.
+- **Hosted Connect rehearsed once on production, Test env, with the `simulator` adapter,** after deploy. The running Even simulator was not involved. Session, pair, claim and consent all answered 2xx and each wrote its row (`connect.session`, `connect.pair`, `connect.claim`, `connect.consent`), with `:token` in the route. **Not exercised:** `connections/exchange`, because a session with no `redirect_uri` returns no public token. A second temporary key (`54f913b0`, Test, scope `connect`) was minted and revoked. **Left behind on purpose, in Test only:** end user `connect-rehearsal`, device `9ec4a4ac`, active connection `b75019c5`, session `88e8f9a0`.
 
 ## Phase 1
 
@@ -39,4 +39,7 @@ Phases 0 and 1 of [PLAN.md](PLAN.md), built 2026-10-31. Later phases belong to o
 
 ## Gates and deploy
 
-Recorded at the end of the run, below.
+- Full local gates ran once. First pass failed on build, typecheck, lint and the root suite; all fixed, and the failed ones re-run green. The other gates passed on that first pass.
+- **Local gates ran with the uncommitted docs restyle in the tree,** which hid two CI failures: `next-env.d.ts` masking image types, and the guard's `docs-page.tsx` case. CI caught both on `22da24d29`, so master was red for that one push. Fixed in `e5083db18`.
+- **Push protection blocked the first push.** Fixture strings in the redesign's history had the shape of Stripe keys: 4 distinct values, all sample data in the fictional portal fixtures. The unblock links were not used. The unpushed branch history was rewritten to same-length non-matching strings, which also moved `ui/dev-portal-redesign` and local `master` to new shas. Old shas remain only in the reflog. **Samuel may want to confirm none of the four was ever a real key;** they read as invented, but that was judged from context, not checked with Stripe.
+- `e5083db18`: CI `ci` success, Vercel success, all check runs success. Later doc commits change only this file.
