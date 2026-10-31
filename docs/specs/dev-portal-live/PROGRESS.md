@@ -479,3 +479,31 @@ Commits `a006a074b`, `016e2b82f`, `cf1df4f75` and the id fix after them, on top 
 - **`dev_events` prunes at most 10,000 rows a run.** A project past that daily would fall behind.
 
 Vitest on device-sdk, `/api/developers`, `/api/v1`, the prune cron, the write gate and `/developers`: 67 files, 604 passed, 17 skipped. `tsc` clean. ESLint clean on changed files. No `next build`.
+
+## Push to master (2026-10-31)
+
+Pushed `06c37febd`, then `3a200ef04`, on top of `c179416df`. origin/master had not moved, so nothing was merged. No force. The uncommitted docs restyle and marketing docs files stayed out: the temp worktree build ran from a clean checkout with `docs.css` still present.
+
+**Gates on clean HEAD, temp worktree:** `tsc` clean, `eslint --max-warnings 0` clean, root `npm run build` passed. Targeted Vitest: 636 passed, 17 skipped. Legal pages: 20 passed. Desktop `google-home-*`: 40 passed.
+
+**Migrations:** all 4 `dev_portal_*` files match production by name and by md5 of the applied statements. The 10 `dev_portal_*` and `dev_webhook_*` RPCs the code calls exist on production. Secret scan of the unpushed diff found nothing.
+
+**CI:**
+
+- `06c37febd` went red on two jobs while Vercel read success.
+- Lint was from this work: `internal-events.test.ts` had one unused parameter, and CI lints with `--max-warnings 0` where the local gate had not. `3a200ef04` fixes it.
+- The test failure was `staging-channels-page.test.tsx:71`, a default 1s `waitFor` timing out in a file this branch does not touch. It passed on the rerun with no change, so it is a flake and is still there.
+- `3a200ef04`: all six jobs green, Vercel success.
+
+**Smoke, no session, on production:**
+
+| Check | Result |
+|---|---|
+| `/developers` and all its pages, invite page | 307 to `/login` with `redirectTo` |
+| `/docs/home`, `/privacy`, `/services-agreement` | 200 |
+| `/api/developers/activity`, `/api/v1/events`, `/api/v1/webhook_endpoints` | 401 |
+| `/api/device-bridge/poll`, `/ack` | POST 401, GET 405 |
+| `/api/cron/device-sdk-webhooks-send`, `device-sdk-events-prune` | 401 without the secret; both in `vercel.json` (`* * * * *`, `15 9 * * *`) |
+| `/privacy` | Reads "Last updated: October 31, 2026", section 2.13 present |
+
+**Not proven:** the crons running on schedule; the signed-in checks 2 and 5 to 12 above. Check 4 has not passed yet: the Mac's `last_seen` still read 05:09 UTC at 10:55 UTC, 17 minutes after the first deploy. It may only need the desktop awake on a new heartbeat; that was not looked into. The simulator read 09:11 UTC at 10:38 UTC, not restarted, per check 3.
