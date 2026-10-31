@@ -12,6 +12,7 @@ import { DateRange, PlanCard, type DateSpan } from "../_design/ui-extras";
 import { FillBody, FillCard, FitRows, ScrollArea, SplitLayout, useFitRows } from "../_design/ui-output";
 import { Between, FlowDialog, Grow, Page, PageHeader, Row, StatRow, TableHead, Text, Tiles, Toast } from "../_design/ui-page";
 import { dailySeries } from "../_data/activity";
+import { DEMO_NOW } from "../_data/company";
 import { ALL_MODELS, CATEGORIES, categoryOf, modelById, trail, type ModelId } from "../_data/catalog";
 import { PLAN } from "../_data/misc";
 import { userDeliveries } from "../_data/users";
@@ -21,6 +22,7 @@ import { fmt } from "../_components/ui";
 
 const RANGES = [{ label: "7 days", days: 7 }, { label: "30 days", days: 30 }, { label: "90 days", days: 90 }];
 const BREAKDOWNS = ["Model", "User", "API key"];
+const HISTORY_DAYS = 365;
 const KEY_LIMIT = 20;
 const ENDPOINT_LIMIT = 10;
 /** The demo is 29 days into a 30-day period. */
@@ -50,8 +52,8 @@ export function UsageSection() {
   const month = Math.round(week.deliveries * 3.9);
   const projected = Math.round(month / ELAPSED);
   const over = Math.max(0, projected - PLAN.deliveriesIncluded);
-  const spanDays = span ? Math.round((Date.parse(span.to) - Date.parse(span.from)) / 86_400_000) + 1 : 0;
-  const series = dailySeries(week.deliveries, span ? Math.max(1, spanDays) : RANGES[range].days);
+  const dayOf = (daysAgo: string) => new Date(Date.parse(DEMO_NOW) - Number(daysAgo) * 86_400_000).toISOString().slice(0, 10);
+  const series = span ? dailySeries(week.deliveries, HISTORY_DAYS).filter((bar) => dayOf(bar.key) >= span.from && dayOf(bar.key) <= span.to) : dailySeries(week.deliveries, RANGES[range].days);
   const models = ALL_MODELS.filter((m) => devicesOfModel(users, m.id).length > 0);
 
   const rowsOf = () => {
@@ -132,7 +134,7 @@ export function UsageSection() {
                   <DateRange label="Custom" value={span} month="2026-10" onChange={setSpan} />
                 </Row>
               </Between>
-              <BarChart bars={series} />
+              {series.length > 0 ? <BarChart bars={series} /> : <Text kind="muted">No deliveries in this range</Text>}
             </FillCard>
           }
           right={
