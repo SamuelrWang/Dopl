@@ -139,7 +139,7 @@ export function DateRange({ label, value, month, onChange }: { label: string; va
               const end = day === draft.from || day === draft.to;
               const between = draft.from && draft.to && day > draft.from && day < draft.to;
               return (
-                <button key={day} type="button" aria-pressed={end} className={cx(b.reset, o.day, x.dayBtn, Boolean(between) && o.dayRange, end && o.dayEnd)} onClick={() => press(day)}>
+                <button key={day} type="button" aria-pressed={end} className={cx(o.day, x.dayBtn, Boolean(between) && o.dayRange, end && o.dayEnd)} onClick={() => press(day)}>
                   {i + 1}
                 </button>
               );
