@@ -93,6 +93,12 @@ export const DeviceEventRowSchema = z.object({
   /** The request path. Never holds a token: hosted Connect writes `:token`. */
   route: z.string().nullish(),
   http_status: z.number().int().nullish(),
+  /** The text of a message row (internal Dopl App project only). Portal read only: {@link PRIVATE_EVENT_FIELDS}. */
+  message_text: z.string().nullish(),
+  /** The channel a message row belongs to. */
+  channel_id: z.string().nullish(),
+  /** The channel message a row is about. */
+  message_id: z.string().nullish(),
 });
 export type DeviceEventRow = z.infer<typeof DeviceEventRowSchema>;
 
@@ -133,7 +139,7 @@ export const PublicDeviceEventSchema = DeviceEventRowSchema.pick({
 export type PublicDeviceEvent = z.infer<typeof PublicDeviceEventSchema>;
 
 /** The C8 fields `PublicDeviceEventSchema` never exposes (pinned by `events.test.ts`). */
-export const PRIVATE_EVENT_FIELDS = ["org_id", "bytes_in", "bytes_out", "cost_units", "api_key_id", "action_id", "operation", "http_method", "route", "http_status"] as const;
+export const PRIVATE_EVENT_FIELDS = ["org_id", "bytes_in", "bytes_out", "cost_units", "api_key_id", "action_id", "operation", "http_method", "route", "http_status", "message_text", "channel_id", "message_id"] as const;
 
 /** `GET /events` response: the shared list envelope (`lists.ts`). */
 export const EventListResponseSchema = listResponseSchema(PublicDeviceEventSchema);

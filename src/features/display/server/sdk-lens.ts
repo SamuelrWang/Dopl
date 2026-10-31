@@ -1,7 +1,7 @@
 import "server-only";
 import { Dopl, DoplError, type Action, type DeliverResponse, type DisplayBlock as SdkBlock } from "@dopl/sdk";
 import { sdkDeliveryFor } from "@/features/device-sdk/server/sdk-delivery-flag";
-export { logProsumerFallback } from "@/features/device-sdk/server/internal-events";
+export { logInboundMessage, logMirroredReply, logProsumerFallback } from "@/features/device-sdk/server/internal-events";
 import type { DisplayBlock, Positioned } from "../core/types";
 
 /**

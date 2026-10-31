@@ -18,6 +18,7 @@ import { sttProviderFromEnv } from "./core/voice/stt";
 import { createHeyEvenHandlers } from "./platforms/even-g2/hey-even";
 import { connectPairingPort } from "@/features/device-sdk/server/connect/pairing-port";
 import { sdkGlassesPort } from "@/features/device-sdk/server/glasses/sdk-glasses-port";
+import { logMirroredReply } from "@/features/device-sdk/server/internal-events";
 
 /**
  * The production wiring: real stores, the channels-service gateways and the
@@ -54,6 +55,7 @@ export const deviceHandlers = createDeviceHandlers({
   ...base,
   connect: connectPairingPort,
   sdk: sdkGlassesPort,
+  onMirrored: logMirroredReply,
   sdkAnswerLinked: (device, settled) =>
     answerFromSdkLens(device.user_id, settled, glassesMessageSource({ id: device.id, name: device.name ?? "", platform: device.platform })),
 });

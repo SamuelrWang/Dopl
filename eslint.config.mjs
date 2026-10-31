@@ -115,6 +115,7 @@ const eslintConfig = defineConfig([
       "src/features/device-sdk/**",
       "src/app/api/v1/**",
       "src/app/api/connect/**",
+      "src/app/api/device-bridge/**",
       "src/app/connect/**",
       "src/app/api/cron/device-sdk-events-prune/**",
       "src/app/api/cron/device-sdk-webhooks-send/**",

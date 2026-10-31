@@ -11,6 +11,7 @@ import type { DeviceAdapter, DeviceKind, Environment } from "@dopl/device-contra
 
 import { createDesktopAdapter } from "./desktop";
 import { createEvenG2Adapter } from "./even-g2";
+import { createGoogleHomeAdapter } from "./google-home";
 import { SIMULATOR_ADAPTER_ID, createSimulatorAdapter } from "./simulator";
 
 export interface ListOptions {
@@ -46,5 +47,6 @@ export function createAdapterRegistry(adapters: DeviceAdapter[]): AdapterRegistr
 export const deviceAdapters: AdapterRegistry = createAdapterRegistry([
   createEvenG2Adapter(),
   createDesktopAdapter(),
+  createGoogleHomeAdapter(),
   createSimulatorAdapter(),
 ]);

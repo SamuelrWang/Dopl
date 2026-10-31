@@ -27,6 +27,21 @@ describe("reply mirror", () => {
   }
   const cursorOf = (t: ReturnType<typeof setup>, deviceId: string, channelId: string) => t.activity.get(`${deviceId}|${channelId}`)?.reply_cursor_seq;
 
+  it("reports each queued reply once, for the portal's log row", async () => {
+    const t = setup();
+    const d = await device(t);
+    const onMirrored = vi.fn();
+    const deps = { ...t.deps, onMirrored };
+    await mirrorReplies(deps, d);
+    const id = t.ch.agentSays("Done.", "Coder", CHAN);
+    t.clock.advance(5_000);
+    await mirrorReplies(deps, d);
+    t.clock.advance(5_000);
+    await mirrorReplies(deps, d);
+    expect(onMirrored).toHaveBeenCalledTimes(1);
+    expect(onMirrored).toHaveBeenCalledWith({ userId: USER, deviceId: d.id, channelId: CHAN, messageId: id, body: "Done." });
+  });
+
   it("starts the target channel at its head, then mirrors each agent reply exactly once", async () => {
     const t = setup();
     t.ch.agentSays("old history, never replayed", "Coder", CHAN);

@@ -67,6 +67,12 @@ export const desktopDeviceRepository: DesktopDeviceStore = {
     return (data as DesktopDeviceRow | null) ?? null;
   },
 
+  async touchLinkedDevice(id, now) {
+    // Primary key plus "is SDK-owned": a computer that was never linked matches nothing.
+    const { error } = await db().from("devices").update({ last_seen: now }).eq("id", id).not("project_id", "is", null).is("revoked_at", null);
+    if (error) fail("touchLinkedDevice", error);
+  },
+
   async insert(userId, input, sessionId, now) {
     const { data, error } = await db()
       .from(DEVICES)

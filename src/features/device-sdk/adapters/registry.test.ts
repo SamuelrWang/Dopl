@@ -21,8 +21,8 @@ describe("device adapter registry", () => {
   });
 
   it("offers the simulator in test only", () => {
-    expect(ids(deviceAdapters.list({ env: "test" }))).toEqual(["even_g2", "desktop", "simulator"]);
-    expect(ids(deviceAdapters.list({ env: "live" }))).toEqual(["even_g2", "desktop"]);
+    expect(ids(deviceAdapters.list({ env: "test" }))).toEqual(["even_g2", "desktop", "google_home", "simulator"]);
+    expect(ids(deviceAdapters.list({ env: "live" }))).toEqual(["even_g2", "desktop", "google_home"]);
     expect(ids(deviceAdapters.forKind("glasses", { env: "test" }))).toEqual(["even_g2", "simulator"]);
     expect(ids(deviceAdapters.forKind("robot", { env: "live" }))).toEqual([]);
   });

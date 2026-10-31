@@ -38,6 +38,8 @@ export interface MirrorDeps extends Clock {
   devices: DeviceStore;
   gateway: ChannelGateway;
   linker: ChannelLinker;
+  /** A reply just went on the queue: the portal's log row (`internal-events.ts`). Never throws. Absent in suites. */
+  onMirrored?: (a: { userId: string; deviceId: string; channelId: string; messageId: string; body: string }) => void;
 }
 
 /** A posted-to channel stays in scope this long after the device's last post there. */
@@ -112,7 +114,9 @@ export async function mirrorReplies(
           expires_at: iso(nowMs + REPLY_TTL_SEC * 1000),
           now: iso(nowMs),
         });
-        if (row) queued += 1;
+        if (!row) continue;
+        queued += 1;
+        deps.onMirrored?.({ userId: device.user_id, deviceId: device.id, channelId, messageId: reply.id, body: reply.body });
       }
       const next = list.length ? list[list.length - 1].seq : cursor;
       // Write a moved cursor, or re-confirm an idle one before it goes stale.

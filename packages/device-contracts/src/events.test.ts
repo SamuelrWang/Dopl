@@ -20,6 +20,7 @@ const SPEC_FIELDS = [
   "latency_ms", "bytes_in", "bytes_out", "cost_units",
   // The portal's request fields, added 2026-10-31.
   "api_key_id", "action_id", "operation", "http_method", "route", "http_status",
+  "message_text", "channel_id", "message_id",
 ];
 
 const ROW = {

@@ -34,7 +34,7 @@ export interface DevEventSink {
   write(rows: DeviceEventRow[]): Promise<void>;
 }
 
-const logColumns = createColumnCompat(["api_key_id", "action_id", "operation", "http_method", "route", "http_status"]);
+const logColumns = createColumnCompat(["api_key_id", "action_id", "operation", "http_method", "route", "http_status", "message_text", "channel_id", "message_id"]);
 
 /** The batch insert, over any `insert`. Exported so the suite runs the real path against a database lacking the columns. */
 export async function writeEventRows(
@@ -111,6 +111,9 @@ export function buildDevEvent(input: DevEventInput): DeviceEventRow {
     http_method: input.http_method ?? null,
     route: input.route ?? null,
     http_status: input.http_status ?? null,
+    message_text: input.message_text ?? null,
+    channel_id: input.channel_id ?? null,
+    message_id: input.message_id ?? null,
   };
 }
 

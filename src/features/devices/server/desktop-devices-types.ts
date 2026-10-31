@@ -52,6 +52,8 @@ export interface DesktopDeviceStore {
   findByInstall(userId: string, installId: string): Promise<DesktopDeviceRow | null>;
   /** Refresh the ACTIVE row for (user, install); null when there is none (new, or removed). */
   touch(userId: string, input: HeartbeatInput, sessionId: string | null, now: string): Promise<DesktopDeviceRow | null>;
+  /** A computer linked into the Dopl App project (`link_desktop_device`) keeps its `devices.last_seen` moving. No row, no effect. */
+  touchLinkedDevice?(id: string, now: string): Promise<void>;
   /** Insert a new row; null when (user, install) already exists (a race, or a removed row). */
   insert(userId: string, input: HeartbeatInput, sessionId: string | null, now: string): Promise<DesktopDeviceRow | null>;
   listActive(userId: string): Promise<DesktopDeviceRow[]>;

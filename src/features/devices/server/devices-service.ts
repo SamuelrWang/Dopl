@@ -135,6 +135,8 @@ export async function heartbeat(
       (await deps.store.touch(userId, input, sessionId, now));
     if (!row) return { device: { revoked: true } };
   }
+  // Best effort: presence on the portal must never cost a computer its beat.
+  await deps.store.touchLinkedDevice?.(row.id, now).catch((err: unknown) => console.warn("[devices] linked device touch failed", err));
   if (input.tokenId) await deps.store.linkTokenById(userId, row.id, input.tokenId);
   else if (input.tokenLabel) await deps.store.linkTokensByLabel(userId, row.id, input.tokenLabel);
   return { device: { id: row.id, revoked: false } };

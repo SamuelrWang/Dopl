@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { vi } from "vitest";
 import {
   COMPUTER_ONLINE_WINDOW_MS,
   heartbeat,
@@ -178,6 +179,19 @@ describe("heartbeat", () => {
     expect(second).toEqual(first);
     expect(devices).toHaveLength(1);
     expect(devices[0].status).toBe("away");
+  });
+
+  it("moves a linked computer's device row, and a failed move never costs the beat", async () => {
+    const { store, devices } = fakeStore();
+    const touchLinkedDevice = vi.fn(async () => {});
+    await heartbeat(deps({ ...store, touchLinkedDevice }), USER, beat());
+    expect(touchLinkedDevice).toHaveBeenCalledWith(devices[0].id, expect.any(String));
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const failing = vi.fn(async () => { throw new Error("down"); });
+    const res = await heartbeat(deps({ ...store, touchLinkedDevice: failing }), USER, beat());
+    expect(res).toEqual({ device: { id: devices[0].id, revoked: false } });
+    warn.mockRestore();
   });
 
   it("links the device token this machine names, by id, and only when named", async () => {

@@ -15,7 +15,7 @@ import {
   readInbox,
   type AnswerOutcome,
 } from "./inbox";
-import { mirrorReplies } from "./reply-mirror";
+import { mirrorReplies, type MirrorDeps } from "./reply-mirror";
 import type { GlassesMessage, GlassesStore } from "./types";
 import { isUuid } from "../validation";
 
@@ -30,6 +30,8 @@ export interface DeviceHandlerDeps extends Clock {
   devices: DeviceStore;
   gateway: ChannelGateway;
   linker: ChannelLinker;
+  /** The reply mirror's log row (`reply-mirror.ts › MirrorDeps`). */
+  onMirrored?: MirrorDeps["onMirrored"];
   /** Per-IP limiter for unauthenticated pairing starts; true = within the limit. */
   allowPairStart: (request: Request) => Promise<boolean>;
   touchThrottle?: Throttle<string>;

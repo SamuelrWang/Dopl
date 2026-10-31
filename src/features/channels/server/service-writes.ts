@@ -31,6 +31,7 @@ import { resolveWakeVerdict } from "./service-wake-verdict";
 // The outside session's CLIENT ("via Claude Code") — `lib/message-via.ts` says what, this says when.
 import { VIA_METADATA_KEY } from "../lib/message-via";
 import { resolveViaStamp } from "./message-via";
+import { logInboundMessage } from "@/features/display/server/sdk-lens";
 import { deviceStamps } from "./service-writes-device";
 // Best effort: the answer stamp + lens release after an answer insert; the nudge on an agent's
 // structured-looking plain send.
@@ -441,6 +442,10 @@ export async function postMessage(
     stored[ESCALATION_ANSWER_METADATA_KEY] ? onAnswerInserted(ctx, channel.id, row) : null,
     hydrateOne(row),
   ]);
+  // The portal's log of what a person sent from a device. After the response; a replay never gets here.
+  if (authorKind === "user" && ctx.messageSource && (input.kind ?? "message") === "message") {
+    logInboundMessage({ userId: ctx.userId, source: ctx.messageSource, body: input.body, channelId: channel.id, messageId: row.id });
+  }
   const hint =
     authorKind === "agent" &&
     (input.kind ?? "message") === "message" &&
