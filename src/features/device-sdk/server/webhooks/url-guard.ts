@@ -61,7 +61,7 @@ export function isBlockedAddress(ip: string): boolean {
 export type Resolver = (hostname: string) => Promise<string[]>;
 
 /** Every address `hostname` resolves to (A and AAAA). */
-export const resolveAll: Resolver = (hostname) =>
+const resolveAll: Resolver = (hostname) =>
   new Promise((resolve, reject) => {
     dnsLookup(hostname, { all: true, verbatim: true }, (err, addresses: LookupAddress[]) => {
       if (err) reject(err);
@@ -69,14 +69,14 @@ export const resolveAll: Resolver = (hostname) =>
     });
   });
 
-export const ENDPOINT_URL_MAX = 2048;
+const ENDPOINT_URL_MAX = 2048;
 /**
  * Ports an endpoint may use (ruled 2026-10-28): 443 (the https default) and 8443. Anything else would
  * let the sender probe arbitrary services on public hosts.
  */
-export const ALLOWED_PORTS: readonly string[] = ["", "443", "8443"];
+const ALLOWED_PORTS: readonly string[] = ["", "443", "8443"];
 
-export type UrlCheck = { ok: true; url: string } | { ok: false; reason: string };
+type UrlCheck = { ok: true; url: string } | { ok: false; reason: string };
 
 /** Syntax-only checks (no DNS): https, no credentials, no fragment, a host, length cap. */
 export function parseEndpointUrl(raw: string): UrlCheck {

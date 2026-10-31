@@ -13,9 +13,9 @@ import { createHmac, randomBytes } from "node:crypto";
  * accepts any one of them.
  */
 
-export const WEBHOOK_SECRET_PREFIX = "whsec_";
+const WEBHOOK_SECRET_PREFIX = "whsec_";
 /** Secret entropy in bytes (Standard Webhooks: 24–64). */
-export const WEBHOOK_SECRET_BYTES = 32;
+const WEBHOOK_SECRET_BYTES = 32;
 
 /** A fresh endpoint secret: `whsec_` + base64 of 32 random bytes. Shown once (create / rotate). */
 export function generateWebhookSecret(): string {
@@ -30,7 +30,7 @@ function secretKey(secret: string): Buffer {
 }
 
 /** `v1,<base64 sig>` for one secret. */
-export function signatureFor(secret: string, id: string, timestamp: number, body: string): string {
+function signatureFor(secret: string, id: string, timestamp: number, body: string): string {
   const mac = createHmac("sha256", secretKey(secret)).update(`${id}.${timestamp}.${body}`).digest("base64");
   return `v1,${mac}`;
 }

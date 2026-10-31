@@ -7,7 +7,7 @@ import type { Environment, WebhookEventName } from "../../types";
  * Secrets cross this boundary only on create / rotate (returned once) and `secretsFor` (signing).
  */
 
-export type DeliveryStatus = "pending" | "delivered" | "failed";
+type DeliveryStatus = "pending" | "delivered" | "failed";
 
 export interface EndpointRow {
   id: string;

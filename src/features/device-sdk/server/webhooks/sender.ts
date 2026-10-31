@@ -20,12 +20,12 @@ import { isSuccess, stripNul, type Transport } from "./transport";
  * the lease to expire and the delivery is sent again with the same `webhook-id`. Receivers dedupe on it.
  */
 
-export const SENDER_BATCH = 25;
-export const FAN_OUT_BATCH = 200;
+const SENDER_BATCH = 25;
+const FAN_OUT_BATCH = 200;
 /** Lease per claimed delivery; > transport timeout (15s) with margin. */
 export const LEASE_S = 60;
 
-export interface SenderDeps {
+interface SenderDeps {
   store: WebhookStore;
   transport: Transport;
   now?: () => Date;

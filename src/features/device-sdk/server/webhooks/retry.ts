@@ -6,7 +6,7 @@
  */
 export const RETRY_DELAYS_S = [5, 5 * 60, 30 * 60, 2 * 3600, 5 * 3600, 10 * 3600, 10 * 3600] as const;
 export const WEBHOOK_MAX_ATTEMPTS = RETRY_DELAYS_S.length + 1;
-export const RETRY_JITTER = 0.1;
+const RETRY_JITTER = 0.1;
 
 /**
  * When to try again after `attemptsDone` failed tries in this run, or `null` = dead-letter.

@@ -1,3 +1,4 @@
+import { isUuid } from "@/shared/lib/id/uuid";
 import {
   ListQuerySchema,
   WebhookEndpointCreateRequestSchema,
@@ -37,8 +38,6 @@ export interface WebhookApiDeps {
   resolve?: Resolver;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 function invalid(error: { issues: Array<{ path: PropertyKey[]; message: string }> }): WebhookApiError {
   const i = error.issues[0];
   const where = i?.path.length ? `${i.path.map(String).join(".")}: ` : "";
@@ -48,7 +47,7 @@ function invalid(error: { issues: Array<{ path: PropertyKey[]; message: string }
 const notFound = (what: string) => new WebhookApiError("not_found", `No such ${what}.`);
 
 function requireId(id: string, what: string): string {
-  if (!UUID.test(id)) throw notFound(what);
+  if (!isUuid(id)) throw notFound(what);
   return id.toLowerCase();
 }
 
@@ -75,7 +74,7 @@ export function toEndpoint(r: EndpointRow, now: Date = new Date()): WebhookEndpo
   };
 }
 
-export function toAttempt(a: AttemptRow): WebhookAttempt {
+function toAttempt(a: AttemptRow): WebhookAttempt {
   return {
     attempt: a.attempt,
     attempted_at: new Date(a.attempted_at).toISOString(),
@@ -86,7 +85,7 @@ export function toAttempt(a: AttemptRow): WebhookAttempt {
   };
 }
 
-export function toDelivery(d: DeliveryRow, attempts?: AttemptRow[]): WebhookDelivery {
+function toDelivery(d: DeliveryRow, attempts?: AttemptRow[]): WebhookDelivery {
   return {
     id: d.id,
     endpoint_id: d.endpoint_id,
@@ -116,7 +115,7 @@ export function encodeCursor(p: ListPosition): string {
 export function decodeCursor(raw: string): ListPosition {
   const text = Buffer.from(raw, "base64url").toString("utf8");
   const [createdAt, id, extra] = text.split("|");
-  if (extra !== undefined || !createdAt || !id || !UUID.test(id) || !PG_TIMESTAMP.test(createdAt)) {
+  if (extra !== undefined || !createdAt || !id || !isUuid(id) || !PG_TIMESTAMP.test(createdAt)) {
     throw new WebhookApiError("invalid_request", "cursor: not a cursor this list returned");
   }
   return { createdAt, id };

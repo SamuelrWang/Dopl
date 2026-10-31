@@ -18,9 +18,9 @@ import type {
 
 export const ENDPOINT_COLS =
   "id, project_id, env, url, description, enabled_events, previous_secret_expires_at, disabled_at, created_at, updated_at";
-export const DELIVERY_COLS =
+const DELIVERY_COLS =
   "id, outbox_id, endpoint_id, project_id, env, event_type, status, attempts, next_attempt_at, last_status_code, last_error, delivered_at, created_at, updated_at";
-export const ATTEMPT_COLS = "id, delivery_id, attempt, attempted_at, status_code, error, duration_ms, response_body";
+const ATTEMPT_COLS = "id, delivery_id, attempt, attempted_at, status_code, error, duration_ms, response_body";
 
 const db = () => supabaseAdmin();
 
@@ -41,7 +41,7 @@ export const pickEndpoint = (r: Record<string, unknown>): EndpointRow => ({
   updated_at: r.updated_at as string,
 });
 
-export const pickDelivery = (r: Record<string, unknown>): DeliveryRow => ({
+const pickDelivery = (r: Record<string, unknown>): DeliveryRow => ({
   id: r.id as string,
   outbox_id: r.outbox_id as string,
   endpoint_id: r.endpoint_id as string,

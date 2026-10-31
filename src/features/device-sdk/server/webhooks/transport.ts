@@ -3,7 +3,7 @@ import { BlockedAddressError, guardedLookup, parseEndpointUrl } from "./url-guar
 
 /**
  * One webhook POST. Never throws: every failure is a {@link TransportResult} with `statusCode: null`
- * and an `error` that is ONE OF {@link CONNECT_ERROR_CLASSES}, never the raw socket / TLS / DNS text
+ * and an `error` that is ONE OF {@link ConnectErrorClass}, never the raw socket / TLS / DNS text
  * (ruled 2026-10-28: raw connection errors would turn the attempt log into a port and service
  * scanner). Only a real HTTP answer carries detail: its status and the first 1 KiB of its body.
  *
@@ -12,21 +12,12 @@ import { BlockedAddressError, guardedLookup, parseEndpointUrl } from "./url-guar
  * at most {@link RESPONSE_BODY_CAP} bytes of the response read (the socket is dropped after that).
  */
 
-export const WEBHOOK_TIMEOUT_MS = 15_000;
-export const RESPONSE_BODY_CAP = 1024;
-export const WEBHOOK_USER_AGENT = "Dopl-Webhooks/1";
+const WEBHOOK_TIMEOUT_MS = 15_000;
+const RESPONSE_BODY_CAP = 1024;
+const WEBHOOK_USER_AGENT = "Dopl-Webhooks/1";
 
 /** What a connection-phase failure is reported as. */
-export const CONNECT_ERROR_CLASSES = [
-  "dns_failed",
-  "connect_refused",
-  "tls_failed",
-  "timeout",
-  "address_blocked",
-  "url_refused",
-  "connect_failed",
-] as const;
-export type ConnectErrorClass = (typeof CONNECT_ERROR_CLASSES)[number];
+type ConnectErrorClass = "dns_failed" | "connect_refused" | "tls_failed" | "timeout" | "address_blocked" | "url_refused" | "connect_failed";
 
 const DNS_CODES = new Set(["ENOTFOUND", "EAI_AGAIN", "EAI_FAIL", "ENODATA", "ESERVFAIL", "ENONAME"]);
 const REFUSED_CODES = new Set(["ECONNREFUSED", "ECONNRESET", "EHOSTUNREACH", "ENETUNREACH", "EPIPE"]);

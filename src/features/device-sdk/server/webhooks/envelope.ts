@@ -10,7 +10,7 @@ import type { Environment, WebhookEventName } from "../../types";
  * `dev_webhook_fan_out`) from the project's pinned version, so it is frozen before the first send.
  * Consumers must ignore unknown `type`s and fields.
  */
-export interface WebhookEnvelope {
+interface WebhookEnvelope {
   id: string;
   type: WebhookEventName;
   api_version?: string;
