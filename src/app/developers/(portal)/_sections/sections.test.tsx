@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { PortalProvider, usePortal } from "../_components/portal-store";
-import { PortalShell } from "../_components/portal-shell";
+import { INTEGRATIONS } from "@/features/device-sdk/portal/catalog";
+import type { PortalProject } from "@/features/device-sdk/portal/scope";
+import type { Call, EndpointView, Issue, KeyView, MetricRow, PortalUser } from "@/features/device-sdk/portal/view";
+import { PortalProvider } from "../_components/portal-store";
 import { ActivitySection } from "./activity";
 import { ConnectSection } from "./connect";
-import { AddDeviceDialog } from "./add-device-dialog";
 import { DevicesSection } from "./devices";
 import { IntegrationPageSection } from "./integration-page";
 import { IssuesSection } from "./issues";
@@ -19,299 +20,178 @@ import { UserPageSection } from "./user-page";
 import { UsersSection } from "./users";
 import { WebhooksSection } from "./webhooks";
 
-const push = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push }),
-  usePathname: () => "/developers/users",
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/developers",
 }));
 
 beforeAll(() => {
   // jsdom has neither; the kit's popover and frame read them.
   window.matchMedia ??= ((q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} })) as never;
-  globalThis.ResizeObserver ??= class {
+  window.ResizeObserver ??= class {
     observe() {}
     unobserve() {}
     disconnect() {}
   } as never;
 });
-
 afterEach(cleanup);
 
-const wrap = (node: ReactNode) => render(<PortalProvider>{node}</PortalProvider>);
+const NOW = "2026-10-31T12:00:00.000Z";
+const internal: PortalProject = { id: "p1", name: "Dopl App", apiVersion: "2026-10-01", role: "owner", org: { id: "o1", name: "Dopl", internal: true } };
+const customer: PortalProject = { ...internal, org: { id: "o2", name: "Acme", internal: false } };
 
-describe("every page renders on the fixtures", () => {
-  it.each([
-    ["Overview", <OverviewSection key="o" />],
-    ["Devices", <DevicesSection key="d" />],
-    ["Users", <UsersSection key="u" />],
-    ["Issues", <IssuesSection key="i" />],
-    ["API keys", <KeysSection key="k" />],
-    ["Webhooks", <WebhooksSection key="w" />],
-    ["Usage", <UsageSection key="us" />],
-    ["Team", <TeamSection key="t" />],
-    ["Connect page", <ConnectSection key="c" />],
-    ["Playground", <PlaygroundSection key="p" />],
-  ])("%s", (title, node) => {
-    wrap(node);
-    expect(screen.getByRole("heading", { level: 1, name: title })).toBeTruthy();
+const users: PortalUser[] = [
+  {
+    id: "usr_1",
+    name: "Maya Chen",
+    named: true,
+    activeDeviceId: "d1",
+    lastDeliveryAt: "2026-10-31T11:00:00.000Z",
+    lastActiveAt: "2026-10-31T11:59:00.000Z",
+    createdAt: "2026-10-01T00:00:00.000Z",
+    devices: [{ id: "d1", userId: "usr_1", name: "Maya's G2", modelId: "g2", state: "online", firmware: null, lastSeenAt: "2026-10-31T11:59:30.000Z", pairedAt: "2026-10-01T00:00:00.000Z", grants: ["present.*"], deliveries7d: 10, delivered7d: 9 }],
+  },
+];
+const metrics: MetricRow[] = [{ day: "2026-10-31", user: "usr_1", device: "d1", kind: "glasses", key: "k1", calls: 12, errors: 1, deliveries: 10, delivered: 9, failed: 1, last_delivery: "2026-10-31T11:00:00.000Z" }];
+const calls: Call[] = [
+  { id: "c1", kind: "message", at: "2026-10-31T11:30:00.000Z", userId: "usr_1", deviceId: "d1", modelId: "g2", capability: "input.utterance", status: "received", errorCode: null, title: "Ship the release", text: "Ship the release", latencyMs: 0, steps: [], considered: [], route: null, response: null, webhook: null },
+  {
+    id: "c2",
+    kind: "delivery",
+    at: "2026-10-31T11:00:00.000Z",
+    userId: "usr_1",
+    deviceId: "d1",
+    modelId: "g2",
+    capability: "present.notify",
+    status: "delivered",
+    errorCode: null,
+    title: "Deploy finished",
+    text: "Deploy finished",
+    latencyMs: 80,
+    steps: [{ key: "picked", label: "Picked up by device", at: 900, state: "done" }],
+    considered: [{ deviceId: "d1", verdict: "chosen", reason: "most recently active" }],
+    route: "POST /v1/users/usr_1/deliver",
+    response: { status: "done" },
+    webhook: null,
+  },
+];
+const hook: Call = { ...calls[1], id: "h1", kind: "webhook", status: "failed", title: "action.failed", webhook: { endpointId: "e1", endpointName: "Backend", event: "action.failed", attempts: [{ at: NOW, status: 500, note: "Answered 500" }], payload: { type: "action.failed" } } };
+const endpoints: EndpointView[] = [{ id: "e1", name: "Backend", url: "https://x.example/h", events: ["action.failed"], state: "failing", sent7d: 3, delivered7d: 0, failed7d: 3, rate: 0, lastAt: NOW, bars: [0, 0, 0, 0, 0, 0, 100] }];
+const issues: Issue[] = [{ id: "error:device_offline", kind: "error_code", title: "Devices offline when called", code: "device_offline", count: 3, countLabel: "calls in 7 days", why: "Offline.", firstSeen: NOW, userIds: ["usr_1"], latestCallId: "c2", action: { label: "Open activity", href: "/activity" } }];
+const key = (over: Partial<KeyView>): KeyView => ({ id: "k1", name: "Assistant backend", kind: "secret", prefix: "sk_live_Mx7a", scopes: ["actions:write"], createdAt: "2026-10-01T00:00:00.000Z", createdBy: "a@b.co", lastUsedAt: "2026-10-31T11:50:00.000Z", calls7d: 12, revokedAt: null, expiresAt: null, locked: false, ...over });
+const rules = { profileId: "glasses-default", profileVersion: 1, guidance: "Be brief.", format: "plain", maxLines: 5, maxChars: 300, overflow: "Cut to fit", published: [{ id: "present.notify" as const, allowed: true, limits: [["max lines", "4"]] as [string, string][] }] };
+
+const inPortal = (children: ReactNode, project = internal, env: "live" | "test" = "live") =>
+  render(
+    <PortalProvider data={{ email: "a@b.co", projects: [project], project, env, now: NOW }}>
+      {children}
+    </PortalProvider>
+  );
+
+describe("the portal's pages, on real shapes", () => {
+  it("Overview shows the real figures and cuts what was invented", () => {
+    inPortal(<OverviewSection users={users} metrics={metrics} endpoints={endpoints} issues={issues} activeKeys={1} />);
+    expect(screen.getByText("Deliveries, 7d")).toBeTruthy();
+    expect(screen.getByText("1 of 1")).toBeTruthy();
+    expect(screen.queryByText(/maintenance/i)).toBeNull();
+    expect(screen.queryByPlaceholderText(/Ask about/)).toBeNull();
+    fireEvent.click(screen.getByText("Which users need a relink?"));
+    expect(screen.getByText("None.")).toBeTruthy();
   });
 
-  it("the sidebar lists the three groups and the find box", () => {
-    wrap(
-      <PortalShell>
-        <div />
-      </PortalShell>
-    );
-    for (const name of ["Build", "Operate", "Configure"]) expect(screen.getByText(name)).toBeTruthy();
-    expect(screen.getByPlaceholderText("Find anything")).toBeTruthy();
-    expect(screen.queryByRole("link", { name: "Design Playground" })).toBeNull();
-    expect(screen.getByText("Sample data")).toBeTruthy();
-    const test = screen.getByRole("tab", { name: "Test" });
-    fireEvent.click(test);
-    expect(test.getAttribute("aria-selected")).toBe("true");
-  });
-});
-
-describe("Users", () => {
-  it("narrows by quick view and opens a user in a sheet with metadata only", () => {
-    wrap(<UsersSection />);
-    expect(screen.queryByText("of 25")).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "Needs attention" }));
-    expect(screen.getByText("of 25")).toBeTruthy();
-    fireEvent.click(screen.getAllByRole("button", { name: /.+/ }).find((n) => n.getAttribute("aria-haspopup") === "dialog")!);
-    const sheet = screen.getByRole("dialog");
-    expect(within(sheet).getByText("Latest deliveries")).toBeTruthy();
-    expect(within(sheet).getByRole("link", { name: "Open full page" })).toBeTruthy();
-    expect(within(sheet).queryByText(/Test message/)).toBeNull();
-  });
-});
-
-describe("Devices", () => {
-  it("groups by category with an add card in each section", () => {
-    wrap(<DevicesSection />);
-    const robots = screen.getByRole("region", { name: "Robots" });
-    expect(within(robots).getByRole("button", { name: /Add new device/ })).toBeTruthy();
-    const glasses = screen.getByRole("region", { name: "Glasses" });
-    expect(within(glasses).getByText("Even Realities")).toBeTruthy();
-    expect(within(glasses).getByText("G2")).toBeTruthy();
-    expect(within(glasses).queryByText("Coming soon")).toBeNull();
-    expect(screen.queryByText("Simulator")).toBeNull();
+  it("Activity shows a message's own words, and never says seen", () => {
+    inPortal(<ActivitySection calls={calls} users={users} initial={{ call: "c2" }} />);
+    expect(screen.getByText("Ship the release")).toBeTruthy();
+    expect(screen.getByText("Picked up by device")).toBeTruthy();
+    expect(screen.queryByText(/seen by device/i)).toBeNull();
   });
 
-  it("filters the catalog and keeps the stats and add cards honest", () => {
-    wrap(<DevicesSection />);
-    expect(screen.getAllByRole("button", { name: /Add new device/ }).length).toBe(6);
-    fireEvent.click(screen.getByRole("button", { name: /^Glasses/ }));
-    expect(screen.queryByRole("region", { name: "Desktop" })).toBeNull();
-    fireEvent.change(screen.getByPlaceholderText("Search models"), { target: { value: "nothing like this" } });
-    expect(screen.getByText("No models match")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
-    expect(screen.getByRole("region", { name: "Desktop" })).toBeTruthy();
-  });
-});
-
-describe("API keys", () => {
-  const ToTest = () => {
-    const { update } = usePortal();
-    return (
-      <button type="button" onClick={() => update((s) => ({ ...s, env: "test" }))}>
-        Switch to test
-      </button>
-    );
-  };
-
-  it("sections keys by type for the environment in the store", () => {
-    wrap(
-      <>
-        <KeysSection />
-        <ToTest />
-      </>
-    );
-    const secrets = screen.getByRole("region", { name: "Secret keys" });
-    expect(within(secrets).getByRole("article", { name: "Assist backend" })).toBeTruthy();
-    expect(within(secrets).queryByRole("article", { name: "Contractor sandbox" })).toBeNull();
-    expect(within(screen.getByRole("region", { name: "Publishable keys" })).getByRole("article", { name: "Connect widget" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Switch to test" }));
-    expect(screen.getByText("Test data")).toBeTruthy();
-    expect(within(screen.getByRole("region", { name: "Secret keys" })).getByRole("article", { name: "Local development" })).toBeTruthy();
-    expect(screen.queryByRole("article", { name: "Assist backend" })).toBeNull();
+  it("Usage labels an internal project and offers no plan", () => {
+    inPortal(<UsageSection users={users} metrics={metrics} keys={[key({})]} keyLimit={10} seats={1} endpoints={1} />);
+    expect(screen.getByText("Internal, not billed")).toBeTruthy();
+    expect(screen.queryByText(/plan|Next bill|Manage/)).toBeNull();
   });
 
-  it("creates a secret one decision at a time, keeps choices on Back, and shows it once", () => {
-    wrap(<KeysSection />);
-    fireEvent.click(screen.getByRole("button", { name: "Create key" }));
-    const dialog = () => within(screen.getByRole("dialog"));
-    const next = () => fireEvent.click(dialog().getByRole("button", { name: "Continue" }));
-    expect((dialog().getByRole("button", { name: "Continue" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(dialog().getByRole("button", { name: /Secret/ }));
-    next();
-    fireEvent.click(dialog().getByRole("button", { name: /Read events/ }));
-    fireEvent.click(dialog().getByRole("button", { name: "Back" }));
-    next();
-    expect(dialog().getByRole("button", { name: /Read events/ }).getAttribute("aria-pressed")).toBe("true");
-    next();
-    expect((dialog().getByRole("button", { name: "Create key" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(dialog().getByRole("textbox", { name: "Key name" }), { target: { value: "Nightly export" } });
-    fireEvent.click(dialog().getByRole("button", { name: "Create key" }));
-    expect(dialog().getByRole("heading", { name: "Copy your secret key" })).toBeTruthy();
-    const secret = dialog().getByText(/^sk_live_.{24}$/).textContent!;
-    fireEvent.keyDown(document, { key: "Escape" });
-    fireEvent.click(dialog().getByRole("button", { name: "Done" }));
-    const card = screen.getByRole("article", { name: "Nightly export" });
-    expect(within(card).getByText("Not used yet")).toBeTruthy();
-    expect(screen.queryByText(secret)).toBeNull();
+  it("Issues links to the fix instead of pretending to do it", () => {
+    inPortal(<IssuesSection issues={issues} users={users} />);
+    expect(screen.getAllByText("Devices offline when called").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Mute")).toBeNull();
+    expect(screen.getByRole("link", { name: /Open activity/ })).toBeTruthy();
   });
 
-  it("makes a publishable key without asking for permissions, and it stays readable", () => {
-    wrap(<KeysSection />);
-    fireEvent.click(within(screen.getByRole("article", { name: "Connect widget" })).getByRole("button", { name: "Revoke" }));
-    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Revoke key" }));
-    fireEvent.click(screen.getByRole("button", { name: /New publishable key/ }));
-    const dialog = () => within(screen.getByRole("dialog"));
-    expect(dialog().getByRole("heading", { name: "Name this key" })).toBeTruthy();
-    fireEvent.change(dialog().getByRole("textbox", { name: "Key name" }), { target: { value: "Mobile app" } });
-    fireEvent.click(dialog().getByRole("button", { name: "Create key" }));
-    const token = dialog().getByText(/^pk_live_.{24}$/).textContent!;
-    fireEvent.click(dialog().getByRole("button", { name: "Done" }));
-    expect(within(screen.getByRole("article", { name: "Mobile app" })).getByText(token)).toBeTruthy();
+  it("Users has no saved views, plan or send test", () => {
+    inPortal(<UsersSection users={users} calls={calls} />);
+    expect(screen.getByText("Maya Chen")).toBeTruthy();
+    expect(screen.queryByText("Views")).toBeNull();
+    fireEvent.click(screen.getByText("Maya Chen"));
+    expect(screen.queryByText("Send test")).toBeNull();
+    expect(screen.queryByText("Relink link")).toBeNull();
   });
 
-  it("confirms a revoke, then moves the key to Revoked", () => {
-    wrap(<KeysSection />);
-    const card = () => screen.getByRole("article", { name: "Assist backend" });
-    fireEvent.click(within(card()).getByRole("button", { name: "Revoke" }));
-    const confirm = screen.getByRole("alertdialog");
-    expect(within(confirm).getByText("In use. Its calls fail at once.")).toBeTruthy();
-    fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
-    fireEvent.click(within(card()).getByRole("button", { name: "Revoke" }));
-    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Revoke key" }));
-    expect(screen.queryByRole("article", { name: "Assist backend" })).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "Revoked" }));
-    expect(within(card()).queryByRole("button", { name: "Revoke" })).toBeNull();
+  it("a user's page has no controls that do nothing", () => {
+    inPortal(<UserPageSection user={users[0]} calls={calls} />);
+    expect(screen.getByText("Maya's G2")).toBeTruthy();
+    for (const fake of ["Revoke", "Relink", "Preferences", "Send test"]) expect(screen.queryByText(fake)).toBeNull();
   });
 
-  it("rotates with a grace period and reveals the new secret", () => {
-    wrap(<KeysSection />);
-    fireEvent.click(within(screen.getByRole("article", { name: "Dispatch worker" })).getByRole("button", { name: "Rotate" }));
-    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Rotate key" }));
-    const dialog = within(screen.getByRole("dialog"));
-    expect(dialog.getByRole("heading", { name: "Copy your new secret" })).toBeTruthy();
-    fireEvent.click(dialog.getByRole("button", { name: "Done" }));
-    const card = within(screen.getByRole("article", { name: "Dispatch worker" }));
-    expect(card.getByText("Old secret ends in 24h")).toBeTruthy();
-    expect(card.queryByText(/sk_live_Ld71/)).toBeNull();
+  it("Devices lists only what is connected, with no add flow", () => {
+    inPortal(<DevicesSection users={users} metrics={metrics} />);
+    expect(screen.getByText("G2")).toBeTruthy();
+    expect(screen.queryByText("Add device")).toBeNull();
+    expect(screen.queryByText("Meta")).toBeNull();
   });
 
-  // Stale against the fixture UI before the 2026-10-31 move; Phase 3 of docs/specs/dev-portal-live/PLAN.md rewrites this page.
-  it.skip("finds unused keys, and answers an empty search", () => {
-    wrap(<KeysSection />);
-    fireEvent.click(screen.getByRole("button", { name: /Needs review/ }));
-    expect(screen.getByRole("article", { name: "Old reporting job" })).toBeTruthy();
-    expect(screen.queryByRole("article", { name: "Assist backend" })).toBeNull();
-    fireEvent.change(screen.getByPlaceholderText("Search keys"), { target: { value: "nothing like this" } });
-    expect(screen.getByText("No keys match")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
-    expect(screen.getByRole("article", { name: "Assist backend" })).toBeTruthy();
-  });
-});
-
-describe("Add new device", () => {
-  it("picks a model and goes live, warning about tests that have not passed without blocking", async () => {
-    const Probe = () => <output>{usePortal().state.integrations.meta?.status}</output>;
-    const onClose = vi.fn();
-    wrap(
-      <>
-        <AddDeviceDialog initialCategory="glasses" onClose={onClose} />
-        <Probe />
-      </>
-    );
-    expect(await screen.findByRole("heading", { name: "Choose a device" })).toBeTruthy();
-    const next = () => fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: /Meta glasses/ }));
-    next();
-    fireEvent.click(screen.getByRole("button", { name: /Simulator/ }));
-    next();
-    next();
-    next();
-    expect(screen.getByText(/tests have not passed/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Back" }));
-    expect(screen.getByRole("heading", { name: "Run capability tests" })).toBeTruthy();
-    next();
-    fireEvent.click(screen.getByRole("button", { name: "Go live" }));
-    expect(screen.getByRole("status").textContent).toBe("live");
-    expect(onClose).toHaveBeenCalled();
-  });
-});
-
-describe("The simulator in the live preview", () => {
-  // Stale against the fixture UI before the 2026-10-31 move; Phase 3 of docs/specs/dev-portal-live/PLAN.md rewrites this page.
-  it.skip("starts, shows the test send on its screen, and takes a tap", async () => {
-    wrap(<IntegrationPageSection integrationId="even_realities" initialTab="receives" />);
-    fireEvent.click(screen.getByRole("button", { name: "Start simulator" }));
-    expect(screen.getByText("Waiting for a message")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Send test" }));
-    expect(await screen.findByText("Queued")).toBeTruthy();
-    expect(await screen.findByText("Seen by device", {}, { timeout: 2000 })).toBeTruthy();
-    expect(screen.queryByText("Waiting for a message")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
-    expect(screen.getByRole("button", { name: "Start simulator" })).toBeTruthy();
-  });
-});
-
-describe("What it receives", () => {
-  // Stale against the fixture UI before the 2026-10-31 move; Phase 3 of docs/specs/dev-portal-live/PLAN.md rewrites this page.
-  it.skip("overrides inline, moves the source label, and resets to inherited", () => {
-    wrap(<IntegrationPageSection integrationId="even_realities" initialTab="receives" />);
-    const row = () => screen.getByText("Max lines").closest("li")!;
-    expect(within(row()).getByText("Dopl default")).toBeTruthy();
-    fireEvent.click(within(row()).getByRole("button", { name: "Override" }));
-    expect(within(row()).getByText("Your project · Glasses")).toBeTruthy();
-    fireEvent.change(within(row()).getByRole("spinbutton"), { target: { value: "2" } });
-    expect(screen.getByText(/Fits 2 of/)).toBeTruthy();
-    fireEvent.click(within(row()).getByRole("button", { name: "Reset to inherited" }));
-    expect(within(row()).getByText("Dopl default")).toBeTruthy();
+  it("a device page reads its rules, read only", () => {
+    inPortal(<IntegrationPageSection integration={INTEGRATIONS[0]} users={users} calls={calls} metrics={metrics} rules={rules} initialTab="receives" />);
+    expect(screen.getByText("glasses-default v1")).toBeTruthy();
+    expect(screen.queryByText(/quiet hours/i)).toBeNull();
+    expect(screen.queryByText("Publish")).toBeNull();
   });
 
-  // Stale against the fixture UI before the 2026-10-31 move; Phase 3 of docs/specs/dev-portal-live/PLAN.md rewrites this page.
-  it.skip("clamps an override to the model's floor", () => {
-    wrap(<IntegrationPageSection integrationId="even_realities" initialTab="receives" />);
-    const row = () => screen.getByText("Max lines").closest("li")!;
-    fireEvent.click(within(row()).getByRole("button", { name: "Override" }));
-    fireEvent.change(within(row()).getByRole("spinbutton"), { target: { value: "40" } });
-    expect((within(row()).getByRole("spinbutton") as HTMLInputElement).value).toBe("4");
+  it("Webhooks shows failing endpoints and the real add flow", () => {
+    inPortal(<WebhooksSection endpoints={endpoints} events={[hook]} />);
+    expect(screen.getAllByText("Backend").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Test")).toBeNull();
+    fireEvent.click(screen.getByText("Add endpoint"));
+    expect(screen.getByText("Where should events go?")).toBeTruthy();
   });
 
-  // Stale against the fixture UI before the 2026-10-31 move; Phase 3 of docs/specs/dev-portal-live/PLAN.md rewrites this page.
-  it.skip("walks a draft to Test and then Live", () => {
-    wrap(<IntegrationPageSection integrationId="even_realities" initialTab="receives" />);
-    fireEvent.click(within(screen.getByText("Max lines").closest("li")!).getByRole("button", { name: "Override" }));
-    fireEvent.click(screen.getByRole("button", { name: "Publish to Test" }));
-    expect(screen.getByText("Test v8")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Promote to Live" }));
-    expect(screen.getByText("Live v8")).toBeTruthy();
-  });
-});
-
-describe("Activity", () => {
-  // Stale against the fixture UI before the 2026-10-31 move; Phase 3 of docs/specs/dev-portal-live/PLAN.md rewrites this page.
-  it.skip("opens the stale pairing case from a link, with the unknowable step labelled", () => {
-    wrap(<ActivitySection initial={{ call: "del_7f3a91" }} />);
-    expect(screen.getAllByText("Refused")).toHaveLength(2);
-    expect(screen.getByText("Read by the person")).toBeTruthy();
-  });
-});
-
-describe("User page", () => {
-  it("shows each physical device with its trail and firmware", () => {
-    wrap(<UserPageSection userId="tech_1107" />);
-    expect(screen.getByText("Tomasz's G2")).toBeTruthy();
-    expect(screen.getAllByText("Glasses › Even Realities › G2")).toHaveLength(3);
-    expect(screen.getAllByText("1.3.8").length).toBeGreaterThan(0);
+  it("Keys has no undo, and a locked key offers nothing to press", () => {
+    inPortal(<KeysSection keys={[key({ locked: true })]} />);
+    expect(screen.getByText("Used by Dopl")).toBeTruthy();
+    expect(screen.queryByText("Rotate")).toBeNull();
+    expect(screen.queryByText("Revoke")).toBeNull();
   });
 
-  it("offers a closed set of preferences, never free text", () => {
-    wrap(<UserPageSection userId="tech_1107" initialTab="preferences" />);
-    expect(screen.queryByRole("textbox")).toBeNull();
-    expect(screen.getByRole("button", { name: "Language" })).toBeTruthy();
+  it("an unlocked key can rotate and revoke", () => {
+    inPortal(<KeysSection keys={[key({})]} />);
+    expect(screen.getByText("Rotate")).toBeTruthy();
+    expect(screen.getByText("Revoke")).toBeTruthy();
+  });
+
+  it("Team offers no invite in an internal org, and no Viewer anywhere", () => {
+    inPortal(<TeamSection members={[{ userId: "u", email: "a@b.co", role: "owner", isOwner: true, isYou: true, lastActiveAt: NOW }]} invites={[]} />);
+    expect(screen.queryByText("Invite member")).toBeNull();
+    expect(screen.queryByText("Viewer")).toBeNull();
+  });
+
+  it("Team offers the invite in a customer org, as a link to copy", () => {
+    inPortal(<TeamSection members={[{ userId: "u", email: "a@b.co", role: "owner", isOwner: true, isYou: true, lastActiveAt: NOW }]} invites={[]} />, customer);
+    expect(screen.getByText("Invite member")).toBeTruthy();
+  });
+
+  it("Connect shows what can pair, with nothing to publish", () => {
+    inPortal(<ConnectSection branding={{ name: "Dopl App", accent: null, logoUrl: null }} integrations={[INTEGRATIONS[0]]} />);
+    expect(screen.getByText("Even Realities")).toBeTruthy();
+    expect(screen.queryByText("Publish")).toBeNull();
+    expect(screen.queryByText("Open test link")).toBeNull();
+  });
+
+  it("the Playground refuses to run on Live", () => {
+    inPortal(<PlaygroundSection />);
+    expect(screen.getByText("The Playground uses test data only")).toBeTruthy();
+    cleanup();
+    inPortal(<PlaygroundSection />, internal, "test");
+    expect(screen.getByText("Send")).toBeTruthy();
   });
 });

@@ -2,70 +2,74 @@
 
 /**
  * API keys: which keys can reach this environment, what each may do, which to rotate or revoke, and
- * how to make one. Secret and publishable keys are separate sections because they behave differently:
- * a secret is shown once and rotates, a publishable key stays readable.
+ * how to make one. Secret and publishable keys are separate sections because they behave differently.
+ * Revoking is final: there is no undo, because a revoked key may have leaked.
  */
 import { CheckCircle2, Globe, KeyRound, Plus, SearchX } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import type { KeyView } from "@/features/device-sdk/portal/view";
+import { errorText, portalCall } from "../../_lib/client-api";
 import { Button, ICON, SearchField, Segmented } from "../_design/ui";
 import { Between, CardSection, EmptyState, Page, PageHeader, Toast, Toolbar } from "../_design/ui-page";
-import { MEMBERS, minsAgo } from "../_data/company";
-import type { ApiKeyRow } from "../_data/misc";
+import { fmt } from "../_components/format";
 import { usePortal } from "../_components/portal-store";
-import { fmt } from "../_components/ui";
 import { AddKeyCard, KeyCard } from "./keys-card";
-import { CreateKeyFlow, RevealDialog, RevokeDialog, RotateDialog, copyText } from "./keys-dialogs";
-import { KEY_VIEWS, keepsKey, newKey, rotated, type KeyKind, type KeyView } from "./keys-model";
+import { CreateKeyFlow, RevealDialog, RevokeDialog, RotateDialog } from "./keys-dialogs";
+import { KEY_VIEWS, keepsKey, type KeyKind, type KeyTab } from "./keys-model";
 
 const SECTIONS = [
   { kind: "secret", label: "Secret keys", add: "New secret key", Glyph: KeyRound },
   { kind: "publishable", label: "Publishable keys", add: "New publishable key", Glyph: Globe },
 ] as const;
-/** The demo has one signed-in person, the same one the sidebar shows. */
-const ME = MEMBERS[2];
 
-export function KeysSection() {
-  const { state, update } = usePortal();
-  const [view, setView] = useState<KeyView>("active");
+export function KeysSection({ keys }: { keys: KeyView[] }) {
+  const router = useRouter();
+  const { test, env, project, canManage } = usePortal();
+  const [view, setView] = useState<KeyTab>("active");
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState<KeyKind | "any" | null>(null);
-  const [rotating, setRotating] = useState<ApiKeyRow | null>(null);
-  const [revoking, setRevoking] = useState<ApiKeyRow | null>(null);
-  const [revealed, setRevealed] = useState<{ row: ApiKeyRow; token: string } | null>(null);
+  const [rotating, setRotating] = useState<KeyView | null>(null);
+  const [revoking, setRevoking] = useState<KeyView | null>(null);
+  const [revealed, setRevealed] = useState<{ row: KeyView; token: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const all = useMemo(() => state.keys.filter((key) => key.env === state.env), [state.keys, state.env]);
-  const rows = useMemo(() => all.filter((key) => keepsKey(key, view, q)), [all, view, q]);
-  const envLabel = state.env === "live" ? "Live" : "Test";
+  const rows = useMemo(() => keys.filter((key) => keepsKey(key, view, q)), [keys, view, q]);
   const browsing = q === "" && view === "active";
   const sections = SECTIONS.filter((section) => browsing || rows.some((key) => key.kind === section.kind));
-
-  const [undo, setUndo] = useState<(() => void) | null>(null);
-  const say = (text: string, back: (() => void) | null = null) => {
+  const say = (text: string) => {
     setNotice(text);
-    setUndo(() => back);
-    window.setTimeout(() => setNotice((now) => (now === text ? null : now)), back ? 6000 : 3200);
+    window.setTimeout(() => setNotice((now) => (now === text ? null : now)), 3200);
   };
-  const seed = () => state.keys.length + 1;
-  const replace = (row: ApiKeyRow) => update((s) => ({ ...s, keys: s.keys.map((key) => (key.id === row.id ? row : key)) }));
-  const create = ({ name, kind, scopes }: { name: string; kind: KeyKind; scopes: string[] }) => {
-    const { row, token } = newKey({ name, kind, scopes, env: state.env, by: ME.name, seed: seed() });
-    update((s) => ({ ...s, keys: [row, ...s.keys] }));
-    return token;
+  const create = async ({ name, kind, scopes }: { name: string; kind: KeyKind; scopes: string[] }) => {
+    const body = kind === "secret" ? { env, kind, name, scopes } : { env, kind, name };
+    const made = await portalCall<{ secret: string }>(`/api/developers/projects/${project.id}/keys`, "POST", body);
+    router.refresh();
+    return made.secret;
   };
-  const rotate = (graceHours: number) => {
+  const rotate = async (graceHours: number) => {
     if (!rotating) return;
-    const next = rotated(rotating, graceHours, seed() + rotating.prefix.charCodeAt(9));
-    replace(next.row);
+    const row = rotating;
     setRotating(null);
-    setRevealed(next);
+    try {
+      const made = await portalCall<{ secret: string }>(`/api/developers/keys/${row.id}/rotate`, "POST", { grace_hours: graceHours });
+      setRevealed({ row, token: made.secret });
+      router.refresh();
+    } catch (e) {
+      say(errorText(e, "Could not rotate this key."));
+    }
   };
-  const revoke = () => {
+  const revoke = async () => {
     if (!revoking) return;
-    const before = revoking;
-    replace({ ...before, revoked: true, revokedAt: minsAgo(0) });
+    const row = revoking;
     setRevoking(null);
-    say(`${before.name} revoked`, () => replace(before));
+    try {
+      await portalCall(`/api/developers/keys/${row.id}`, "DELETE");
+      say(`${row.name} revoked`);
+      router.refresh();
+    } catch (e) {
+      say(errorText(e, "Could not revoke this key."));
+    }
   };
   const clear = () => {
     setQ("");
@@ -76,32 +80,24 @@ export function KeysSection() {
     <Page
       overlays={
         <>
-          {creating && <CreateKeyFlow env={state.env} initialKind={creating === "any" ? null : creating} onCreate={create} onClose={() => setCreating(null)} />}
-          {rotating && <RotateDialog row={rotating} onCancel={() => setRotating(null)} onConfirm={rotate} />}
-          {revoking && <RevokeDialog row={revoking} onCancel={() => setRevoking(null)} onConfirm={revoke} />}
-          {revealed && <RevealDialog row={revealed.row} token={revealed.token} onDone={() => setRevealed(null)} />}
-          {notice && (
-            <Toast
-              action={undo ? "Undo" : undefined}
-              onAction={() => {
-                undo?.();
-                setNotice(null);
-              }}
-            >
-              {notice}
-            </Toast>
-          )}
+          {creating && <CreateKeyFlow env={env} initialKind={creating === "any" ? null : creating} onCreate={create} onClose={() => setCreating(null)} />}
+          {rotating && <RotateDialog row={rotating} onCancel={() => setRotating(null)} onConfirm={(hours) => void rotate(hours)} />}
+          {revoking && <RevokeDialog row={revoking} onCancel={() => setRevoking(null)} onConfirm={() => void revoke()} />}
+          {revealed && <RevealDialog row={revealed.row} env={env} token={revealed.token} onDone={() => setRevealed(null)} />}
+          {notice && <Toast>{notice}</Toast>}
         </>
       }
     >
       <PageHeader
         title="API keys"
-        test={state.env === "test"}
+        test={test}
         action={
-          <Button variant="ink" onClick={() => setCreating("any")}>
-            <Plus {...ICON} aria-hidden="true" />
-            Create key
-          </Button>
+          canManage && (
+            <Button variant="ink" onClick={() => setCreating("any")}>
+              <Plus {...ICON} aria-hidden="true" />
+              Create key
+            </Button>
+          )
         }
       />
 
@@ -121,18 +117,9 @@ export function KeysSection() {
           return (
             <CardSection key={kind} icon={<Glyph {...ICON} aria-hidden="true" />} title={label} meta={sectionCalls > 0 && `${fmt(sectionCalls)} calls, 7d`}>
               {inSection.map((row) => (
-                <KeyCard
-                  key={row.id}
-                  row={row}
-                  onRotate={() => setRotating(row)}
-                  onRevoke={() => setRevoking(row)}
-                  onCopy={(token) => {
-                    copyText(token);
-                    say("Key copied");
-                  }}
-                />
+                <KeyCard key={row.id} row={row} canManage={canManage} onRotate={() => setRotating(row)} onRevoke={() => setRevoking(row)} />
               ))}
-              {browsing && inSection.length === 0 && <AddKeyCard label={add} env={envLabel} onClick={() => setCreating(kind)} />}
+              {browsing && canManage && inSection.length === 0 && <AddKeyCard label={add} env={test ? "Test" : "Live"} onClick={() => setCreating(kind)} />}
             </CardSection>
           );
         })

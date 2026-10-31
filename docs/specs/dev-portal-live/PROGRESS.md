@@ -1,6 +1,6 @@
 # Dev portal live data: progress
 
-Phases 0, 1 and 2 of [PLAN.md](PLAN.md), built 2026-10-31. Later phases belong to other agents.
+Phases 0 to 3 of [PLAN.md](PLAN.md), built 2026-10-31. Later phases belong to other agents.
 
 ## Phase 0
 
@@ -128,3 +128,85 @@ Works today: it touches no server. Add `--device "name"` if the network has seve
 - **`dev_device_messages` and `dev_actions` also hold message text and have no retention.** The new privacy row covers only the log entries.
 - **Audible speech** is still untested. Bridge changes ran only against fakes.
 - **Gates:** typecheck, lint on touched paths, 38 targeted vitest files (584 tests), 8 bridge tests and root build passed, with the docs restyle still in the tree. Not pushed, no CI. The dev server on :3000 runs from this worktree and answered 200 after the build.
+
+## Phase 3
+
+**Committed, not pushed.** Production runs the old code; the migration and the seed rows are already on production.
+
+### On production already
+
+- **Migration** `20261124115000_dev_portal_reads.sql`, applied as `dev_portal_reads`. Function body md5 matched the file (`276cbeb8...`), no backslashes; `dev_portal_metrics` not executable by anon or authenticated (checked). Stamped to sort before the held `20261124120000_channel_per_channel_numbering.sql`.
+- **Seed rows**, by [seed.sql](seed.sql), counted after the run: 19 end users, 32 devices, 606 events, 350 actions, 7 keys, 4 endpoints, 152 deliveries, 232 attempts. Real rows counted the same: 2 end users, 7 devices, 19 events, 3 actions, 4 keys. `dev_billable_events` still 0, `cost_units` sum 0, no pending delivery or outbox row.
+
+### Removing the seed rows
+
+Exact SQL. Every seeded id starts `5eed0000-`, and no real id does. Order matters only for readability: children cascade.
+
+```sql
+BEGIN;
+DELETE FROM public.dev_webhook_attempts   WHERE id::text LIKE '5eed0000-%';
+DELETE FROM public.dev_webhook_deliveries WHERE id::text LIKE '5eed0000-%';
+DELETE FROM public.dev_webhook_outbox     WHERE id::text LIKE '5eed0000-%';
+DELETE FROM public.dev_webhook_endpoints  WHERE id::text LIKE '5eed0000-%';
+DELETE FROM public.dev_events             WHERE event_id::text LIKE '5eed0000-%';
+DELETE FROM public.dev_actions            WHERE id::text LIKE '5eed0000-%';
+DELETE FROM public.connections            WHERE id::text LIKE '5eed0000-%';
+DELETE FROM public.devices                WHERE id::text LIKE '5eed0000-%';
+DELETE FROM public.dev_end_users          WHERE id::text LIKE '5eed0000-%';
+DELETE FROM public.dev_api_keys           WHERE id::text LIKE '5eed0000-%';
+COMMIT;
+```
+
+**Why they cannot hurt anyone.** The org is internal, so the billing view excludes them. Seeded keys hash a random value nobody holds, so none can authenticate. Enabled seeded endpoints listen only to events nothing emits, and the one with live names is paused, so real traffic never fans out to their `.example` URLs. Their `secret_id` points at no vault row: pressing Send again on a seeded delivery marks it failed with `secret_missing` and sends nothing. Seeded users own no credential, so nothing routes to them. The rows age out under the 30-day prune, so a recording long after today shows them thinning; re-run after removing.
+
+**What the seed cannot make true.** Seeded devices read offline: online is a heartbeat inside 60 seconds, and I did not add a job to fake one, so Overview reads "1 of 32" with your simulator running and "N seen today" beside it. Team stays you alone: `dev_org_members` needs real accounts.
+
+### Portal
+
+- **Every page reads rows.** `(portal)/_lib/portal-page.ts` is the one loader; `cache` shares a read between the sidebar and the page. `_data/` is gone, and `design-guard.test.ts` now fails if it, `DEMO_NOW` or Larkfield comes back.
+- **One figure source.** `dev_portal_metrics` returns one grouped row per day, user, device, kind and key. `portal/view.ts` computes everything from it. A delivery excludes polls, replays, a person's message and the bridge's report of its own cast. Delivered means accepted and its action reached delivered or done.
+- **Usage reads activity, not billing.** It does not touch `dev_billable_events`. Billing is unchanged. An internal project wears the Internal, not billed badge. `server/usage.ts` and `portal/usage.ts` went with classic.
+- **Scope in cookies.** A layout cannot read the URL, and links stay plain. The project id is matched against the caller's projects. This resolves PLAN's "internal org hidden, default to Test": an internal project opens on Live, and internal projects are no longer filtered out.
+- **Activity shows text:** `message_text`, or for a delivery the queued message's text under an internal project. It re-reads every 3 seconds while visible, by `router.refresh`. No new route, no realtime. Limit 300 newest rows, filtered in the browser, so a filter does not reach further back than that.
+- **`/developers/classic` deleted, all of it.** Its features moved: keys, members, invites, logs, usage, webhooks, Playground. `/developers/new` and `/developers/invite` stay and now use `_design`. New project moved to Team.
+
+### Controls: live or deleted
+
+| Page | Live | Deleted |
+|---|---|---|
+| Overview | Question chips, answered from the page's own figures | Free-text Ask, maintenance banner, invented deltas |
+| Users | Search, filters, Export | Saved views, Send test, Relink, plan, region, firmware filter, preferences, webhooks tab, Revoke |
+| Activity | Filters, Export, Copy ID | Custom date range |
+| Issues | Links to where to fix it | Mute, Revoke the pairings, Send relink links |
+| Devices | Search, filters | Add device flow, Coming soon integrations, Live and Testing badges, tests that always pass, per-model switches |
+| What it receives, Capabilities | Read only, from the adapter and `DOPL_KIND_PROFILES` | Editor, drafts, publish, versions, invented defaults and floors, the false quiet-hours floor, preview |
+| Webhooks | Add endpoint, Pause, Send again (three new session-only routes) | Test, spark bars from a hash, `ask.answered` and other unsent events in the picker |
+| Usage | Range, filters, Export | Plan, prices, Next bill, Manage, Projected, 90 days, custom range |
+| Connect | Copy snippet | Publish, branding edit, logo, redirects, allowed integrations, max permissions, test link |
+| API keys | Create (name, real scopes), Rotate with grace, Revoke | Undo, publishable reveal |
+| Team | Invite as a copied link, role, remove, revoke invite, new project | Undo, Viewer, Resend, "Invite sent" |
+| Playground | One real call, Test only, pasted key | The simulated device and every simulated output |
+
+### Rulings applied, and two calls of mine
+
+- **Ruling 14:** an internal org's owner may create and revoke keys; admins may not. Invites, roles and projects stay refused there.
+- **Mine: Dopl's delivery key is locked.** Rotate and Revoke refuse it (`KEY_LOCKED`) and the card shows Used by Dopl. It matches `DOPL_APP_SDK_KEY`, and under an internal project any unnamed live secret, because the variable is not in `.env.local`. PLAN section 2 item 8 made this a rule for people; this makes it hold.
+- **Mine: users in an internal project show their account email as the name** when no `display_name` is set, read by the auth admin API. It is only visible to that org's members. I did not write a name onto your real row.
+
+### Phase 2 review items
+
+- **Stuck `queued`: swept.** `stuck-actions.ts › sweepStuckActions` runs first in the minute webhook cron, on a new partial index. After 15 minutes, past the 10-minute longest TTL: a message the device took finishes the action (which also resolves F-784), anything else fails `device_offline` and fires `action.failed`.
+- **Bridge online with no speaker: fixed.** It does not poll until it has a speaker, so it reads offline, which is true.
+- **Retention: made true.** `retention.ts › pruneDeviceText` runs in the daily prune and deletes `dev_device_messages`, `dev_actions` and settled `dev_webhook_outbox` rows (cascading to deliveries and attempts) past 30 days. **Starts only at the push.** `dev_actions` idempotency keys go with them, so a replay after 30 days runs fresh. `docs/legal/PRIVACY.md`'s retention row now names these stores and section 2.13 says reply or notice. **Section 19 notice question stays Samuel's.**
+
+### Still not live
+
+Send test, Relink, Revoke from a user page, Mute, rule publishing, Connect save and test link, device add flow, Find anything over calls (a pasted id opens its call; only names and ids of users and devices are searched). `display_name` has no writer but the seed.
+
+### Not verified
+
+- **Nothing has been seen in a browser.** No session here, and screenshots are not sign-off. Checked instead: section tests render every page on real shapes, and a throwaway read-only run of the real readers against production returned 17 users, 32 devices, 300 calls and 6 issues on Live in 3.5 seconds, 4 users and 109 calls on Test. A full page load runs these reads plus the shell's, so check how the 3-second refresh feels.
+- **The sweep, retention deletes and new webhook routes never ran against production,** only their pure parts and fakes.
+- **Skeletons were adjusted for removed header buttons,** not compared side by side.
+- **`write-gate-coverage` was already red from Phase 2:** the two `device-bridge` routes had no EXEMPT row. Added.
+- **The old deliver row** (`ae2c30bb`) titles as `present.display`: it predates `action_id`, so its text cannot be joined.

@@ -3,7 +3,7 @@
 /** Find a model: search, quick views, every category as a pill, two secondary filters. */
 import { Button, Chip, PillMenu, SearchField, Segmented } from "../_design/ui";
 import { Between, FilterRow, Grow, Toolbar } from "../_design/ui-page";
-import { CATEGORIES } from "../_data/catalog";
+import { CATEGORIES } from "@/features/device-sdk/portal/catalog";
 import { DEVICE_QUICK, NO_DEVICE_FILTERS, integrationName, type DeviceFilters, type ModelRow } from "./devices-model";
 
 const withAll = <T extends { value: string; label: string }>(options: T[]) => [{ value: "all", label: "All" }, ...options];
@@ -26,7 +26,7 @@ export function DevicesToolbar({ rows, filters, onChange }: { rows: ModelRow[]; 
         <Chip on={filters.category === "all"} pressed={filters.category === "all"} onClick={() => onChange({ category: "all", integration: "all" })}>
           All
         </Chip>
-        {CATEGORIES.map((category) => {
+        {CATEGORIES.filter((category) => rows.some((r) => r.category.id === category.id)).map((category) => {
           const on = filters.category === category.id;
           return (
             <Chip key={category.id} on={on} pressed={on} count={rows.filter((r) => r.category.id === category.id).length} onClick={() => onChange({ category: on ? "all" : category.id, integration: "all" })}>

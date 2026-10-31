@@ -1,54 +1,47 @@
 "use client";
 
-/** What one model may do, by risk tier, from `@dopl/device-contracts`. */
-import { Lock } from "lucide-react";
-import { CAPABILITY_IDS, CAPABILITY_RISK_TIER, RISK_TIER_DEFAULT_POLICY, RISK_TIERS, type CapabilityId, type RiskTier } from "@dopl/device-contracts";
-import { Badge, Card, ICON_SM, PillMenu, Switch, TwoLine } from "../_design/ui";
+/** What one model may do, by risk tier: what its adapter publishes, and what the rules in force allow. Read only for now. */
+import { CAPABILITY_IDS, CAPABILITY_RISK_TIER, RISK_TIERS, type CapabilityId, type RiskTier } from "@dopl/device-contracts";
+import { TIER_LABEL, TIER_POLICY } from "@/features/device-sdk/portal/catalog";
+import { Badge, Card, TwoLine } from "../_design/ui";
 import { Between, ChipRow, Grow, ListRow, Text } from "../_design/ui-page";
-import { CONFIRM_LABEL, POLICY_LABEL, TIER_LABEL, modelById, type ConfirmMode, type ModelId } from "../_data/catalog";
-import { usePortal } from "../_components/portal-store";
 
-const MODES: ConfirmMode[] = ["none", "on_device", "trusted_surface", "deny"];
+/** The rules in force for a model, read from its adapter and Dopl's default profile on the server. */
+export interface RulesOfModel {
+  profileId: string;
+  profileVersion: number;
+  guidance: string;
+  format: string | null;
+  maxLines: number | null;
+  maxChars: number | null;
+  overflow: string;
+  published: { id: CapabilityId; allowed: boolean; limits: [string, string][] }[];
+}
 
-export function CapabilitiesTab({ model }: { model: ModelId }) {
-  const { state, update } = usePortal();
-  const def = modelById(model);
-  const settings = state.capabilities[model] ?? {};
-  const set = (id: CapabilityId, patch: Partial<{ on: boolean; confirm: ConfirmMode }>) =>
-    update((s) => ({
-      ...s,
-      capabilities: { ...s.capabilities, [model]: { ...s.capabilities[model], [id]: { ...s.capabilities[model]![id]!, ...patch } } },
-    }));
-  const published = def.capabilities;
+export function CapabilitiesTab({ rules }: { rules: RulesOfModel }) {
+  const published = rules.published.map((c) => c.id);
   const others = CAPABILITY_IDS.filter((c) => !published.includes(c));
   const tiers = RISK_TIERS.filter((t) => published.some((c) => CAPABILITY_RISK_TIER[c] === t));
-
   return (
     <>
       {tiers.map((tier: RiskTier) => {
-        const rows = published.filter((c) => CAPABILITY_RISK_TIER[c] === tier);
+        const rows = rules.published.filter((c) => CAPABILITY_RISK_TIER[c.id] === tier);
         return (
           <Card key={tier} label={TIER_LABEL[tier]}>
             <Between>
-              <TwoLine title={<Text kind="h3">{TIER_LABEL[tier]}</Text>} sub={POLICY_LABEL[RISK_TIER_DEFAULT_POLICY[tier]]} />
+              <TwoLine title={<Text kind="h3">{TIER_LABEL[tier]}</Text>} sub={TIER_POLICY[tier]} />
               <Badge tone={tier === "T4" ? "warn" : "ring"}>{tier}</Badge>
             </Between>
             <div>
-              {rows.map((c, i) => {
-                const row = settings[c] ?? { on: false, confirm: "none" as ConfirmMode };
-                const modes = tier === "T4" ? MODES.filter((m) => m !== "none") : MODES;
-                return (
-                  <ListRow key={c} line={i < rows.length - 1}>
-                    <Text kind="mono" clip>
-                      {c}
-                    </Text>
-                    <Grow />
-                    {tier === "T4" && <Lock {...ICON_SM} aria-label="Confirmed on every call" />}
-                    {row.on ? <PillMenu stable label={CONFIRM_LABEL[row.confirm]} value={row.confirm} options={modes.map((m) => ({ value: m, label: CONFIRM_LABEL[m] }))} onChange={(confirm) => set(c, { confirm: confirm as ConfirmMode })} /> : <Text kind="faint">Off</Text>}
-                    <Switch checked={row.on} label={`Allow ${c}`} onChange={(on) => set(c, { on })} />
-                  </ListRow>
-                );
-              })}
+              {rows.map((c, i) => (
+                <ListRow key={c.id} line={i < rows.length - 1}>
+                  <Text kind="mono" clip>
+                    {c.id}
+                  </Text>
+                  <Grow />
+                  {c.allowed ? <Badge tone="ok">Allowed</Badge> : <Text kind="faint">Off</Text>}
+                </ListRow>
+              ))}
             </div>
           </Card>
         );

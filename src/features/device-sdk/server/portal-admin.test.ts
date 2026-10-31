@@ -271,13 +271,20 @@ describe("🔒 internal orgs are never self-serve", () => {
     }).id as string;
   });
 
-  it("refuses invites, role changes, projects and key create/revoke with 409 INTERNAL_ORG", async () => {
+  it("lets its owner mint and revoke a named key, and never the unnamed live key Dopl delivers with", async () => {
+    const minted = await createProjectKey(OWNER, intProject, { env: "live", kind: "secret", name: "Backend" });
+    expect(rows("dev_api_keys").find((k) => k.id === minted.key.id)?.name).toBe("Backend");
+    await revokeProjectKey(OWNER, minted.key.id);
+    await expectHttp(revokeProjectKey(OWNER, intKey), 409, "KEY_LOCKED");
+  });
+
+  it("refuses invites, role changes and projects with 409 INTERNAL_ORG, and keys to all but its owner", async () => {
     for (const actor of [OWNER, ADMIN]) {
       await expectHttp(createInvite(actor, intOrg, { email: "x@example.com", role: "developer" }), 409, "INTERNAL_ORG");
       await expectHttp(createProject(actor, intOrg, { name: "x" }), 409, "INTERNAL_ORG");
-      await expectHttp(createProjectKey(actor, intProject, { env: "live", kind: "secret" }), 409, "INTERNAL_ORG");
-      await expectHttp(revokeProjectKey(actor, intKey), 409, "INTERNAL_ORG");
     }
+    await expectHttp(createProjectKey(ADMIN, intProject, { env: "live", kind: "secret" }), 409, "INTERNAL_ORG");
+    await expectHttp(revokeProjectKey(ADMIN, intKey), 409, "INTERNAL_ORG");
     await expectHttp(changeMemberRole(OWNER, intOrg, DEV, "admin"), 409, "INTERNAL_ORG");
     expect(rows("dev_org_invites")).toHaveLength(0);
     expect(rows("dev_projects").filter((p) => p.org_id === intOrg)).toHaveLength(1);

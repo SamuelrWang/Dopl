@@ -1,19 +1,20 @@
 "use client";
 
 /** Everything that interrupts the list: the create flow, the once-only reveal, rotate and revoke. */
-import { Activity, AlertTriangle, Check, Copy, Cpu, RefreshCw, Send, SlidersHorizontal, Users, Webhook, type LucideIcon } from "lucide-react";
+import { Activity, AlertTriangle, Check, Copy, Cpu, Link2, RefreshCw, Send, type LucideIcon } from "lucide-react";
 import { useState } from "react";
+import { KEY_SCOPES } from "@/features/device-sdk/portal/catalog";
+import type { KeyView } from "@/features/device-sdk/portal/view";
+import type { Environment as Env } from "@/features/device-sdk/types";
 import { Badge, Button, ICON_SM, Segmented, TwoLine } from "../_design/ui";
 import { Alert, ChipRow, CodeBlock, CodeDim, CodeStrong, ConfirmDialog, FlowDialog, Grow, Mark, ReviewWell, Row, SecretWell, Stack, Text, TextField, Tile, Tiles } from "../_design/ui-page";
-import type { Env } from "../_data/company";
-import { KEY_SCOPES, type ApiKeyRow } from "../_data/misc";
-import { fmt, since } from "../_components/ui";
+import { fmt, since } from "../_components/format";
 import { KIND_GLYPH } from "./keys-card";
 import { GRACE, inUse, type KeyKind } from "./keys-model";
 
 const ENV_LABEL: Record<Env, string> = { live: "Live", test: "Test" };
 const KIND_LABEL: Record<KeyKind, string> = { secret: "Secret", publishable: "Publishable" };
-const SCOPE_GLYPH: Record<string, LucideIcon> = { deliver: Send, "devices.act": SlidersHorizontal, "devices.read": Cpu, "users.read": Users, "events.read": Activity, "webhooks.write": Webhook };
+const SCOPE_GLYPH: Record<string, LucideIcon> = { "actions:write": Send, "devices:read": Cpu, connect: Link2, "analytics:read": Activity };
 
 const STEP_TYPE = "Choose a key type";
 const STEP_SCOPES = "Choose what it can do";
@@ -53,11 +54,11 @@ function Reveal({ kind, token }: { kind: KeyKind; token: string }) {
             Shown once. Store it now.
           </Alert>
           <CodeBlock title="Send a first delivery">
-            <CodeDim>{"# POST /v1/deliver\n"}</CodeDim>
-            {"curl -X POST https://api.usedopl.com/v1/deliver \\\n  -H "}
-            <CodeStrong>{`"Authorization: Bearer ${token.slice(0, token.lastIndexOf("_") + 5)}…"`}</CodeStrong>
-            {" \\\n  -d "}
-            <CodeStrong>{`'{"target": {"device_id": "dev_g2_77d0"},\n       "content": {"text": "Hello"}}'`}</CodeStrong>
+            <CodeDim>{"# POST /v1/users/{external_user_id}/deliver\n"}</CodeDim>
+            {"curl -X POST https://www.usedopl.com/api/v1/users/user_123/deliver \\\n  -H "}
+            <CodeStrong>{`"Authorization: Bearer ${token.slice(0, 12)}…"`}</CodeStrong>
+            {" \\\n  -H \"Content-Type: application/json\" \\\n  -d "}
+            <CodeStrong>{`'{"intent": "message", "urgency": "normal",\n       "idempotency_key": "first-delivery",\n       "target": "auto", "content": {"text": "Hello"}}'`}</CodeStrong>
           </CodeBlock>
         </>
       )}
@@ -75,20 +76,22 @@ const DoneFoot = ({ onDone }: { onDone: () => void }) => (
 );
 
 /** A rotation's new secret, on its own. */
-export function RevealDialog({ row, token, onDone }: { row: ApiKeyRow; token: string; onDone: () => void }) {
+export function RevealDialog({ row, env, token, onDone }: { row: KeyView; env: Env; token: string; onDone: () => void }) {
   return (
-    <FlowDialog label="Copy your new secret" eyebrow={`${row.name}, ${ENV_LABEL[row.env]}`} title="Copy your new secret" onDismiss={null} foot={<DoneFoot onDone={onDone} />}>
+    <FlowDialog label="Copy your new secret" eyebrow={`${row.name}, ${ENV_LABEL[env]}`} title="Copy your new secret" onDismiss={null} foot={<DoneFoot onDone={onDone} />}>
       <Reveal kind={row.kind} token={token} />
     </FlowDialog>
   );
 }
 
-export function CreateKeyFlow({ env, initialKind, onCreate, onClose }: { env: Env; initialKind: KeyKind | null; onCreate: (input: { name: string; kind: KeyKind; scopes: string[] }) => string; onClose: () => void }) {
+export function CreateKeyFlow({ env, initialKind, onCreate, onClose }: { env: Env; initialKind: KeyKind | null; onCreate: (input: { name: string; kind: KeyKind; scopes: string[] }) => Promise<string>; onClose: () => void }) {
   const [step, setStep] = useState(initialKind ? 1 : 0);
   const [kind, setKind] = useState<KeyKind | null>(initialKind);
-  const [scopes, setScopes] = useState<string[]>(["deliver"]);
+  const [scopes, setScopes] = useState<string[]>(["actions:write"]);
   const [name, setName] = useState("");
   const [token, setToken] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
 
   if (token && kind) {
     return (
@@ -102,9 +105,17 @@ export function CreateKeyFlow({ env, initialKind, onCreate, onClose }: { env: En
   const title = steps[step];
   const last = step === steps.length - 1;
   const canContinue = title === STEP_TYPE ? kind !== null : title === STEP_SCOPES ? scopes.length > 0 : name.trim() !== "";
-  const create = () => {
+  const create = async () => {
     if (!kind || !canContinue) return;
-    setToken(onCreate({ name: name.trim(), kind, scopes }));
+    setBusy(true);
+    setProblem(null);
+    try {
+      setToken(await onCreate({ name: name.trim(), kind, scopes }));
+    } catch (e) {
+      setProblem(e instanceof Error && e.message ? e.message : "Could not create this key.");
+    } finally {
+      setBusy(false);
+    }
   };
   const typeTile = (value: KeyKind, sub: string) => (
     <Tile selected={kind === value} onClick={() => setKind(value)}>
@@ -128,7 +139,7 @@ export function CreateKeyFlow({ env, initialKind, onCreate, onClose }: { env: En
             </Button>
           )}
           <Grow />
-          <Button variant="ink" disabled={!canContinue} onClick={last ? create : () => setStep(step + 1)}>
+          <Button variant="ink" loading={busy} disabled={!canContinue} onClick={last ? () => void create() : () => setStep(step + 1)}>
             {last ? "Create key" : "Continue"}
           </Button>
         </>
@@ -157,7 +168,7 @@ export function CreateKeyFlow({ env, initialKind, onCreate, onClose }: { env: En
       )}
       {title === STEP_NAME && (
         <Stack>
-          <TextField autoFocus label="Key name" placeholder="Production backend" value={name} onChange={setName} onEnter={create} />
+          <TextField autoFocus label="Key name" placeholder="Production backend" value={name} onChange={setName} onEnter={() => void create()} />
           <ReviewWell
             items={[
               ["Environment", ENV_LABEL[env]],
@@ -171,15 +182,20 @@ export function CreateKeyFlow({ env, initialKind, onCreate, onClose }: { env: En
               </Badge>
             ))}
           </ChipRow>
+          {problem && (
+            <Alert tone="error" icon={AlertTriangle}>
+              {problem}
+            </Alert>
+          )}
         </Stack>
       )}
     </FlowDialog>
   );
 }
 
-const usage = (row: ApiKeyRow) => `${row.prefix}, ${row.lastUsedAt ? `used ${since(row.lastUsedAt).toLowerCase()}` : "never used"}, ${fmt(row.calls7d)} calls in 7d`;
+const usage = (row: KeyView) => `${row.prefix}, ${row.lastUsedAt ? `used ${since(row.lastUsedAt).toLowerCase()}` : "never used"}, ${fmt(row.calls7d)} calls in 7d`;
 
-export function RevokeDialog({ row, onCancel, onConfirm }: { row: ApiKeyRow; onCancel: () => void; onConfirm: () => void }) {
+export function RevokeDialog({ row, onCancel, onConfirm }: { row: KeyView; onCancel: () => void; onConfirm: () => void }) {
   return (
     <ConfirmDialog
       label={`Revoke ${row.name}`}
@@ -202,7 +218,7 @@ export function RevokeDialog({ row, onCancel, onConfirm }: { row: ApiKeyRow; onC
   );
 }
 
-export function RotateDialog({ row, onCancel, onConfirm }: { row: ApiKeyRow; onCancel: () => void; onConfirm: (graceHours: number) => void }) {
+export function RotateDialog({ row, onCancel, onConfirm }: { row: KeyView; onCancel: () => void; onConfirm: (graceHours: number) => void }) {
   const [grace, setGrace] = useState(GRACE.length - 1);
   return (
     <ConfirmDialog

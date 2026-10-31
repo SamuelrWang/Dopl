@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { cn } from "@/shared/lib/utils";
-import { SMALL_PRIMARY_BUTTON } from "@/shared/ui/small-action-button";
-import { Card, ov } from "../../_components/ui";
+import { useState } from "react";
+import { Button, Card } from "../../(portal)/_design/ui";
+import { designFont } from "../../(portal)/_design/font";
+import { Alert, Page, PageHeader, Stack, Text } from "../../(portal)/_design/ui-page";
 import { errorText, portalCall } from "../../_lib/client-api";
 
 export type InviteState =
@@ -24,17 +24,7 @@ const DEAD: Record<"missing" | "accepted" | "revoked" | "expired", string> = {
   expired: "This invite has expired. Ask for a new one.",
 };
 
-export function AcceptInvite({
-  token,
-  orgName,
-  role,
-  state,
-}: {
-  token: string;
-  orgName: string | null;
-  role: string | null;
-  state: InviteState;
-}) {
+export function AcceptInvite({ token, orgName, role, state }: { token: string; orgName: string | null; role: string | null; state: InviteState }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,8 +34,8 @@ export function AcceptInvite({
     setBusy(true);
     setError(null);
     try {
-      const out = await portalCall<{ orgId: string }>("/api/developers/invites/accept", "POST", { token });
-      router.push(`/developers/classic/org?org=${encodeURIComponent(out.orgId)}`);
+      await portalCall("/api/developers/invites/accept", "POST", { token });
+      router.push("/developers/team");
       router.refresh();
     } catch (e) {
       setError(errorText(e, "Could not accept the invite"));
@@ -54,50 +44,43 @@ export function AcceptInvite({
   };
 
   return (
-    <div className="w-full max-w-md">
-      <Card title={orgName ? `Join ${orgName}` : "Developer invite"}>
-        <div className="flex flex-col gap-3">
-          {state.kind === "open" && (
-            <>
-              <p className="text-body text-text-secondary">
-                You are invited to {orgName} as {role}.
-              </p>
-              {error && (
-                <p role="alert" className={ov.note} data-tone="over">
-                  {error}
-                </p>
-              )}
-              <div>
-                <button
-                  type="button"
-                  className={cn(SMALL_PRIMARY_BUTTON, busy && "opacity-60")}
-                  disabled={busy}
-                  onClick={() => void accept()}
-                >
-                  {busy ? "Joining" : "Accept invite"}
-                </button>
-              </div>
-            </>
-          )}
-          {state.kind === "joined" && (
-            <>
-              <p className="text-body text-text-secondary">You are already in {orgName}.</p>
-              <Link href={`/developers/classic/org?org=${encodeURIComponent(state.orgId)}`} className={SMALL_PRIMARY_BUTTON}>
-                Open the org
-              </Link>
-            </>
-          )}
-          {state.kind === "mismatch" && (
-            <p className="text-body text-text-secondary">
-              This invite is for {state.invited}. You are signed in as {state.signedIn}. Sign in with the invited email
-              to accept it.
-            </p>
-          )}
-          {(state.kind === "missing" || state.kind === "accepted" || state.kind === "revoked" || state.kind === "expired") && (
-            <p className="text-body text-text-secondary">{DEAD[state.kind]}</p>
-          )}
-        </div>
-      </Card>
+    <div className={designFont.className} style={{ display: "contents" }}>
+      <Page>
+        <PageHeader title={orgName ? `Join ${orgName}` : "Developer invite"} />
+        <Card>
+          <Stack>
+            {state.kind === "open" && (
+              <>
+                <Text>
+                  You are invited to {orgName} as {role}.
+                </Text>
+                {error && (
+                  <Alert tone="error" icon={AlertTriangle}>
+                    {error}
+                  </Alert>
+                )}
+                <Button variant="ink" loading={busy} onClick={() => void accept()}>
+                  Accept invite
+                </Button>
+              </>
+            )}
+            {state.kind === "joined" && (
+              <>
+                <Text>You are already in {orgName}.</Text>
+                <Button variant="ink" href="/developers/team">
+                  Open the org
+                </Button>
+              </>
+            )}
+            {state.kind === "mismatch" && (
+              <Text>
+                This invite is for {state.invited}. You are signed in as {state.signedIn}. Sign in with the invited email to accept it.
+              </Text>
+            )}
+            {(state.kind === "missing" || state.kind === "accepted" || state.kind === "revoked" || state.kind === "expired") && <Text>{DEAD[state.kind]}</Text>}
+          </Stack>
+        </Card>
+      </Page>
     </div>
   );
 }

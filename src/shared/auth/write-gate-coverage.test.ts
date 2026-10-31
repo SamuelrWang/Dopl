@@ -82,6 +82,10 @@ const EXEMPT: Record<string, string> = {
     "The /api/mcp transport under a URL-embedded bearer (desktop MCP clients cannot send headers). Delegates to mcp/route.ts, which authenticates via authenticateMcpRequest — same exemption rationale as mcp/route.ts.",
   "mcp/glasses/route.ts":
     "Glasses MCP transport (authenticateMcpRequest). JSON-RPC over POST like mcp/route.ts; its write tools are scope-gated per call on an explicit dopl.write (features/glasses/core/mcp/tools.ts › registerGlassesTools).",
+  "device-bridge/poll/route.ts":
+    "Local Cast bridge — per-device token (features/device-sdk/server/bridge/port.ts › bridgePort), not a user OAuth token; no scope to gate.",
+  "device-bridge/ack/route.ts":
+    "Local Cast bridge — per-device token, same as device-bridge/poll; moves only that device's own queued message.",
   "glasses/device/answer/route.ts":
     "Glasses device API — authenticated by the per-device token (features/glasses/core/devices/service.ts › deviceFromBearer), not a user OAuth token; no scope to gate.",
   "glasses/device/dismiss/route.ts":
@@ -263,6 +267,10 @@ describe("H-3 write-gate coverage", () => {
         "developers/orgs/[orgId]/members/[memberId]/route.ts",
         "developers/invites/[inviteId]/route.ts",
         "developers/invites/accept/route.ts",
+        // Webhook endpoints: POST answers a signing secret once; PATCH stops deliveries; replay re-sends.
+        "developers/projects/[projectId]/webhooks/route.ts",
+        "developers/webhooks/[endpointId]/route.ts",
+        "developers/webhook-deliveries/[deliveryId]/route.ts",
         // Cancel writes on our own route (no Stripe-hosted click-through).
         "billing/cancel/route.ts",
         // POST switches a live personal subscription Pro ⇄ Max in place

@@ -5,11 +5,11 @@ import { ChevronRight } from "lucide-react";
 import { Badge, Card, DataCell, DataRow, DataTable, ICON, ICON_SM, Initials, MeterFigure, StateDot, TwoLine, initialsOf, type Column, type Tone } from "../_design/ui";
 import { FillCard, ScrollArea, useFitRows } from "../_design/ui-output";
 import { Pager, PlainButton, TableFoot, Text } from "../_design/ui-page";
-import { modelById } from "../_data/catalog";
-import { ownedDevice, userDeliveries, userRate, type DeviceState, type OwnedDevice, type PortalUser } from "../_data/users";
+import { modelById } from "@/features/device-sdk/portal/catalog";
+import { categoryIdOf, userDeliveries, userRate, type DeviceState, type OwnedDevice, type PortalUser } from "@/features/device-sdk/portal/view";
 import { CategoryGlyph } from "../_components/category-glyph";
-import { since } from "../_components/ui";
-import { FIRST_DIR, STATUS_LABELS, categoryIdOf, devicesInOrder, statusOf, type Sort, type SortKey, type Status } from "./users-model";
+import { since } from "../_components/format";
+import { FIRST_DIR, STATUS_LABELS, activeDevice, devicesInOrder, statusOf, type Sort, type SortKey, type Status } from "./users-model";
 
 export const PAGE_SIZE = 10;
 
@@ -43,13 +43,13 @@ const COLUMNS: Column[] = [
   { key: "devices", label: "Devices", width: "26%", sortable: true },
   { key: "active", label: "Active device", width: "15%", sortable: true },
   { key: "delivery", label: "Last delivery", width: "12%", sortable: true },
-  { key: "success", label: "Success", width: "11%", sortable: true },
+  { key: "success", label: "Delivered", width: "11%", sortable: true },
   { key: "status", label: "Status", width: "11%", sortable: true },
   { key: "open", srLabel: "Open", width: "calc(75 * var(--u))" },
 ];
 
 function UserRow({ user, open, onOpen }: { user: PortalUser; open: boolean; onOpen: () => void }) {
-  const active = user.activeDeviceId ? ownedDevice(user.activeDeviceId) : null;
+  const active = activeDevice(user);
   const delivered = userDeliveries(user) > 0;
   const rate = userRate(user);
   const devices = devicesInOrder(user);
@@ -57,7 +57,7 @@ function UserRow({ user, open, onOpen }: { user: PortalUser; open: boolean; onOp
     <DataRow selected={open} onClick={onOpen}>
       <DataCell>
         <Initials text={initialsOf(user.name)} />
-        <TwoLine title={<PlainButton haspopup="dialog">{user.name}</PlainButton>} sub={user.id} />
+        <TwoLine title={<PlainButton haspopup="dialog">{user.name}</PlainButton>} sub={user.named ? user.id : undefined} />
       </DataCell>
       <DataCell>
         {devices.slice(0, 2).map((d) => (

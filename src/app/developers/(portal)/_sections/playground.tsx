@@ -1,346 +1,140 @@
 "use client";
 
 /**
- * Playground: pick a device and what it should do, see what happens on it. The output is drawn from
- * the capability, not the device, so anything with no screen still shows a result. The simulator and
- * the real device are the same call; here both are computed locally and nothing is sent.
+ * Playground: one real `/v1` call with a test key, and what came back. The call runs on the server, against the
+ * project's test data only; the key is held in memory for this call and never stored.
  */
-import { Check, CircleAlert, Copy, Play, Radio, RotateCcw } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { CapabilityId } from "@dopl/device-contracts";
-import { Badge, Button, Chip, ICON, PillMenu, Segmented, TwoLine, type Tone } from "../_design/ui";
-import { Alert, Between, CodeBlock, ConfirmDialog, FilterRow, Grow, ListRow, Mark, Page, PageHeader, Stack, Text, TextArea, TextField, WarnNote } from "../_design/ui-page";
-import { CaptureOutput, ChangeOutput, CodeEditor, DetailsPane, FillBody, FillCard, HapticOutput, LensScreen, PanelScreen, ReadOutput, SpeakerOutput, SplitLayout, Stage } from "../_design/ui-output";
-import { G2, G2Screen, g2Wrap } from "../_design/g2-screen";
-import { CATEGORIES, ALL_MODELS, categoryOf, modelById, type CategoryId, type Model, type ModelId } from "../_data/catalog";
-import { wrapLines } from "../_data/receives";
-import { usePortal, useUsers } from "../_components/portal-store";
-import { HAPTICS, answersOf, changeOf, choicesOf, defaultText, eventsOf, familyOf, labelOf, needsConfirm, needsText, readRows, requestOf, responseOf, sendable, snippetOf, textLabel, type Phase } from "./playground-model";
-import { runSnippet } from "./playground-run";
+import { AlertTriangle, FlaskConical, Play } from "lucide-react";
+import { useState } from "react";
+import { PLAYGROUND_OPS, playgroundOp, type PlaygroundOp } from "@/features/device-sdk/portal/playground-ops";
+import type { PlaygroundRun } from "@/features/device-sdk/portal/playground-types";
+import { Badge, Button, ICON, PillMenu, TwoLine } from "../_design/ui";
+import { CodeEditor, FillBody, FillCard, LabeledField, SplitLayout } from "../_design/ui-output";
+import { Alert, Between, CodeBlock, EmptyState, Page, PageHeader, Stack, Text, TextField } from "../_design/ui-page";
+import { usePortal } from "../_components/portal-store";
 
-const PHASE: Record<Phase, [string, Tone]> = { idle: ["Not sent", "neutral"], queued: ["Queued", "neutral"], delivered: ["Sent", "neutral"], seen: ["Seen by device", "ok"], answered: ["Answered", "ok"], refused: ["Refused", "error"] };
-const TABS = ["Request", "Response", "Events"];
+const OPTIONS = PLAYGROUND_OPS.map((op) => ({ value: op.id, label: op.label }));
+const pretty = (v: unknown) => JSON.stringify(v, null, 2);
+const pathOf = (op: PlaygroundOp) => Object.fromEntries(op.pathParams.map((p) => [p.name, p.example]));
+const bodyOf = (op: PlaygroundOp) => (op.body === null ? "" : pretty(op.body));
 
-/** What is on the device now, from the form or from a run. */
-interface Shown {
-  capability: CapabilityId;
-  text: string;
-  lines?: string[];
-  choice: string;
-  answers: string[];
-}
-const TARGETS = ["Simulator", "Real device"];
+export function PlaygroundSection() {
+  const { project, test, setEnv } = usePortal();
+  const [key, setKey] = useState("");
+  const [opId, setOpId] = useState(PLAYGROUND_OPS[0].id);
+  const op = playgroundOp(opId) ?? PLAYGROUND_OPS[0];
+  const [path, setPath] = useState<Record<string, string>>(pathOf(op));
+  const [query, setQuery] = useState<Record<string, string>>({});
+  const [body, setBody] = useState(bodyOf(op));
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [run, setRun] = useState<PlaygroundRun | null>(null);
 
-function Output({ model, shown, phase, error, answer, onAnswer }: { model: Model; shown: Shown; phase: Phase; error: string | null; answer: string | null; onAnswer: (a: string) => void }) {
-  const { capability, text, choice, answers } = shown;
-  const family = familyOf(capability);
-  if (phase === "idle" || phase === "queued") {
-    return (
-      <Stage>
-        <Mark icon={Radio} />
-        <TwoLine title={phase === "queued" ? "Sending" : `Simulated ${model.name}`} sub={labelOf(capability)} />
-      </Stage>
-    );
-  }
-  if (phase === "refused") {
-    return (
-      <Stage>
-        <Alert tone="error" icon={CircleAlert}>
-          {error ?? "Device offline. Nothing was delivered."}
-        </Alert>
-      </Stage>
-    );
-  }
-  if (family === "speak") return <Stage><SpeakerOutput text={text} /></Stage>;
-  if (family === "haptic") return <Stage><HapticOutput pattern={HAPTICS[choice] ?? HAPTICS.Tap} /></Stage>;
-  if (family === "act") return <Stage><ChangeOutput {...changeOf(capability, choice, text)} /></Stage>;
-  if (family === "read") return <Stage><ReadOutput rows={readRows(capability, model)} /></Stage>;
-  if (family === "capture") return <Stage><CaptureOutput /></Stage>;
-
-  if (model.id === "g2") {
-    const choices = family === "ask" && capability !== "ask.text" ? answers.slice(0, model.floor.maxOptions) : [];
-    const body = shown.lines ?? g2Wrap(text);
-    const room = G2.maxLines - choices.length;
-    const picked = answer ? [`> ${answer}`] : choices.map((a, i) => `${i === 0 ? ">" : " "} ${a}`);
-    return (
-      <Stage>
-        <G2Screen lines={[...body.slice(0, room), ...picked]} />
-        {body.length > room && (
-          <WarnNote>
-            <CircleAlert {...ICON} aria-hidden="true" />
-            {body.length - room} lines cut, this display fits {G2.maxLines}
-          </WarnNote>
-        )}
-        {family === "ask" && !answer && (
-          <FilterRow>
-            {capability === "ask.text" ? (
-              <Button size="sm" onClick={() => onAnswer("Text reply")}>
-                Reply as user
-              </Button>
-            ) : (
-              choices.map((a) => (
-                <Button key={a} size="sm" onClick={() => onAnswer(a)}>
-                  {a}
-                </Button>
-              ))
-            )}
-          </FilterRow>
-        )}
-      </Stage>
-    );
-  }
-  const all = shown.lines ?? wrapLines(text, model.floor.lineWidth);
-  const lines = model.surface === "lens" ? all.slice(0, model.floor.maxLines) : all;
-  const cut = all.length - lines.length;
-  const replies = family === "ask" && !answer && capability !== "ask.text" ? answers.slice(0, model.floor.maxOptions).map((a) => <Button key={a} size="sm" onClick={() => onAnswer(a)}>{a}</Button>) : null;
-  const reply = answer ? <Badge tone="ok">{answer}</Badge> : capability === "ask.text" ? <Button size="sm" onClick={() => onAnswer("Text reply")}>Reply as user</Button> : replies;
-  return (
-    <Stage>
-      {model.surface === "lens" ? <LensScreen lines={lines}>{reply}</LensScreen> : <PanelScreen app="Larkfield Assist" lines={lines}>{reply}</PanelScreen>}
-      {cut > 0 && (
-        <WarnNote>
-          <CircleAlert {...ICON} aria-hidden="true" />
-          {cut} lines cut, this device shows {model.floor.maxLines}
-        </WarnNote>
-      )}
-    </Stage>
-  );
-}
-
-export function PlaygroundSection({ initialModel }: { initialModel?: string }) {
-  const { state } = usePortal();
-  const users = useUsers();
-  const [modelId, setModelId] = useState<ModelId>(ALL_MODELS.find((m) => m.id === initialModel)?.id ?? "g2");
-  const model = modelById(modelId);
-  const capabilities = sendable(model);
-  const [capability, setCapability] = useState(capabilities.find((c) => c === "present.display") ?? capabilities[0]);
-  const [texts, setTexts] = useState<Record<string, string>>({});
-  const [options, setOptions] = useState("Yes, No");
-  const [choices, setChoices] = useState<Record<string, string>>({});
-  const [target, setTarget] = useState(0);
-  const [deviceId, setDeviceId] = useState<string | null>(null);
-  const [edited, setEdited] = useState<string | null>(null);
-  const [ran, setRan] = useState<Shown | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [logs, setLogs] = useState<string[]>([]);
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [answer, setAnswer] = useState<string | null>(null);
-  const [tab, setTab] = useState(0);
-  const [copied, setCopied] = useState(false);
-  const [confirming, setConfirming] = useState<Shown | null>(null);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-
-  const clear = () => {
-    timers.current.forEach(clearTimeout);
-    timers.current = [];
-    setPhase("idle");
-    setAnswer(null);
-    setRan(null);
-    setError(null);
-    setLogs([]);
+  const pick = (id: string) => {
+    const next = playgroundOp(id);
+    if (!next) return;
+    setOpId(id);
+    setPath(pathOf(next));
+    setQuery({});
+    setBody(bodyOf(next));
+    setProblem(null);
   };
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
-
-  const owned = useMemo(() => users.flatMap((u) => u.devices).filter((d) => d.modelId === modelId && !d.simulated), [users, modelId]);
-  const device = owned.find((d) => d.id === deviceId) ?? owned[0] ?? null;
-  const real = target === 1;
-  const text = texts[capability] ?? defaultText(capability);
-  const pickable = choicesOf(capability);
-  const choice = choices[capability] ?? pickable[0] ?? "";
-  const answers = answersOf(capability, options);
-  const callDevice = real && device ? device.id : `dev_sim_${modelId}`;
-  const category = categoryOf(modelId);
-  const inCategory = ALL_MODELS.filter((m) => categoryOf(m.id).id === category.id);
-  const generated = snippetOf(capability, callDevice, text, choice, answers);
-  const code = edited ?? generated;
-  const shown: Shown = ran ?? { capability, text, choice, answers };
-
-  const pickModel = (id: ModelId) => {
-    const list = sendable(modelById(id));
-    setModelId(id);
-    setCapability(list.includes(capability) ? capability : (list.find((c) => c === "present.display") ?? list[0]));
-    setDeviceId(null);
-    setTarget(0);
-    setEdited(null);
-    clear();
-  };
-  const play = () => {
-    setPhase("queued");
-    timers.current.push(setTimeout(() => setPhase("delivered"), 300), setTimeout(() => setPhase((p) => (p === "delivered" ? "seen" : p)), 800));
-  };
-  const runCode = async () => {
-    clear();
-    const result = await runSnippet(code);
-    setLogs(result.logs);
-    const refuse = (message: string) => {
-      setError(message);
-      setPhase("refused");
-    };
-    if (result.error) return refuse(result.error);
-    const last = result.calls.at(-1);
-    if (!last) return refuse("The code made no call to dopl");
-    if (!capabilities.includes(last.capability as CapabilityId)) return refuse(`${model.name} does not support ${last.capability}`);
-    const c = last.capability as CapabilityId;
-    const next: Shown = { capability: c, text: last.text ?? last.lines?.join(" ") ?? "", lines: last.lines, choice: last.value ?? choicesOf(c)[0] ?? "", answers: last.options ?? answersOf(c, options) };
-    if (real && device?.state !== "online") return setPhase("refused");
-    if (real && needsConfirm(c)) return setConfirming(next);
-    setRan(next);
-    play();
-  };
-  const canRun = code.trim() !== "" && (!real || device !== null);
-  const tag = PHASE[phase];
-  const events = eventsOf(phase, answer);
-
-  return (
-    <Page
-      fit
-      overlays={
-        confirming && (
-          <ConfirmDialog
-            label={`Send ${labelOf(confirming.capability)}`}
-            mark={<Mark icon={CircleAlert} tone="danger" />}
-            title={`${labelOf(confirming.capability)} on a real device?`}
-            sub={device?.name ?? model.name}
-            onCancel={() => setConfirming(null)}
-            action={
-              <Button full variant="dangerFlat" onClick={() => { setRan(confirming); setConfirming(null); play(); }}>
-                Send
-              </Button>
-            }
-          />
-        )
+  const send = async () => {
+    setProblem(null);
+    let parsed: unknown;
+    if (op.body !== null) {
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        setProblem("The body is not valid JSON.");
+        return;
       }
-    >
-      <PageHeader title="Playground" test={state.env === "test"} />
+    }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/developers/playground", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ project_id: project.id, key: key.trim(), operation: op.id, path_params: path, query, body: parsed }),
+      });
+      const data = (await res.json().catch(() => null)) as (Partial<PlaygroundRun> & { error?: { message?: string } }) | null;
+      if (!res.ok || !data?.response) setProblem(data?.error?.message ?? `The playground answered ${res.status}.`);
+      else setRun(data as PlaygroundRun);
+    } catch {
+      setProblem("Could not reach the playground.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!test) {
+    return (
+      <Page fit>
+        <PageHeader title="Playground" />
+        <EmptyState icon={FlaskConical} title="The Playground uses test data only" action={<Button onClick={() => setEnv("test")}>Switch to Test</Button>} />
+      </Page>
+    );
+  }
+
+  return (
+    <Page fit>
+      <PageHeader title="Playground" test />
       <SplitLayout
         left={
           <FillCard>
-            <FilterRow>
-                <PillMenu
-                  stable
-                  label={category.name}
-                  value={category.id}
-                  options={CATEGORIES.map((c) => ({ value: c.id, label: c.name }))}
-                  onChange={(id) => {
-                    const first = ALL_MODELS.find((m) => categoryOf(m.id).id === (id as CategoryId));
-                    if (first) pickModel(first.id);
-                  }}
-                />
-                <PillMenu stable label={model.name} value={modelId} options={inCategory.map((m) => ({ value: m.id, label: m.name }))} onChange={(id) => pickModel(id as ModelId)} />
-            </FilterRow>
+            <Between>
+              <TwoLine title={<Text kind="h3">Request</Text>} sub={`${op.method} /v1${op.path}`} />
+              <PillMenu stable label={op.label} value={op.id} options={OPTIONS} onChange={pick} />
+            </Between>
             <FillBody>
-                  <Stack>
-                    <Text kind="strong">Do</Text>
-                    <FilterRow>
-                      {capabilities.map((c) => (
-                        <Chip key={c} on={capability === c} pressed={capability === c} onClick={() => { setCapability(c); setEdited(null); clear(); }}>
-                          {labelOf(c)}
-                        </Chip>
-                      ))}
-                    </FilterRow>
-                  </Stack>
-                  {needsText(capability) && (
-                    <Stack>
-                      <Text kind="strong">{textLabel(capability)}</Text>
-                      {capability === "act.navigate" ? (
-                        <TextField label={textLabel(capability)} value={text} onChange={(v) => setTexts((t) => ({ ...t, [capability]: v }))} />
-                      ) : (
-                        <TextArea label={textLabel(capability)} value={text} onChange={(v) => setTexts((t) => ({ ...t, [capability]: v }))} />
-                      )}
-                    </Stack>
-                  )}
-                  {capability === "ask.choice" && (
-                    <Stack>
-                      <Text kind="strong">Answers</Text>
-                      <TextField label="Answers" value={options} onChange={setOptions} />
-                    </Stack>
-                  )}
-                  {pickable.length > 0 && (
-                    <Stack>
-                      <Text kind="strong">Value</Text>
-                      <FilterRow>
-                        {pickable.map((p) => (
-                          <Chip key={p} on={choice === p} pressed={choice === p} onClick={() => setChoices((c) => ({ ...c, [capability]: p }))}>
-                            {p}
-                          </Chip>
-                        ))}
-                      </FilterRow>
-                    </Stack>
-                  )}
-                  <CodeEditor label="Code" value={code} onChange={setEdited} />
+              <Stack>
+                <LabeledField label="Test secret key">
+                  <TextField type="password" label="Test secret key" placeholder="sk_test_" value={key} onChange={setKey} />
+                </LabeledField>
+                {op.pathParams.map((p) => (
+                  <LabeledField key={p.name} label={p.name}>
+                    <TextField label={p.name} value={path[p.name] ?? ""} onChange={(v) => setPath((all) => ({ ...all, [p.name]: v }))} />
+                  </LabeledField>
+                ))}
+                {op.query.map((name) => (
+                  <LabeledField key={name} label={name}>
+                    <TextField label={name} value={query[name] ?? ""} onChange={(v) => setQuery((all) => ({ ...all, [name]: v }))} />
+                  </LabeledField>
+                ))}
+                {op.body !== null && (
+                  <LabeledField label="Body">
+                    <CodeEditor label="Body" value={body} onChange={setBody} />
+                  </LabeledField>
+                )}
+                {problem && (
+                  <Alert tone="error" icon={AlertTriangle}>
+                    {problem}
+                  </Alert>
+                )}
+              </Stack>
             </FillBody>
-            <FilterRow>
-              {edited !== null && (
-                <Button variant="ghost" onClick={() => setEdited(null)}>
-                  <RotateCcw {...ICON} aria-hidden="true" />
-                  Reset
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  void navigator.clipboard?.writeText(code);
-                  setCopied(true);
-                  timers.current.push(setTimeout(() => setCopied(false), 1500));
-                }}
-              >
-                {copied ? <Check {...ICON} aria-hidden="true" /> : <Copy {...ICON} aria-hidden="true" />}
-                {copied ? "Copied" : "Copy"}
-              </Button>
-              <Grow />
-              <Button variant="ink" disabled={!canRun} onClick={() => void runCode()}>
-                <Play {...ICON} aria-hidden="true" />
-                Run
-              </Button>
-            </FilterRow>
+            <Button block variant="ink" loading={busy} disabled={key.trim() === ""} onClick={() => void send()}>
+              <Play {...ICON} aria-hidden="true" />
+              Send
+            </Button>
           </FillCard>
         }
         right={
           <FillCard>
             <Between>
-              <FilterRow>
-                <Segmented label="Send to" options={TARGETS} value={target} onChange={(i) => { setTarget(i); setEdited(null); clear(); }} />
-                {real && owned.length === 0 && <Text kind="muted">No paired {model.name}</Text>}
-                {real && owned.length > 0 && <PillMenu stable label={device?.name ?? "Device"} value={device?.id ?? ""} options={owned.slice(0, 12).map((d) => ({ value: d.id, label: d.name }))} onChange={(id) => { setDeviceId(id); setEdited(null); clear(); }} />}
-                {real && device && <Badge tone={device.state === "online" ? "ok" : "warn"}>{device.state === "online" ? "Online" : "Offline"}</Badge>}
-              </FilterRow>
-              <Badge tone={tag[1]} dot={phase === "seen" || phase === "answered"}>
-                {tag[0]}
-              </Badge>
+              <Text kind="h3">Response</Text>
+              {run && <Badge tone={run.response.status < 400 ? "ok" : "error"}>{run.response.status}</Badge>}
             </Between>
-            <Output model={model} shown={shown} phase={phase} error={error} answer={answer} onAnswer={(a) => { setAnswer(a); setPhase("answered"); }} />
-            <Segmented label="Details" options={TABS} value={tab} onChange={setTab} />
-            <DetailsPane>
-              {tab === 0 && <CodeBlock title="HTTP">{requestOf(shown.capability, callDevice, shown.text, shown.choice, shown.answers, shown.lines)}</CodeBlock>}
-              {tab === 1 && (phase === "idle" ? <Text kind="muted">Nothing sent yet</Text> : <CodeBlock title="Response">{responseOf(shown.capability, callDevice, phase, model)}</CodeBlock>)}
-              {tab === 2 &&
-                (events.length === 0 && logs.length === 0 ? (
-                  <Text kind="muted">Nothing sent yet</Text>
-                ) : (
-                  <div>
-                    {events.map(([name, detail], i) => (
-                      <ListRow key={name} line={i < events.length - 1 || logs.length > 0}>
-                        <Text kind="mono" clip>
-                          {name}
-                        </Text>
-                        <Grow />
-                        <Text kind="smallMuted" nowrap>
-                          {detail}
-                        </Text>
-                      </ListRow>
-                    ))}
-                    {logs.map((log, i) => (
-                      <ListRow key={i} line={i < logs.length - 1}>
-                        <Text kind="mono" clip>
-                          {log}
-                        </Text>
-                        <Grow />
-                        <Text kind="smallMuted">console</Text>
-                      </ListRow>
-                    ))}
-                  </div>
-                ))}
-            </DetailsPane>
+            <FillBody>
+              {run ? (
+                <Stack>
+                  <CodeBlock title={`${run.request.method} ${run.request.path}, ${run.response.durationMs} ms`}>{pretty(run.response.body)}</CodeBlock>
+                  {run.event != null && <CodeBlock title="Log row">{pretty(run.event)}</CodeBlock>}
+                </Stack>
+              ) : (
+                <Text kind="faint">Nothing sent yet</Text>
+              )}
+            </FillBody>
           </FillCard>
         }
       />

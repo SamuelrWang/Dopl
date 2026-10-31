@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { HttpError } from "@/shared/lib/http-error";
-import type { ApiKeyKind, Environment } from "../types";
+import { API_KEY_SCOPES, type ApiKeyKind, type ApiKeyScope, type Environment } from "../types";
 import {
   canActOn,
   canAssignRole,
@@ -10,7 +10,7 @@ import {
   type PortalProject,
   type PortalRole,
 } from "../portal/scope";
-import { mintApiKey, revokeApiKey, type MintedKey } from "./keys";
+import { lockedKeyIds, mintApiKey, revokeApiKey, type MintedKey } from "./keys";
 import { getKeyProject, listPortalOrgs, listPortalProjects } from "./portal";
 
 /**
@@ -57,10 +57,30 @@ export const notFound = (what: string) => new HttpError(404, "NOT_FOUND", `${wha
 /**
  * ⚠ AN INTERNAL ORG IS NEVER SELF-SERVE. "Dopl App" (`dev_orgs.internal`) logs every Dopl user's
  * device traffic keyed by their user id, so who can read it, and which keys and projects it holds,
- * is managed by hand. No invite, role change, new project, or key create/revoke goes through here.
+ * is managed by hand. No invite, role change or new project goes through here. Keys: its owner only.
  */
 export function refuseInternal(internal: boolean): void {
   if (internal) throw new HttpError(409, "INTERNAL_ORG", "This is an internal org. It is managed by hand.");
+}
+
+/** Ruled 2026-10-31 (PLAN section 8, 14): an internal org's owner may manage its keys. Members, invites and projects stay by hand. */
+function refuseInternalKeyEdit(project: PortalProject): void {
+  if (project.org.internal && project.role !== "owner") refuseInternal(true);
+}
+
+/** `DOPL_APP_SDK_KEY` is how the app reaches devices: a button must not stop that. */
+export async function refuseLockedKey(project: Pick<PortalProject, "id" | "org">, keyId: string): Promise<void> {
+  if ((await lockedKeyIds(project.id, project.org.internal)).includes(keyId)) {
+    throw new HttpError(409, "KEY_LOCKED", "Dopl delivers with this key. Change it in the environment, not here.");
+  }
+}
+
+function parseScopes(value: unknown): ApiKeyScope[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length === 0 || !value.every((s) => (API_KEY_SCOPES as readonly unknown[]).includes(s))) {
+    throw new HttpError(400, "BAD_REQUEST", "scopes must be a non-empty list of known scopes");
+  }
+  return value as ApiKeyScope[];
 }
 
 /** The caller's org with their role, or 404. */
@@ -243,7 +263,7 @@ const KINDS: readonly ApiKeyKind[] = ["secret", "publishable"];
 export async function createProjectKey(
   userId: string,
   projectId: string,
-  input: { env: unknown; kind: unknown },
+  input: { env: unknown; kind: unknown; name?: unknown; scopes?: unknown },
   now: Date = new Date()
 ): Promise<MintedKey> {
   if (!(ENVS as readonly unknown[]).includes(input.env)) throw new HttpError(400, "BAD_REQUEST", "env must be test or live");
@@ -254,7 +274,9 @@ export async function createProjectKey(
   const kind = input.kind as ApiKeyKind;
   const project = await requireProject(userId, projectId);
   if (!canManageKeys(project.role)) throw new HttpError(403, "FORBIDDEN", "Only an org owner or admin can create keys");
-  refuseInternal(project.org.internal);
+  refuseInternalKeyEdit(project);
+  const name = input.name === undefined ? null : cleanName(input.name, "Key name");
+  const scopes = parseScopes(input.scopes);
 
   const { data, error } = await supabaseAdmin()
     .from("dev_api_keys")
@@ -269,7 +291,7 @@ export async function createProjectKey(
   if (live.length >= MAX_ACTIVE_KEYS) {
     throw new HttpError(409, "KEY_LIMIT", `A project can have at most ${MAX_ACTIVE_KEYS} active ${env} keys. Revoke one first.`);
   }
-  return mintApiKey({ projectId: project.id, env, kind });
+  return mintApiKey({ projectId: project.id, env, kind, name, scopes, createdBy: userId });
 }
 
 /** Revoke a key now. Owner or admin of its project; a key the caller cannot see is 404. */
@@ -278,7 +300,8 @@ export async function revokeProjectKey(userId: string, keyId: string): Promise<v
   const project = key ? (await listPortalProjects(userId)).find((p) => p.id === key.projectId) : undefined;
   if (!key || !project) throw notFound("Key");
   if (!canManageKeys(project.role)) throw new HttpError(403, "FORBIDDEN", "Only an org owner or admin can revoke keys");
-  refuseInternal(project.org.internal);
+  refuseInternalKeyEdit(project);
+  await refuseLockedKey(project, keyId);
   if (key.revokedAt) throw new HttpError(409, "KEY_REVOKED", "This key is already revoked");
   const revoked = await revokeApiKey({ projectId: project.id, keyId });
   if (!revoked) throw new HttpError(409, "KEY_REVOKED", "This key is already revoked");

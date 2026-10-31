@@ -33,14 +33,5 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
           ? ({ kind: "mismatch", invited: invite.email, signedIn: user.email ?? "this account" } as const)
           : ({ kind: "open" } as const);
 
-  return (
-    <main className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay px-4">
-      <AcceptInvite
-        token={token}
-        orgName={invite?.orgName ?? null}
-        role={invite ? ROLE_LABEL[invite.role] : null}
-        state={state}
-      />
-    </main>
-  );
+  return <AcceptInvite token={token} orgName={invite?.orgName ?? null} role={invite ? ROLE_LABEL[invite.role] : null} state={state} />;
 }

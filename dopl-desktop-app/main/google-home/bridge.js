@@ -152,9 +152,12 @@ async function run({ client, home, device, log, sleep, stop, now = Date.now }) {
           ? `Speaker: ${speaker.name} (${speaker.model})`
           : `No single speaker yet. Found: ${pool.map((d) => d.name).join(', ') || 'none'}. Same Wi-Fi? Several? Pass --device.`);
       }
-      const identity = speaker && !reported ? { name: speaker.name, model: speaker.model } : {};
-      await pass({ client, home, device, identity, log, state, now });
-      if (speaker) reported = true;
+      // With no speaker it does not report in: a poll is what reads the device online, and nothing could speak.
+      if (speaker) {
+        const identity = !reported ? { name: speaker.name, model: speaker.model } : {};
+        await pass({ client, home, device, identity, log, state, now });
+        reported = true;
+      }
       if (lastProblem) log('Connected to Dopl again.');
       lastProblem = null;
     } catch (err) {

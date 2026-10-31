@@ -1,37 +1,20 @@
 "use client";
 
 /** The portal: the sidebar and the page's content, on one surface. No rail, no panel around either. */
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import {
-  Activity,
-  AlertCircle,
-  BarChart3,
-  Cpu,
-  FlaskConical,
-  KeyRound,
-  LayoutGrid,
-  Link2,
-  Users,
-  UsersRound,
-  Webhook,
-  type LucideIcon,
-} from "lucide-react";
+import { Activity, AlertCircle, BarChart3, Cpu, FlaskConical, KeyRound, LayoutGrid, Link2, Users, UsersRound, Webhook, type LucideIcon } from "lucide-react";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import { NavRow, Segmented } from "../_design/ui";
-import { Banner } from "../_design/ui-extras";
 import { AccountRow, NavGroup, PortalFrame, ProjectSwitcher, Sidebar } from "../_design/ui-sidebar";
-import { COMPANY, MEMBERS, PROJECTS, type Env } from "../_data/company";
-import { issuesFor } from "../_data/issues";
-import { hasIssues } from "../_data/users";
-import { FindAnything } from "./find-anything";
-import { usePortal, useUsers } from "./portal-store";
-import { BASE } from "./ui";
+import { FindAnything, type FindEntry } from "./find-anything";
+import { BASE } from "./format";
+import { usePortal, useLiveRefresh } from "./portal-store";
 
-const ENVS: { value: Env; label: string }[] = [
+const ENVS = [
   { value: "live", label: "Live" },
   { value: "test", label: "Test" },
-];
+] as const;
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
 
@@ -64,32 +47,36 @@ const GROUPS: { label: string | null; items: NavItem[] }[] = [
   },
 ];
 
-function PortalSidebar({ fontClass }: { fontClass?: string }) {
+export interface ShellCounts {
+  issues: number;
+  attention: number;
+  find: FindEntry[];
+}
+
+function PortalSidebar({ fontClass, counts }: { fontClass?: string; counts: ShellCounts }) {
   const pathname = usePathname();
-  const { state, update } = usePortal();
-  const users = useUsers();
-  const openIssues = issuesFor(state.env, state.revoked, Object.keys(state.deviceStates)).filter((i) => !state.mutedIssues.includes(i.id)).length;
-  const attention = users.filter(hasIssues).length;
-  const me = MEMBERS[2];
+  const { email, project, projects, env, setEnv, setProject } = usePortal();
+  useLiveRefresh();
+  const options = projects.map((p) => ({ value: p.id, label: p.name }));
   return (
     <Sidebar
       fontClass={fontClass}
       label="Developer portal"
       identity={
         <>
-          <ProjectSwitcher label="Project" options={PROJECTS} value={state.project} onChange={(project) => update((s) => ({ ...s, project }))} />
-          <Segmented label="Environment" options={ENVS.map((e) => e.label)} value={ENVS.findIndex((e) => e.value === state.env)} onChange={(i) => update((s) => ({ ...s, env: ENVS[i].value }))} />
-          <FindAnything />
+          <ProjectSwitcher label="Project" options={options} value={project.id} onChange={setProject} />
+          <Segmented label="Environment" options={ENVS.map((e) => e.label)} value={ENVS.findIndex((e) => e.value === env)} onChange={(i) => setEnv(ENVS[i].value)} />
+          <FindAnything entries={counts.find} />
         </>
       }
-      foot={<AccountRow name={me.name} org={COMPANY.name} />}
+      foot={<AccountRow name={email ?? "Signed in"} org={project.org.name} />}
     >
       {GROUPS.map((group) => (
         <NavGroup key={group.label ?? "top"} label={group.label}>
           {group.items.map((item) => {
             const href = BASE + item.href;
             const active = item.href === "" ? pathname === BASE : pathname.startsWith(href);
-            const alert = item.href === "/issues" ? openIssues : item.href === "/users" ? attention : undefined;
+            const alert = item.href === "/issues" ? counts.issues : item.href === "/users" ? counts.attention : undefined;
             const alertLabel = item.href === "/issues" ? "Open issues" : "Users needing attention";
             return <NavRow key={item.href} href={href} icon={item.icon} label={item.label} active={active} alert={alert} alertLabel={alertLabel} />;
           })}
@@ -99,13 +86,9 @@ function PortalSidebar({ fontClass }: { fontClass?: string }) {
   );
 }
 
-export function PortalShell({ fontClass, children }: { fontClass?: string; children: ReactNode }) {
-  const router = useRouter();
+export function PortalShell({ fontClass, counts, children }: { fontClass?: string; counts: ShellCounts; children: ReactNode }) {
   return (
-    <PortalFrame rootClass={shell.root} sidebar={<PortalSidebar fontClass={fontClass} />}>
-      <Banner icon={FlaskConical} action="Open live data" onAction={() => router.push("/developers/classic/logs")}>
-        Sample data
-      </Banner>
+    <PortalFrame rootClass={shell.root} sidebar={<PortalSidebar fontClass={fontClass} counts={counts} />}>
       {children}
     </PortalFrame>
   );

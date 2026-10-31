@@ -117,13 +117,13 @@ describe("self-serve routes", () => {
     expect(svc.acceptInvite).not.toHaveBeenCalled();
   });
 
-  it("🔒 key create returns the secret once with no-store and passes only env + kind", async () => {
+  it("🔒 key create returns the secret once with no-store and passes only env, kind, name and scopes", async () => {
     svc.createProjectKey.mockResolvedValue({ secret: "sk_test_RAW", key: { id: "k" } });
-    const res = await call(keys.POST, "POST", { projectId: ID }, { env: "test", kind: "secret", scopes: ["x"] });
+    const res = await call(keys.POST, "POST", { projectId: ID }, { env: "test", kind: "secret", scopes: ["x"], role: "owner" });
     expect(res.status).toBe(201);
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(await res.json()).toEqual({ secret: "sk_test_RAW", key: { id: "k" } });
-    expect(svc.createProjectKey).toHaveBeenCalledWith("u1", ID, { env: "test", kind: "secret" });
+    expect(svc.createProjectKey).toHaveBeenCalledWith("u1", ID, { env: "test", kind: "secret", name: undefined, scopes: ["x"] });
   });
 
   it("🔒 invite create answers the link path once with no-store", async () => {

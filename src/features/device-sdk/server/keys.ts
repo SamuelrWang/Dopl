@@ -98,10 +98,28 @@ export interface DevApiKeyRow {
   last_used_at: string | null;
   revoked_at: string | null;
   expires_at: string | null;
+  name?: string | null;
+  created_by?: string | null;
 }
 
 const ROW_COLUMNS =
-  "id, project_id, env, kind, prefix, scopes, created_at, last_used_at, revoked_at, expires_at";
+  "id, project_id, env, kind, prefix, scopes, name, created_by, created_at, last_used_at, revoked_at, expires_at";
+
+/**
+ * Keys a button must not rotate or revoke: the one the running app delivers with (`DOPL_APP_SDK_KEY`), and under an
+ * internal project every live secret minted before keys had names, which is what the seed made. The second rule
+ * holds where the environment variable is absent, such as a local server reading production.
+ */
+export async function lockedKeyIds(projectId: string, internal: boolean): Promise<string[]> {
+  const db = supabaseAdmin();
+  const raw = process.env.DOPL_APP_SDK_KEY;
+  const [byEnv, byShape] = await Promise.all([
+    raw ? db.from(TABLE).select("id").eq("project_id", projectId).eq("key_hash", hashApiKey(raw)) : Promise.resolve({ data: [], error: null }),
+    internal ? db.from(TABLE).select("id").eq("project_id", projectId).eq("env", "live").eq("kind", "secret").is("name", null).is("revoked_at", null) : Promise.resolve({ data: [], error: null }),
+  ]);
+  for (const res of [byEnv, byShape]) if (res.error) throw new Error(`lockedKeyIds failed: ${res.error.message}`);
+  return [...((byEnv.data ?? []) as Array<{ id: string }>), ...((byShape.data ?? []) as Array<{ id: string }>)].map((k) => k.id);
+}
 
 export interface MintedKey {
   /** Shown once. Never store or log it. */
@@ -114,6 +132,8 @@ export async function mintApiKey(input: {
   env: Environment;
   kind: ApiKeyKind;
   scopes?: readonly ApiKeyScope[];
+  name?: string | null;
+  createdBy?: string | null;
 }): Promise<MintedKey> {
   const scopes = normalizeScopes(input.kind, input.scopes);
   const { raw, prefix, keyHash } = generateApiKey(input.kind, input.env);
@@ -126,6 +146,8 @@ export async function mintApiKey(input: {
       prefix,
       key_hash: keyHash,
       scopes,
+      ...(input.name ? { name: input.name } : {}),
+      ...(input.createdBy ? { created_by: input.createdBy } : {}),
     })
     .select(ROW_COLUMNS)
     .single();
@@ -213,6 +235,8 @@ export async function rotateApiKey(input: {
       env: prev.env,
       kind: prev.kind,
       scopes: prev.scopes,
+      name: prev.name,
+      createdBy: prev.created_by,
     });
   } catch (err) {
     // Release OUR claim (only if it is still ours: same expires_at value), so the old key stays

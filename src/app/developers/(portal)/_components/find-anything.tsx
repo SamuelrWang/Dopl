@@ -1,61 +1,46 @@
 "use client";
 
-/** The sidebar's one search box: a user id, device id, request id or webhook id takes you there. */
+/**
+ * The sidebar's one search box: a user or a device by name or id, and a pasted id goes to its call. It searches
+ * only ids and names the sidebar already holds, never message text, so nothing typed here leaves the page.
+ */
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { SearchField } from "../_design/ui";
 import { SearchEmpty, SearchHit, SearchPanel } from "../_design/ui-sidebar";
-import { ALL_CALLS } from "../_data/activity";
-import { ALL_DEVICES, ALL_USERS } from "../_data/users";
-import { BASE } from "./ui";
+import { BASE } from "./format";
 
-interface Hit {
-  key: string;
-  label: string;
+export interface FindEntry {
   id: string;
-  kind: string;
+  label: string;
+  kind: "User" | "Device";
   href: string;
 }
 
-function search(raw: string): Hit[] {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function search(entries: readonly FindEntry[], raw: string): FindEntry[] {
   const q = raw.trim().toLowerCase();
   if (q.length < 2) return [];
-  const hits: Hit[] = [];
-  for (const u of ALL_USERS) {
-    if (u.id.toLowerCase().includes(q) || u.name.toLowerCase().includes(q)) {
-      hits.push({ key: u.id, label: u.name, id: u.id, kind: "User", href: `${BASE}/users/${u.id}` });
-    }
-  }
-  for (const d of ALL_DEVICES) {
-    if (d.id.toLowerCase().includes(q)) {
-      hits.push({ key: d.id, label: d.name, id: d.id, kind: "Device", href: `${BASE}/users/${d.userId}` });
-    }
-  }
-  for (const c of ALL_CALLS) {
-    if (c.id.toLowerCase().includes(q) || c.requestId?.toLowerCase().includes(q)) {
-      const kind = c.kind === "webhook" ? "Webhook" : c.kind === "request" ? "Request" : "Delivery";
-      hits.push({ key: c.id, label: c.title, id: c.id, kind, href: `${BASE}/activity?call=${c.id}` });
-    }
-  }
-  return hits.slice(0, 8);
+  const hits = entries.filter((e) => e.id.toLowerCase().includes(q) || e.label.toLowerCase().includes(q)).slice(0, 8);
+  return hits.length === 0 && UUID.test(q) ? [{ id: q, label: q, kind: "User", href: `${BASE}/activity?call=${q}` }] : hits;
 }
 
-export function FindAnything() {
+export function FindAnything({ entries }: { entries: readonly FindEntry[] }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
-  const hits = useMemo(() => search(q), [q]);
-  const show = open && q.trim().length >= 2;
+  const hits = useMemo(() => search(entries, q), [entries, q]);
   return (
-    <SearchPanel open={show} onOpenChange={setOpen} field={<SearchField value={q} placeholder="Find anything" onChange={setQ} />}>
+    <SearchPanel open={open && q.trim().length >= 2} onOpenChange={setOpen} field={<SearchField value={q} placeholder="Find anything" onChange={setQ} />}>
       {hits.length === 0 ? (
         <SearchEmpty>No matches</SearchEmpty>
       ) : (
         hits.map((h) => (
           <SearchHit
-            key={h.key}
+            key={`${h.kind}:${h.id}`}
             label={h.label}
-            kind={h.kind}
+            kind={h.href.includes("/activity") ? "Call" : h.kind}
             onClick={() => {
               setOpen(false);
               setQ("");

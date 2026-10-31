@@ -2,104 +2,103 @@
 
 /**
  * Overview: is everything working, what should I do next. A project summary leads in the black panel;
- * setup, trends and the newest users sit around it. Fits the window.
+ * setup, trends and the newest users sit around it. Fits the window. The questions answer from this
+ * page's own figures; no model is involved.
  */
-import { ArrowRight, FlaskConical, Info, Paperclip } from "lucide-react";
+import { ArrowRight, FlaskConical, Paperclip } from "lucide-react";
 import { useState } from "react";
+import { activeWithin, dailyBars, figuresOfDevices, percentDelta, rateOf, rowsBetween, totalsOf, type EndpointView, type Issue, type MetricRow, type PortalUser } from "@/features/device-sdk/portal/view";
 import { Badge, Button, Chip, ICON, Initials, Stat, TwoLine, initialsOf } from "../_design/ui";
 import { Banner } from "../_design/ui-extras";
 import { BarChart, LineChart, Ring, Timeline, type Step } from "../_design/ui-data";
-import { AvatarStack, FillBody, FillCard, FitRows, InkFoot, InkPanel, InkPrompt, InkQuote, SplitLayout, StatStrip, ThreeUp } from "../_design/ui-output";
+import { AvatarStack, FillBody, FillCard, FitRows, InkFoot, InkPanel, InkQuote, SplitLayout, StatStrip, ThreeUp } from "../_design/ui-output";
 import { Between, FilterRow, Grow, ListRow, Page, PageHeader, Row, Text } from "../_design/ui-page";
-import { dailySeries } from "../_data/activity";
-import { issuesFor } from "../_data/issues";
-import { useCalls, usePortal, useUsers } from "../_components/portal-store";
-import { WEEK, activeWithin, figuresOfUsers } from "../_components/stats";
-import { BASE, fmt, since } from "../_components/ui";
+import { BASE, fmt, portalNow, since } from "../_components/format";
+import { usePortal } from "../_components/portal-store";
 
 const RECENT = 4;
-const QUESTIONS = ["Why are deliveries failing?", "Which users need a relink?", "What changed this week?"];
+const WEEK_MS = 7 * 86_400_000;
+const DAY_MS = 86_400_000;
 
-function useSetup(): (Step & { href: string; cta: string })[] {
-  const { state } = usePortal();
-  const users = useUsers();
-  const calls = useCalls();
-  const keys = state.keys.filter((k) => k.env === state.env && !k.revoked);
-  const added = Object.keys(state.integrations).length;
-  const first = calls.find((c) => c.kind === "delivery");
-  const endpoints = state.endpoints.filter((e) => e.env === state.env);
+export interface OverviewProps {
+  users: PortalUser[];
+  metrics: MetricRow[];
+  endpoints: EndpointView[];
+  issues: Issue[];
+  activeKeys: number;
+}
+
+function setupOf({ users, metrics, endpoints, activeKeys }: OverviewProps): (Step & { href: string; cta: string })[] {
+  const devices = users.flatMap((u) => u.devices);
+  const sent = totalsOf(metrics).deliveries;
   const failing = endpoints.find((e) => e.state === "failing");
+  const received = endpoints.some((e) => e.delivered7d > 0);
   return [
-    { key: "key", label: "Create an API key", detail: `${keys.length} active`, state: keys.length ? "done" : "pending", href: "/keys", cta: "Create key" },
-    { key: "add", label: "Add a device", detail: `${added} added`, state: added ? "done" : "pending", href: "/devices", cta: "Open devices" },
+    { key: "key", label: "Create an API key", detail: `${activeKeys} active`, state: activeKeys ? "done" : "pending", href: "/keys", cta: "Create key" },
+    { key: "add", label: "Connect a device", detail: `${devices.length} connected`, state: devices.length ? "done" : "pending", href: "/connect", cta: "Open Connect" },
     { key: "connect", label: "Connect a user", detail: `${users.length} connected`, state: users.length ? "done" : "pending", href: "/connect", cta: "Open Connect" },
-    { key: "send", label: "Send a delivery", detail: first ? "Sent" : "Nothing yet", state: first ? "done" : "pending", href: "/playground", cta: "Open Playground" },
-    { key: "hook", label: "Receive a webhook", detail: failing ? `${failing.description} failing` : `${endpoints.length} healthy`, state: failing ? "failed" : endpoints.length ? "done" : "pending", href: "/webhooks", cta: "Open webhooks" },
+    { key: "send", label: "Send a delivery", detail: sent ? "Sent" : "Nothing yet", state: sent ? "done" : "pending", href: "/playground", cta: "Open Playground" },
+    { key: "hook", label: "Receive a webhook", detail: failing ? `${failing.name} failing` : "Nothing yet", state: failing ? "failed" : received ? "done" : "pending", href: "/webhooks", cta: "Open webhooks" },
   ];
 }
 
-export function OverviewSection() {
-  const { state, update } = usePortal();
-  const users = useUsers();
-  const [hidBanner, setHidBanner] = useState(false);
-  const [q, setQ] = useState("");
+export function OverviewSection(props: OverviewProps) {
+  const { users, metrics, issues } = props;
+  const { test, setEnv } = usePortal();
   const [asked, setAsked] = useState<string | null>(null);
-  const figures = figuresOfUsers(users);
-  const issues = issuesFor(state.env, state.revoked, Object.keys(state.deviceStates)).filter((i) => !state.mutedIssues.includes(i.id));
-  const worst = [...issues].sort((a, b) => b.count - a.count)[0];
-  const steps = useSetup();
+  const now = portalNow();
+  const figures = figuresOfDevices(users.flatMap((u) => u.devices));
+  const week = totalsOf(rowsBetween(metrics, now, 6));
+  const before = totalsOf(rowsBetween(metrics, now, 13, 7));
+  const rate = rateOf(week);
+  const deliveryDelta = percentDelta(week.deliveries, before.deliveries);
+  const rateChange = before.deliveries && week.deliveries ? rate - rateOf(before) : null;
+  const newUsers = users.filter((u) => now - Date.parse(u.createdAt) <= WEEK_MS).length;
+  const seenToday = users.flatMap((u) => u.devices).filter((d) => d.lastSeenAt && now - Date.parse(d.lastSeenAt) <= DAY_MS).length;
+  const worst = issues[0];
+  const steps = setupOf(props);
   const done = steps.filter((s) => s.state === "done").length;
   const next = steps.find((s) => s.state !== "done");
-  const series = dailySeries(figures.deliveries, 14);
-  const rate = series.map((_, i) => figures.rate - 1 + Math.sin(i * 0.9) * 0.9 + (i / series.length) * 1.2);
+  const bars = dailyBars(metrics, 14, now);
+  const rates = bars.map((b, i) => b.rate ?? bars.slice(0, i).reverse().find((x) => x.rate !== null)?.rate ?? 0);
   const newest = [...users].sort((a, b) => Date.parse(b.lastDeliveryAt ?? "0") - Date.parse(a.lastDeliveryAt ?? "0")).slice(0, RECENT);
-  const summary = `${fmt(figures.deliveries)} deliveries this week, ${figures.rate}% seen by a device. ${issues.length ? `${issues.length} issues open; ${worst.title.toLowerCase()} is the largest, with ${fmt(worst.count)} ${worst.countLabel}.` : "Nothing needs you."}`;
-  const answer = worst ? `Most of the loss comes from ${worst.title.toLowerCase()}: ${fmt(worst.count)} ${worst.countLabel} across ${worst.userIds.length} users. ${worst.action} to clear it.` : "Nothing is failing this week.";
+  const relink = users.filter((u) => u.devices.some((d) => d.state === "needs_relink"));
+
+  const answers: Record<string, string> = {
+    "Why are deliveries failing?": worst ? `${worst.title}: ${fmt(worst.count)} ${worst.countLabel}. ${worst.why}` : "Nothing is failing this week.",
+    "Which users need a relink?": relink.length ? relink.slice(0, 3).map((u) => u.name).join(", ") + (relink.length > 3 ? ` and ${relink.length - 3} more.` : ".") : "None.",
+    "What changed this week?": `${fmt(week.deliveries)} deliveries against ${fmt(before.deliveries)} the week before. ${newUsers} new ${newUsers === 1 ? "user" : "users"}, ${issues.length} open ${issues.length === 1 ? "issue" : "issues"}.`,
+  };
+  const summary = `${fmt(week.deliveries)} deliveries this week, ${rate}% taken by a device. ${worst ? `${issues.length} ${issues.length === 1 ? "issue" : "issues"} open; ${worst.title.toLowerCase()} is the largest, with ${fmt(worst.count)} ${worst.countLabel}.` : "Nothing needs you."}`;
 
   return (
     <Page fit>
-      <PageHeader title="Overview" test={state.env === "test"} action={worst && <Button href={`${BASE}/issues`}>{issues.length} open issues<ArrowRight {...ICON} aria-hidden="true" /></Button>} />
-      {state.env === "test" ? (
-        <Banner icon={FlaskConical} action="Switch to Live" onAction={() => update((s) => ({ ...s, env: "live" }))}>
+      <PageHeader title="Overview" test={test} action={worst && <Button href={`${BASE}/issues`}>{issues.length} open {issues.length === 1 ? "issue" : "issues"}<ArrowRight {...ICON} aria-hidden="true" /></Button>} />
+      {test && (
+        <Banner icon={FlaskConical} action="Switch to Live" onAction={() => setEnv("live")}>
           Test environment. Nothing here reaches real users.
         </Banner>
-      ) : (
-        !hidBanner && (
-          <Banner icon={Info} onClose={() => setHidBanner(true)}>
-            Scheduled maintenance on Saturday, 02:00 to 04:00 UTC
-          </Banner>
-        )
       )}
       <StatStrip>
-        <Stat label="Deliveries, 7d" value={fmt(figures.deliveries)} delta="6.1%" />
-        <Stat label="Shown rate" value={`${figures.rate}%`} delta="0.8%" />
-        <Stat label="Active users, 7d" value={fmt(activeWithin(users, WEEK))} delta="3 new" />
-        <Stat label="Devices online" value={`${fmt(figures.online)} of ${fmt(figures.devices)}`} delta="2 fewer" down />
+        <Stat label="Deliveries, 7d" value={fmt(week.deliveries)} delta={deliveryDelta?.text} down={deliveryDelta?.down} />
+        <Stat label="Delivered" value={`${rate}%`} delta={rateChange === null ? undefined : `${Math.abs(rateChange).toFixed(1)}%`} down={rateChange !== null && rateChange < 0} />
+        <Stat label="Active users, 7d" value={fmt(activeWithin(users, WEEK_MS, now))} delta={newUsers ? `${newUsers} new` : undefined} />
+        <Stat label="Devices online" value={`${fmt(figures.online)} of ${fmt(figures.devices)}`} hint={`${fmt(seenToday)} seen today`} />
       </StatStrip>
       <FitRows>
         <SplitLayout
           wide
           left={
             <InkPanel fill title="Project summary">
-              <InkQuote>{asked ? answer : summary}</InkQuote>
+              <InkQuote>{asked ? answers[asked] : summary}</InkQuote>
               {asked && (
                 <Text kind="smallMuted" clip>
                   {asked}
                 </Text>
               )}
-              <InkPrompt
-                value={q}
-                placeholder="Ask about this project"
-                send="Ask"
-                onChange={setQ}
-                onSend={() => {
-                  setAsked(q.trim());
-                  setQ("");
-                }}
-              />
               <FilterRow>
-                {QUESTIONS.map((question) => (
-                  <Chip key={question} ring onClick={() => setAsked(question)}>
+                {Object.keys(answers).map((question) => (
+                  <Chip key={question} ring on={asked === question} pressed={asked === question} onClick={() => setAsked(asked === question ? null : question)}>
                     {question}
                   </Chip>
                 ))}
@@ -107,7 +106,7 @@ export function OverviewSection() {
               <InkFoot>
                 <Button size="sm" variant="ghost" href={`${BASE}/activity`}>
                   <Paperclip {...ICON} aria-hidden="true" />
-                  Use activity logs
+                  Activity
                 </Button>
                 <Grow />
                 <Text kind="smallMuted">Last 7 days</Text>
@@ -137,14 +136,14 @@ export function OverviewSection() {
               <Text kind="h3">Deliveries</Text>
               <Badge tone="ring">14 days</Badge>
             </Between>
-            <BarChart bars={series} />
+            <BarChart bars={bars} />
           </FillCard>
           <FillCard>
             <Between>
-              <TwoLine title={<Text kind="h3">Shown rate</Text>} sub={`${figures.rate}% this week`} />
+              <TwoLine title={<Text kind="h3">Delivered</Text>} sub={`${rate}% this week`} />
               <Badge tone="ring">14 days</Badge>
             </Between>
-            <LineChart values={rate} min={85} max={100} label="Shown rate over 14 days" />
+            <LineChart values={rates} min={0} max={100} label="Delivered over 14 days" />
           </FillCard>
           <FillCard>
             <Between>
@@ -159,7 +158,7 @@ export function OverviewSection() {
               <div>
                 {newest.map((u, i) => (
                   <ListRow key={u.id} line={i < newest.length - 1}>
-                    <TwoLine title={u.name} sub={u.id} />
+                    <TwoLine title={u.name} sub={u.named ? u.id : undefined} />
                     <Grow />
                     <Text kind="smallMuted" nowrap>
                       {since(u.lastDeliveryAt)}

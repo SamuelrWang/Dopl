@@ -180,7 +180,7 @@ export const ActivitySkeleton = () => (
 );
 export const DevicesSkeleton = () => (
   <Frame>
-    <Head />
+    <Head action={false} />
     <Stats />
     <Filters />
     <Cards count={2} />
@@ -231,7 +231,7 @@ export const TeamSkeleton = () => (
 );
 export const IssuesSkeleton = () => (
   <Frame fit>
-    <Head />
+    <Head action={false} />
     <Split left={<TableCard rows={4} />} right={<Panel />} />
   </Frame>
 );
@@ -257,7 +257,7 @@ export const PlaygroundSkeleton = () => (
 );
 export const ConnectSkeleton = () => (
   <Frame>
-    <Head />
+    <Head action={false} />
     <div style={{ height: u(620), display: "flex" }}>
       <Split left={<Panel />} right={<Panel />} />
     </div>

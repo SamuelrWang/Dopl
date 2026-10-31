@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCronSecret } from "@/shared/auth/require-cron-secret";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
+import { sweepStuckActions } from "@/features/device-sdk/server/stuck-actions";
 import { CRON_BUDGET_MS, runWebhookSenderNow } from "@/features/device-sdk/server/webhooks/runtime";
 
 /**
  * GET /api/cron/device-sdk-webhooks-send — one Device SDK webhook sender run (C8): fan out the
- * outbox, send due deliveries, record attempts, schedule retries, dead-letter the exhausted.
+ * outbox, send due deliveries, record attempts, schedule retries, dead-letter the exhausted. The sweep of
+ * stuck actions runs first, so an `action.failed` it raises leaves in the same run.
  * Auth: CRON_SECRET bearer. Schedule: vercel.json (every minute).
  */
 export const dynamic = "force-dynamic";
@@ -15,6 +17,7 @@ export async function GET(request: NextRequest) {
   const denied = requireCronSecret(request);
   if (denied) return denied;
   try {
+    await sweepStuckActions().catch((err) => console.error("[device-sdk] stuck action sweep failed:", err));
     const report = await runWebhookSenderNow(CRON_BUDGET_MS);
     return NextResponse.json({ ok: true, ...report });
   } catch (err) {

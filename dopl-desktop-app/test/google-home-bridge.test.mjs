@@ -113,11 +113,13 @@ test('run reports the speaker once, survives a server error and says each proble
   assert.ok(lines.includes('Connected to Dopl again.'));
 });
 
-test('several speakers and no --device casts to nobody by name and asks', async () => {
+test('several speakers and no --device asks, and does not report in: a poll would read the device online', async () => {
   const lines = [];
   let turns = 0;
-  const client = { poll: async () => { turns += 1; return { messages: [] }; }, ack: async () => ({}) };
+  let polls = 0;
+  const client = { poll: async () => { polls += 1; return { messages: [] }; }, ack: async () => ({}) };
   const home = { status: async () => ({ devices: [{ id: '1', name: 'A', model: 'm', group: false }, { id: '2', name: 'B', model: 'm', group: false }] }), notify: async () => ({}) };
-  await run({ client, home, log: (l) => lines.push(l), sleep: async () => {}, stop: () => turns >= 1, now: () => 0 });
+  await run({ client, home, log: (l) => lines.push(l), sleep: async () => { turns += 1; }, stop: () => turns >= 3, now: () => 0 });
   assert.match(lines[0], /Found: A, B/);
+  assert.equal(polls, 0);
 });

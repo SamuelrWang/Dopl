@@ -10759,10 +10759,10 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - Fix: `experimental: { reactDebugChannel: false }` (debug info inline in the RSC payload again). Verified on a scratch `next dev` from HEAD: back to `/` → 814 fibers, `scrub` modes, banner-demo CSS loaded; back to `/authenticate` → 191 fibers. Takes effect on the next dev-server restart.
 - Status: RESOLVED (revisit if Next fixes the replay upstream and the channel is wanted back).
 
-### F-784 — a fast pickup can be overwritten by the sender's own status write (2026-10-31, open)
+### F-784 — a fast pickup can be overwritten by the sender's own status write (2026-10-31, RESOLVED 2026-10-31: `device-sdk/server/stuck-actions.ts › sweepStuckActions` finishes such an action within 15 minutes)
 
 `server/delivery-service.ts › deliver` and `action-service.ts › deviceAction` write the adapter's `queued` after queueing, with no condition on the current status. If the glasses' inbox takes the row between the queue insert and that write, the action moves back to `queued` after the device already has it. Older than this wave, but it now matters more: a notice is `done` at pickup and has fired `action.completed`. The window is the milliseconds between the two writes. Fix: make those writes conditional on `status = 'queued'`, as `lens-actions` already does. To reproduce, insert a pickup between the two writes in a suite.
 
-### F-785 — six redesign tests skipped as stale (2026-10-31, open)
+### F-785 — six redesign tests skipped as stale (2026-10-31, RESOLVED 2026-10-31: `(portal)/_sections/sections.test.tsx` rewritten against the real page props)
 
 `src/app/developers/(portal)/_sections/sections.test.tsx`: six `it.skip` cases assert fixture UI that later redesign commits changed (Needs review filter, simulator copy, What it receives rows, Activity's unknowable step). They failed before the move too. Resolved when Phase 3 of docs/specs/dev-portal-live/PLAN.md rewrites those pages: delete or re-point each one then.

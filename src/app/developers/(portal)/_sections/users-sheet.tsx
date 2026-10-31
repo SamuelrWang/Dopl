@@ -1,27 +1,20 @@
 "use client";
 
-/** A user over the list: identity, devices, the week, latest deliveries as metadata only. */
-import { Send, Link2 } from "lucide-react";
+/** A user over the list: identity, devices, the week, latest deliveries. */
+import { STATE_LABEL, STATUS_LABEL, userDelivered, userDeliveries, userRate, type Call, type DeviceState, type PortalUser } from "@/features/device-sdk/portal/view";
+import { modelById } from "@/features/device-sdk/portal/catalog";
 import { Badge, Button, ICON, Initials, StateDot, TwoLine, initialsOf, type Tone } from "../_design/ui";
 import { StatTriple } from "../_design/ui-extras";
 import { BoxRow, Grow, ListRow, Row, SideSheet, Stack, Text } from "../_design/ui-page";
-import { CAPABILITY_LABEL, modelById } from "../_data/catalog";
-import { STATUS_LABEL as CALL_STATUS, type Call, type CallStatus } from "../_data/activity";
-import { PLAN_LABEL, REGION_LABEL, STATE_LABEL, needsRelink, ownedDevice, userDeliveries, userRate, userSeen, type DeviceState, type PortalUser } from "../_data/users";
-import { BASE, fmt, since } from "../_components/ui";
+import { BASE, fmt, since } from "../_components/format";
+import { STATUS_TONE, deviceNameOf } from "./activity";
 import { DeviceGlyph, StatusBadge } from "./users-table";
 import { devicesInOrder, statusOf } from "./users-model";
 
-const STATE_BADGE: Record<DeviceState, Tone> = { online: "ok", offline: "neutral", stale: "warn", needs_relink: "error" };
-const CALL_BADGE: Partial<Record<CallStatus, Tone>> = { seen: "ok", answered: "ok", ok: "ok", failed: "error", expired: "warn", retrying: "warn" };
+export const STATE_BADGE: Record<DeviceState, Tone> = { online: "ok", offline: "neutral", stale: "warn", needs_relink: "error" };
 const LATEST = 5;
 
-function capabilityOf(call: Call) {
-  return call.capability ? (CAPABILITY_LABEL[call.capability] ?? call.capability) : "Delivery";
-}
-
-export function UserSheet({ user, calls, onClose, onSendTest, onRelink }: { user: PortalUser; calls: Call[]; onClose: () => void; onSendTest: () => void; onRelink: () => void }) {
-  const relink = needsRelink(user);
+export function UserSheet({ user, calls, onClose }: { user: PortalUser; calls: Call[]; onClose: () => void }) {
   const deliveries = calls.filter((c) => c.userId === user.id && c.kind === "delivery").slice(0, LATEST);
   const sent = userDeliveries(user);
   return (
@@ -29,19 +22,11 @@ export function UserSheet({ user, calls, onClose, onSendTest, onRelink }: { user
       label={user.name}
       onClose={onClose}
       face={<Initials text={initialsOf(user.name)} />}
-      head={<TwoLine title={<Text kind="title" as="h2">{user.name}</Text>} sub={`${user.id}, ${PLAN_LABEL[user.plan]}, ${REGION_LABEL[user.region]}`} />}
+      head={<TwoLine title={<Text kind="title" as="h2">{user.name}</Text>} sub={user.named ? user.id : undefined} />}
       foot={
         <>
-          <Button variant={relink ? "secondary" : "ink"} onClick={onSendTest}>
-            <Send {...ICON} />
-            Send test
-          </Button>
-          <Button variant={relink ? "ink" : "secondary"} onClick={onRelink}>
-            <Link2 {...ICON} />
-            Relink link
-          </Button>
           <Grow />
-          <Button variant="ghost" href={`${BASE}/users/${user.id}`}>
+          <Button variant="ink" href={`${BASE}/users/${encodeURIComponent(user.id)}`}>
             Open full page
           </Button>
         </>
@@ -55,8 +40,8 @@ export function UserSheet({ user, calls, onClose, onSendTest, onRelink }: { user
       <StatTriple
         items={[
           ["Deliveries, 7d", fmt(sent)],
-          ["Seen, 7d", fmt(userSeen(user))],
-          ["Success", sent ? `${userRate(user)}%` : "None"],
+          ["Delivered, 7d", fmt(userDelivered(user))],
+          ["Rate", sent ? `${userRate(user)}%` : "None"],
         ]}
       />
 
@@ -75,7 +60,7 @@ export function UserSheet({ user, calls, onClose, onSendTest, onRelink }: { user
                   {d.id === user.activeDeviceId && <StateDot tone="ok" />}
                 </Row>
               }
-              sub={`${modelById(d.modelId).name}, firmware ${d.firmware}`}
+              sub={modelById(d.modelId).name}
             />
             <Grow />
             <Stack end>
@@ -96,9 +81,9 @@ export function UserSheet({ user, calls, onClose, onSendTest, onRelink }: { user
         <div>
           {deliveries.map((c, i) => (
             <ListRow key={c.id} line={i < deliveries.length - 1}>
-              <TwoLine strong={false} title={capabilityOf(c)} sub={c.deviceId ? (ownedDevice(c.deviceId)?.name ?? c.deviceId) : "No device"} />
+              <TwoLine strong={false} title={c.title} sub={deviceNameOf([user], c.deviceId) ?? "No device"} />
               <Grow />
-              <Badge tone={CALL_BADGE[c.status]}>{CALL_STATUS[c.status]}</Badge>
+              <Badge tone={STATUS_TONE[c.status]}>{STATUS_LABEL[c.status]}</Badge>
               <Text kind="smallMuted" nowrap>
                 {since(c.at)}
               </Text>

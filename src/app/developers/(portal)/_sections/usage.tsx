@@ -1,121 +1,109 @@
 "use client";
 
-/**
- * Usage: how much of the plan is used, where it will land by renewal, and what is driving it. Figures
- * follow the Category and Model filters; the plan's limits never do.
- */
-import { CreditCard, Download } from "lucide-react";
+/** Usage: how much this project sends, and what is driving it. Figures follow the Category and Model filters; the counts on the right never do. */
+import { Download } from "lucide-react";
 import { useState } from "react";
-import { Button, DataCell, DataRow, DataTable, ICON, ICON_SM, MeterFigure, PillMenu, Segmented, StatCard, TwoLine, type Column } from "../_design/ui";
+import { ALL_MODELS, CATEGORIES, categoryOf, modelById, modelOfAdapter, trail, type ModelId } from "@/features/device-sdk/portal/catalog";
+import { dailyBars, rateOf, rowsBetween, totalsOf, type KeyView, type MetricRow, type PortalUser } from "@/features/device-sdk/portal/view";
+import { Badge, Button, DataCell, DataRow, DataTable, ICON, MeterFigure, PillMenu, Segmented, StatCard, TwoLine, type Column } from "../_design/ui";
 import { BarChart, Limit } from "../_design/ui-data";
-import { DateRange, PlanCard, type DateSpan } from "../_design/ui-extras";
 import { FillBody, FillCard, FitRows, ScrollArea, SplitLayout, useFitRows } from "../_design/ui-output";
-import { Between, FlowDialog, Grow, Page, PageHeader, Row, StatRow, TableHead, Text, Tiles, Toast } from "../_design/ui-page";
-import { dailySeries } from "../_data/activity";
-import { DEMO_NOW } from "../_data/company";
-import { ALL_MODELS, CATEGORIES, categoryOf, modelById, trail, type ModelId } from "../_data/catalog";
-import { PLAN } from "../_data/misc";
-import { userDeliveries } from "../_data/users";
-import { usePortal, useUsers } from "../_components/portal-store";
-import { devicesOfModel, figuresOfDevices } from "../_components/stats";
-import { fmt } from "../_components/ui";
+import { Between, Page, PageHeader, Row, StatRow, TableHead, Text } from "../_design/ui-page";
+import { downloadCsv, fmt, portalNow } from "../_components/format";
+import { usePortal } from "../_components/portal-store";
 
-const RANGES = [{ label: "7 days", days: 7 }, { label: "30 days", days: 30 }, { label: "90 days", days: 90 }];
+const RANGES = [{ label: "7 days", days: 7 }, { label: "30 days", days: 30 }];
 const BREAKDOWNS = ["Model", "User", "API key"];
-const HISTORY_DAYS = 365;
-const KEY_LIMIT = 20;
-const ENDPOINT_LIMIT = 10;
-/** The demo is 29 days into a 30-day period. */
-const ELAPSED = 29 / 30;
-const COLUMNS: Column[] = [
-  { key: "name", label: "Name", width: "40%" },
-  { key: "calls", label: "Calls, 7d", width: "20%" },
-  { key: "detail", label: "Detail", width: "20%" },
-  { key: "share", label: "Share", width: "20%" },
-];
 
-export function UsageSection() {
-  const { state } = usePortal();
-  const users = useUsers();
+export interface UsageProps {
+  users: PortalUser[];
+  metrics: MetricRow[];
+  keys: KeyView[];
+  keyLimit: number;
+  seats: number;
+  endpoints: number;
+}
+
+function modelOfRow(m: MetricRow, users: readonly PortalUser[]): ModelId | null {
+  if (!m.device) return null;
+  for (const u of users) {
+    const d = u.devices.find((x) => x.id === m.device);
+    if (d) return d.modelId;
+  }
+  return modelOfAdapter(m.kind === "glasses" ? "even_g2" : m.kind === "desktop" ? "desktop" : m.kind === "home_hub" ? "google_home" : "");
+}
+
+export function UsageSection({ users, metrics, keys, keyLimit, seats, endpoints }: UsageProps) {
+  const { test, project } = usePortal();
   const [category, setCategory] = useState("all");
   const [modelId, setModelId] = useState("all");
   const [range, setRange] = useState(1);
   const [by, setBy] = useState(0);
-  const [notice, setNotice] = useState<string | null>(null);
   const fit = useFitRows(4);
-  const [span, setSpan] = useState<DateSpan | null>(null);
-  const [choosing, setChoosing] = useState(false);
+  const now = portalNow();
+  const days = RANGES[range].days;
 
-  const inFilter = (id: ModelId) => (category === "all" || categoryOf(id).id === category) && (modelId === "all" || id === modelId);
-  const devices = users.flatMap((u) => u.devices).filter((d) => inFilter(d.modelId));
-  const week = figuresOfDevices(devices);
-  const month = Math.round(week.deliveries * 3.9);
-  const projected = Math.round(month / ELAPSED);
-  const over = Math.max(0, projected - PLAN.deliveriesIncluded);
-  const dayOf = (daysAgo: string) => new Date(Date.parse(DEMO_NOW) - Number(daysAgo) * 86_400_000).toISOString().slice(0, 10);
-  const series = span ? dailySeries(week.deliveries, HISTORY_DAYS).filter((bar) => dayOf(bar.key) >= span.from && dayOf(bar.key) <= span.to) : dailySeries(week.deliveries, RANGES[range].days);
-  const models = ALL_MODELS.filter((m) => devicesOfModel(users, m.id).length > 0);
+  const inFilter = (m: MetricRow) => {
+    if (category === "all" && modelId === "all") return true;
+    const id = modelOfRow(m, users);
+    return id !== null && (category === "all" || categoryOf(id).id === category) && (modelId === "all" || id === modelId);
+  };
+  const filtered = metrics.filter(inFilter);
+  const inRange = rowsBetween(filtered, now, days - 1);
+  const month = new Date(now).toISOString().slice(0, 7);
+  const thisMonth = totalsOf(filtered.filter((m) => m.day.startsWith(month)));
+  const totals = totalsOf(inRange);
+  const series = dailyBars(filtered, days, now);
+  const usedModels = ALL_MODELS.filter((m) => users.some((u) => u.devices.some((d) => d.modelId === m.id)));
 
   const rowsOf = () => {
-    if (by === 0)
-      return models
-        .filter((m) => inFilter(m.id))
-        .map((m) => {
-          const f = figuresOfDevices(devicesOfModel(users, m.id));
-          return { id: m.id as string, name: m.name, sub: trail(m.id).slice(0, 2).join(", "), calls: f.deliveries, detail: `${f.users} users` };
-        });
-    if (by === 1) return users.map((u) => ({ id: u.id, name: u.name, sub: u.id, calls: userDeliveries(u), detail: `${u.devices.length} device${u.devices.length === 1 ? "" : "s"}` }));
-    return state.keys.filter((k) => k.env === state.env && !k.revoked).map((k) => ({ id: k.id, name: k.name, sub: k.prefix, calls: k.calls7d, detail: k.kind === "secret" ? "Secret" : "Publishable" }));
+    const rows = rowsBetween(metrics, now, days - 1);
+    if (by === 0) {
+      return [
+        ...usedModels.filter((m) => (category === "all" || categoryOf(m.id).id === category) && (modelId === "all" || m.id === modelId)).map((m) => {
+          const owners = users.filter((u) => u.devices.some((d) => d.modelId === m.id)).length;
+          return { id: m.id as string, name: m.name, sub: trail(m.id).slice(0, 2).join(", "), calls: totalsOf(rows.filter((r) => modelOfRow(r, users) === m.id)).deliveries, detail: `${owners} ${owners === 1 ? "user" : "users"}` };
+        }),
+        { id: "unrouted", name: "No device", sub: "Refused before routing", calls: totalsOf(rows.filter((r) => !r.device)).deliveries, detail: "" },
+      ];
+    }
+    if (by === 1) return users.map((u) => ({ id: u.id, name: u.name, sub: u.named ? u.id : "", calls: totalsOf(rows.filter((r) => r.user === u.id)).deliveries, detail: `${u.devices.length} ${u.devices.length === 1 ? "device" : "devices"}` }));
+    return [
+      ...keys.filter((k) => !k.revokedAt).map((k) => ({ id: k.id, name: k.name, sub: `${k.prefix}••••`, calls: totalsOf(rows.filter((r) => r.key === k.id)).calls, detail: k.kind === "secret" ? "Secret" : "Publishable" })),
+      { id: "none", name: "No key", sub: "Before keys were recorded, or from a device", calls: totalsOf(rows.filter((r) => !r.key)).calls, detail: "" },
+    ];
   };
-  const sorted = rowsOf().sort((a, b) => b.calls - a.calls);
+  const sorted = rowsOf().filter((r) => r.calls > 0).sort((a, b) => b.calls - a.calls);
   const total = Math.max(sorted.reduce((n, r) => n + r.calls, 0), 1);
-
-  const exportCsv = () => {
-    const csv = ["name,detail,calls_7d", ...sorted.map((r) => `"${r.name}","${r.detail}",${r.calls}`)].join("\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "usage.csv";
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-  const keys = state.keys.filter((k) => !k.revoked && k.env === state.env).length;
-  const endpoints = state.endpoints.filter((e) => e.env === state.env).length;
+  const COLUMNS: Column[] = [
+    { key: "name", label: "Name", width: "40%" },
+    { key: "calls", label: `Calls, ${days}d`, width: "20%" },
+    { key: "detail", label: "Detail", width: "20%" },
+    { key: "share", label: "Share", width: "20%" },
+  ];
+  const exportCsv = () => downloadCsv("usage.csv", [`name,detail,calls_${days}d`, ...sorted.map((r) => `"${r.name}","${r.detail}",${r.calls}`)].join("\n"));
 
   return (
-    <Page
-      fit
-      overlays={
-        <>
-          {choosing && (
-            <PlanDialog
-              onClose={() => setChoosing(false)}
-              onChoose={(name) => {
-                setChoosing(false);
-                setNotice(`Demo: would move to ${name}`);
-              }}
-            />
-          )}
-          {notice && <Toast>{notice}</Toast>}
-        </>
-      }
-    >
+    <Page fit>
       <PageHeader
         title="Usage"
-        test={state.env === "test"}
+        test={test}
         action={
-          <Button variant="ink" onClick={exportCsv}>
-            <Download {...ICON} aria-hidden="true" />
-            Export
-          </Button>
+          <Row>
+            {project.org.internal && <Badge>Internal, not billed</Badge>}
+            <Button variant="ink" disabled={sorted.length === 0} onClick={exportCsv}>
+              <Download {...ICON} aria-hidden="true" />
+              Export
+            </Button>
+          </Row>
         }
       />
 
       <StatRow>
-        <StatCard label="This month" value={fmt(month)} hint={`${Math.round((month / PLAN.deliveriesIncluded) * 100)}% of ${fmt(PLAN.deliveriesIncluded)}`} />
-        <StatCard label="Projected" value={fmt(projected)} hint={over > 0 ? `${fmt(over)} over plan` : "Within plan"} />
-        <StatCard label="Delivered" value={week.deliveries ? `${week.rate}%` : "None"} hint="Seen by device, 7d" />
-        <StatCard label="Next bill" value={PLAN.price.split(" ")[0]} hint={`${PLAN.name}, renews ${PLAN.renewsOn}`} />
+        <StatCard label="This month" value={fmt(thisMonth.deliveries)} hint="Deliveries, UTC" />
+        <StatCard label={`Deliveries, ${days}d`} value={fmt(totals.deliveries)} hint={`${fmt(totals.calls)} calls`} />
+        <StatCard label="Delivered" value={totals.deliveries ? `${rateOf(totals)}%` : "None"} hint={`Taken by a device, ${days}d`} />
+        <StatCard label="Failed" value={fmt(totals.failed)} hint={`${days}d`} />
       </StatRow>
 
       <FitRows>
@@ -126,31 +114,27 @@ export function UsageSection() {
               <Between>
                 <Row>
                   <Text kind="h3">Deliveries</Text>
-                  <PillMenu stable label={category === "all" ? "All categories" : CATEGORIES.find((c) => c.id === category)!.name} value={category} options={[{ value: "all", label: "All categories" }, ...CATEGORIES.map((c) => ({ value: c.id, label: c.name }))]} onChange={(v) => { setCategory(v); setModelId("all"); }} />
-                  <PillMenu stable label={modelId === "all" ? "All models" : modelById(modelId as ModelId).name} value={modelId} options={[{ value: "all", label: "All models" }, ...models.filter((m) => category === "all" || categoryOf(m.id).id === category).map((m) => ({ value: m.id, label: m.name }))]} onChange={setModelId} />
+                  <PillMenu stable label={category === "all" ? "All categories" : CATEGORIES.find((c) => c.id === category)!.name} value={category} options={[{ value: "all", label: "All categories" }, ...CATEGORIES.filter((c) => usedModels.some((m) => categoryOf(m.id).id === c.id)).map((c) => ({ value: c.id, label: c.name }))]} onChange={(v) => { setCategory(v); setModelId("all"); }} />
+                  <PillMenu stable label={modelId === "all" ? "All models" : modelById(modelId as ModelId).name} value={modelId} options={[{ value: "all", label: "All models" }, ...usedModels.filter((m) => category === "all" || categoryOf(m.id).id === category).map((m) => ({ value: m.id, label: m.name }))]} onChange={setModelId} />
                 </Row>
-                <Row>
-                  {!span && <Segmented label="Range" options={RANGES.map((r) => r.label)} value={range} onChange={setRange} />}
-                  <DateRange label="Custom" value={span} month="2026-10" onChange={setSpan} />
-                </Row>
+                <Segmented label="Range" options={RANGES.map((r) => r.label)} value={range} onChange={setRange} />
               </Between>
-              {series.length > 0 ? <BarChart bars={series} /> : <Text kind="muted">No deliveries in this range</Text>}
+              <BarChart bars={series} />
             </FillCard>
           }
           right={
             <FillCard>
-              <Between>
-                <TwoLine title={<Text kind="h3">{PLAN.name} plan</Text>} sub={`${PLAN.price}, renews ${PLAN.renewsOn}`} />
-                <Button size="sm" onClick={() => setChoosing(true)}>
-                  <CreditCard {...ICON_SM} aria-hidden="true" />
-                  Manage
-                </Button>
-              </Between>
+              <Text kind="h3">Project</Text>
               <FillBody even>
-                <Limit label="Deliveries" used={month} limit={PLAN.deliveriesIncluded} format={fmt} />
-                <Limit label="Seats" used={state.members.length} limit={PLAN.seatsIncluded} />
-                <Limit label="API keys" used={keys} limit={KEY_LIMIT} />
-                <Limit label="Webhook endpoints" used={endpoints} limit={ENDPOINT_LIMIT} />
+                <Limit label="API keys" used={keys.filter((k) => !k.revokedAt).length} limit={keyLimit} />
+                <Between>
+                  <Text>Seats</Text>
+                  <Text num>{fmt(seats)}</Text>
+                </Between>
+                <Between>
+                  <Text>Webhook endpoints</Text>
+                  <Text num>{fmt(endpoints)}</Text>
+                </Between>
               </FillBody>
             </FillCard>
           }
@@ -162,63 +146,28 @@ export function UsageSection() {
           </TableHead>
           <ScrollArea areaRef={fit.ref}>
             <DataTable columns={COLUMNS}>
-              {sorted.slice(0, fit.count).map((r) => {
-                const share = Math.round((r.calls / total) * 100);
-                return (
-                  <DataRow key={r.id}>
-                    <DataCell>
-                      <TwoLine title={r.name} sub={r.sub} />
-                    </DataCell>
-                    <DataCell>
-                      <Text num>{fmt(r.calls)}</Text>
-                    </DataCell>
-                    <DataCell>
-                      <Text kind="muted" nowrap>
-                        {r.detail}
-                      </Text>
-                    </DataCell>
-                    <DataCell>
-                      <MeterFigure value={share} />
-                    </DataCell>
-                  </DataRow>
-                );
-              })}
+              {sorted.slice(0, fit.count).map((r) => (
+                <DataRow key={r.id}>
+                  <DataCell>
+                    <TwoLine title={r.name} sub={r.sub} />
+                  </DataCell>
+                  <DataCell>
+                    <Text num>{fmt(r.calls)}</Text>
+                  </DataCell>
+                  <DataCell>
+                    <Text kind="muted" nowrap>
+                      {r.detail}
+                    </Text>
+                  </DataCell>
+                  <DataCell>
+                    <MeterFigure value={Math.round((r.calls / total) * 100)} />
+                  </DataCell>
+                </DataRow>
+              ))}
             </DataTable>
           </ScrollArea>
         </FillCard>
       </FitRows>
     </Page>
-  );
-}
-
-const PLANS = [
-  { name: "Starter", price: "$49", features: ["5,000 deliveries", "3 seats", "1 project"] },
-  { name: "Team", price: "$249", features: ["25,000 deliveries", "10 seats", "5 projects"] },
-  { name: "Scale", price: "$799", features: ["150,000 deliveries", "Unlimited seats", "Priority support"] },
-];
-
-function PlanDialog({ onClose, onChoose }: { onClose: () => void; onChoose: (name: string) => void }) {
-  const [chosen, setChosen] = useState(PLAN.name);
-  return (
-    <FlowDialog
-      label="Manage plan"
-      eyebrow={`On ${PLAN.name}, renews ${PLAN.renewsOn}`}
-      title="Choose a plan"
-      onDismiss={onClose}
-      foot={
-        <>
-          <Grow />
-          <Button variant="ink" disabled={chosen === PLAN.name} onClick={() => onChoose(chosen)}>
-            {chosen === PLAN.name ? "Current plan" : `Move to ${chosen}`}
-          </Button>
-        </>
-      }
-    >
-      <Tiles cols={3}>
-        {PLANS.map((plan) => (
-          <PlanCard key={plan.name} name={plan.name} price={plan.price} per="/ month" features={plan.features} badge={plan.name === PLAN.name ? "Current" : undefined} selected={chosen === plan.name} onClick={() => setChosen(plan.name)} />
-        ))}
-      </Tiles>
-    </FlowDialog>
   );
 }

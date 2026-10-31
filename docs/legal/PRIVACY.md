@@ -97,7 +97,7 @@ Dopl retains correspondence You send to Dopl, including attachments.
 
 ### 2.13. Device Message Logs
 
-If Your Dopl Account is connected to Dopl's own project on the Dopl developer platform, Dopl keeps a log entry each time You send a message from the Desktop App or Glasses, an Agent's reply is sent to Your Glasses, or a message is spoken through a Google Home speaker connected to that project. Each entry includes the text of the message (up to 2,000 characters), the Channel, the device, and the time. Because Channels may be shared, the text may include Content that relates to other Members. These logs can be read only by members of that Dopl project, and Dopl's own webhooks for that project may receive the text of messages You speak to Your Glasses. They are not available through the public developer API.
+If Your Dopl Account is connected to Dopl's own project on the Dopl developer platform, Dopl keeps a log entry each time You send a message from the Desktop App or Glasses, an Agent's reply or notice is sent to Your Glasses, or a message is spoken through a Google Home speaker connected to that project. Each entry includes the text of the message (up to 2,000 characters), the Channel, the device, and the time. Because Channels may be shared, the text may include Content that relates to other Members. These logs can be read only by members of that Dopl project, and Dopl's own webhooks for that project may receive the text of messages You speak to Your Glasses. They are not available through the public developer API.
 
 ---
 
@@ -244,7 +244,7 @@ Dopl is located in the United States, and its subcontractors store and process P
 | Content | Until deleted by You or a Workspace Admin, or until the Dopl Account is deleted, subject to Section 10.1(e) |
 | Guest (Playground) accounts | Deleted automatically approximately 10 minutes after the session |
 | Agent session information | For the life of the related Channel |
-| Device message logs | 30 days, after which they are deleted. Deleting a Dopl Account does not delete them sooner |
+| Device message logs, and the queued messages, action records and webhook events behind them | 30 days, after which they are deleted. Deleting a Dopl Account does not delete them sooner |
 | MCP activity records | 90 days, after which they are deleted. On deletion of a Dopl Account, arguments and result summaries in that account's records are deleted |
 | Credit and usage records | Until the Dopl Account is deleted, then retained only in de-identified form |
 | Billing records | As required for tax and accounting purposes, generally up to 7 years |

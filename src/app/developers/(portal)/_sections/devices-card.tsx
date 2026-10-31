@@ -1,30 +1,28 @@
 "use client";
 
-/** A model the project supports: identity, state, what it does, how it is doing, what to do next. */
+/** A model the project uses: identity, state, what it does, how it is doing. */
 import { ChevronRight } from "lucide-react";
+import { LOW_RATE, dayOf, totalsOf, type MetricRow } from "@/features/device-sdk/portal/view";
 import { Badge, Button, Card, ICON, Meter } from "../_design/ui";
-import { AddCard, CardFoot, CardHead, ChipRow, Figure, FigureWell, Mark, Spark, Text } from "../_design/ui-page";
-import type { Category, Model } from "../_data/catalog";
+import { CardFoot, CardHead, ChipRow, Figure, FigureWell, Mark, Spark, Text } from "../_design/ui-page";
 import { CategoryGlyph } from "../_components/category-glyph";
-import { BASE, fmt } from "../_components/ui";
-import { LOW_SHOWN, attentionOf, weekBars, type ModelRow } from "./devices-model";
+import { BASE, fmt, portalNow } from "../_components/format";
+import { attentionOf, type ModelRow } from "./devices-model";
 
 const SHOWN_CHIPS = 4;
 
-function nextAction(row: ModelRow): { label: string; ink: boolean } {
-  if (row.added.status === "testing") return { label: "Continue testing", ink: true };
-  const n = attentionOf(row);
-  return n > 0 ? { label: `Review ${n}`, ink: false } : { label: "Open", ink: false };
+/** This model's seven days, tallest day full height. */
+function weekBars(row: ModelRow, metrics: readonly MetricRow[]): number[] {
+  const ids = new Set(row.devices.map((d) => d.id));
+  const counts = Array.from({ length: 7 }, (_, i) => totalsOf(metrics.filter((m) => m.device !== null && ids.has(m.device) && m.day === dayOf(portalNow(), 6 - i))).deliveries);
+  const top = Math.max(...counts, 1);
+  return counts.map((c) => (c / top) * 100);
 }
 
-export function ModelCard({ row }: { row: ModelRow }) {
-  const { model, integration, category, added, figures, functions } = row;
+export function ModelCard({ row, metrics }: { row: ModelRow; metrics: readonly MetricRow[] }) {
+  const { model, integration, category, figures, functions } = row;
   const attention = attentionOf(row);
-  const testing = added.status === "testing";
   const delivered = figures.deliveries > 0;
-  const low = delivered && figures.rate < LOW_SHOWN;
-  const action = nextAction(row);
-  const tests = model.capabilities.length;
   return (
     <Card href={`${BASE}/devices/${integration.id}?model=${model.id}`}>
       <CardHead
@@ -35,14 +33,7 @@ export function ModelCard({ row }: { row: ModelRow }) {
         }
         title={model.name}
         sub={<Text kind="smallMuted">{integration.name}</Text>}
-        badges={
-          <>
-            <Badge tone={testing ? "neutral" : "ok"} dot>
-              {testing ? "Testing" : "Live"}
-            </Badge>
-            {attention > 0 && <Badge tone="error">{attention} need attention</Badge>}
-          </>
-        }
+        badges={attention > 0 && <Badge tone="error">{attention} need attention</Badge>}
       />
       <ChipRow>
         {functions.slice(0, SHOWN_CHIPS).map((fn) => (
@@ -53,48 +44,27 @@ export function ModelCard({ row }: { row: ModelRow }) {
         {functions.length > SHOWN_CHIPS && <Badge>+{functions.length - SHOWN_CHIPS}</Badge>}
       </ChipRow>
       <FigureWell>
-        <Figure label="Shown, 7d" value={delivered ? `${figures.rate}%` : "None"}>
-          {delivered && <Meter value={figures.rate} tone={low ? "error" : "ink"} />}
+        <Figure label="Delivered, 7d" value={delivered ? `${figures.rate}%` : "None"}>
+          {delivered && <Meter value={figures.rate} tone={figures.rate < LOW_RATE ? "error" : "ink"} />}
         </Figure>
         <Figure label="Users" value={fmt(figures.users)} />
         <Figure label="Online" value={`${fmt(figures.online)} of ${fmt(figures.devices)}`} />
       </FigureWell>
       <CardFoot
         main={
-          testing ? (
-            <Text kind="small" clip>
-              {added.testsPassed} of {tests} tests passed
+          <>
+            <Spark bars={weekBars(row, metrics)} />
+            <Text kind="small" num clip>
+              {delivered ? `${fmt(figures.deliveries)} deliveries` : "No deliveries yet"}
             </Text>
-          ) : (
-            <>
-              <Spark bars={weekBars(model.id)} />
-              <Text kind="small" num clip>
-                {delivered ? `${fmt(figures.deliveries)} calls` : "No calls yet"}
-              </Text>
-            </>
-          )
+          </>
         }
       >
-        <Button inert size="sm" variant={action.ink ? "ink" : "secondary"}>
-          {action.label}
+        <Button inert size="sm" variant="secondary">
+          {attention > 0 ? `Review ${attention}` : "Open"}
           <ChevronRight {...ICON} />
         </Button>
       </CardFoot>
     </Card>
-  );
-}
-
-/** Closes each section, and says what the category can still add. */
-export function AddModelCard({ category, available, wide, onClick }: { category: Category; available: Model[]; wide: boolean; onClick: () => void }) {
-  return (
-    <AddCard title="Add new device" sub={category.name} wide={wide} onClick={onClick}>
-      {available.length === 0 && <Text kind="smallMuted">None available</Text>}
-      {available.slice(0, 3).map((m) => (
-        <Badge key={m.id} tone="ring">
-          {m.name}
-        </Badge>
-      ))}
-      {available.length > 3 && <Badge>+{available.length - 3}</Badge>}
-    </AddCard>
   );
 }

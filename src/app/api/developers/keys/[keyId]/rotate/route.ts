@@ -4,8 +4,11 @@ import { HttpError } from "@/shared/lib/http-error";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import { KeyNotRotatableError, rotateApiKey } from "@/features/device-sdk/server/keys";
 import { getKeyProject, listPortalProjects } from "@/features/device-sdk/server/portal";
+import { refuseLockedKey } from "@/features/device-sdk/server/portal-admin";
 import { canManageKeys } from "@/features/device-sdk/portal/scope";
 
+/** How long the old secret keeps working, in hours. The only values the portal offers. */
+const GRACE_HOURS = [0, 1, 24];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -22,7 +25,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * already-rotating key answers 409 (`KEY_REVOKED` / `KEY_EXPIRED` / `KEY_ROTATING`).
  */
 export const POST = withUserAuth(
-  async (_request, { userId, params }) => {
+  async (request, { userId, params }) => {
     try {
       const keyId = params?.keyId ?? "";
       if (!UUID.test(keyId)) throw new HttpError(404, "NOT_FOUND", "Key not found");
@@ -42,7 +45,11 @@ export const POST = withUserAuth(
       }
       if (key.expiresAt) throw new KeyNotRotatableError("KEY_ROTATING", "This key is already being rotated");
 
-      const rotated = await rotateApiKey({ projectId: project.id, keyId });
+      await refuseLockedKey(project, keyId);
+      const body = (await request.json().catch(() => null)) as { grace_hours?: unknown } | null;
+      const grace = body?.grace_hours;
+      if (grace !== undefined && !GRACE_HOURS.includes(grace as number)) throw new HttpError(400, "BAD_REQUEST", "grace_hours must be 0, 1 or 24");
+      const rotated = await rotateApiKey({ projectId: project.id, keyId, overlapMs: grace === undefined ? undefined : (grace as number) * 3_600_000 });
       return NextResponse.json(
         { secret: rotated.secret, key: rotated.key, previous: rotated.previous },
         { headers: { "Cache-Control": "no-store" } }

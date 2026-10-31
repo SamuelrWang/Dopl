@@ -1,25 +1,26 @@
 "use client";
 
 /** A key: what it is, whether it is in use, what it may do, how much it does, what to do with it. */
-import { Copy, Globe, KeyRound, RefreshCw, type LucideIcon } from "lucide-react";
+import { Globe, KeyRound, RefreshCw, type LucideIcon } from "lucide-react";
+import type { KeyView } from "@/features/device-sdk/portal/view";
 import { Badge, Button, Card, ICON_SM, Initials, initialsOf, type Tone } from "../_design/ui";
 import { AddCard, CardFoot, CardHead, ChipRow, Figure, FigureWell, Mark, Text } from "../_design/ui-page";
-import type { ApiKeyRow } from "../_data/misc";
-import { fmt, since } from "../_components/ui";
-import { oldSecretLeft, stateOf, type KeyKind } from "./keys-model";
+import { fmt, since } from "../_components/format";
+import { isDead, oldSecretLeft, stateOf, type KeyKind } from "./keys-model";
 
 export const KIND_GLYPH: Record<KeyKind, LucideIcon> = { secret: KeyRound, publishable: Globe };
 const TONE: Record<"ok" | "warn" | "plain", Tone> = { ok: "ok", warn: "warn", plain: "neutral" };
 
-export function KeyCard({ row, onRotate, onRevoke, onCopy }: { row: ApiKeyRow; onRotate: () => void; onRevoke: () => void; onCopy: (token: string) => void }) {
+export function KeyCard({ row, canManage, onRotate, onRevoke }: { row: KeyView; canManage: boolean; onRotate: () => void; onRevoke: () => void }) {
   const state = stateOf(row);
   const left = oldSecretLeft(row);
+  const dead = isDead(row);
   return (
     <Card label={row.name}>
       <CardHead
-        mark={<Mark icon={KIND_GLYPH[row.kind]} tone={row.revoked ? "ring" : "ink"} />}
+        mark={<Mark icon={KIND_GLYPH[row.kind]} tone={dead ? "ring" : "ink"} />}
         title={row.name}
-        sub={<Text kind="token">{row.token ?? `${row.prefix}••••`}</Text>}
+        sub={<Text kind="token">{`${row.prefix}••••`}</Text>}
         badges={
           <>
             <Badge tone={TONE[state.tone]} dot={state.tone === "ok"}>
@@ -37,37 +38,39 @@ export function KeyCard({ row, onRotate, onRevoke, onCopy }: { row: ApiKeyRow; o
         ))}
       </ChipRow>
       <FigureWell>
-        {row.revoked ? <Figure label="Revoked" value={since(row.revokedAt ?? null)} /> : <Figure label="Last used" value={since(row.lastUsedAt)} />}
+        {row.revokedAt ? <Figure label="Revoked" value={since(row.revokedAt)} /> : <Figure label="Last used" value={since(row.lastUsedAt)} />}
         <Figure label="Calls, 7d" value={fmt(row.calls7d)} />
         <Figure label="Created" value={since(row.createdAt)} />
       </FigureWell>
       <CardFoot
         main={
-          <>
-            <Initials text={initialsOf(row.createdBy)} small />
-            <Text kind="small" clip>
-              {row.createdBy}
-            </Text>
-          </>
+          row.createdBy && (
+            <>
+              <Initials text={initialsOf(row.createdBy)} small />
+              <Text kind="small" clip>
+                {row.createdBy}
+              </Text>
+            </>
+          )
         }
       >
-        {!row.revoked && (
-          <>
-            {row.token ? (
-              <Button size="sm" onClick={() => onCopy(row.token!)}>
-                <Copy {...ICON_SM} aria-hidden="true" />
-                Copy
+        {row.locked ? (
+          <Badge>Used by Dopl</Badge>
+        ) : (
+          canManage &&
+          !dead && (
+            <>
+              {row.kind === "secret" && !row.expiresAt && (
+                <Button size="sm" onClick={onRotate}>
+                  <RefreshCw {...ICON_SM} aria-hidden="true" />
+                  Rotate
+                </Button>
+              )}
+              <Button size="sm" variant="dangerOutline" onClick={onRevoke}>
+                Revoke
               </Button>
-            ) : (
-              <Button size="sm" onClick={onRotate}>
-                <RefreshCw {...ICON_SM} aria-hidden="true" />
-                Rotate
-              </Button>
-            )}
-            <Button size="sm" variant="dangerOutline" onClick={onRevoke}>
-              Revoke
-            </Button>
-          </>
+            </>
+          )
         )}
       </CardFoot>
     </Card>

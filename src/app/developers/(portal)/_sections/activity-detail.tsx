@@ -1,64 +1,57 @@
 "use client";
 
-/** One call's story: what it was, each step it took, the devices considered, the raw response. */
+/** One call's story: what it said, each step it took, the devices considered, the raw response. */
 import { Check, Copy, ExternalLink } from "lucide-react";
 import { useState } from "react";
+import { CALL_KIND_LABEL, STATUS_LABEL, type Call, type PortalUser } from "@/features/device-sdk/portal/view";
 import { Badge, Button, ICON_SM, TwoLine, type Tone } from "../_design/ui";
 import { Timeline, type Step } from "../_design/ui-data";
 import { FillBody } from "../_design/ui-output";
 import { BoxRow, Between, CodeBlock, Grow, ListRow, ReviewWell, Stack, Text } from "../_design/ui-page";
-import { KIND_LABEL, STATUS_LABEL, timelineOf, type Call, type CallStatus } from "../_data/activity";
-import { ownedDevice, userById } from "../_data/users";
-import { BASE, clock, fmt, ms, since } from "../_components/ui";
+import { BASE, clockOf, ms, since } from "../_components/format";
+import { STATUS_TONE, deviceNameOf, userNameOf } from "./activity";
 
-const TONE: Partial<Record<CallStatus, Tone>> = { seen: "ok", answered: "ok", ok: "ok", failed: "error", retrying: "warn", expired: "warn" };
-const VERDICT: Record<string, [string, Tone]> = { chosen: ["Chosen", "ok"], skipped: ["Skipped", "neutral"], refused: ["Refused", "error"] };
+const VERDICT: Record<string, [string, Tone]> = { chosen: ["Chosen", "ok"], eligible: ["Eligible", "neutral"], skipped: ["Skipped", "neutral"] };
 
-function stepsOf(call: Call): Step[] {
-  return timelineOf(call)
-    .filter((s) => s.state !== "unknowable")
-    .map((s) => ({ key: s.key, label: s.label, detail: s.detail, at: s.at === undefined || s.at === null ? undefined : ms(s.at), state: s.state === "failed" ? "failed" : s.state === "pending" ? "pending" : "done" }));
-}
-
-export function CallDetail({ call }: { call: Call }) {
+export function CallDetail({ call, users }: { call: Call; users: PortalUser[] }) {
   const [copied, setCopied] = useState<string | null>(null);
-  const user = call.userId ? userById(call.userId) : null;
-  const device = call.deviceId ? ownedDevice(call.deviceId) : null;
+  const user = userNameOf(users, call.userId);
+  const device = deviceNameOf(users, call.deviceId);
+  const steps: Step[] = call.steps.map((s) => ({ key: s.key, label: s.label, detail: s.detail, at: s.at === undefined ? undefined : ms(s.at), state: s.state }));
   return (
     <>
       <Between>
-        <Badge tone={TONE[call.status] ?? "neutral"} dot>
+        <Badge tone={STATUS_TONE[call.status] ?? "neutral"} dot>
           {STATUS_LABEL[call.status]}
         </Badge>
-        <Text kind="smallMuted">{KIND_LABEL[call.kind]}</Text>
+        <Text kind="smallMuted">{CALL_KIND_LABEL[call.kind]}</Text>
       </Between>
-      <TwoLine title={<Text kind="h3">{call.webhook?.event ?? call.title}</Text>} sub={call.id} />
+      <TwoLine title={<Text kind="h3">{call.title}</Text>} sub={call.id} />
       <FillBody>
         <ReviewWell
           items={[
-            ["When", clock(call.at)],
-            ["Took", `${fmt(call.latencyMs)} ms`],
-            ["User", user?.name ?? "None"],
-            ["Device", device?.name ?? "None"],
+            ["When", clockOf(call.at)],
+            ["Took", call.latencyMs === null ? "None" : ms(call.latencyMs)],
+            ["User", user ?? "None"],
+            ["Device", device ?? call.webhook?.endpointName ?? "None"],
           ]}
         />
-        {call.truncated && <Badge tone="warn">Cut to {call.truncated.kept} of {call.truncated.of} lines</Badge>}
-        {call.kind === "delivery" && (
+        {steps.length > 0 && (
           <Stack>
             <Text kind="strong" as="h3">
               Timeline
             </Text>
-            <Timeline steps={stepsOf(call)} />
+            <Timeline steps={steps} />
           </Stack>
         )}
-        {call.candidates.length > 0 && (
+        {call.considered.length > 0 && (
           <Stack>
             <Text kind="strong" as="h3">
               Devices considered
             </Text>
-            {call.candidates.map((c) => (
+            {call.considered.map((c) => (
               <BoxRow key={c.deviceId}>
-                <TwoLine title={ownedDevice(c.deviceId)?.name ?? c.deviceId} sub={c.reason} />
+                <TwoLine title={deviceNameOf(users, c.deviceId) ?? c.deviceId} sub={c.reason} />
                 <Grow />
                 <Badge tone={VERDICT[c.verdict][1]}>{VERDICT[c.verdict][0]}</Badge>
               </BoxRow>
@@ -84,11 +77,7 @@ export function CallDetail({ call }: { call: Call }) {
             </div>
           </Stack>
         )}
-        {call.http && (
-          <CodeBlock title={`${call.http.method} ${call.http.path}`}>
-            {JSON.stringify(call.errorCode ? { error: { code: call.errorCode, retryable: call.errorCode === "rate_limited", request_id: call.id } } : { ok: true, status: call.http.status, request_id: call.id }, null, 2)}
-          </CodeBlock>
-        )}
+        {call.response != null && <CodeBlock title={call.route ?? "Response"}>{JSON.stringify(call.response, null, 2)}</CodeBlock>}
       </FillBody>
       <Between>
         <Button
@@ -101,8 +90,8 @@ export function CallDetail({ call }: { call: Call }) {
           {copied === call.id ? <Check {...ICON_SM} aria-hidden="true" /> : <Copy {...ICON_SM} aria-hidden="true" />}
           {copied === call.id ? "Copied" : "Copy ID"}
         </Button>
-        {user && (
-          <Button size="sm" variant="ghost" href={`${BASE}/users/${user.id}`}>
+        {call.userId && (
+          <Button size="sm" variant="ghost" href={`${BASE}/users/${encodeURIComponent(call.userId)}`}>
             <ExternalLink {...ICON_SM} aria-hidden="true" />
             Open user
           </Button>

@@ -1,5 +1,5 @@
 /** Overhauled pages use the shared components only, so they cannot drift from the Playground. See README.md. */
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -24,6 +24,16 @@ describe("overhauled pages", () => {
   // docs-page.tsx keeps its CSS until the docs restyle is committed; drop this filter when it lands.
   it.each(readdirSync(DOCS).filter((f) => f !== "docs-page.tsx"))("the docs site's %s imports no CSS", (file) => {
     expect(readFileSync(join(DOCS, file), "utf8")).not.toMatch(/\.css"/);
+  });
+
+  it("never import sample data", () => {
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : /\.tsx?$/.test(e.name) ? [join(dir, e.name)] : []));
+    const here = (name: string) => join(__dirname, "..", name);
+    for (const f of [...walk(here("_sections")), ...walk(here("_components")), ...walk(here("_lib"))]) {
+      expect(readFileSync(f, "utf8"), f).not.toMatch(/_data\/|DEMO_NOW|larkfield/i);
+    }
+    expect(existsSync(here("_data"))).toBe(false);
   });
 
   it("have no CSS modules of their own", () => {

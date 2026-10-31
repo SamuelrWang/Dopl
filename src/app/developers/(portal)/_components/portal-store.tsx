@@ -1,111 +1,68 @@
 "use client";
 
 /**
- * The demo's local state: one provider in the route's layout, so edits survive moving between pages
- * and vanish on reload. No API, no DB. Sections read `usePortal()` and write with `update`.
+ * What the shell knows and every page reads: who, which project, which environment. The figures themselves
+ * come to each page from the server. Switching project or environment writes a cookie and re-reads.
  */
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import type { CapabilityId } from "@dopl/device-contracts";
-import { ALL_CALLS, type Call } from "../_data/activity";
-import { MEMBERS, PROJECTS, type Env, type Member } from "../_data/company";
-import {
-  INTEGRATIONS,
-  SEED_INTEGRATIONS,
-  integrationById,
-  seedCapabilities,
-  type CapabilitySetting,
-  type CategoryId,
-  type IntegrationId,
-  type IntegrationStatus,
-  type ModelId,
-} from "../_data/catalog";
-import { SEED_CONNECT, SEED_ENDPOINTS, SEED_KEYS, type ApiKeyRow, type ConnectConfig, type EndpointRow } from "../_data/misc";
-import { seedReceives, type ReceivesState } from "../_data/receives";
-import { ALL_USERS, type DeviceState, type PortalUser, type UserPrefs } from "../_data/users";
+import { useRouter } from "next/navigation";
+import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from "react";
+import { canManageKeys, canManageMembers, type PortalProject } from "@/features/device-sdk/portal/scope";
+import type { Environment } from "@/features/device-sdk/types";
+import { setPortalClock } from "./format";
 
-export interface AddedIntegration {
-  status: IntegrationStatus;
-  addedAt: string;
-  testsPassed: number;
+export interface PortalShellData {
+  email: string | null;
+  projects: PortalProject[];
+  project: PortalProject;
+  env: Environment;
+  now: string;
 }
 
-export interface SavedView {
-  id: string;
-  name: string;
-  filters: UserFilters;
-}
-
-export interface UserFilters {
-  q: string;
-  category: string;
-  integration: string;
-  model: string;
-  status: string;
-  issues: string;
-  firmware: string;
-  active: string;
-}
-
-export const NO_FILTERS: UserFilters = { q: "", category: "all", integration: "all", model: "all", status: "all", issues: "all", firmware: "all", active: "all" };
-
-export interface PortalState {
-  env: Env;
-  project: string;
-  integrations: Partial<Record<IntegrationId, AddedIntegration>>;
-  /** Rules live on the category; a model overrides inside it. */
-  receives: Partial<Record<CategoryId, ReceivesState>>;
-  capabilities: Partial<Record<ModelId, Partial<Record<CapabilityId, CapabilitySetting>>>>;
-  deviceStates: Record<string, DeviceState>;
-  revoked: string[];
-  prefs: Record<string, UserPrefs>;
-  mutedIssues: string[];
-  savedViews: SavedView[];
-  keys: ApiKeyRow[];
-  endpoints: EndpointRow[];
-  members: Member[];
-  connect: { draft: ConnectConfig; published: ConnectConfig };
-  checklist: { key: boolean; webhook: boolean };
-  sentCalls: Call[];
-}
-
-const SEED_VIEWS: SavedView[] = [
-  { id: "view_relink", name: "Needs relink", filters: { ...NO_FILTERS, issues: "relink" } },
-  { id: "view_dormant", name: "Quiet for 2 days", filters: { ...NO_FILTERS, active: "over7" } },
-  { id: "view_g2_old", name: "G2 on old firmware", filters: { ...NO_FILTERS, model: "g2", firmware: "1.3.8" } },
-];
-
-function seed(): PortalState {
-  const added = INTEGRATIONS.filter((i) => SEED_INTEGRATIONS[i.id]);
-  return {
-    env: "live",
-    project: PROJECTS[0].value,
-    integrations: { ...SEED_INTEGRATIONS },
-    receives: Object.fromEntries([...new Set(added.map((i) => i.categoryId))].map((c) => [c, seedReceives(c)])) as PortalState["receives"],
-    capabilities: Object.fromEntries(added.flatMap((i) => i.models).map((m) => [m.id, seedCapabilities(m)])) as PortalState["capabilities"],
-    deviceStates: {},
-    revoked: [],
-    prefs: {},
-    mutedIssues: [],
-    savedViews: SEED_VIEWS,
-    keys: SEED_KEYS,
-    endpoints: SEED_ENDPOINTS,
-    members: MEMBERS,
-    connect: { draft: SEED_CONNECT, published: SEED_CONNECT },
-    checklist: { key: true, webhook: true },
-    sentCalls: [],
-  };
-}
-
-interface PortalApi {
-  state: PortalState;
-  update: (fn: (s: PortalState) => PortalState) => void;
+interface PortalApi extends PortalShellData {
+  test: boolean;
+  canManage: boolean;
+  /** An internal org's people are managed by hand. */
+  canInvite: boolean;
+  setEnv: (env: Environment) => void;
+  setProject: (id: string) => void;
 }
 
 const Ctx = createContext<PortalApi | null>(null);
 
-export function PortalProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<PortalState>(seed);
-  const value = useMemo(() => ({ state, update: setState }), [state]);
+const YEAR_S = 365 * 86_400;
+const writeCookie = (name: string, value: string) => {
+  document.cookie = `${name}=${value}; path=/developers; max-age=${YEAR_S}; samesite=lax`;
+};
+
+export function PortalProvider({ data, children }: { data: PortalShellData; children: ReactNode }) {
+  const router = useRouter();
+  setPortalClock(data.now);
+  const setEnv = useCallback(
+    (env: Environment) => {
+      writeCookie("dopl_dev_env", env);
+      router.refresh();
+    },
+    [router]
+  );
+  const setProject = useCallback(
+    (id: string) => {
+      writeCookie("dopl_dev_project", id);
+      document.cookie = "dopl_dev_env=; path=/developers; max-age=0";
+      router.refresh();
+    },
+    [router]
+  );
+  const value = useMemo<PortalApi>(
+    () => ({
+      ...data,
+      test: data.env === "test",
+      canManage: canManageKeys(data.project.role),
+      canInvite: canManageMembers(data.project.role) && !data.project.org.internal,
+      setEnv,
+      setProject,
+    }),
+    [data, setEnv, setProject]
+  );
   return <Ctx value={value}>{children}</Ctx>;
 }
 
@@ -115,47 +72,20 @@ export function usePortal(): PortalApi {
   return api;
 }
 
-/** The env's users with this session's revokes, relinks and preference edits laid over them. */
-export function useUsers(): PortalUser[] {
-  const { state } = usePortal();
-  return useMemo(
-    () =>
-      ALL_USERS.filter((u) => u.env === state.env).map((u) => ({
-        ...u,
-        prefs: state.prefs[u.id] ?? u.prefs,
-        devices: u.devices
-          .filter((d) => !state.revoked.includes(d.id))
-          .map((d) => ({ ...d, state: state.deviceStates[d.id] ?? d.state })),
-      })),
-    [state.env, state.prefs, state.revoked, state.deviceStates]
-  );
-}
-
-export function useUser(id: string): PortalUser | null {
-  const { state } = usePortal();
-  const u = ALL_USERS.find((x) => x.id === id);
-  if (!u) return null;
-  return {
-    ...u,
-    prefs: state.prefs[u.id] ?? u.prefs,
-    devices: u.devices.filter((d) => !state.revoked.includes(d.id)).map((d) => ({ ...d, state: state.deviceStates[d.id] ?? d.state })),
-  };
-}
-
-export function useCalls(): Call[] {
-  const { state } = usePortal();
-  return useMemo(() => [...state.sentCalls, ...ALL_CALLS].filter((c) => c.env === state.env), [state.env, state.sentCalls]);
-}
-
-/** Adds an integration to the project as Testing; one already added is left alone. */
-export function addIntegration(s: PortalState, id: IntegrationId, at: string): PortalState {
-  if (s.integrations[id]) return s;
-  const integration = integrationById(id)!;
-  const category = integration.categoryId;
-  return {
-    ...s,
-    integrations: { ...s.integrations, [id]: { status: "testing", addedAt: at, testsPassed: 0 } },
-    receives: s.receives[category] ? s.receives : { ...s.receives, [category]: seedReceives(category) },
-    capabilities: { ...s.capabilities, ...(Object.fromEntries(integration.models.map((m) => [m.id, seedCapabilities(m)])) as PortalState["capabilities"]) },
-  };
+/** Re-reads the page on return to the tab and, with `everyMs`, on a timer while it is visible. No realtime: `dev_*` is service role only. */
+export function useLiveRefresh(everyMs?: number): void {
+  const router = useRouter();
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") router.refresh();
+    };
+    window.addEventListener("focus", refreshIfVisible);
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    const timer = everyMs ? window.setInterval(refreshIfVisible, everyMs) : null;
+    return () => {
+      window.removeEventListener("focus", refreshIfVisible);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+      if (timer !== null) window.clearInterval(timer);
+    };
+  }, [router, everyMs]);
 }

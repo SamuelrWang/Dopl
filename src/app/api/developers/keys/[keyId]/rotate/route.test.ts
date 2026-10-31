@@ -38,7 +38,7 @@ vi.mock("@/features/device-sdk/server/keys", () => {
       super(message);
     }
   }
-  return { KeyNotRotatableError, rotateApiKey: (...a: unknown[]) => rotateApiKey(...a) };
+  return { KeyNotRotatableError, rotateApiKey: (...a: unknown[]) => rotateApiKey(...a), lockedKeyIds: async () => [] };
 });
 
 import { POST } from "./route";
