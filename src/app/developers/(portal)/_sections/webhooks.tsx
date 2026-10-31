@@ -7,12 +7,13 @@
 import { ChevronRight, Plus, SearchX, Webhook } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { STATUS_LABEL, type Call, type EndpointView } from "@/features/device-sdk/portal/view";
+import { STATUS_LABEL, rateOf, type Call, type EndpointView } from "@/features/device-sdk/portal/view";
 import { errorText, portalCall } from "../../_lib/client-api";
 import { Badge, Button, Card, DataCell, DataRow, DataTable, ICON, PillMenu, SearchField, Segmented, StatCard, type Column } from "../_design/ui";
-import { Between, CardSection, EmptyState, Page, PageHeader, StatRow, TableHead, Text, Toast } from "../_design/ui-page";
+import { Between, CardSection, EmptyState, Page, PageHeader, Pager, StatRow, TableFoot, TableHead, Text, Toast } from "../_design/ui-page";
 import { fmt, since } from "../_components/format";
 import { useLiveRefresh, usePortal } from "../_components/portal-store";
+import { useLiveCalls } from "../_components/use-live-calls";
 import { STATUS_TONE } from "./activity";
 import { AddEndpointFlow } from "./webhooks-add";
 import { EndpointCard } from "./webhooks-card";
@@ -20,7 +21,8 @@ import { EventSheet } from "./webhooks-sheet";
 
 const VIEWS = ["All", "Failed"];
 const SHOWN = 10;
-const LIVE_MS = 3000;
+/** The rows stay live on their own. This is for the endpoint figures above them. */
+const FIGURES_MS = 30_000;
 const COLUMNS: Column[] = [
   { key: "event", label: "Event", width: "26%" },
   { key: "endpoint", label: "Endpoint", width: "26%" },
@@ -34,10 +36,12 @@ const COLUMNS: Column[] = [
 const lastCode = (c: Call) => c.webhook?.attempts.at(-1)?.status ?? null;
 const isFailure = (c: Call) => c.status === "failed" || c.status === "retrying";
 
-export function WebhooksSection({ endpoints, events }: { endpoints: EndpointView[]; events: Call[] }) {
+export function WebhooksSection({ endpoints, events: first }: { endpoints: EndpointView[]; events: Call[] }) {
   const router = useRouter();
   const { test, project, env, canManage } = usePortal();
-  useLiveRefresh(LIVE_MS);
+  useLiveRefresh(FIGURES_MS);
+  const { calls: events } = useLiveCalls(first, "webhooks");
+  const [page, setPage] = useState(1);
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [view, setView] = useState(0);
@@ -51,13 +55,15 @@ export function WebhooksSection({ endpoints, events }: { endpoints: EndpointView
     window.setTimeout(() => setNotice((now) => (now === text ? null : now)), 3200);
   };
   const rows = events.filter((c) => (endpointId === "all" || c.webhook!.endpointId === endpointId) && (view === 0 || isFailure(c)) && (q === "" || c.webhook!.event.includes(q.toLowerCase())));
+  const pages = Math.max(1, Math.ceil(rows.length / SHOWN));
+  const current = Math.min(page, pages);
   const open = events.find((c) => c.id === openId) ?? null;
   const nameOf = (id: string) => endpoints.find((e) => e.id === id)?.name ?? id;
 
   const sent = endpoints.reduce((n, e) => n + e.sent7d, 0);
   const delivered = endpoints.reduce((n, e) => n + e.delivered7d, 0);
   const failedCount = endpoints.reduce((n, e) => n + e.failed7d, 0);
-  const rate = delivered + failedCount ? Math.round((delivered / (delivered + failedCount)) * 1000) / 10 : 0;
+  const rate = rateOf({ deliveries: delivered + failedCount, delivered });
   const failing = endpoints.filter((e) => e.state === "failing");
 
   const toggle = async (e: EndpointView) => {
@@ -148,7 +154,7 @@ export function WebhooksSection({ endpoints, events }: { endpoints: EndpointView
               <EmptyState icon={SearchX} title={events.length === 0 ? "No events yet" : "No events match"} action={events.length > 0 ? <Button onClick={() => { setQ(""); setView(0); setEndpointId("all"); }}>Clear filters</Button> : undefined} />
             ) : (
               <DataTable columns={COLUMNS}>
-                {rows.slice(0, SHOWN).map((c) => (
+                {rows.slice((current - 1) * SHOWN, current * SHOWN).map((c) => (
                   <DataRow key={c.id} selected={openId === c.id} onClick={() => setOpenId(c.id)}>
                     <DataCell>
                       <Text kind="mono" clip>
@@ -178,6 +184,12 @@ export function WebhooksSection({ endpoints, events }: { endpoints: EndpointView
                   </DataRow>
                 ))}
               </DataTable>
+            )}
+            {pages > 1 && (
+              <TableFoot>
+                <Text kind="smallMuted">{fmt(rows.length)} events</Text>
+                <Pager page={current} pages={pages} onPage={setPage} />
+              </TableFoot>
             )}
           </Card>
         </>

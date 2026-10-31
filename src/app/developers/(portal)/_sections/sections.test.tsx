@@ -120,7 +120,7 @@ describe("the portal's pages, on real shapes", () => {
   });
 
   it("Users has no saved views, plan or send test", () => {
-    inPortal(<UsersSection users={users} calls={calls} />);
+    inPortal(<UsersSection users={users} />);
     expect(screen.getByText("Maya Chen")).toBeTruthy();
     expect(screen.queryByText("Views")).toBeNull();
     fireEvent.click(screen.getByText("Maya Chen"));

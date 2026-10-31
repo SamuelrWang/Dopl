@@ -1,12 +1,15 @@
 "use client";
 
 /** A user over the list: identity, devices, the week, latest deliveries. */
+import { useEffect, useState } from "react";
 import { STATE_LABEL, STATUS_LABEL, userDelivered, userDeliveries, userRate, type Call, type DeviceState, type PortalUser } from "@/features/device-sdk/portal/view";
 import { modelById } from "@/features/device-sdk/portal/catalog";
 import { Badge, Button, ICON, Initials, StateDot, TwoLine, initialsOf, type Tone } from "../_design/ui";
 import { StatTriple } from "../_design/ui-extras";
 import { BoxRow, Grow, ListRow, Row, SideSheet, Stack, Text } from "../_design/ui-page";
 import { BASE, fmt, since } from "../_components/format";
+import { usePortal } from "../_components/portal-store";
+import { readFeed } from "../_components/use-live-calls";
 import { STATUS_TONE, deviceNameOf } from "./activity";
 import { DeviceGlyph, StatusBadge } from "./users-table";
 import { devicesInOrder, statusOf } from "./users-model";
@@ -14,8 +17,18 @@ import { devicesInOrder, statusOf } from "./users-model";
 export const STATE_BADGE: Record<DeviceState, Tone> = { online: "ok", offline: "neutral", stale: "warn", needs_relink: "error" };
 const LATEST = 5;
 
-export function UserSheet({ user, calls, onClose }: { user: PortalUser; calls: Call[]; onClose: () => void }) {
-  const deliveries = calls.filter((c) => c.userId === user.id && c.kind === "delivery").slice(0, LATEST);
+export function UserSheet({ user, onClose }: { user: PortalUser; onClose: () => void }) {
+  const { project, env } = usePortal();
+  const [deliveries, setDeliveries] = useState<Call[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    void readFeed(project.id, env, { user: user.id, source: "devices", limit: "50" }).then((body) => {
+      if (live) setDeliveries((body?.calls ?? []).filter((c) => c.kind === "delivery").slice(0, LATEST));
+    });
+    return () => {
+      live = false;
+    };
+  }, [project.id, env, user.id]);
   const sent = userDeliveries(user);
   return (
     <SideSheet
@@ -77,9 +90,9 @@ export function UserSheet({ user, calls, onClose }: { user: PortalUser; calls: C
         <Text kind="strong" as="h3">
           Latest deliveries
         </Text>
-        {deliveries.length === 0 && <Text kind="faint">None</Text>}
+        {deliveries?.length === 0 && <Text kind="faint">None</Text>}
         <div>
-          {deliveries.map((c, i) => (
+          {deliveries?.map((c, i) => (
             <ListRow key={c.id} line={i < deliveries.length - 1}>
               <TwoLine strong={false} title={c.title} sub={deviceNameOf([user], c.deviceId) ?? "No device"} />
               <Grow />

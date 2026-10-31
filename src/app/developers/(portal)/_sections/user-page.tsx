@@ -1,9 +1,10 @@
 "use client";
 
 /** One user: their physical devices, deliveries and grants. */
-import { CAPABILITY_RISK_TIER, type CapabilityId } from "@dopl/device-contracts";
+import { CAPABILITY_RISK_TIER, type CapabilityId, type CapabilityScope } from "@dopl/device-contracts";
 import { Cpu } from "lucide-react";
 import { useState } from "react";
+import { scopesCover } from "@/features/device-sdk/delivery/resolve-profile";
 import { modelById, trail } from "@/features/device-sdk/portal/catalog";
 import { STATE_LABEL, categoryIdOf, userDeliveries, userRate, type Call, type OwnedDevice, type PortalUser } from "@/features/device-sdk/portal/view";
 import { Badge, Card, ICON, Initials, Segmented, StatCard, TwoLine, initialsOf } from "../_design/ui";
@@ -50,10 +51,6 @@ function DeviceCard({ device }: { device: OwnedDevice }) {
   );
 }
 
-function covers(grants: readonly string[], capability: string) {
-  return grants.includes(capability) || grants.some((g) => g.endsWith(".*") && capability.startsWith(g.slice(0, -1)));
-}
-
 function Grants({ device }: { device: OwnedDevice }) {
   const capabilities = modelById(device.modelId).capabilities;
   return (
@@ -69,7 +66,7 @@ function Grants({ device }: { device: OwnedDevice }) {
               {c}
             </Text>
             <Grow />
-            {covers(device.grants, c) ? <Badge tone="ok">Granted</Badge> : <Text kind="faint">Not granted</Text>}
+            {scopesCover(device.grants as CapabilityScope[], c as CapabilityId) ? <Badge tone="ok">Granted</Badge> : <Text kind="faint">Not granted</Text>}
           </ListRow>
         ))}
       </div>

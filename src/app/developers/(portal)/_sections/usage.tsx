@@ -2,7 +2,7 @@
 
 /** Usage: how much this project sends, and what is driving it. Figures follow the Category and Model filters; the counts on the right never do. */
 import { Download } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ALL_MODELS, CATEGORIES, categoryOf, modelById, modelOfAdapter, trail, type ModelId } from "@/features/device-sdk/portal/catalog";
 import { dailyBars, rateOf, rowsBetween, totalsOf, type KeyView, type MetricRow, type PortalUser } from "@/features/device-sdk/portal/view";
 import { Badge, Button, DataCell, DataRow, DataTable, ICON, MeterFigure, PillMenu, Segmented, StatCard, TwoLine, type Column } from "../_design/ui";
@@ -15,7 +15,7 @@ import { usePortal } from "../_components/portal-store";
 const RANGES = [{ label: "7 days", days: 7 }, { label: "30 days", days: 30 }];
 const BREAKDOWNS = ["Model", "User", "API key"];
 
-export interface UsageProps {
+interface UsageProps {
   users: PortalUser[];
   metrics: MetricRow[];
   keys: KeyView[];
@@ -24,13 +24,12 @@ export interface UsageProps {
   endpoints: number;
 }
 
-function modelOfRow(m: MetricRow, users: readonly PortalUser[]): ModelId | null {
+const ADAPTER_OF_KIND: Record<string, string> = { glasses: "even_g2", desktop: "desktop", home_hub: "google_home" };
+
+/** A row's device may be gone from the fleet by now, so its kind still places it. */
+function modelOfRow(m: MetricRow, models: ReadonlyMap<string, ModelId>): ModelId | null {
   if (!m.device) return null;
-  for (const u of users) {
-    const d = u.devices.find((x) => x.id === m.device);
-    if (d) return d.modelId;
-  }
-  return modelOfAdapter(m.kind === "glasses" ? "even_g2" : m.kind === "desktop" ? "desktop" : m.kind === "home_hub" ? "google_home" : "");
+  return models.get(m.device) ?? modelOfAdapter(ADAPTER_OF_KIND[m.kind ?? ""] ?? "");
 }
 
 export function UsageSection({ users, metrics, keys, keyLimit, seats, endpoints }: UsageProps) {
@@ -43,9 +42,10 @@ export function UsageSection({ users, metrics, keys, keyLimit, seats, endpoints 
   const now = portalNow();
   const days = RANGES[range].days;
 
+  const models = useMemo(() => new Map(users.flatMap((u) => u.devices.map((d) => [d.id, d.modelId] as const))), [users]);
   const inFilter = (m: MetricRow) => {
     if (category === "all" && modelId === "all") return true;
-    const id = modelOfRow(m, users);
+    const id = modelOfRow(m, models);
     return id !== null && (category === "all" || categoryOf(id).id === category) && (modelId === "all" || id === modelId);
   };
   const filtered = metrics.filter(inFilter);
@@ -62,7 +62,7 @@ export function UsageSection({ users, metrics, keys, keyLimit, seats, endpoints 
       return [
         ...usedModels.filter((m) => (category === "all" || categoryOf(m.id).id === category) && (modelId === "all" || m.id === modelId)).map((m) => {
           const owners = users.filter((u) => u.devices.some((d) => d.modelId === m.id)).length;
-          return { id: m.id as string, name: m.name, sub: trail(m.id).slice(0, 2).join(", "), calls: totalsOf(rows.filter((r) => modelOfRow(r, users) === m.id)).deliveries, detail: `${owners} ${owners === 1 ? "user" : "users"}` };
+          return { id: m.id as string, name: m.name, sub: trail(m.id).slice(0, 2).join(", "), calls: totalsOf(rows.filter((r) => modelOfRow(r, models) === m.id)).deliveries, detail: `${owners} ${owners === 1 ? "user" : "users"}` };
         }),
         { id: "unrouted", name: "No device", sub: "Refused before routing", calls: totalsOf(rows.filter((r) => !r.device)).deliveries, detail: "" },
       ];
@@ -75,13 +75,14 @@ export function UsageSection({ users, metrics, keys, keyLimit, seats, endpoints 
   };
   const sorted = rowsOf().filter((r) => r.calls > 0).sort((a, b) => b.calls - a.calls);
   const total = Math.max(sorted.reduce((n, r) => n + r.calls, 0), 1);
+  const unit = by === 2 ? "Calls" : "Deliveries";
   const COLUMNS: Column[] = [
     { key: "name", label: "Name", width: "40%" },
-    { key: "calls", label: `Calls, ${days}d`, width: "20%" },
+    { key: "calls", label: `${unit}, ${days}d`, width: "20%" },
     { key: "detail", label: "Detail", width: "20%" },
     { key: "share", label: "Share", width: "20%" },
   ];
-  const exportCsv = () => downloadCsv("usage.csv", [`name,detail,calls_${days}d`, ...sorted.map((r) => `"${r.name}","${r.detail}",${r.calls}`)].join("\n"));
+  const exportCsv = () => downloadCsv("usage.csv", [["name", "detail", `${unit.toLowerCase()}_${days}d`], ...sorted.map((r) => [r.name, r.detail, r.calls])]);
 
   return (
     <Page fit>

@@ -47,7 +47,7 @@ const GROUPS: { label: string | null; items: NavItem[] }[] = [
   },
 ];
 
-export interface ShellCounts {
+interface ShellCounts {
   issues: number;
   attention: number;
   find: FindEntry[];

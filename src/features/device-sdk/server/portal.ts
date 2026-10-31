@@ -1,17 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import type { DeviceEventRow, Environment } from "../types";
-import {
-  LOG_WINDOW_MS,
-  logCursor,
-  parseLogCursor,
-  ROLE_RANK,
-  type LogFilters,
-  type PortalOrg,
-  type PortalProject,
-  type PortalRole,
-} from "../portal/scope";
-import type { DevApiKeyRow } from "./keys";
+import type { DeviceEventRow } from "../types";
+import { ROLE_RANK, type PortalOrg, type PortalProject, type PortalRole } from "../portal/scope";
 
 /**
  * DEVELOPER PORTAL READS (W1.3, Plans/Dopl SDK Split › §6, §9). Service role, server only.
@@ -20,18 +10,9 @@ import type { DevApiKeyRow } from "./keys";
  * so the portal's pages read here and nowhere else. ⚠ THE CALLER'S REACH IS DECIDED HERE, NOT BY
  * RLS: `listPortalProjects` is the one place a user id becomes project ids, and every other read
  * takes those ids (or a single id the caller already checked against them) and filters on them.
- *
- * ⚠ BILLING / USAGE READS GO THROUGH `dev_billable_events` ONLY (W0.2): it is `dev_events` minus
- * internal orgs. LOG reads stay on `dev_events`, because a developer sees every call they made.
  */
 
 const ROLES: readonly PortalRole[] = ["owner", "admin", "developer"];
-
-const KEY_COLUMNS =
-  "id, project_id, env, kind, prefix, scopes, created_at, last_used_at, revoked_at, expires_at";
-
-/** Log page size. One more row is fetched to know whether an older page exists. */
-export const LOG_PAGE_SIZE = 50;
 
 /**
  * The ONE place a user id becomes org reach: orgs they own (`owner_user_id`, read as `owner`) plus
@@ -124,18 +105,6 @@ export async function listPortalProjects(userId: string): Promise<PortalProject[
     .map((x) => x.p);
 }
 
-/** Keys of one project and env, newest first. Never `key_hash`. */
-export async function listProjectKeys(projectId: string, env: Environment): Promise<DevApiKeyRow[]> {
-  const { data, error } = await supabaseAdmin()
-    .from("dev_api_keys")
-    .select(KEY_COLUMNS)
-    .eq("project_id", projectId)
-    .eq("env", env)
-    .order("created_at", { ascending: false });
-  if (error) throw new Error(`listProjectKeys failed: ${error.message}`);
-  return (data ?? []) as DevApiKeyRow[];
-}
-
 /**
  * The key's project and lifecycle, for the rotate route's checks. `null` when no such key.
  * Rotatable = not revoked, never rotated (`expires_at` unset); `keys.ts › rotateApiKey` re-checks
@@ -154,50 +123,6 @@ export async function getKeyProject(
   return row ? { projectId: row.project_id, revokedAt: row.revoked_at, expiresAt: row.expires_at } : null;
 }
 
-export interface LogPage {
-  rows: DeviceEventRow[];
-  /** `logCursor` of the last row when an older page exists, else null. */
-  nextBefore: string | null;
-}
-
-/** One page of `dev_events` over the given projects and env, newest first. */
-export async function queryPortalEvents(input: {
-  projectIds: readonly string[];
-  env: Environment;
-  filters: LogFilters;
-  now?: Date;
-}): Promise<LogPage> {
-  if (input.projectIds.length === 0) return { rows: [], nextBefore: null };
-  const f = input.filters;
-  const now = input.now ?? new Date();
-  let q = supabaseAdmin()
-    .from("dev_events")
-    .select("*")
-    .in("project_id", [...input.projectIds])
-    .eq("env", input.env)
-    .gte("ts", new Date(now.getTime() - LOG_WINDOW_MS[f.window]).toISOString());
-  if (f.outcome) q = q.eq("outcome", f.outcome);
-  if (f.deviceKind) q = q.eq("device_kind", f.deviceKind);
-  if (f.capability) q = q.eq("capability", f.capability);
-  if (f.intent) q = q.eq("intent", f.intent);
-  if (f.route) q = q.eq("route_decision->>target", f.route);
-  // Compound keyset `(ts, event_id) < cursor`. Both parts were validated (ISO + UUID) by
-  // `parseLogCursor`, so neither can carry PostgREST `or` syntax.
-  const cursor = parseLogCursor(f.before);
-  // Values are double-quoted so an offset `+00:00` or the fraction dot is read as data.
-  if (cursor) {
-    q = q.or(`ts.lt."${cursor.ts}",and(ts.eq."${cursor.ts}",event_id.lt.${cursor.eventId})`);
-  }
-  const { data, error } = await q
-    .order("ts", { ascending: false })
-    .order("event_id", { ascending: false })
-    .limit(LOG_PAGE_SIZE + 1);
-  if (error) throw new Error(`queryPortalEvents failed: ${error.message}`);
-  const all = (data ?? []) as DeviceEventRow[];
-  const rows = all.slice(0, LOG_PAGE_SIZE);
-  return { rows, nextBefore: all.length > LOG_PAGE_SIZE ? logCursor(rows[rows.length - 1]) : null };
-}
-
 /** One event, only if it belongs to one of `projectIds`. */
 export async function getPortalEvent(eventId: string, projectIds: readonly string[]): Promise<DeviceEventRow | null> {
   if (projectIds.length === 0) return null;
@@ -209,24 +134,4 @@ export async function getPortalEvent(eventId: string, projectIds: readonly strin
     .maybeSingle();
   if (error) throw new Error(`getPortalEvent failed: ${error.message}`);
   return (data as DeviceEventRow | null) ?? null;
-}
-
-/**
- * Billable calls over the window: read from `dev_billable_events`, never `dev_events`, so an
- * internal org's traffic can never count as usage.
- */
-export async function countBillableEvents(input: {
-  projectIds: readonly string[];
-  env: Environment;
-  sinceIso: string;
-}): Promise<number> {
-  if (input.projectIds.length === 0) return 0;
-  const { count, error } = await supabaseAdmin()
-    .from("dev_billable_events")
-    .select("event_id", { count: "exact", head: true })
-    .in("project_id", [...input.projectIds])
-    .eq("env", input.env)
-    .gte("ts", input.sinceIso);
-  if (error) throw new Error(`countBillableEvents failed: ${error.message}`);
-  return count ?? 0;
 }

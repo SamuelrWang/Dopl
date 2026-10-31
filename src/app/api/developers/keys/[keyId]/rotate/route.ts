@@ -4,7 +4,7 @@ import { HttpError } from "@/shared/lib/http-error";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import { KeyNotRotatableError, rotateApiKey } from "@/features/device-sdk/server/keys";
 import { getKeyProject, listPortalProjects } from "@/features/device-sdk/server/portal";
-import { refuseLockedKey } from "@/features/device-sdk/server/portal-admin";
+import { refuseInternalUnlessOwner, refuseLockedKey } from "@/features/device-sdk/server/portal-admin";
 import { canManageKeys } from "@/features/device-sdk/portal/scope";
 
 /** How long the old secret keeps working, in hours. The only values the portal offers. */
@@ -36,6 +36,7 @@ export const POST = withUserAuth(
       if (!canManageKeys(project.role)) {
         throw new HttpError(403, "FORBIDDEN", "Only an org owner or admin can rotate keys");
       }
+      refuseInternalUnlessOwner(project);
       // Only a live, never-rotated key rotates: an expired key would mint a working credential off
       // a dead one; a key in its overlap window would get a second live replacement. The same
       // refusals hold atomically inside `rotateApiKey` (the check→rotate race lands there).

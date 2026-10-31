@@ -4,8 +4,9 @@ import { errorBody } from "../adapters/shared";
 import { isAsk } from "../delivery/intents";
 import type { CapabilityId, DeviceKind } from "../types";
 import { connectStore } from "./connect/store";
+import { ACTION_COLS } from "./delivery-store-supabase";
 import { supabaseLensActions } from "./glasses/sdk-glasses-port";
-import type { LensActionPatch } from "./glasses/lens-actions";
+import { withStatus, type LensActionPatch, type MovedLensAction } from "./glasses/lens-actions";
 import { emitActionSettled } from "./webhooks/action-events";
 
 /**
@@ -13,7 +14,7 @@ import { emitActionSettled } from "./webhooks/action-events";
  * it; the device took it but the move failed after the take; or a pickup raced the sender's status write (F-784).
  * The longest a message can wait is `SDK_ASK_TTL_S`, ten minutes, so anything older cannot move by itself.
  */
-export const STUCK_AFTER_MS = 15 * 60 * 1000;
+const STUCK_AFTER_MS = 15 * 60 * 1000;
 const BATCH = 100;
 
 /** What a stuck action becomes, by its queued message's status. Null message = it was never queued. Pure. */
@@ -29,13 +30,13 @@ export async function sweepStuckActions(now: Date = new Date()): Promise<number>
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("dev_actions")
-    .select("id, device_id, capability, result, devices!inner(kind)")
+    .select("id, device_id, capability, result, response, devices!inner(kind)")
     .eq("status", "queued")
     .lt("created_at", new Date(now.getTime() - STUCK_AFTER_MS).toISOString())
     .order("created_at", { ascending: true })
     .limit(BATCH);
   if (error) throw new Error(`sweepStuckActions failed: ${error.message}`);
-  const rows = (data ?? []) as unknown as Array<{ id: string; device_id: string; capability: string | null; result: { lens_message_id?: string } | null; devices: { kind: DeviceKind } }>;
+  const rows = (data ?? []) as unknown as Array<{ id: string; device_id: string; capability: string | null; result: { lens_message_id?: string } | null; response: Record<string, unknown> | null; devices: { kind: DeviceKind } }>;
   if (rows.length === 0) return 0;
   const lensIds = rows.map((r) => r.result?.lens_message_id).filter((v): v is string => typeof v === "string");
   const lens = await db.from("dev_device_messages").select("id, status").in("id", lensIds);
@@ -51,9 +52,16 @@ export async function sweepStuckActions(now: Date = new Date()): Promise<number>
       await emitActionSettled(connectStore, done);
       moved += done.length;
     } else {
-      const res = await db.from("dev_actions").update({ status: patch.status, settled_at: at, error: patch.error, updated_at: at }).eq("id", row.id).eq("status", "queued");
+      const res = await db
+        .from("dev_actions")
+        .update({ status: patch.status, settled_at: at, error: patch.error, updated_at: at, response: withStatus(row.response ?? {}, patch.status) })
+        .eq("id", row.id)
+        .eq("status", "queued")
+        .select(ACTION_COLS);
       if (res.error) throw new Error(`sweepStuckActions failed: ${res.error.message}`);
-      moved += 1;
+      const done = (res.data ?? []) as unknown as MovedLensAction[];
+      await emitActionSettled(connectStore, done);
+      moved += done.length;
     }
   }
   return moved;

@@ -1,5 +1,7 @@
 /** Small display helpers. `since` reads the server's clock, set by the provider, so a render and its hydration agree. */
 export const BASE = "/developers";
+export const PROJECT_COOKIE = "dopl_dev_project";
+export const ENV_COOKIE = "dopl_dev_env";
 
 let clock = 0;
 
@@ -11,7 +13,7 @@ export const portalNow = () => clock || Date.now();
 
 export const fmt = (n: number) => n.toLocaleString("en-US");
 export const ms = (n: number) => (n < 1000 ? `${n} ms` : `${(n / 1000).toFixed(1)} s`);
-export const clockOf = (iso: string) => `${iso.slice(5, 10)} ${iso.slice(11, 19)}`;
+export const clockOf = (iso: string) => `${iso.slice(5, 10)} ${iso.slice(11, 19)} UTC`;
 
 export function since(iso: string | null | undefined): string {
   if (!iso) return "Never";
@@ -22,7 +24,14 @@ export function since(iso: string | null | undefined): string {
   return `${Math.round(mins / 1440)}d ago`;
 }
 
-export function downloadCsv(name: string, csv: string): void {
+/** Quoted, and a leading formula character neutered: a device's message must not run as a spreadsheet formula. */
+function csvCell(value: string | number): string {
+  if (typeof value === "number") return String(value);
+  return `"${(/^[=+\-@\t\r]/.test(value) ? `'${value}` : value).replaceAll('"', '""')}"`;
+}
+
+export function downloadCsv(name: string, rows: readonly (readonly (string | number)[])[]): void {
+  const csv = rows.map((r) => r.map(csvCell).join(",")).join("\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
   const link = document.createElement("a");
   link.href = url;

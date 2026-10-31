@@ -267,6 +267,8 @@ describe("H-3 write-gate coverage", () => {
         "developers/orgs/[orgId]/members/[memberId]/route.ts",
         "developers/invites/[inviteId]/route.ts",
         "developers/invites/accept/route.ts",
+        // Reads device message text across a project: a person's page, not an agent's tool.
+        "developers/activity/route.ts",
         // Webhook endpoints: POST answers a signing secret once; PATCH stops deliveries; replay re-sends.
         "developers/projects/[projectId]/webhooks/route.ts",
         "developers/webhooks/[endpointId]/route.ts",

@@ -3,7 +3,7 @@
 /** Users: the figures for what is on screen, then find anyone, then one row per user. */
 import { Download, SearchX, UserRoundX } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { activeWithin, hasIssues, hasStale, needsRelink, userDeliveries, userRate, LOW_RATE, type Call, type PortalUser } from "@/features/device-sdk/portal/view";
+import { DAY_MS, activeWithin, hasIssues, hasStale, needsRelink, userDeliveries, userRate, LOW_RATE, type PortalUser } from "@/features/device-sdk/portal/view";
 import { Button, ICON, StatCard } from "../_design/ui";
 import { EmptyState, Page, PageHeader, StatRow } from "../_design/ui-page";
 import { downloadCsv, fmt, portalNow } from "../_components/format";
@@ -13,9 +13,7 @@ import { UsersTable } from "./users-table";
 import { UsersToolbar } from "./users-toolbar";
 import { NO_FILTERS, inQuick, matches, sortUsers, usersCsv, type Quick, type Sort, type UserFilters } from "./users-model";
 
-const DAY_MS = 86_400_000;
-
-export function UsersSection({ users, calls }: { users: PortalUser[]; calls: Call[] }) {
+export function UsersSection({ users }: { users: PortalUser[] }) {
   const { test } = usePortal();
   const [filters, setFilters] = useState<UserFilters>(NO_FILTERS);
   const [quick, setQuick] = useState<Quick>("all");
@@ -44,7 +42,7 @@ export function UsersSection({ users, calls }: { users: PortalUser[]; calls: Cal
   const hasFilter = quick !== "all" || Object.entries(filters).some(([k, v]) => v !== NO_FILTERS[k as keyof UserFilters]);
 
   return (
-    <Page fit overlays={open && <UserSheet user={open} calls={calls} onClose={closeSheet} />}>
+    <Page fit overlays={open && <UserSheet user={open} onClose={closeSheet} />}>
       <PageHeader
         title="Users"
         test={test}

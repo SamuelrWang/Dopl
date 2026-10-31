@@ -1,6 +1,6 @@
 /**
  * Issues are computed on read, one group per cause: nothing stores them, so none can go stale. Pure.
- * A group's copy says what the data shows and no more. First seen is capped by the 30-day event retention.
+ * A group's copy says what the data shows and no more. First seen looks back over the same seven days as the count.
  */
 import type { EndpointView, Issue, PortalUser } from "./view";
 
@@ -36,46 +36,21 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
 export function computeIssues(input: { users: readonly PortalUser[]; errors: readonly ErrorRow[]; endpoints: readonly EndpointView[] }): Issue[] {
   const issues: Issue[] = [];
-  const withState = (state: "stale" | "needs_relink") => input.users.filter((u) => u.devices.some((d) => d.state === state));
-  const count = (state: "stale" | "needs_relink") => input.users.reduce((n, u) => n + u.devices.filter((d) => d.state === state).length, 0);
-
-  const stale = withState("stale");
-  if (stale.length > 0) {
-    issues.push({
-      id: "stale_pairing",
-      kind: "stale_pairing",
-      title: "Stale pairings",
-      code: "stale",
-      count: count("stale"),
-      countLabel: count("stale") === 1 ? "device" : "devices",
-      why: "These devices still have a live connection but have not been seen for 14 days or more.",
-      firstSeen: null,
-      userIds: stale.map((u) => u.id),
-      latestCallId: null,
-      action: { label: "Open users", href: USERS },
-    });
-  }
-  const relink = withState("needs_relink");
-  if (relink.length > 0) {
-    issues.push({
-      id: "needs_relink",
-      kind: "needs_relink",
-      title: "Needs relink",
-      code: "needs_reauth",
-      count: count("needs_relink"),
-      countLabel: count("needs_relink") === 1 ? "device" : "devices",
-      why: "These connections need the user to link the device again. Nothing reaches them until then.",
-      firstSeen: null,
-      userIds: relink.map((u) => u.id),
-      latestCallId: null,
-      action: { label: "Open users", href: USERS },
-    });
-  }
+  const addDeviceIssue = (state: "stale" | "needs_relink", fields: Pick<Issue, "id" | "kind" | "title" | "code" | "why">) => {
+    const affected = input.users.filter((u) => u.devices.some((d) => d.state === state));
+    if (affected.length === 0) return;
+    const count = affected.reduce((n, u) => n + u.devices.filter((d) => d.state === state).length, 0);
+    issues.push({ ...fields, count, countLabel: count === 1 ? "device" : "devices", firstSeen: null, userIds: affected.map((u) => u.id), latestCallId: null, action: { label: "Open users", href: USERS } });
+  };
+  addDeviceIssue("stale", { id: "stale_pairing", kind: "stale_pairing", title: "Stale pairings", code: "stale", why: "These devices still have a live connection but have not been seen for 14 days or more." });
+  addDeviceIssue("needs_relink", { id: "needs_relink", kind: "needs_relink", title: "Needs relink", code: "needs_reauth", why: "These connections need the user to link the device again. Nothing reaches them until then." });
 
   const groups = new Map<string, ErrorRow[]>();
   for (const e of input.errors) {
     const code = e.error_code ?? "internal_error";
-    groups.set(code, [...(groups.get(code) ?? []), e]);
+    const group = groups.get(code);
+    if (group) group.push(e);
+    else groups.set(code, [e]);
   }
   for (const [code, rows] of groups) {
     const newest = rows.reduce((a, b) => (a.ts > b.ts ? a : b));

@@ -85,7 +85,7 @@ export function IntegrationPageSection({ integration, users, calls, metrics, rul
   }
 
   return (
-    <Page overlays={selected && <UserSheet user={selected} calls={calls} onClose={() => setOpenUser(null)} />}>
+    <Page overlays={selected && <UserSheet user={selected} onClose={() => setOpenUser(null)} />}>
       {head}
       {tabs}
       {tab === "overview" && (

@@ -25,7 +25,9 @@ export default async function Layout({ children }: { children: ReactNode }) {
   return (
     <PortalProvider data={{ email: scope.email, projects: scope.projects, project: scope.project, env: scope.env, now: scope.now.toISOString() }}>
       <PortalShell fontClass={designFont.className} counts={{ issues: snapshot.issues.length, attention: snapshot.users.filter(hasIssues).length, find }}>
-        {children}
+        <div key={`${scope.project.id}:${scope.env}`} className={designFont.className} style={{ display: "contents" }}>
+          {children}
+        </div>
       </PortalShell>
     </PortalProvider>
   );

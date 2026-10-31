@@ -113,7 +113,7 @@ export const TIER_POLICY: Record<RiskTier, string> = {
   T4: "Denied",
 };
 
-export const CAPABILITY_LABEL: Partial<Record<CapabilityId, string>> = {
+const CAPABILITY_LABEL: Partial<Record<CapabilityId, string>> = {
   "present.notify": "Notify",
   "present.display": "Display",
   "present.speak": "Speak",

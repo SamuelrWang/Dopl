@@ -7,7 +7,7 @@
  */
 import { ArrowRight, FlaskConical, Paperclip } from "lucide-react";
 import { useState } from "react";
-import { activeWithin, dailyBars, figuresOfDevices, percentDelta, rateOf, rowsBetween, totalsOf, type EndpointView, type Issue, type MetricRow, type PortalUser } from "@/features/device-sdk/portal/view";
+import { DAY_MS, activeWithin, dailyBars, figuresOfDevices, percentDelta, rateOf, rowsBetween, totalsOf, type EndpointView, type Issue, type MetricRow, type PortalUser } from "@/features/device-sdk/portal/view";
 import { Badge, Button, Chip, ICON, Initials, Stat, TwoLine, initialsOf } from "../_design/ui";
 import { Banner } from "../_design/ui-extras";
 import { BarChart, LineChart, Ring, Timeline, type Step } from "../_design/ui-data";
@@ -17,10 +17,9 @@ import { BASE, fmt, portalNow, since } from "../_components/format";
 import { usePortal } from "../_components/portal-store";
 
 const RECENT = 4;
-const WEEK_MS = 7 * 86_400_000;
-const DAY_MS = 86_400_000;
+const WEEK_MS = 7 * DAY_MS;
 
-export interface OverviewProps {
+interface OverviewProps {
   users: PortalUser[];
   metrics: MetricRow[];
   endpoints: EndpointView[];
@@ -60,7 +59,9 @@ export function OverviewSection(props: OverviewProps) {
   const done = steps.filter((s) => s.state === "done").length;
   const next = steps.find((s) => s.state !== "done");
   const bars = dailyBars(metrics, 14, now);
-  const rates = bars.map((b, i) => b.rate ?? bars.slice(0, i).reverse().find((x) => x.rate !== null)?.rate ?? 0);
+  // A day with nothing sent holds the line. Before the first send there is nothing to hold, so it starts flat.
+  const firstRate = bars.find((b) => b.rate !== null)?.rate ?? 0;
+  const rates = bars.map((b, i) => b.rate ?? bars.slice(0, i).reverse().find((x) => x.rate !== null)?.rate ?? firstRate);
   const newest = [...users].sort((a, b) => Date.parse(b.lastDeliveryAt ?? "0") - Date.parse(a.lastDeliveryAt ?? "0")).slice(0, RECENT);
   const relink = users.filter((u) => u.devices.some((d) => d.state === "needs_relink"));
 
@@ -69,7 +70,7 @@ export function OverviewSection(props: OverviewProps) {
     "Which users need a relink?": relink.length ? relink.slice(0, 3).map((u) => u.name).join(", ") + (relink.length > 3 ? ` and ${relink.length - 3} more.` : ".") : "None.",
     "What changed this week?": `${fmt(week.deliveries)} deliveries against ${fmt(before.deliveries)} the week before. ${newUsers} new ${newUsers === 1 ? "user" : "users"}, ${issues.length} open ${issues.length === 1 ? "issue" : "issues"}.`,
   };
-  const summary = `${fmt(week.deliveries)} deliveries this week, ${rate}% taken by a device. ${worst ? `${issues.length} ${issues.length === 1 ? "issue" : "issues"} open; ${worst.title.toLowerCase()} is the largest, with ${fmt(worst.count)} ${worst.countLabel}.` : "Nothing needs you."}`;
+  const summary = `${fmt(week.deliveries)} deliveries this week${week.deliveries ? `, ${rate}% taken by a device` : ""}. ${worst ? `${issues.length} ${issues.length === 1 ? "issue" : "issues"} open; ${worst.title.toLowerCase()} is the largest, with ${fmt(worst.count)} ${worst.countLabel}.` : "Nothing needs you."}`;
 
   return (
     <Page fit>
@@ -81,7 +82,7 @@ export function OverviewSection(props: OverviewProps) {
       )}
       <StatStrip>
         <Stat label="Deliveries, 7d" value={fmt(week.deliveries)} delta={deliveryDelta?.text} down={deliveryDelta?.down} />
-        <Stat label="Delivered" value={`${rate}%`} delta={rateChange === null ? undefined : `${Math.abs(rateChange).toFixed(1)}%`} down={rateChange !== null && rateChange < 0} />
+        <Stat label="Delivered" value={week.deliveries ? `${rate}%` : "None"} delta={rateChange === null ? undefined : `${Math.abs(rateChange).toFixed(1)}%`} down={rateChange !== null && rateChange < 0} />
         <Stat label="Active users, 7d" value={fmt(activeWithin(users, WEEK_MS, now))} delta={newUsers ? `${newUsers} new` : undefined} />
         <Stat label="Devices online" value={`${fmt(figures.online)} of ${fmt(figures.devices)}`} hint={`${fmt(seenToday)} seen today`} />
       </StatStrip>
@@ -140,7 +141,7 @@ export function OverviewSection(props: OverviewProps) {
           </FillCard>
           <FillCard>
             <Between>
-              <TwoLine title={<Text kind="h3">Delivered</Text>} sub={`${rate}% this week`} />
+              <TwoLine title={<Text kind="h3">Delivered</Text>} sub={week.deliveries ? `${rate}% this week` : "Nothing sent this week"} />
               <Badge tone="ring">14 days</Badge>
             </Between>
             <LineChart values={rates} min={0} max={100} label="Delivered over 14 days" />

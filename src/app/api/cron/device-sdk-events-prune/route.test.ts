@@ -14,6 +14,11 @@ vi.mock("@/features/device-sdk/server/events", () => ({
   pruneDevEvents: vi.fn(),
 }));
 
+vi.mock("@/features/device-sdk/server/retention", () => ({
+  pruneDeviceText: vi.fn(async () => ({})),
+  rollSeedRows: vi.fn(async () => {}),
+}));
+
 import { requireCronSecret } from "@/shared/auth/require-cron-secret";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 import { pruneDevEvents } from "@/features/device-sdk/server/events";
@@ -28,7 +33,7 @@ describe("GET /api/cron/device-sdk-events-prune", () => {
     vi.mocked(pruneDevEvents).mockResolvedValue(12);
     const res = await GET(request());
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, deleted: 12, retention_days: 30 });
+    expect(await res.json()).toEqual({ ok: true, deleted: 12, text: {}, retention_days: 30 });
     expect(pruneDevEvents).toHaveBeenCalledWith({ retentionDays: 30 });
   });
 

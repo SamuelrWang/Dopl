@@ -196,3 +196,10 @@ BEGIN
   END LOOP;
 END;
 $seed$;
+
+-- Devices that read online: a future last_seen stays inside every adapter's online window, with no cron. Skips the
+-- stale and needs-relink ones and every third device. `dev_portal_roll_seed` leaves these alone.
+UPDATE public.devices d SET last_seen = now() + interval '10 years'
+  FROM public.connections c
+ WHERE d.id::text LIKE '5eed0000-0002-%' AND d.env = 'live' AND c.device_id = d.id AND c.status = 'active'
+   AND right(d.id::text, 12)::int % 3 <> 0 AND right(d.id::text, 12)::int NOT IN (4, 7, 12, 15);

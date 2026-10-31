@@ -4,9 +4,10 @@
 import { RotateCcw } from "lucide-react";
 import { STATUS_LABEL, type Call } from "@/features/device-sdk/portal/view";
 import { Badge, Button, ICON, TwoLine } from "../_design/ui";
-import { CodeBlock, FigureGrid, GridFigure, Grow, ListRow, SideSheet, Stack, Text } from "../_design/ui-page";
+import { CodeBlock, FigureGrid, GridFigure, SideSheet, Text } from "../_design/ui-page";
 import { since } from "../_components/format";
 import { STATUS_TONE } from "./activity";
+import { AttemptList } from "./activity-detail";
 
 export function EventSheet({ call, canManage, busy, onClose, onRetry }: { call: Call; canManage: boolean; busy: boolean; onClose: () => void; onRetry: () => void }) {
   const hook = call.webhook!;
@@ -29,23 +30,7 @@ export function EventSheet({ call, canManage, busy, onClose, onRetry }: { call: 
         <GridFigure label="Attempts" value={hook.attempts.length} />
         <GridFigure label="Sent" value={since(call.at)} />
       </FigureGrid>
-      <Stack>
-        <Text kind="strong" as="h3">
-          Attempts
-        </Text>
-        <div>
-          {hook.attempts.map((a, i) => (
-            <ListRow key={a.at + i} line={i < hook.attempts.length - 1}>
-              <Badge tone={a.status && a.status < 300 ? "ok" : "error"}>{a.status ?? "No reply"}</Badge>
-              <TwoLine strong={false} title={a.note} />
-              <Grow />
-              <Text kind="smallMuted" nowrap>
-                {since(a.at)}
-              </Text>
-            </ListRow>
-          ))}
-        </div>
-      </Stack>
+      <AttemptList attempts={hook.attempts} />
       {hook.payload != null && <CodeBlock title="Payload">{JSON.stringify(hook.payload, null, 2)}</CodeBlock>}
     </SideSheet>
   );

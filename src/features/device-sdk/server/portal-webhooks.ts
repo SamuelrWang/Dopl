@@ -1,10 +1,9 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import type { Environment, WebhookDelivery, WebhookEndpoint } from "../types";
-import { dayOf, endpointFailing, type Call, type CallStatus, type EndpointView } from "../portal/view";
-import { toDelivery, toEndpoint } from "./webhooks/api";
-import type { AttemptRow } from "./webhooks/store-types";
-import { ATTEMPT_COLS, DELIVERY_COLS, ENDPOINT_COLS, pickDelivery, pickEndpoint } from "./webhooks/store-supabase";
+import type { Environment, WebhookEndpoint } from "../types";
+import { dayOf, endpointFailing, rateOf, type Call, type CallStatus, type EndpointView } from "../portal/view";
+import { toEndpoint } from "./webhooks/api";
+import { ENDPOINT_COLS, pickEndpoint } from "./webhooks/store-supabase";
 
 /**
  * DEVELOPER PORTAL WEBHOOK READS. Service role, server only, read only. Same rule as `portal.ts`:
@@ -12,9 +11,6 @@ import { ATTEMPT_COLS, DELIVERY_COLS, ENDPOINT_COLS, pickDelivery, pickEndpoint 
  * page already checked against it and filters on `(project_id, env)`.
  * ⚠ Endpoint reads use `ENDPOINT_COLS`, which never names `secret_id` / `previous_secret_id`.
  */
-
-/** Delivery page size for one endpoint. */
-export const PORTAL_DELIVERY_LIMIT = 50;
 
 /** Endpoints of one project and env, newest first. */
 export async function listPortalWebhookEndpoints(projectId: string, env: Environment): Promise<WebhookEndpoint[]> {
@@ -28,48 +24,6 @@ export async function listPortalWebhookEndpoints(projectId: string, env: Environ
   if (error) throw new Error(`listPortalWebhookEndpoints failed: ${error.message}`);
   const now = new Date();
   return ((data ?? []) as Record<string, unknown>[]).map((r) => toEndpoint(pickEndpoint(r), now));
-}
-
-/**
- * The newest deliveries of one endpoint, each with its HTTP attempts (newest attempt first). Fenced
- * on `project_id` and `env` too, so an endpoint id from another project reads nothing.
- */
-export async function listPortalWebhookDeliveries(
-  endpointId: string,
-  projectId: string,
-  env: Environment,
-  limit: number = PORTAL_DELIVERY_LIMIT
-): Promise<WebhookDelivery[]> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("dev_webhook_deliveries")
-    .select(DELIVERY_COLS)
-    .eq("endpoint_id", endpointId)
-    .eq("project_id", projectId)
-    .eq("env", env)
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: false })
-    .limit(limit);
-  if (error) throw new Error(`listPortalWebhookDeliveries failed: ${error.message}`);
-  const rows = ((data ?? []) as Record<string, unknown>[]).map(pickDelivery);
-  if (rows.length === 0) return [];
-
-  const attempts = await db
-    .from("dev_webhook_attempts")
-    .select(ATTEMPT_COLS)
-    .in(
-      "delivery_id",
-      rows.map((d) => d.id)
-    )
-    .order("attempt", { ascending: false });
-  if (attempts.error) throw new Error(`listPortalWebhookDeliveries failed: ${attempts.error.message}`);
-  const byDelivery = new Map<string, AttemptRow[]>();
-  for (const a of (attempts.data ?? []) as AttemptRow[]) {
-    const list = byDelivery.get(a.delivery_id);
-    if (list) list.push(a);
-    else byDelivery.set(a.delivery_id, [a]);
-  }
-  return rows.map((d) => toDelivery(d, byDelivery.get(d.id) ?? []));
 }
 
 const STATS_LIMIT = 5000;
@@ -116,32 +70,32 @@ export async function readEndpointViews(projectId: string, env: Environment, now
       sent7d: mine.length,
       delivered7d: delivered,
       failed7d: failed,
-      rate: delivered + failed === 0 ? 0 : Math.round((delivered / (delivered + failed)) * 1000) / 10,
+      rate: rateOf({ deliveries: delivered + failed, delivered }),
       lastAt: mine[0]?.created_at ?? null,
       bars: bars.map((n) => (n / top) * 100),
     };
   });
 }
 
-/** Webhook deliveries as feed rows, with attempts and the event's real payload. */
-export async function readWebhookCalls(projectId: string, env: Environment, limit: number): Promise<Call[]> {
+/** Webhook deliveries as feed rows, with attempts. The event body comes only for a page that shows it. */
+export async function readWebhookCalls(projectId: string, env: Environment, options: { limit: number; since?: string; before?: string; ids?: string[]; payloads?: boolean }): Promise<Call[]> {
   const db = supabaseAdmin();
-  const since = new Date(Date.now() - FEED_DAYS * 86_400_000).toISOString();
-  const { data, error } = await db
+  let query = db
     .from("dev_webhook_deliveries")
     .select("id, outbox_id, endpoint_id, event_type, status, attempts, last_status_code, last_error, created_at")
     .eq("project_id", projectId)
-    .eq("env", env)
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(limit);
+    .eq("env", env);
+  if (options.ids) query = query.in("id", options.ids);
+  else query = query.gte("created_at", options.since ?? new Date(Date.now() - FEED_DAYS * 86_400_000).toISOString());
+  if (options.before) query = query.lte("created_at", options.before);
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(options.limit);
   if (error) throw new Error(`readWebhookCalls failed: ${error.message}`);
   const rows = (data ?? []) as Array<{ id: string; outbox_id: string; endpoint_id: string; event_type: string; status: string; attempts: number; last_status_code: number | null; last_error: string | null; created_at: string }>;
   if (rows.length === 0) return [];
   const [endpoints, attempts, outbox] = await Promise.all([
     db.from("dev_webhook_endpoints").select("id, url, description").eq("project_id", projectId).eq("env", env),
     db.from("dev_webhook_attempts").select("delivery_id, attempt, attempted_at, status_code, error").in("delivery_id", rows.map((r) => r.id)).order("attempt", { ascending: true }),
-    db.from("dev_webhook_outbox").select("id, payload").eq("project_id", projectId).in("id", rows.map((r) => r.outbox_id)),
+    options.payloads ? db.from("dev_webhook_outbox").select("id, payload").eq("project_id", projectId).in("id", rows.map((r) => r.outbox_id)) : Promise.resolve({ data: [], error: null }),
   ]);
   for (const res of [endpoints, attempts, outbox]) if (res.error) throw new Error(`readWebhookCalls failed: ${res.error.message}`);
   const names = new Map(((endpoints.data ?? []) as Array<{ id: string; url: string; description: string | null }>).map((e) => [e.id, e.description ?? new URL(e.url).hostname]));

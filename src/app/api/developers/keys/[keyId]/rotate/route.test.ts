@@ -103,6 +103,14 @@ describe("rotate route", () => {
     expect(rotateApiKey).not.toHaveBeenCalled();
   });
 
+  it("🔒 an internal org's admin cannot rotate: only its owner", async () => {
+    getKeyProject.mockResolvedValue({ projectId: "p1", revokedAt: null, expiresAt: null });
+    listPortalProjects.mockResolvedValue([{ ...project("p1", "admin"), org: { id: "o", name: "o", internal: true } }]);
+    const res = await call();
+    expect(res.status).toBe(409);
+    expect(rotateApiKey).not.toHaveBeenCalled();
+  });
+
   it("maps a lost check→rotate race to 409, not 500", async () => {
     getKeyProject.mockResolvedValue({ projectId: "p1", revokedAt: null, expiresAt: null });
     listPortalProjects.mockResolvedValue([project("p1", "owner")]);

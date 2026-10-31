@@ -37,15 +37,7 @@ function query(table: string) {
 
 vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: () => ({ from: (t: string) => query(t) }) }));
 
-import {
-  LOG_PAGE_SIZE,
-  countBillableEvents,
-  getPortalEvent,
-  listPortalProjects,
-  listProjectKeys,
-  queryPortalEvents,
-} from "./portal";
-import { EMPTY_FILTERS } from "../portal/scope";
+import { getPortalEvent, listPortalProjects } from "./portal";
 
 const tables = () => calls.map((c) => c.table);
 const opsOn = (table: string) => calls.filter((c) => c.table === table).flatMap((c) => c.ops);
@@ -97,114 +89,10 @@ describe("listPortalProjects", () => {
   });
 });
 
-describe("listProjectKeys", () => {
-  it("filters on project and env and never selects key_hash", async () => {
-    await listProjectKeys("p1", "live");
-    const ops = opsOn("dev_api_keys");
-    expect(ops).toContainEqual(["eq", "project_id", "p1"]);
-    expect(ops).toContainEqual(["eq", "env", "live"]);
-    const select = ops.find((o) => o[0] === "select");
-    expect(String(select?.[1])).not.toContain("key_hash");
-  });
-});
-
-describe("queryPortalEvents", () => {
-  const now = new Date("2026-10-28T12:00:00.000Z");
-
-  it("reads dev_events fenced to the caller's projects, with every filter", async () => {
-    await queryPortalEvents({
-      projectIds: ["p1", "p2"],
-      env: "test",
-      now,
-      filters: {
-        ...EMPTY_FILTERS,
-        outcome: "error",
-        deviceKind: "glasses",
-        capability: "display.card",
-        intent: "notify",
-        route: "auto",
-        window: "1h",
-        before: "2026-10-28T11:30:00.000Z~55555555-5555-4555-8555-555555555555",
-      },
-    });
-    expect(tables()).toEqual(["dev_events"]);
-    const ops = opsOn("dev_events");
-    expect(ops).toContainEqual(["in", "project_id", ["p1", "p2"]]);
-    expect(ops).toContainEqual(["eq", "env", "test"]);
-    expect(ops).toContainEqual(["gte", "ts", "2026-10-28T11:00:00.000Z"]);
-    expect(ops).toContainEqual(["eq", "outcome", "error"]);
-    expect(ops).toContainEqual(["eq", "device_kind", "glasses"]);
-    expect(ops).toContainEqual(["eq", "capability", "display.card"]);
-    expect(ops).toContainEqual(["eq", "intent", "notify"]);
-    expect(ops).toContainEqual(["eq", "route_decision->>target", "auto"]);
-    expect(ops).toContainEqual([
-      "or",
-      'ts.lt."2026-10-28T11:30:00.000Z",and(ts.eq."2026-10-28T11:30:00.000Z",event_id.lt.55555555-5555-4555-8555-555555555555)',
-    ]);
-    expect(ops).toContainEqual(["order", "event_id", { ascending: false }]);
-    expect(ops).toContainEqual(["limit", LOG_PAGE_SIZE + 1]);
-  });
-
-  it("returns a cursor only when an older page exists", async () => {
-    const rows = Array.from({ length: LOG_PAGE_SIZE + 1 }, (_, i) => ({
-      event_id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
-      ts: new Date(now.getTime() - i * 1000).toISOString(),
-    }));
-    canned.set("dev_events", { data: rows });
-    const page = await queryPortalEvents({ projectIds: ["p1"], env: "test", now, filters: EMPTY_FILTERS });
-    expect(page.rows).toHaveLength(LOG_PAGE_SIZE);
-    const last = rows[LOG_PAGE_SIZE - 1];
-    expect(page.nextBefore).toBe(`${last.ts}~${last.event_id}`);
-
-    canned.set("dev_events", { data: rows.slice(0, 3) });
-    expect((await queryPortalEvents({ projectIds: ["p1"], env: "test", now, filters: EMPTY_FILTERS })).nextBefore).toBeNull();
-  });
-
-  it("cursors on the stored microsecond ts, so same-ms rows at a page edge are not skipped", async () => {
-    const rows = Array.from({ length: LOG_PAGE_SIZE + 1 }, (_, i) => ({
-      event_id: `00000000-0000-4000-8000-${String(LOG_PAGE_SIZE + 1 - i).padStart(12, "0")}`,
-      // The last two rows on the page share one millisecond, different microseconds.
-      ts: i >= LOG_PAGE_SIZE - 2 ? `2026-10-28T11:00:00.12345${9 - i + LOG_PAGE_SIZE - 2}+00:00` : `2026-10-28T11:59:${String(59 - i).padStart(2, "0")}.000000+00:00`,
-    }));
-    canned.set("dev_events", { data: rows });
-    const page = await queryPortalEvents({ projectIds: ["p1"], env: "test", now, filters: EMPTY_FILTERS });
-    const last = rows[LOG_PAGE_SIZE - 1];
-    expect(last.ts).toMatch(/\.12345\d\+00:00$/);
-    expect(page.nextBefore).toBe(`${last.ts}~${last.event_id}`);
-
-    calls.length = 0;
-    await queryPortalEvents({ projectIds: ["p1"], env: "test", now, filters: { ...EMPTY_FILTERS, before: page.nextBefore } });
-    expect(opsOn("dev_events")).toContainEqual([
-      "or",
-      `ts.lt."${last.ts}",and(ts.eq."${last.ts}",event_id.lt.${last.event_id})`,
-    ]);
-  });
-
-  it("reads nothing for an empty project list", async () => {
-    expect(await queryPortalEvents({ projectIds: [], env: "test", filters: EMPTY_FILTERS })).toEqual({
-      rows: [],
-      nextBefore: null,
-    });
-    expect(calls).toEqual([]);
-  });
-});
-
 describe("getPortalEvent", () => {
   it("is fenced to the caller's projects", async () => {
     await getPortalEvent("e1", ["p1"]);
     expect(opsOn("dev_events")).toContainEqual(["in", "project_id", ["p1"]]);
     expect(await getPortalEvent("e1", [])).toBeNull();
-  });
-});
-
-describe("countBillableEvents", () => {
-  it("reads the billable view, never dev_events", async () => {
-    canned.set("dev_billable_events", { count: 7 });
-    const n = await countBillableEvents({ projectIds: ["p1"], env: "live", sinceIso: "2026-09-28T00:00:00.000Z" });
-    expect(n).toBe(7);
-    expect(tables()).toEqual(["dev_billable_events"]);
-    const ops = opsOn("dev_billable_events");
-    expect(ops).toContainEqual(["in", "project_id", ["p1"]]);
-    expect(ops).toContainEqual(["eq", "env", "live"]);
   });
 });

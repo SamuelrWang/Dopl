@@ -2,7 +2,7 @@
 import { CATEGORIES, INTEGRATIONS, functionsOf, integrationById, type Category, type CategoryId, type Integration, type Model } from "@/features/device-sdk/portal/catalog";
 import { devicesOfModel, figuresOfDevices, type Figures, type OwnedDevice, type PortalUser } from "@/features/device-sdk/portal/view";
 
-export type DeviceQuick = "all" | "attention";
+type DeviceQuick = "all" | "attention";
 export const DEVICE_QUICK: { key: DeviceQuick; label: string }[] = [
   { key: "all", label: "All" },
   { key: "attention", label: "Needs attention" },

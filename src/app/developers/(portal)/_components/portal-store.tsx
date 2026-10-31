@@ -8,9 +8,9 @@ import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from "react";
 import { canManageKeys, canManageMembers, type PortalProject } from "@/features/device-sdk/portal/scope";
 import type { Environment } from "@/features/device-sdk/types";
-import { setPortalClock } from "./format";
+import { ENV_COOKIE, PROJECT_COOKIE, setPortalClock } from "./format";
 
-export interface PortalShellData {
+interface PortalShellData {
   email: string | null;
   projects: PortalProject[];
   project: PortalProject;
@@ -39,15 +39,15 @@ export function PortalProvider({ data, children }: { data: PortalShellData; chil
   setPortalClock(data.now);
   const setEnv = useCallback(
     (env: Environment) => {
-      writeCookie("dopl_dev_env", env);
+      writeCookie(ENV_COOKIE, env);
       router.refresh();
     },
     [router]
   );
   const setProject = useCallback(
     (id: string) => {
-      writeCookie("dopl_dev_project", id);
-      document.cookie = "dopl_dev_env=; path=/developers; max-age=0";
+      writeCookie(PROJECT_COOKIE, id);
+      document.cookie = `${ENV_COOKIE}=; path=/developers; max-age=0`;
       router.refresh();
     },
     [router]
@@ -56,7 +56,7 @@ export function PortalProvider({ data, children }: { data: PortalShellData; chil
     () => ({
       ...data,
       test: data.env === "test",
-      canManage: canManageKeys(data.project.role),
+      canManage: canManageKeys(data.project.role) && (!data.project.org.internal || data.project.role === "owner"),
       canInvite: canManageMembers(data.project.role) && !data.project.org.internal,
       setEnv,
       setProject,

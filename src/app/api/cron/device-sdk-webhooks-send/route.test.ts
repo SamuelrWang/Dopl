@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 vi.mock("@/shared/auth/require-cron-secret", () => ({ requireCronSecret: vi.fn(() => null) }));
 vi.mock("@/features/analytics/server/system-events", () => ({ logSystemEvent: vi.fn() }));
+vi.mock("@/features/device-sdk/server/stuck-actions", () => ({ sweepStuckActions: vi.fn(async () => 0) }));
 vi.mock("@/features/device-sdk/server/webhooks/runtime", () => ({
   CRON_BUDGET_MS: 40_000,
   runWebhookSenderNow: vi.fn(),

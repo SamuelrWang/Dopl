@@ -3,9 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("./connect/store", () => ({ connectStore: {} }));
 vi.mock("./glasses/sdk-glasses-port", () => ({ supabaseLensActions: {} }));
-vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: () => ({}) }));
+const admin = vi.fn(() => ({}));
+const emitActionSettled = vi.fn();
+vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: () => admin() }));
+vi.mock("./webhooks/action-events", () => ({ emitActionSettled: (...a: unknown[]) => emitActionSettled(...a) }));
 
-const { stuckPatch } = await import("./stuck-actions");
+const { stuckPatch, sweepStuckActions } = await import("./stuck-actions");
 
 describe("a stuck action's end", () => {
   const base = { kind: "glasses" as const, at: "2026-10-31T00:00:00.000Z" };
@@ -24,5 +27,30 @@ describe("a stuck action's end", () => {
 
   it("leaves an ask open at delivered: only its answer finishes it", () => {
     expect(stuckPatch({ ...base, capability: "ask.choice", lensStatus: "delivered" })).toEqual({ status: "delivered", delivered_at: base.at });
+  });
+});
+
+describe("sweepStuckActions", () => {
+  it("🔒 a never-queued action fails with action.failed too, and the write stays conditional on queued", async () => {
+    const ops: Array<[string, ...unknown[]]> = [];
+    const row = { id: "a1", device_id: "d1", capability: "present.notify", result: null, response: { status: "queued" }, devices: { kind: "glasses" } };
+    const settled = { ...row, status: "failed" };
+    const chain: Record<string, unknown> = {};
+    let updating = false;
+    for (const op of ["select", "eq", "lt", "order", "in", "update"]) {
+      chain[op] = (...args: unknown[]) => {
+        ops.push([op, ...args]);
+        if (op === "update") updating = true;
+        return chain;
+      };
+    }
+    chain.limit = async () => ({ data: [row], error: null });
+    chain.then = (resolve: (v: unknown) => unknown) => resolve({ data: updating ? [settled] : [], error: null });
+    admin.mockReturnValue({ from: () => chain });
+
+    expect(await sweepStuckActions(new Date("2026-10-31T00:00:00.000Z"))).toBe(1);
+    expect(ops).toContainEqual(["lt", "created_at", "2026-10-30T23:45:00.000Z"]);
+    expect(ops.filter((o) => o[0] === "eq" && o[1] === "status" && o[2] === "queued").length).toBe(2);
+    expect(emitActionSettled).toHaveBeenCalledWith(expect.anything(), [settled]);
   });
 });

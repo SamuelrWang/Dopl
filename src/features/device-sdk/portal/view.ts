@@ -9,8 +9,8 @@ export type DeviceState = "online" | "offline" | "stale" | "needs_relink";
 export const STATE_LABEL: Record<DeviceState, string> = { online: "Online", offline: "Offline", stale: "Stale pairing", needs_relink: "Needs relink" };
 
 /** Idle this long with a live connection, and a pairing is stale. */
-export const STALE_DAYS = 14;
-const DAY_MS = 86_400_000;
+const STALE_DAYS = 14;
+export const DAY_MS = 86_400_000;
 
 /** One row of `dev_portal_metrics`. */
 export interface MetricRow {
@@ -79,7 +79,7 @@ export function figuresOfDevices(devices: readonly OwnedDevice[]): Figures {
   return {
     deliveries,
     delivered,
-    rate: deliveries === 0 ? 0 : Math.round((delivered / deliveries) * 1000) / 10,
+    rate: rateOf({ deliveries, delivered }),
     users: new Set(devices.map((d) => d.userId)).size,
     online: devices.filter((d) => d.state === "online").length,
     devices: devices.length,
@@ -96,7 +96,7 @@ export const activeWithin = (users: readonly PortalUser[], ms: number, now: numb
 /** The UTC day `offset` days before `now`. */
 export const dayOf = (now: number, offset: number) => new Date(now - offset * DAY_MS).toISOString().slice(0, 10);
 
-export interface Totals {
+interface Totals {
   calls: number;
   errors: number;
   deliveries: number;
@@ -127,7 +127,7 @@ export const rateOf = (t: Pick<Totals, "deliveries" | "delivered">) => (t.delive
 
 const tickFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
-export interface DayBar {
+interface DayBar {
   key: string;
   value: number;
   label: string;

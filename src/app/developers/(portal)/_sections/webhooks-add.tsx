@@ -1,13 +1,14 @@
 "use client";
 
 /** Add an endpoint, one decision per page: where, which events, then its signing secret once. */
-import { AlertTriangle, Check, Copy } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { LIVE_WEBHOOK_EVENTS } from "@/features/device-sdk/portal/catalog";
 import { portalCall, errorText } from "../../_lib/client-api";
-import { Button, ICON_SM } from "../_design/ui";
-import { Alert, FlowDialog, Grow, SecretWell, Stack, Text, TextField, Tile, Tiles } from "../_design/ui-page";
+import { Button } from "../_design/ui";
+import { Alert, FlowDialog, Grow, Stack, Text, TextField, Tile, Tiles } from "../_design/ui-page";
 import { usePortal } from "../_components/portal-store";
+import { CopyWell } from "./keys-dialogs";
 
 export function AddEndpointFlow({ onClose }: { onClose: () => void }) {
   const { project, env } = usePortal();
@@ -16,7 +17,6 @@ export function AddEndpointFlow({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [events, setEvents] = useState<string[]>(["action.completed", "action.failed"]);
   const [secret, setSecret] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const validUrl = /^https:\/\/\S+\.\S+/.test(url);
@@ -52,22 +52,7 @@ export function AddEndpointFlow({ onClose }: { onClose: () => void }) {
         }
       >
         <Stack>
-          <SecretWell
-            value={secret}
-            action={
-              <Button
-                size="sm"
-                label="Copy secret"
-                onClick={() => {
-                  void navigator.clipboard?.writeText(secret);
-                  setCopied(true);
-                }}
-              >
-                {copied ? <Check {...ICON_SM} aria-hidden="true" /> : <Copy {...ICON_SM} aria-hidden="true" />}
-                {copied ? "Copied" : "Copy"}
-              </Button>
-            }
-          />
+          <CopyWell value={secret} label="Copy secret" />
           <Alert tone="warn" icon={AlertTriangle}>
             Shown once. Store it now.
           </Alert>

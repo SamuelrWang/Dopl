@@ -1,6 +1,6 @@
 /** The Users list's rules: what each filter keeps, how each column sorts, what each status means. */
 import { categoryOf, integrationOf } from "@/features/device-sdk/portal/catalog";
-import { hasIssues, hasStale, needsRelink, userDeliveries, userRate, type DeviceState, type PortalUser } from "@/features/device-sdk/portal/view";
+import { DAY_MS, hasIssues, hasStale, needsRelink, userDeliveries, userRate, type DeviceState, type PortalUser } from "@/features/device-sdk/portal/view";
 import { portalNow } from "../_components/format";
 
 export interface UserFilters {
@@ -19,7 +19,6 @@ export const QUICK: { key: Quick; label: string }[] = [
   { key: "attention", label: "Needs attention" },
   { key: "inactive", label: "Inactive" },
 ];
-const DAY_MS = 86_400_000;
 const idleMs = (u: PortalUser) => (u.lastActiveAt ? portalNow() - Date.parse(u.lastActiveAt) : Infinity);
 
 export function inQuick(u: PortalUser, quick: Quick): boolean {
@@ -82,9 +81,7 @@ export function sortUsers(users: readonly PortalUser[], { key, dir }: Sort): Por
 const RANK: Record<DeviceState, number> = { online: 0, needs_relink: 1, stale: 2, offline: 3 };
 export const devicesInOrder = (u: PortalUser) => [...u.devices].sort((a, b) => RANK[a.state] - RANK[b.state]);
 
-export function usersCsv(users: readonly PortalUser[]): string {
-  const cell = (v: string | number) => `"${String(v).replaceAll('"', '""')}"`;
+export function usersCsv(users: readonly PortalUser[]): (string | number)[][] {
   const head = ["Name", "User ID", "Devices", "Active device", "Last delivery", "Delivered", "Status"];
-  const rows = users.map((u) => [u.name, u.id, u.devices.length, activeDevice(u)?.name ?? "", u.lastDeliveryAt ?? "", userDeliveries(u) ? `${userRate(u)}%` : "", STATUS_LABELS[statusOf(u)]]);
-  return [head, ...rows].map((r) => r.map(cell).join(",")).join("\n");
+  return [head, ...users.map((u) => [u.name, u.id, u.devices.length, activeDevice(u)?.name ?? "", u.lastDeliveryAt ?? "", userDeliveries(u) ? `${userRate(u)}%` : "", STATUS_LABELS[statusOf(u)]])];
 }

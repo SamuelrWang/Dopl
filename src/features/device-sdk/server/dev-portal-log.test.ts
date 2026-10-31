@@ -8,7 +8,6 @@ import type { DeviceEventRow } from "../types";
 import { createColumnCompat, RECHECK_MS } from "./column-compat";
 import { buildDevEvent, writeEventRows } from "./events";
 import { operationOf } from "./with-developer-key";
-import { parsePortalParams, type PortalProject } from "../portal/scope";
 import { route, type RouteCandidate } from "../delivery/router";
 import { actionTimes } from "./delivery-store";
 
@@ -106,15 +105,5 @@ describe("small rules", () => {
     expect(actionTimes("delivered", "t")).toEqual({ delivered_at: "t" });
     expect(actionTimes("done", "t")).toEqual({ delivered_at: "t", settled_at: "t" });
     expect(actionTimes("failed", "t")).toEqual({ settled_at: "t" });
-  });
-
-  it("an internal project opens on live, a customer's on test, and the URL still wins", () => {
-    const p = (id: string, internal: boolean): PortalProject => ({ id, name: id, apiVersion: "1", org: { id: "o", name: "o", internal }, role: "owner" });
-    const internal = "11111111-1111-4111-8111-111111111111";
-    const customer = "22222222-2222-4222-8222-222222222222";
-    const projects = [p(customer, false), p(internal, true)];
-    expect(parsePortalParams({ project: internal }, projects).env).toBe("live");
-    expect(parsePortalParams({ project: customer }, projects).env).toBe("test");
-    expect(parsePortalParams({ project: internal, env: "test" }, projects).env).toBe("test");
   });
 });

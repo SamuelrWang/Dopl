@@ -63,8 +63,8 @@ export function refuseInternal(internal: boolean): void {
   if (internal) throw new HttpError(409, "INTERNAL_ORG", "This is an internal org. It is managed by hand.");
 }
 
-/** Ruled 2026-10-31 (PLAN section 8, 14): an internal org's owner may manage its keys. Members, invites and projects stay by hand. */
-function refuseInternalKeyEdit(project: PortalProject): void {
+/** Ruled 2026-10-31 (PLAN section 8, 14): an internal org's owner may manage its keys and webhooks. Members, invites and projects stay by hand. */
+export function refuseInternalUnlessOwner(project: Pick<PortalProject, "org" | "role">): void {
   if (project.org.internal && project.role !== "owner") refuseInternal(true);
 }
 
@@ -274,8 +274,10 @@ export async function createProjectKey(
   const kind = input.kind as ApiKeyKind;
   const project = await requireProject(userId, projectId);
   if (!canManageKeys(project.role)) throw new HttpError(403, "FORBIDDEN", "Only an org owner or admin can create keys");
-  refuseInternalKeyEdit(project);
+  refuseInternalUnlessOwner(project);
   const name = input.name === undefined ? null : cleanName(input.name, "Key name");
+  // Under an internal project an unnamed live secret reads as Dopl's own delivery key and locks (`keys.ts › lockedKeyIds`).
+  if (project.org.internal && env === "live" && kind === "secret" && !name) throw new HttpError(400, "BAD_REQUEST", "Name this key");
   const scopes = parseScopes(input.scopes);
 
   const { data, error } = await supabaseAdmin()
@@ -300,7 +302,7 @@ export async function revokeProjectKey(userId: string, keyId: string): Promise<v
   const project = key ? (await listPortalProjects(userId)).find((p) => p.id === key.projectId) : undefined;
   if (!key || !project) throw notFound("Key");
   if (!canManageKeys(project.role)) throw new HttpError(403, "FORBIDDEN", "Only an org owner or admin can revoke keys");
-  refuseInternalKeyEdit(project);
+  refuseInternalUnlessOwner(project);
   await refuseLockedKey(project, keyId);
   if (key.revokedAt) throw new HttpError(409, "KEY_REVOKED", "This key is already revoked");
   const revoked = await revokeApiKey({ projectId: project.id, keyId });

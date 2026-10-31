@@ -20,9 +20,9 @@ const STEP_TYPE = "Choose a key type";
 const STEP_SCOPES = "Choose what it can do";
 const STEP_NAME = "Name this key";
 
-export const copyText = (text: string) => void navigator.clipboard?.writeText(text)?.catch(() => {});
+const copyText = (text: string) => void navigator.clipboard?.writeText(text)?.catch(() => {});
 
-function CopyWell({ value, label }: { value: string; label: string }) {
+export function CopyWell({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <SecretWell

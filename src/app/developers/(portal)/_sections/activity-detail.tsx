@@ -3,7 +3,7 @@
 /** One call's story: what it said, each step it took, the devices considered, the raw response. */
 import { Check, Copy, ExternalLink } from "lucide-react";
 import { useState } from "react";
-import { CALL_KIND_LABEL, STATUS_LABEL, type Call, type PortalUser } from "@/features/device-sdk/portal/view";
+import { CALL_KIND_LABEL, STATUS_LABEL, type Call, type PortalUser, type WebhookCall } from "@/features/device-sdk/portal/view";
 import { Badge, Button, ICON_SM, TwoLine, type Tone } from "../_design/ui";
 import { Timeline, type Step } from "../_design/ui-data";
 import { FillBody } from "../_design/ui-output";
@@ -12,6 +12,28 @@ import { BASE, clockOf, ms, since } from "../_components/format";
 import { STATUS_TONE, deviceNameOf, userNameOf } from "./activity";
 
 const VERDICT: Record<string, [string, Tone]> = { chosen: ["Chosen", "ok"], eligible: ["Eligible", "neutral"], skipped: ["Skipped", "neutral"] };
+
+export function AttemptList({ attempts }: { attempts: WebhookCall["attempts"] }) {
+  return (
+    <Stack>
+      <Text kind="strong" as="h3">
+        Attempts
+      </Text>
+      <div>
+        {attempts.map((a, i) => (
+          <ListRow key={a.at + i} line={i < attempts.length - 1}>
+            <Badge tone={a.status && a.status < 300 ? "ok" : "error"}>{a.status ?? "No reply"}</Badge>
+            <Text clip>{a.note}</Text>
+            <Grow />
+            <Text kind="smallMuted" nowrap>
+              {since(a.at)}
+            </Text>
+          </ListRow>
+        ))}
+      </div>
+    </Stack>
+  );
+}
 
 export function CallDetail({ call, users }: { call: Call; users: PortalUser[] }) {
   const [copied, setCopied] = useState<string | null>(null);
@@ -58,25 +80,7 @@ export function CallDetail({ call, users }: { call: Call; users: PortalUser[] })
             ))}
           </Stack>
         )}
-        {call.webhook && (
-          <Stack>
-            <Text kind="strong" as="h3">
-              Attempts
-            </Text>
-            <div>
-              {call.webhook.attempts.map((a, i) => (
-                <ListRow key={a.at + i} line={i < call.webhook!.attempts.length - 1}>
-                  <Badge tone={a.status && a.status < 300 ? "ok" : "error"}>{a.status ?? "No reply"}</Badge>
-                  <Text clip>{a.note}</Text>
-                  <Grow />
-                  <Text kind="smallMuted" nowrap>
-                    {since(a.at)}
-                  </Text>
-                </ListRow>
-              ))}
-            </div>
-          </Stack>
-        )}
+        {call.webhook && <AttemptList attempts={call.webhook.attempts} />}
         {call.response != null && <CodeBlock title={call.route ?? "Response"}>{JSON.stringify(call.response, null, 2)}</CodeBlock>}
       </FillBody>
       <Between>

@@ -5,6 +5,7 @@ import { modelOfAdapter } from "../portal/catalog";
 import { dayOf, deviceState, type MetricRow, type OwnedDevice, type PortalUser } from "../portal/view";
 import { wiredDeviceAdapters } from "./device-adapters";
 import { emailOf } from "./portal-admin";
+import { UUID } from "./portal-http";
 
 /**
  * USERS, DEVICES AND FIGURES for `/developers`. Service role, server only. The caller passes a project it
@@ -18,7 +19,6 @@ const METRIC_DAYS = 31;
 const MAX_FLEET = 1000;
 /** Looking up a name is one auth call each, so an internal project's list stops here. */
 const MAX_NAME_LOOKUPS = 20;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function must<T>(res: { data: T | null; error: { message: string } | null }, op: string): T {
   if (res.error) throw new Error(`${op} failed: ${res.error.message}`);
@@ -92,13 +92,16 @@ export async function readFleet(input: { projectId: string; env: Environment; in
       .eq("env", input.env)
       .is("revoked_at", null)
       .limit(MAX_FLEET),
-    db.from("connections").select("device_id, status, expires_at, granted_scopes, created_at").eq("project_id", input.projectId).eq("env", input.env).neq("status", "revoked").limit(MAX_FLEET),
+    db.from("connections").select("device_id, status, expires_at, granted_scopes, created_at").eq("project_id", input.projectId).eq("env", input.env).neq("status", "revoked").order("created_at", { ascending: true }).limit(MAX_FLEET),
   ]);
   const users = must(usersRes, "readFleet users") as unknown as Array<{ id: string; external_user_id: string; display_name: string | null; created_at: string }>;
   const devices = must(devicesRes, "readFleet devices") as unknown as DeviceRow[];
   const connections = must(connectionsRes, "readFleet connections") as unknown as Array<{ device_id: string; status: string; expires_at: string | null; granted_scopes: string[]; created_at: string }>;
 
+  // A device can be re-paired: oldest first, so the newest connection is the one kept.
   const connectionOf = new Map(connections.map((c) => [c.device_id, c]));
+  const devicesOf = new Map<string, DeviceRow[]>();
+  for (const d of devices) devicesOf.set(d.end_user_id, [...(devicesOf.get(d.end_user_id) ?? []), d]);
   const weekStart = dayOf(now, 6);
   const perDevice = new Map<string, { deliveries: number; delivered: number }>();
   const lastDelivery = new Map<string, string>();
@@ -114,10 +117,10 @@ export async function readFleet(input: { projectId: string; env: Environment; in
 
   return users.map((u) => {
     const owned: OwnedDevice[] = [];
-    for (const d of devices) {
+    for (const d of devicesOf.get(u.id) ?? []) {
       const connection = connectionOf.get(d.id);
       const modelId = modelOfAdapter(d.adapter_id);
-      if (d.end_user_id !== u.id || !connection || !modelId) continue;
+      if (!connection || !modelId) continue;
       const figures = perDevice.get(d.id);
       owned.push({
         id: d.id,

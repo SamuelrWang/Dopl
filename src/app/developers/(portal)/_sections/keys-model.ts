@@ -23,7 +23,7 @@ function quietDays(k: Key) {
 
 export const isExpired = (k: Key) => k.expiresAt !== null && Date.parse(k.expiresAt) <= portalNow();
 export const isDead = (k: Key) => k.revokedAt !== null || isExpired(k);
-export const isUnused = (k: Key) => !isDead(k) && quietDays(k) >= UNUSED_DAYS;
+const isUnused = (k: Key) => !isDead(k) && quietDays(k) >= UNUSED_DAYS;
 export const inUse = (k: Key) => !isDead(k) && k.lastUsedAt !== null && minsSince(k.lastUsedAt) < DAY;
 
 export function keepsKey(k: Key, view: KeyTab, q: string) {

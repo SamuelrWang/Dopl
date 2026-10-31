@@ -11,7 +11,7 @@ import { CategoryGlyph } from "../_components/category-glyph";
 import { since } from "../_components/format";
 import { FIRST_DIR, STATUS_LABELS, activeDevice, devicesInOrder, statusOf, type Sort, type SortKey, type Status } from "./users-model";
 
-export const PAGE_SIZE = 10;
+const PAGE_SIZE = 10;
 
 export function DeviceGlyph({ device, size }: { device: OwnedDevice; size: typeof ICON | typeof ICON_SM }) {
   return <CategoryGlyph id={categoryIdOf(device.modelId)} size={size} />;

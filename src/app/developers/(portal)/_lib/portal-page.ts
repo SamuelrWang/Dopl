@@ -12,6 +12,7 @@ import { readEndpointViews } from "@/features/device-sdk/server/portal-webhooks"
 import type { Environment } from "@/features/device-sdk/types";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { getUser } from "@/shared/supabase/server";
+import { ENV_COOKIE, PROJECT_COOKIE } from "../_components/format";
 
 /**
  * Every `/developers` page starts here. `cache` makes one read per request, shared by the layout's sidebar
@@ -22,10 +23,7 @@ import { getUser } from "@/shared/supabase/server";
  * 🔒 An internal project opens on Live, because that is where all of its traffic is (PLAN section 2).
  */
 
-export const PROJECT_COOKIE = "dopl_dev_project";
-export const ENV_COOKIE = "dopl_dev_env";
-
-export interface PortalScope {
+interface PortalScope {
   userId: string;
   email: string | null;
   projects: PortalProject[];
@@ -50,7 +48,7 @@ export const loadScope = cache(async (): Promise<PortalScope> => {
   return { userId: user.id, email: user.email ?? null, projects, project, org, env, now };
 });
 
-export interface PortalSnapshot {
+interface PortalSnapshot {
   users: PortalUser[];
   metrics: MetricRow[];
   endpoints: EndpointView[];

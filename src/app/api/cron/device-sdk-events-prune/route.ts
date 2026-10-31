@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireCronSecret } from "@/shared/auth/require-cron-secret";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 import { DEFAULT_EVENT_RETENTION_DAYS, pruneDevEvents } from "@/features/device-sdk/server/events";
-import { pruneDeviceText } from "@/features/device-sdk/server/retention";
+import { pruneDeviceText, rollSeedRows } from "@/features/device-sdk/server/retention";
 
 /**
  * GET /api/cron/device-sdk-events-prune — deletes Device SDK `dev_events` rows, and the message text
@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
   const denied = requireCronSecret(request);
   if (denied) return denied;
   try {
+    await rollSeedRows();
     const deleted = await pruneDevEvents({ retentionDays: DEFAULT_EVENT_RETENTION_DAYS });
     const text = await pruneDeviceText({ retentionDays: DEFAULT_EVENT_RETENTION_DAYS });
     return NextResponse.json({ ok: true, deleted, text, retention_days: DEFAULT_EVENT_RETENTION_DAYS });

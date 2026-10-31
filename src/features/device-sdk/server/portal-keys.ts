@@ -12,6 +12,12 @@ import { emailOf } from "./portal-admin";
  * revoking it from a button would stop glasses delivery until the environment changes (PLAN section 2).
  */
 
+export async function countActiveKeys(projectId: string, env: Environment): Promise<number> {
+  const { count, error } = await supabaseAdmin().from("dev_api_keys").select("id", { count: "exact", head: true }).eq("project_id", projectId).eq("env", env).is("revoked_at", null);
+  if (error) throw new Error(`countActiveKeys failed: ${error.message}`);
+  return count ?? 0;
+}
+
 export async function readKeyViews(projectId: string, env: Environment, internal: boolean, metrics: readonly MetricRow[], now: Date): Promise<KeyView[]> {
   const { data, error } = await supabaseAdmin()
     .from("dev_api_keys")

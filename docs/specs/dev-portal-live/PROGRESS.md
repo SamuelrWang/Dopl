@@ -210,3 +210,67 @@ Send test, Relink, Revoke from a user page, Mute, rule publishing, Connect save 
 - **Skeletons were adjusted for removed header buttons,** not compared side by side.
 - **`write-gate-coverage` was already red from Phase 2:** the two `device-bridge` routes had no EXEMPT row. Added.
 - **The old deliver row** (`ae2c30bb`) titles as `present.display`: it predates `action_id`, so its text cannot be joined.
+
+## Phase 3 review (on `e45bfdb52`)
+
+Read the diff independently, fixed what it found. Behaviour is unchanged except the fixes below.
+
+### On production
+
+- **Migration** `20261124116000_dev_portal_review_fixes.sql`, applied as `dev_portal_review_fixes`. Function body md5s match the file: `dev_portal_metrics` `02d6d6a8...`, `dev_portal_roll_seed` `4a84f0bb...`. Neither is executable by anon or authenticated (checked). No backslashes.
+- **Seed update, 18 rows:** seeded live devices with an active connection, except every third and the stale and needs-relink ones, now hold `last_seen = now() + 10 years`. That stays inside every adapter's online window with no cron, and reads Just now. Overview reads 18 of 32 online (18 seeded; your real device counts when it is online). Added to [seed.sql](seed.sql). All 18 still match `5eed0000-`, no real row changed.
+- **Removal:** the SQL above still removes everything. `dev_portal_roll_seed` stays until `rollSeedRows` leaves the cron, and is a no-op with no seed rows.
+
+### Sweep and retention, read closely
+
+- **Unrelated rows:** nothing references `dev_actions` or `dev_device_messages` by foreign key, and those tables have no delete trigger that matters. Outbox deletes cascade only to its own deliveries and attempts. Rows past 30 days on production today: 0 in all four tables, 0 queued actions, so the first run deletes nothing before 2026-11-03.
+- **Seed rows would have gone, starting 2026-11-03,** and the 7-day figures would have emptied within a week whatever the prune did. `dev_portal_roll_seed` moves them forward by whole days, first thing in the daily prune cron, so the oldest stays near 28 days and the newest is never in the future. Tested on production inside a rolled-back transaction: seed moved 3 days, 0 future rows, 0 answers before their action, real rows byte identical. Runs for real only after the push. pg_cron is not installed, so it lives in the existing cron.
+- **Bounded:** retention now reads at most 500 ids at a time, at most 10,000 rows per table per run. `pruneDevEvents` is older code and still one unbounded delete.
+
+### Bugs fixed
+
+| Area | Bug | Now |
+|---|---|---|
+| Auth | Rotate skipped the internal-org rule, so an internal org's admin could rotate keys | Owner only, same as create and revoke |
+| Auth | An internal org's admin could add a webhook, sending every Dopl user's device events to any URL, or pause and replay them | Owner only |
+| Auth | An unnamed live secret made under an internal project locked itself for good | Refused: name required |
+| Sweep | An action never queued failed without `action.failed` and kept a stale response body, though the notes said it fired | Fires, body updated |
+| Retention | A pending message whose device stopped polling kept its text forever, against the 30-day promise | Deleted once past expiry |
+| Status | Outside an internal project an unanswered ask read Delivered, because the message status was read only for internal | Status always read; text still internal only |
+| Figures | Activity marked replays and the bridge's cast report as deliveries; the metrics did not count them | Same rule both sides |
+| Figures | Active users and Last delivery counted refused calls | Only deliveries a device took |
+| Figures | Median time counted a person's messages as 0 ms | Rows with no API time are left out |
+| Figures | Usage's column said Calls over a count of deliveries, Model and User views | Says Deliveries; the export too |
+| Figures | No deliveries read 0%, and an endpoint with only pending sends read 0% with a red meter | None |
+| Figures | The delivered line started at a false 0% before the first send | Starts flat at the first real rate |
+| Time | Exact times were UTC with no label | Labelled UTC |
+| Switching | Live or Test, or another project, kept the last filters and selection | Page state resets |
+| Export | A message beginning `=` could run as a formula in a spreadsheet | Neutered, all three exports |
+| Fleet | A re-paired device kept an arbitrary connection | The newest |
+| Feed | `action.read` rows were dropped after the limit, shrinking the page | Filtered in the query |
+| Feed | A link to a call older than the newest 300 opened another call | Opens that call |
+| Webhooks | The table showed 10 of 100 events with no way on | Pager |
+| Tests | `device-sdk-webhooks-send` and `device-sdk-events-prune` route tests were red: the new calls reached a real database | Mocked |
+
+Checked and sound: session-only on all new routes, project and env fence on every read, once-only signing secret, webhook URL guard at create and again at send (redirects not followed), account email as name only under `internal`, the delivery key lock.
+
+### Efficiency
+
+- **Activity no longer re-reads the page.** New route `GET /api/developers/activity`, polled by `_components/use-live-calls.ts`: rows since the newest held (less 60 seconds, since the log flushes in batches) and rows still queued or retrying. Measured on production: 1 KB and 0.5 s a poll, against 225 KB and 1.1 s for the feed, and the old refresh also re-ran the whole layout. Nothing runs while the tab is hidden. An unchanged poll keeps the same array, so nothing flickers. Keys and row identity hold, and a selection stays put when newer rows land. Scroll position relies on the browser's scroll anchoring, which Chrome has and Safari does not.
+- **Webhooks** uses the same poll for its rows. Its endpoint figures refresh every 30 seconds rather than the whole tree every 3.
+- **Filters still run in the browser, over what is loaded.** Load older now reads back another 300 at a time, from the table foot and from "No calls match". A true server-side filter is not small, because status is derived after the join.
+- **Over-fetching cut:** Users no longer reads 300 calls for a sheet; the sheet asks for that user's. User page filters on the user in the query, so its history is no longer cut by other users' traffic. Device pages skip webhooks. Activity skips webhook payloads it never showed. `select *` on events is now named columns. Overview counts keys rather than reading them with their creators' emails.
+- **Indexes against real plans:** feed, errors and metrics use `dev_events_project_env_ts_idx` (metrics 35 ms). Webhook reads had a seq scan, so `dev_webhook_deliveries_project_env_created_idx` was added. No N+1 left except account emails, capped at 20 and only for unnamed internal users.
+
+### Cleaned
+
+Deleted what classic left behind: `queryPortalEvents`, `countBillableEvents`, `listProjectKeys`, `listPortalWebhookDeliveries`, the URL parser and its filters in `scope.ts`, and their tests. Removed unused exports. One font wrapper in the layout instead of one per page. Shared `AttemptList`, `CopyWell`, `rateOf`, `DAY_MS`, `scopesCover`, CSV writer and cookie names. The two device issues share one builder. `_design` untouched.
+
+### Still not verified
+
+- **Not seen in a browser,** by rule. Real readers ran against production read-only: 300 calls, poll, older page, by id, 17 users, 32 devices, 18 online.
+- **Sweep and retention deletes have not run on production.** Their reads ran, and the writes are covered by tests with fakes. Both start at the push.
+- **Sidebar counts** update on navigation and focus, not with the poll.
+- **Device pages** still look at the newest 300 calls of the project.
+- **A stuck ask whose message was already answered** ends at delivered, without its answer. It needs both the answer's write and the sweep's race to lose; left as is.
+- **Attempts:** a page of 300 deliveries each with 8 attempts could pass the 1,000-row response cap, which would undercount attempts on the oldest.

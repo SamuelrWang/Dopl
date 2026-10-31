@@ -7,7 +7,8 @@ import { readWebhookCalls } from "./portal-webhooks";
 
 /**
  * THE ACTIVITY FEED: `dev_events` rows, each with its action, merged with webhook deliveries, newest first.
- * Service role; the caller passes a project it already checked.
+ * Service role; the caller passes a project it already checked. Over the whole feed, one page of it, the rows
+ * since a moment (the live poll) or a few by id.
  *
  * 🔒 TEXT: a message row's `message_text`, or for a delivery the queued message's own text. The queued text
  * is read only under an internal project (Samuel, "show the text"; docs/legal/PRIVACY.md section 2.13).
@@ -32,7 +33,7 @@ interface ActionRow {
 interface LensRow {
   id: string;
   status: string;
-  payload: { title?: string; body?: string; question?: string } | null;
+  payload?: { title?: string; body?: string; question?: string } | null;
 }
 
 const lensIdOf = (a: ActionRow | undefined) => (typeof a?.result?.lens_message_id === "string" ? a.result.lens_message_id : null);
@@ -43,7 +44,7 @@ function lensText(row: LensRow | undefined): string | null {
   return p.question ?? ([p.title, p.body].filter(Boolean).join(": ") || null);
 }
 
-export function callStatus(e: Pick<DeviceEventRow, "outcome" | "operation">, kind: Call["kind"], action: ActionRow | undefined, lens: LensRow | undefined): CallStatus {
+function callStatus(e: Pick<DeviceEventRow, "outcome" | "operation">, kind: Call["kind"], action: ActionRow | undefined, lens: LensRow | undefined): CallStatus {
   if (e.outcome === "denied") return "refused";
   if (e.outcome === "error") return "failed";
   if (kind === "message") return "received";
@@ -60,7 +61,7 @@ export function callStatus(e: Pick<DeviceEventRow, "outcome" | "operation">, kin
 
 const offsetFrom = (start: number, iso: string | null | undefined) => (iso ? Math.max(0, Date.parse(iso) - start) : undefined);
 
-export function stepsOf(e: DeviceEventRow, action: ActionRow | undefined, status: CallStatus): CallStep[] {
+function stepsOf(e: DeviceEventRow, action: ActionRow | undefined, status: CallStatus): CallStep[] {
   const end = Date.parse(e.ts);
   const start = end - (e.latency_ms?.api ?? 0);
   const steps: CallStep[] = [{ key: "accepted", label: "Accepted", at: 0, state: "done" }];
@@ -80,10 +81,14 @@ export function stepsOf(e: DeviceEventRow, action: ActionRow | undefined, status
   return steps;
 }
 
+const NOT_A_DELIVERY = ["action.read", "bridge.cast", "device.read"];
+
+/** ⚠ `is_delivery` in `dev_portal_metrics` is the same rule: a row marked Delivery here is one the figures count. */
 function kindOf(e: DeviceEventRow): Call["kind"] {
   const op = e.operation ?? "";
   if (op === "message.from_desktop" || op === "message.from_glasses") return "message";
-  if (e.capability && !e.capability.startsWith("input.") && op !== "action.read" && op !== "device.read" && !(e.route_decision?.reason ?? "").startsWith("poll:")) return "delivery";
+  const reason = e.route_decision?.reason ?? "";
+  if (e.capability && !e.capability.startsWith("input.") && !NOT_A_DELIVERY.includes(op) && !reason.startsWith("poll:") && !reason.startsWith("idempotent replay:")) return "delivery";
   return "request";
 }
 
@@ -97,19 +102,39 @@ function titleOf(e: DeviceEventRow, text: string | null): string {
   return e.operation ?? "Call";
 }
 
-function consideredOf(e: DeviceEventRow): Considered[] {
-  const list = e.route_decision?.considered;
-  if (list) return list.map((c) => ({ deviceId: c.device_id, verdict: c.verdict, reason: c.reason }));
-  return [];
+const consideredOf = (e: DeviceEventRow): Considered[] => (e.route_decision?.considered ?? []).map((c) => ({ deviceId: c.device_id, verdict: c.verdict, reason: c.reason }));
+
+const EVENT_COLUMNS = "event_id, ts, external_user_id, device_id, capability, outcome, error_code, latency_ms, route_decision, profile_id, profile_version, action_id, operation, http_method, route, message_text";
+
+export interface CallsQuery {
+  projectId: string;
+  env: Environment;
+  internal: boolean;
+  limit?: number;
+  /** Rows at or after this moment. */
+  since?: string;
+  /** Rows at or before this moment. A row on the edge comes twice; the reader merges by id. */
+  before?: string;
+  ids?: string[];
+  userId?: string;
+  source?: "devices" | "webhooks";
 }
 
-/** The newest calls of one project and env. Polls stay out: they repeat a delivery, they are not one. */
-export async function readCalls(input: { projectId: string; env: Environment; internal: boolean; limit?: number }): Promise<Call[]> {
+async function readEvents(input: CallsQuery, limit: number): Promise<DeviceEventRow[]> {
+  let query = supabaseAdmin().from("dev_events").select(EVENT_COLUMNS).eq("project_id", input.projectId).eq("env", input.env).or('operation.is.null,operation.neq."action.read"');
+  if (input.ids) query = query.in("event_id", input.ids);
+  if (input.since) query = query.gte("ts", input.since);
+  if (input.before) query = query.lte("ts", input.before);
+  if (input.userId) query = query.eq("external_user_id", input.userId);
+  const { data, error } = await query.order("ts", { ascending: false }).limit(limit);
+  if (error) throw new Error(`readCalls failed: ${error.message}`);
+  return (data ?? []) as unknown as DeviceEventRow[];
+}
+
+export async function readCalls(input: CallsQuery): Promise<Call[]> {
   const db = supabaseAdmin();
   const limit = input.limit ?? FEED_LIMIT;
-  const { data, error } = await db.from("dev_events").select("*").eq("project_id", input.projectId).eq("env", input.env).order("ts", { ascending: false }).limit(limit);
-  if (error) throw new Error(`readCalls failed: ${error.message}`);
-  const events = ((data ?? []) as DeviceEventRow[]).filter((e) => e.operation !== "action.read");
+  const events = input.source === "webhooks" ? [] : await readEvents(input, limit);
 
   const actionIds = [...new Set(events.map((e) => e.action_id).filter((v): v is string => Boolean(v)))];
   const actions = new Map<string, ActionRow>();
@@ -120,10 +145,10 @@ export async function readCalls(input: { projectId: string; env: Environment; in
   }
   const lensIds = [...actions.values()].map(lensIdOf).filter((v): v is string => v !== null);
   const lens = new Map<string, LensRow>();
-  if (input.internal && lensIds.length > 0) {
-    const res = await db.from("dev_device_messages").select("id, status, payload").in("id", lensIds);
+  if (lensIds.length > 0) {
+    const res = await db.from("dev_device_messages").select(input.internal ? "id, status, payload" : "id, status").in("id", lensIds);
     if (res.error) throw new Error(`readCalls messages failed: ${res.error.message}`);
-    for (const m of (res.data ?? []) as LensRow[]) lens.set(m.id, m);
+    for (const m of (res.data ?? []) as unknown as LensRow[]) lens.set(m.id, m);
   }
   const deviceIds = [...new Set(events.map((e) => e.device_id).filter((v): v is string => Boolean(v)))];
   const adapterOf = new Map<string, string>();
@@ -152,7 +177,7 @@ export async function readCalls(input: { projectId: string; env: Environment; in
       errorCode: e.error_code,
       title: titleOf(e, text),
       text,
-      latencyMs: e.latency_ms?.api ?? null,
+      latencyMs: e.latency_ms?.api || null,
       steps: kind === "delivery" ? stepsOf(e, action, status) : [],
       considered: consideredOf(e),
       route: e.route ? `${e.http_method ?? "GET"} ${e.route.replace(/^\/api/, "")}` : null,
@@ -161,6 +186,6 @@ export async function readCalls(input: { projectId: string; env: Environment; in
     };
   });
 
-  const hooks = await readWebhookCalls(input.projectId, input.env, limit);
+  const hooks = input.source === "devices" || input.userId ? [] : await readWebhookCalls(input.projectId, input.env, { limit, since: input.since, before: input.before, ids: input.ids, payloads: input.source === "webhooks" });
   return [...calls, ...hooks].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, limit);
 }
