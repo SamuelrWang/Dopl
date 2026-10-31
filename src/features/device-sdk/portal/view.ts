@@ -141,7 +141,7 @@ export function dailyBars(rows: readonly MetricRow[], days: number, now: number)
     const day = dayOf(now, days - 1 - i);
     const t = totalsOf(rows.filter((r) => r.day === day));
     const tick = tickFormat.format(new Date(`${day}T00:00:00Z`));
-    return { key: day, value: t.deliveries, label: `${tick}: ${t.deliveries.toLocaleString("en-US")} deliveries`, tick, rate: t.deliveries ? rateOf(t) : null };
+    return { key: day, value: t.deliveries, label: `${tick}: ${t.deliveries.toLocaleString("en-US")} ${t.deliveries === 1 ? "delivery" : "deliveries"}`, tick, rate: t.deliveries ? rateOf(t) : null };
   });
 }
 

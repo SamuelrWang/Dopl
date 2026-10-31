@@ -37,7 +37,7 @@ export function DevicesSection({ users, metrics }: { users: PortalUser[]; metric
       <StatRow>
         <StatCard label="Models" value={fmt(rows.length)} hint={`${fmt(categories.length)} ${categories.length === 1 ? "category" : "categories"}`} />
         <StatCard label="Connected devices" value={fmt(figures.devices)} hint={`${fmt(figures.online)} online, ${fmt(figures.users)} users`} />
-        <StatCard label="Delivered, 7d" value={figures.deliveries ? `${figures.rate}%` : "None"} hint={`${fmt(figures.deliveries)} deliveries`} />
+        <StatCard label="Delivered, 7d" value={figures.deliveries ? `${figures.rate}%` : "None"} hint={`${fmt(figures.deliveries)} to connected devices`} />
         <StatCard label="Devices with issues" value={fmt(rows.reduce((n, r) => n + attentionOf(r), 0))} hint={`${relink} relink, ${stale} stale`} pressed={filters.quick === "attention"} onClick={() => patch({ quick: filters.quick === "attention" ? "all" : "attention" })} />
       </StatRow>
 
