@@ -3,7 +3,8 @@
 /** A user over the list: identity, devices, the week, latest deliveries as metadata only. */
 import { Send, Link2 } from "lucide-react";
 import { Badge, Button, ICON, Initials, StateDot, TwoLine, initialsOf, type Tone } from "../_design/ui";
-import { BoxRow, FigureGrid, GridFigure, Grow, ListRow, Row, SideSheet, Stack, Text } from "../_design/ui-page";
+import { StatTriple } from "../_design/ui-extras";
+import { BoxRow, Grow, ListRow, Row, SideSheet, Stack, Text } from "../_design/ui-page";
 import { CAPABILITY_LABEL, modelById } from "../_data/catalog";
 import { STATUS_LABEL as CALL_STATUS, type Call, type CallStatus } from "../_data/activity";
 import { PLAN_LABEL, REGION_LABEL, STATE_LABEL, needsRelink, ownedDevice, userDeliveries, userRate, userSeen, type DeviceState, type PortalUser } from "../_data/users";
@@ -27,12 +28,8 @@ export function UserSheet({ user, calls, onClose, onSendTest, onRelink }: { user
     <SideSheet
       label={user.name}
       onClose={onClose}
-      head={
-        <Row>
-          <Initials text={initialsOf(user.name)} ink />
-          <TwoLine title={<Text kind="title" as="h2">{user.name}</Text>} sub={`${user.id}, ${PLAN_LABEL[user.plan]}, ${REGION_LABEL[user.region]}`} />
-        </Row>
-      }
+      face={<Initials text={initialsOf(user.name)} />}
+      head={<TwoLine title={<Text kind="title" as="h2">{user.name}</Text>} sub={`${user.id}, ${PLAN_LABEL[user.plan]}, ${REGION_LABEL[user.region]}`} />}
       foot={
         <>
           <Button variant={relink ? "secondary" : "ink"} onClick={onSendTest}>
@@ -55,11 +52,13 @@ export function UserSheet({ user, calls, onClose, onSendTest, onRelink }: { user
         <Text kind="smallMuted">Last delivery {since(user.lastDeliveryAt)}</Text>
       </Row>
 
-      <FigureGrid>
-        <GridFigure label="Deliveries, 7d" value={fmt(sent)} />
-        <GridFigure label="Seen, 7d" value={fmt(userSeen(user))} />
-        <GridFigure label="Success" value={sent ? `${userRate(user)}%` : "None"} />
-      </FigureGrid>
+      <StatTriple
+        items={[
+          ["Deliveries, 7d", fmt(sent)],
+          ["Seen, 7d", fmt(userSeen(user))],
+          ["Success", sent ? `${userRate(user)}%` : "None"],
+        ]}
+      />
 
       <Stack>
         <Text kind="strong" as="h3">

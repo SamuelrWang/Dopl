@@ -4,9 +4,10 @@
  * Overview: is everything working, what should I do next. A project summary leads in the black panel;
  * setup, trends and the newest users sit around it. Fits the window.
  */
-import { ArrowRight, Paperclip } from "lucide-react";
+import { ArrowRight, FlaskConical, Info, Paperclip } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Chip, ICON, Initials, Stat, TwoLine, initialsOf } from "../_design/ui";
+import { Banner } from "../_design/ui-extras";
 import { BarChart, LineChart, Ring, Timeline, type Step } from "../_design/ui-data";
 import { AvatarStack, FillBody, FillCard, FitRows, InkFoot, InkPanel, InkPrompt, InkQuote, SplitLayout, StatStrip, ThreeUp } from "../_design/ui-output";
 import { Between, FilterRow, Grow, ListRow, Page, PageHeader, Row, Text } from "../_design/ui-page";
@@ -38,8 +39,9 @@ function useSetup(): (Step & { href: string; cta: string })[] {
 }
 
 export function OverviewSection() {
-  const { state } = usePortal();
+  const { state, update } = usePortal();
   const users = useUsers();
+  const [hidBanner, setHidBanner] = useState(false);
   const [q, setQ] = useState("");
   const [asked, setAsked] = useState<string | null>(null);
   const figures = figuresOfUsers(users);
@@ -57,6 +59,17 @@ export function OverviewSection() {
   return (
     <Page fit>
       <PageHeader title="Overview" test={state.env === "test"} action={worst && <Button href={`${BASE}/issues`}>{issues.length} open issues<ArrowRight {...ICON} aria-hidden="true" /></Button>} />
+      {state.env === "test" ? (
+        <Banner icon={FlaskConical} action="Switch to Live" onAction={() => update((s) => ({ ...s, env: "live" }))}>
+          Test environment. Nothing here reaches real users.
+        </Banner>
+      ) : (
+        !hidBanner && (
+          <Banner icon={Info} onClose={() => setHidBanner(true)}>
+            Scheduled maintenance on Saturday, 02:00 to 04:00 UTC
+          </Banner>
+        )
+      )}
       <StatStrip>
         <Stat label="Deliveries, 7d" value={fmt(figures.deliveries)} delta="6.1%" />
         <Stat label="Shown rate" value={`${figures.rate}%`} delta="0.8%" />

@@ -72,11 +72,11 @@ export function Button({ variant = "secondary", size = "md", square, full, block
 export function SplitButton({ onClick, onMore, moreLabel, children, more }: { onClick?: () => void; onMore?: () => void; moreLabel: string; children: ReactNode; more: ReactNode }) {
   return (
     <span className={b.split}>
-      <button type="button" className={cx(b.reset, b.splitMain)} onClick={onClick}>
+      <button type="button" className={b.splitMain} onClick={onClick}>
         {children}
       </button>
       <span className={b.splitDivider} />
-      <button type="button" aria-label={moreLabel} className={cx(b.reset, b.splitMore)} onClick={onMore}>
+      <button type="button" aria-label={moreLabel} className={b.splitMore} onClick={onMore}>
         {more}
       </button>
     </span>

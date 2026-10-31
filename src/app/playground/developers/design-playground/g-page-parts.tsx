@@ -6,12 +6,24 @@ import { Section } from "../_design/components";
 import { Badge, Button, Card, ICON, Meter, StatCard } from "../_design/ui";
 import { InkFoot, InkPanel, InkQuote } from "../_design/ui-output";
 import { Ring } from "../_design/ui-data";
+import { Banner, CodeCells, DateRange, PlanCard, StatTriple } from "../_design/ui-extras";
 import { AddCard, Alert, CardFoot, CardHead, CardSection, ChipRow, EmptyState, Figure, FigureWell, Mark, ReviewWell, Spark, StatRow, Text, Tile, Tiles } from "../_design/ui-page";
 
 /** What a real page is built from: header action, stats, a section of item cards, a popup's parts. */
 export function PagePartsGroup() {
   return (
     <Section label="Page parts">
+      <Banner icon={Monitor} action="Details">
+        Scheduled maintenance on Saturday
+      </Banner>
+      <CodeCells value="K7Q294" />
+      <StatTriple items={[["Deliveries", "155"], ["Seen", "131"], ["Success", "85%"]]} />
+      <div>
+        <DateRange label="Custom" value={null} month="2026-10" onChange={() => {}} />
+      </div>
+      <Tiles cols={3}>
+        <PlanCard name="Team" price="$249" per="/ month" features={["25,000 deliveries", "10 seats"]} badge="Current" selected onClick={() => {}} />
+      </Tiles>
       <InkPanel title="Project summary">
         <InkQuote>3,181 deliveries this week, 94.7% seen by a device.</InkQuote>
         <InkFoot>

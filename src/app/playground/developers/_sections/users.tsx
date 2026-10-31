@@ -99,7 +99,7 @@ export function UsersSection() {
         title="Users"
         test={state.env === "test"}
         action={
-          <Button disabled={rows.length === 0} onClick={exportCsv}>
+          <Button variant="ink" disabled={rows.length === 0} onClick={exportCsv}>
             <Download {...ICON} />
             Export
           </Button>

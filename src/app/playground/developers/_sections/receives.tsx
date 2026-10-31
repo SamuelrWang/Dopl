@@ -5,11 +5,11 @@
  * shows its value and where the value comes from. Publishing walks a version from draft to Test to
  * Live. Dopl never rewrites a message, so nothing here offers to.
  */
-import { Lock } from "lucide-react";
+import { ChevronDown, Lock } from "lucide-react";
 import { useState } from "react";
-import { Badge, Button, Card, ICON_SM, PillMenu, TwoLine } from "../_design/ui";
+import { Badge, Button, Card, ICON_SM, PillMenu, PopMenu, SplitButton, TwoLine } from "../_design/ui";
 import { RuleRow, SplitLayout } from "../_design/ui-output";
-import { Between, FilterRow, Grow, ListRow, Row, Text, Toast, Toolbar } from "../_design/ui-page";
+import { Between, FilterRow, Grow, ListRow, MenuItem, Row, Text, Toast, Toolbar } from "../_design/ui-page";
 import { minsAgo } from "../_data/company";
 import { MEMBERS } from "../_data/company";
 import { categoryById, modelById, type CategoryId, type ModelId } from "../_data/catalog";
@@ -94,6 +94,16 @@ function VersionBar({ editor, say }: { editor: ReceivesEditor; say: (text: strin
     editor.write((s) => ({ ...s, live: s.test }));
     say(`Promoted v${state.test} to Live`);
   };
+  const publishLive = () => {
+    const n = Math.max(0, ...state.versions.map((v) => v.n)) + 1;
+    editor.write((s) => ({
+      ...s,
+      test: n,
+      live: n,
+      versions: [{ n, at: minsAgo(0), by: MEMBERS[2].name, note: `${countOverrides(s.draft)} overrides on ${category}`, rules: s.draft }, ...s.versions],
+    }));
+    say(`Published v${n} to Test and Live`);
+  };
   return (
     <Toolbar>
       <Between>
@@ -105,12 +115,32 @@ function VersionBar({ editor, say }: { editor: ReceivesEditor; say: (text: strin
         <Row>
           <Badge tone="ring">Test v{state.test || "none"}</Badge>
           <Badge tone="ok" dot>Live v{state.live || "none"}</Badge>
-          <Button disabled={!dirty} onClick={publish}>
-            Publish to Test
-          </Button>
-          <Button variant="ink" disabled={!canPromote} onClick={promote}>
-            Promote to Live
-          </Button>
+          {dirty ? (
+            <PopMenu
+              right
+              label="More publish options"
+              trigger={(_, toggle) => (
+                <SplitButton moreLabel="More publish options" more={<ChevronDown {...ICON_SM} />} onClick={publish} onMore={toggle}>
+                  Publish to Test
+                </SplitButton>
+              )}
+            >
+              {(close) => (
+                <MenuItem
+                  onClick={() => {
+                    publishLive();
+                    close();
+                  }}
+                >
+                  Publish and promote to Live
+                </MenuItem>
+              )}
+            </PopMenu>
+          ) : (
+            <Button variant="ink" disabled={!canPromote} onClick={promote}>
+              Promote to Live
+            </Button>
+          )}
         </Row>
       </Between>
     </Toolbar>

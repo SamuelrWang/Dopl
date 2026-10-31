@@ -2,6 +2,7 @@ import { ButtonsGroup } from "./g-buttons";
 import { ComposedGroup } from "./g-composed";
 import { CredentialsGroup } from "./g-credentials";
 import { DataGroupA, DataGroupB } from "./g-data";
+import { DocsGroup } from "./g-docs";
 import { FeedbackGroup } from "./g-feedback";
 import { InputsGroup } from "./g-inputs";
 import { MenusGroup } from "./g-menus";
@@ -31,6 +32,7 @@ export function Gallery() {
       <CredentialsGroup />
       <PagePartsGroup />
       <OutputsGroup />
+      <DocsGroup />
     </div>
   );
 }

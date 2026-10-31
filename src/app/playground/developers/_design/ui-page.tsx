@@ -4,7 +4,7 @@
  * Page-level parts on top of ui.tsx: the frame, section headers, item cards, sheets and popups. Pages
  * compose these and add only their own grid widths. None takes a className. See README.md.
  */
-import { Check, ChevronLeft, ChevronRight, X, type LucideIcon } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Undo2, X, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { createElement, useEffect, useRef, type ReactNode, type Ref } from "react";
 import b from "./base.module.css";
@@ -102,10 +102,16 @@ export function EmptyState({ icon, title, action }: { icon: LucideIcon; title: s
   );
 }
 
-export function Toast({ children }: { children: ReactNode }) {
+export function Toast({ action, onAction, children }: { /** One way back, such as Undo. */ action?: string; onAction?: () => void; children: ReactNode }) {
   return (
     <div role="status" className={cx(o.toast, o.toastBlack, p.notice)}>
-      <span className={b.onInk}>{children}</span>
+      <span className={cx(b.onInk, b.grow)}>{children}</span>
+      {action && (
+        <button type="button" className={cx(b.reset, b.row)} onClick={onAction}>
+          <Undo2 {...ICON} aria-hidden="true" />
+          <span className={b.onInk}>{action}</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -274,7 +280,7 @@ function useEscape(onEscape: (() => void) | null) {
 }
 
 /* Over the page */
-export function SideSheet({ label, onClose, head, foot, children }: { label: string; onClose: () => void; head: ReactNode; foot: ReactNode; children: ReactNode }) {
+export function SideSheet({ label, onClose, face, head, foot, children }: { label: string; onClose: () => void; /** A person's sheet: a black band with their face over its edge. */ face?: ReactNode; head: ReactNode; foot: ReactNode; children: ReactNode }) {
   const close = useRef<HTMLButtonElement>(null);
   useEffect(() => close.current?.focus(), []);
   useEscape(onClose);
@@ -282,12 +288,24 @@ export function SideSheet({ label, onClose, head, foot, children }: { label: str
     <div className={p.sheetLayer}>
       <button type="button" className={p.scrim} aria-label="Close" tabIndex={-1} onClick={onClose} />
       <aside className={p.sheet} role="dialog" aria-modal="true" aria-label={label}>
-        <div className={p.sheetBody}>
+        {face && (
+          <div className={d.profileHead}>
+            <span className={d.profileFace}>{face}</span>
+            <span className={p.sheetBandClose}>
+              <PlainButton buttonRef={close} label="Close" onClick={onClose}>
+                <X {...ICON} />
+              </PlainButton>
+            </span>
+          </div>
+        )}
+        <div className={cx(p.sheetBody, Boolean(face) && p.sheetBodyFace)}>
           <header className={b.between}>
             {head}
-            <PlainButton buttonRef={close} label="Close" onClick={onClose}>
-              <X {...ICON} className={b.iconSoft} />
-            </PlainButton>
+            {!face && (
+              <PlainButton buttonRef={close} label="Close" onClick={onClose}>
+                <X {...ICON} className={b.iconSoft} />
+              </PlainButton>
+            )}
           </header>
           {children}
         </div>

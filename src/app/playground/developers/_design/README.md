@@ -19,7 +19,10 @@ Pages compose `ui.tsx` and `ui-page.tsx`. A page in `_sections` imports no `_des
 
 - `ui-output.tsx`: Stage, SplitLayout, LensScreen, PanelScreen, SpeakerOutput, HapticOutput, ChangeOutput, ReadOutput, CaptureOutput. InkPanel, InkQuote, InkPrompt, InkFoot (the black frame), StatStrip, ThreeUp, AvatarStack, PickRow. A call draws by capability, never by device. `g2-screen.tsx`: G2Screen, the 576x288 G2 display on Even's font metrics.
 
+- `ui-extras.tsx`: CodeCells, Dropzone, DateRange, PlanCard, Banner, StatTriple.
 - `ui-data.tsx`: BarChart, Limit, Timeline, LineChart, Ring.
+
+- `ui-docs.tsx`: the docs site (`src/features/marketing/docs`). DocNavSlot, DocMain, DocMobileBar, DocFootActions, DocBrand, NavFolder, NavSubhead, NavAnchors, DocColumn, DocHead, DocSplit, DocIntro, DocFoot, DocSocial, Prose, Inline, Anchored, DocGrid, Callout, InkCopy, CodeTabs, DocEndpoint, ParamRow, DocTable, DocSteps, DocFlow, DocFacts, DocLog.
 
 ## Adding a variation
 

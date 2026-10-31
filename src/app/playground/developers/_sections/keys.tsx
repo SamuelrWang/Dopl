@@ -40,9 +40,11 @@ export function KeysSection() {
   const browsing = q === "" && view === "active";
   const sections = SECTIONS.filter((section) => browsing || rows.some((key) => key.kind === section.kind));
 
-  const say = (text: string) => {
+  const [undo, setUndo] = useState<(() => void) | null>(null);
+  const say = (text: string, back: (() => void) | null = null) => {
     setNotice(text);
-    window.setTimeout(() => setNotice((now) => (now === text ? null : now)), 3200);
+    setUndo(() => back);
+    window.setTimeout(() => setNotice((now) => (now === text ? null : now)), back ? 6000 : 3200);
   };
   const seed = () => state.keys.length + 1;
   const replace = (row: ApiKeyRow) => update((s) => ({ ...s, keys: s.keys.map((key) => (key.id === row.id ? row : key)) }));
@@ -60,9 +62,10 @@ export function KeysSection() {
   };
   const revoke = () => {
     if (!revoking) return;
-    replace({ ...revoking, revoked: true, revokedAt: minsAgo(0) });
+    const before = revoking;
+    replace({ ...before, revoked: true, revokedAt: minsAgo(0) });
     setRevoking(null);
-    say(`${revoking.name} revoked`);
+    say(`${before.name} revoked`, () => replace(before));
   };
   const clear = () => {
     setQ("");
@@ -77,7 +80,17 @@ export function KeysSection() {
           {rotating && <RotateDialog row={rotating} onCancel={() => setRotating(null)} onConfirm={rotate} />}
           {revoking && <RevokeDialog row={revoking} onCancel={() => setRevoking(null)} onConfirm={revoke} />}
           {revealed && <RevealDialog row={revealed.row} token={revealed.token} onDone={() => setRevealed(null)} />}
-          {notice && <Toast>{notice}</Toast>}
+          {notice && (
+            <Toast
+              action={undo ? "Undo" : undefined}
+              onAction={() => {
+                undo?.();
+                setNotice(null);
+              }}
+            >
+              {notice}
+            </Toast>
+          )}
         </>
       }
     >

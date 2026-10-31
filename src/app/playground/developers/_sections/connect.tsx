@@ -7,6 +7,7 @@
 import { Check, Copy, ExternalLink, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, Chip, ICON, ICON_SM, TwoLine, type Tone } from "../_design/ui";
+import { Dropzone } from "../_design/ui-extras";
 import { FieldGrid, LabeledField, SplitLayout, Swatch, TierRow } from "../_design/ui-output";
 import { Between, BoxRow, CodeBlock, Grow, Mark, Page, PageHeader, PlainButton, Row, Stack, Text, TextField, Tile, Tiles } from "../_design/ui-page";
 import { INTEGRATIONS, TIER_LABEL, categoryById } from "../_data/catalog";
@@ -26,6 +27,7 @@ export function ConnectSection() {
   const edit = (patch: Partial<typeof draft>) => update((s) => ({ ...s, connect: { ...s.connect, draft: { ...s.connect.draft, ...patch } } }));
   const [next, setNext] = useState("");
   const [testing, setTesting] = useState(false);
+  const [logoName, setLogoName] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const snippet = `const session = await dopl.connectSessions.create({
   external_user_id: "user_123",
@@ -68,8 +70,20 @@ export function ConnectSection() {
                   </Row>
                 </LabeledField>
               </FieldGrid>
-              <LabeledField label="Logo URL">
-                <TextField label="Logo URL" placeholder="https://" value={draft.logoUrl} onChange={(logoUrl) => edit({ logoUrl })} />
+              <LabeledField label="Logo">
+                <Dropzone
+                  title="Drop a logo or choose a file"
+                  sub="PNG or SVG"
+                  fileName={logoName ?? undefined}
+                  onPick={(file) => {
+                    setLogoName(file.name);
+                    edit({ logoUrl: URL.createObjectURL(file) });
+                  }}
+                  onClear={() => {
+                    setLogoName(null);
+                    edit({ logoUrl: "" });
+                  }}
+                />
               </LabeledField>
             </Card>
             <Card>

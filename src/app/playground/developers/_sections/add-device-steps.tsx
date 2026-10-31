@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { Check, CircleAlert, MonitorPlay, QrCode } from "lucide-react";
 import { CAPABILITY_RISK_TIER, type CapabilityId } from "@dopl/device-contracts";
 import { Badge, Button, ICON, ICON_SM, TwoLine } from "../_design/ui";
+import { CodeCells } from "../_design/ui-extras";
 import { Between, BoxList, BoxListRow, Grow, Mark, PairWell, QrPattern, ReviewWell, Row, Stack, Text, Tile, Tiles, WarnNote } from "../_design/ui-page";
 import { TIER_LABEL, functionsOf, type Category, type Integration, type Model } from "../_data/catalog";
 import { CategoryGlyph } from "../_components/category-glyph";
@@ -89,7 +90,7 @@ export function ConnectStep({ method, model, sim, connected, onConnect }: { meth
               <Badge tone="ring">Not connected</Badge>
             )}
           </span>
-          <Text kind="code">K7Q2-94</Text>
+          <CodeCells value="K7Q294" />
           <span>
             <Button variant={connected ? "secondary" : "ink"} onClick={onConnect}>
               {connected ? "Paired" : "Confirm pairing"}

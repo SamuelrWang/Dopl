@@ -72,9 +72,9 @@ export function SearchPanel({ open, onOpenChange, field, children }: { open: boo
   );
 }
 
-export function SearchHit({ label, kind, onClick }: { label: string; kind: string; onClick: () => void }) {
+export function SearchHit({ label, kind, active, onClick }: { label: string; kind: string; /** The arrow keys' row. */ active?: boolean; onClick: () => void }) {
   return (
-    <button type="button" className={cx(o.item, o.itemBtn)} onClick={onClick}>
+    <button type="button" ref={(el) => { if (active) el?.scrollIntoView({ block: "nearest" }); }} className={cx(o.item, o.itemBtn, active && o.itemOn)} onClick={onClick}>
       <span className={side.navLabel}>{label}</span>
       <span className={o.itemEnd}>{kind}</span>
     </button>

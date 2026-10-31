@@ -122,3 +122,4 @@
 .pillSizer { display: inline-grid; text-align: left; }
 .pillSizer > * { grid-area: 1 / 1; white-space: nowrap; }
 .pillGhost { visibility: hidden; height: 0; }
+.splitMain, .splitMore { border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; cursor: pointer; }

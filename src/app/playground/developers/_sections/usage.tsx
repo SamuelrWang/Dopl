@@ -8,8 +8,9 @@ import { CreditCard, Download } from "lucide-react";
 import { useState } from "react";
 import { Button, DataCell, DataRow, DataTable, ICON, ICON_SM, MeterFigure, PillMenu, Segmented, StatCard, TwoLine, type Column } from "../_design/ui";
 import { BarChart, Limit } from "../_design/ui-data";
+import { DateRange, PlanCard, type DateSpan } from "../_design/ui-extras";
 import { FillBody, FillCard, FitRows, ScrollArea, SplitLayout, useFitRows } from "../_design/ui-output";
-import { Between, Page, PageHeader, Row, StatRow, TableHead, Text, Toast } from "../_design/ui-page";
+import { Between, FlowDialog, Grow, Page, PageHeader, Row, StatRow, TableHead, Text, Tiles, Toast } from "../_design/ui-page";
 import { dailySeries } from "../_data/activity";
 import { ALL_MODELS, CATEGORIES, categoryOf, modelById, trail, type ModelId } from "../_data/catalog";
 import { PLAN } from "../_data/misc";
@@ -40,6 +41,8 @@ export function UsageSection() {
   const [by, setBy] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const fit = useFitRows(4);
+  const [span, setSpan] = useState<DateSpan | null>(null);
+  const [choosing, setChoosing] = useState(false);
 
   const inFilter = (id: ModelId) => (category === "all" || categoryOf(id).id === category) && (modelId === "all" || id === modelId);
   const devices = users.flatMap((u) => u.devices).filter((d) => inFilter(d.modelId));
@@ -47,7 +50,8 @@ export function UsageSection() {
   const month = Math.round(week.deliveries * 3.9);
   const projected = Math.round(month / ELAPSED);
   const over = Math.max(0, projected - PLAN.deliveriesIncluded);
-  const series = dailySeries(week.deliveries, RANGES[range].days);
+  const spanDays = span ? Math.round((Date.parse(span.to) - Date.parse(span.from)) / 86_400_000) + 1 : 0;
+  const series = dailySeries(week.deliveries, span ? Math.max(1, spanDays) : RANGES[range].days);
   const models = ALL_MODELS.filter((m) => devicesOfModel(users, m.id).length > 0);
 
   const rowsOf = () => {
@@ -77,12 +81,28 @@ export function UsageSection() {
   const endpoints = state.endpoints.filter((e) => e.env === state.env).length;
 
   return (
-    <Page fit overlays={notice && <Toast>{notice}</Toast>}>
+    <Page
+      fit
+      overlays={
+        <>
+          {choosing && (
+            <PlanDialog
+              onClose={() => setChoosing(false)}
+              onChoose={(name) => {
+                setChoosing(false);
+                setNotice(`Demo: would move to ${name}`);
+              }}
+            />
+          )}
+          {notice && <Toast>{notice}</Toast>}
+        </>
+      }
+    >
       <PageHeader
         title="Usage"
         test={state.env === "test"}
         action={
-          <Button onClick={exportCsv}>
+          <Button variant="ink" onClick={exportCsv}>
             <Download {...ICON} aria-hidden="true" />
             Export
           </Button>
@@ -107,7 +127,10 @@ export function UsageSection() {
                   <PillMenu stable label={category === "all" ? "All categories" : CATEGORIES.find((c) => c.id === category)!.name} value={category} options={[{ value: "all", label: "All categories" }, ...CATEGORIES.map((c) => ({ value: c.id, label: c.name }))]} onChange={(v) => { setCategory(v); setModelId("all"); }} />
                   <PillMenu stable label={modelId === "all" ? "All models" : modelById(modelId as ModelId).name} value={modelId} options={[{ value: "all", label: "All models" }, ...models.filter((m) => category === "all" || categoryOf(m.id).id === category).map((m) => ({ value: m.id, label: m.name }))]} onChange={setModelId} />
                 </Row>
-                <Segmented label="Range" options={RANGES.map((r) => r.label)} value={range} onChange={setRange} />
+                <Row>
+                  {!span && <Segmented label="Range" options={RANGES.map((r) => r.label)} value={range} onChange={setRange} />}
+                  <DateRange label="Custom" value={span} month="2026-10" onChange={setSpan} />
+                </Row>
               </Between>
               <BarChart bars={series} />
             </FillCard>
@@ -116,7 +139,7 @@ export function UsageSection() {
             <FillCard>
               <Between>
                 <TwoLine title={<Text kind="h3">{PLAN.name} plan</Text>} sub={`${PLAN.price}, renews ${PLAN.renewsOn}`} />
-                <Button size="sm" onClick={() => setNotice("Demo: would open billing")}>
+                <Button size="sm" onClick={() => setChoosing(true)}>
                   <CreditCard {...ICON_SM} aria-hidden="true" />
                   Manage
                 </Button>
@@ -163,5 +186,37 @@ export function UsageSection() {
         </FillCard>
       </FitRows>
     </Page>
+  );
+}
+
+const PLANS = [
+  { name: "Starter", price: "$49", features: ["5,000 deliveries", "3 seats", "1 project"] },
+  { name: "Team", price: "$249", features: ["25,000 deliveries", "10 seats", "5 projects"] },
+  { name: "Scale", price: "$799", features: ["150,000 deliveries", "Unlimited seats", "Priority support"] },
+];
+
+function PlanDialog({ onClose, onChoose }: { onClose: () => void; onChoose: (name: string) => void }) {
+  const [chosen, setChosen] = useState(PLAN.name);
+  return (
+    <FlowDialog
+      label="Manage plan"
+      eyebrow={`On ${PLAN.name}, renews ${PLAN.renewsOn}`}
+      title="Choose a plan"
+      onDismiss={onClose}
+      foot={
+        <>
+          <Grow />
+          <Button variant="ink" disabled={chosen === PLAN.name} onClick={() => onChoose(chosen)}>
+            {chosen === PLAN.name ? "Current plan" : `Move to ${chosen}`}
+          </Button>
+        </>
+      }
+    >
+      <Tiles cols={3}>
+        {PLANS.map((plan) => (
+          <PlanCard key={plan.name} name={plan.name} price={plan.price} per="/ month" features={plan.features} badge={plan.name === PLAN.name ? "Current" : undefined} selected={chosen === plan.name} onClick={() => setChosen(plan.name)} />
+        ))}
+      </Tiles>
+    </FlowDialog>
   );
 }

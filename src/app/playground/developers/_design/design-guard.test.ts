@@ -20,6 +20,11 @@ describe("overhauled pages", () => {
     expect(readFileSync(join(__dirname, "..", "_components", file), "utf8")).not.toMatch(/_design\/[a-z-]+\.module\.css/);
   });
 
+  const DOCS = join(__dirname, "..", "..", "..", "..", "features", "marketing", "docs", "components");
+  it.each(readdirSync(DOCS))("the docs site's %s imports no CSS", (file) => {
+    expect(readFileSync(join(DOCS, file), "utf8")).not.toMatch(/\.css"/);
+  });
+
   it("have no CSS modules of their own", () => {
     expect(readdirSync(SECTIONS).filter((f) => f.endsWith(".module.css"))).toEqual([]);
   });

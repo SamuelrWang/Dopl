@@ -7,6 +7,7 @@
 import { Download, SearchX } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, DataCell, DataRow, DataTable, ICON, PillMenu, SearchField, Segmented, StatCard, TwoLine, type Column, type Tone } from "../_design/ui";
+import { DateRange, type DateSpan } from "../_design/ui-extras";
 import { FillCard, ScrollArea, SplitLayout } from "../_design/ui-output";
 import { Between, EmptyState, FilterRow, Grow, Page, PageHeader, StatRow, TableHead, Text } from "../_design/ui-page";
 import { DEMO_NOW } from "../_data/company";
@@ -63,6 +64,7 @@ export function CallsBrowser({ calls, initial, figures, test }: { calls: Call[];
   const [user, setUser] = useState(initial?.user ?? "all");
   const [capability, setCapability] = useState("all");
   const [time, setTime] = useState("all");
+  const [span, setSpan] = useState<DateSpan | null>(null);
   const [q, setQ] = useState(initial?.device ?? "");
 
   const needle = q.trim().toLowerCase();
@@ -73,6 +75,7 @@ export function CallsBrowser({ calls, initial, figures, test }: { calls: Call[];
     if (user !== "all" && c.userId !== user) return false;
     if (capability !== "all" && c.capability !== capability) return false;
     if ((Date.parse(DEMO_NOW) - Date.parse(c.at)) / 60_000 > limit) return false;
+    if (span && (c.at.slice(0, 10) < span.from || c.at.slice(0, 10) > span.to)) return false;
     return !needle || [c.id, c.requestId, c.deviceId, c.userId, c.title, c.webhook?.event].join(" ").toLowerCase().includes(needle);
   });
   const open = calls.find((c) => c.id === openId || c.requestId === openId) ?? rows[0] ?? null;
@@ -80,12 +83,13 @@ export function CallsBrowser({ calls, initial, figures, test }: { calls: Call[];
   const users = [...new Set(calls.map((c) => c.userId).filter(Boolean))] as string[];
   const userOptions = [{ value: "all", label: "All users" }, ...users.map((id) => ({ value: id, label: userById(id)?.name ?? id }))];
   const capabilityOptions = [{ value: "all", label: "All capabilities" }, ...[...new Set(calls.map((c) => c.capability).filter(Boolean))].map((c) => ({ value: c as string, label: c as string }))];
-  const filtered = status !== "all" || user !== "all" || capability !== "all" || time !== "all" || kind !== 0 || q !== "";
+  const filtered = status !== "all" || user !== "all" || capability !== "all" || time !== "all" || span !== null || kind !== 0 || q !== "";
   const clear = () => {
     setStatus("all");
     setUser("all");
     setCapability("all");
     setTime("all");
+    setSpan(null);
     setKind(0);
     setQ("");
   };
@@ -111,7 +115,7 @@ export function CallsBrowser({ calls, initial, figures, test }: { calls: Call[];
           title="Activity"
           test={test}
           action={
-            <Button disabled={rows.length === 0} onClick={exportCsv}>
+            <Button variant="ink" disabled={rows.length === 0} onClick={exportCsv}>
               <Download {...ICON} aria-hidden="true" />
               Export
             </Button>
@@ -140,6 +144,7 @@ export function CallsBrowser({ calls, initial, figures, test }: { calls: Call[];
                 <PillMenu stable label={labelOf(userOptions, user)} value={user} options={userOptions} onChange={setUser} />
                 <PillMenu stable label={labelOf(capabilityOptions, capability)} value={capability} options={capabilityOptions} onChange={setCapability} />
                 <PillMenu stable label={labelOf(TIMES, time)} value={time} options={TIMES} onChange={setTime} />
+                <DateRange label="Custom" value={span} month="2026-10" onChange={setSpan} />
                 <Grow />
                 {filtered && (
                   <Button size="sm" variant="ghost" onClick={clear}>

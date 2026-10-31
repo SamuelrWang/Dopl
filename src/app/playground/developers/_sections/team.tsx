@@ -54,9 +54,11 @@ export function TeamSection() {
   const [q, setQ] = useState("");
   const [view, setView] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
-  const say = (text: string) => {
+  const [undo, setUndo] = useState<(() => void) | null>(null);
+  const say = (text: string, back: (() => void) | null = null) => {
     setNotice(text);
-    window.setTimeout(() => setNotice((now) => (now === text ? null : now)), 3200);
+    setUndo(() => back);
+    window.setTimeout(() => setNotice((now) => (now === text ? null : now)), back ? 6000 : 3200);
   };
 
   const needle = q.toLowerCase();
@@ -92,8 +94,10 @@ export function TeamSection() {
                   full
                   variant="dangerFlat"
                   onClick={() => {
-                    update((s) => ({ ...s, members: s.members.filter((m) => m.id !== removing.id) }));
-                    say(`${removing.name} removed`);
+                    const gone = removing;
+                    const at = state.members.findIndex((m) => m.id === gone.id);
+                    update((s) => ({ ...s, members: s.members.filter((m) => m.id !== gone.id) }));
+                    say(`${gone.name} removed`, () => update((s) => ({ ...s, members: [...s.members.slice(0, at), gone, ...s.members.slice(at)] })));
                     setRemoving(null);
                   }}
                 >
@@ -102,7 +106,17 @@ export function TeamSection() {
               }
             />
           )}
-          {notice && <Toast>{notice}</Toast>}
+          {notice && (
+            <Toast
+              action={undo ? "Undo" : undefined}
+              onAction={() => {
+                undo?.();
+                setNotice(null);
+              }}
+            >
+              {notice}
+            </Toast>
+          )}
         </>
       }
     >
