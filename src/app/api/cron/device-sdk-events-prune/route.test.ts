@@ -11,17 +11,17 @@ vi.mock("@/shared/auth/require-cron-secret", () => ({ requireCronSecret: vi.fn((
 vi.mock("@/features/analytics/server/system-events", () => ({ logSystemEvent: vi.fn() }));
 vi.mock("@/features/device-sdk/server/events", () => ({
   DEFAULT_EVENT_RETENTION_DAYS: 30,
-  pruneDevEvents: vi.fn(),
 }));
 
 vi.mock("@/features/device-sdk/server/retention", () => ({
+  pruneDevEvents: vi.fn(),
   pruneDeviceText: vi.fn(async () => ({})),
   rollSeedRows: vi.fn(async () => {}),
 }));
 
 import { requireCronSecret } from "@/shared/auth/require-cron-secret";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
-import { pruneDevEvents } from "@/features/device-sdk/server/events";
+import { pruneDevEvents } from "@/features/device-sdk/server/retention";
 import { GET } from "./route";
 
 const request = () => new NextRequest("https://dopl.test/api/cron/device-sdk-events-prune");

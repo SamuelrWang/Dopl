@@ -1,10 +1,10 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { after, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import type { RouteContextArg } from "@/shared/auth/with-auth";
 import { ERROR_CODE_INFO, type ApiKeyScope, type ErrorCode, type EventOutcome, type RouteDecision } from "../types";
 import { devSdkError, devSdkErrorCode } from "./errors";
-import { flushDevEvents, logDevEvent, type DevEventInput } from "./events";
+import { flushDevEventsLater, logDevEvent, type DevEventInput } from "./events";
 import { touchApiKeyLastUsed, verifyApiKey, type ResolvedDeveloperKey } from "./keys";
 
 /**
@@ -36,7 +36,7 @@ export type DevEventAnnotation = Omit<
   "org_id" | "project_id" | "env" | "outcome" | "error_code" | "event_id" | "ts" | "latency_ms" | "api_key_id" | "http_method" | "route" | "http_status"
 > & { latency_ms?: { device_delivery?: number | null; user_response?: number | null } };
 
-export interface DevEventHandle {
+interface DevEventHandle {
   /** C5 step 4: the routing decision and its reason. */
   setRouteDecision(decision: RouteDecision): void;
   /** Merge any other C8 field (device, capability, intent, bytes, cost, …). Later calls win. */
@@ -45,7 +45,7 @@ export interface DevEventHandle {
 
 export type DeveloperKeyContext = ResolvedDeveloperKey & { event: DevEventHandle };
 
-export interface DeveloperKeyOptions {
+interface DeveloperKeyOptions {
   /** Every scope the key must carry. `[]` = any valid key of an allowed kind. */
   scopes: readonly ApiKeyScope[];
   /** Admit publishable keys. Only legal when `scopes` is exactly `["connect"]`. */
@@ -107,15 +107,6 @@ const byteLength = (h: string | null): number => {
   return Number.isInteger(n) && n >= 0 ? n : 0;
 };
 
-/** Flush the event batch once the response is sent; outside a request scope (tests) it is a no-op. */
-function flushAfterResponse(): void {
-  try {
-    after(() => flushDevEvents());
-  } catch {
-    // No request scope: the batch's own timer flushes it.
-  }
-}
-
 export function withDeveloperKey(handler: DeveloperKeyHandler, options: DeveloperKeyOptions) {
   const required = [...options.scopes];
   if (options.publishable && !(required.length === 1 && required[0] === "connect")) {
@@ -169,7 +160,7 @@ export function withDeveloperKey(handler: DeveloperKeyHandler, options: Develope
           error_code: code,
           latency_ms: { ...latency_ms, api: Math.max(0, Math.round(performance.now() - started)) },
         });
-        flushAfterResponse();
+        flushDevEventsLater();
       } catch (err) {
         console.warn("[device-sdk] event record failed:", err);
       }

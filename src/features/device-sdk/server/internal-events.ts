@@ -1,10 +1,9 @@
 import "server-only";
-import { after } from "next/server";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import type { CapabilityId, DeviceKind, ErrorCode, EventOutcome } from "../types";
+import type { CapabilityId, DeviceKind, ErrorCode } from "../types";
 import { connectStore } from "./connect/store";
 import { enqueueWebhookEvent } from "./connect/webhooks";
-import { flushDevEvents, logDevEvent, type DevEventInput } from "./events";
+import { afterResponse, flushDevEvents, flushDevEventsLater, logDevEvent, type DevEventInput } from "./events";
 
 /**
  * `dev_events` rows for traffic that never crosses `withDeveloperKey`, so the portal log tells the
@@ -12,18 +11,6 @@ import { flushDevEvents, logDevEvent, type DevEventInput } from "./events";
  * message from a device, an agent reply mirrored to a lens, and a local bridge's Cast outcome.
  * Fire-and-forget like every event: nothing here throws, and nothing fails the call it describes.
  */
-
-/** Work that must never slow the request. Outside a request scope (a script, a suite) it does not run. */
-function afterResponse(work: () => Promise<void>): void {
-  try {
-    after(work);
-  } catch {
-    // No request scope.
-  }
-}
-
-/** Flush once the response is sent; outside a request scope the batch's own timer flushes it. */
-const flushLater = () => afterResponse(flushDevEvents);
 
 /**
  * A lens copy that went through the prosumer queue because the SDK could not take it. Logged under the
@@ -47,7 +34,7 @@ export async function logProsumerFallback(
       operation: a.operation,
       route_decision: { target: "glasses", reason: `prosumer queue: ${a.reason}`, candidates: [] },
     });
-    flushLater();
+    flushDevEventsLater();
   } catch (err) {
     console.warn("[device-sdk] prosumer fallback row failed:", err);
   }
@@ -194,7 +181,7 @@ export async function logBridgeCast(a: {
       latency_ms: { device_delivery: Math.max(0, a.latencyMs) },
       message_text: owner.dev_projects.dev_orgs.internal ? messageTextForRow(a.body) : null,
     });
-    flushLater();
+    flushDevEventsLater();
   } catch (err) {
     console.warn("[device-sdk] bridge cast row failed:", err);
   }
@@ -213,12 +200,11 @@ export async function logConnectStep(a: {
     if (error) throw new Error(error.message);
     const orgId = (data as { org_id: string } | null)?.org_id;
     if (!orgId) return;
-    const outcome: EventOutcome = a.status < 400 ? "ok" : "error";
     logDevEvent({
       org_id: orgId,
       project_id: a.session.project_id,
       env: a.session.env,
-      outcome,
+      outcome: a.status < 400 ? "ok" : "error",
       error_code: a.code,
       external_user_id: a.session.external_user_id,
       connection_id: a.session.connection_id,
@@ -229,7 +215,7 @@ export async function logConnectStep(a: {
       http_status: a.status,
       latency_ms: { api: Math.max(0, Math.round(a.latencyMs)) },
     });
-    flushLater();
+    flushDevEventsLater();
   } catch (err) {
     console.warn("[device-sdk] connect step row failed:", err);
   }

@@ -1,5 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
+import { after } from "next/server";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { DeviceEventRowSchema, type DeviceEventRow } from "../types";
 import { createColumnCompat } from "./column-compat";
@@ -22,7 +23,6 @@ import { createColumnCompat } from "./column-compat";
  * database does not have them yet. The row survives without them.
  */
 
-export const DEV_EVENTS_TABLE = "dev_events";
 /** Rows per insert. */
 export const MAX_BATCH = 100;
 /** Coalescing window before a partial batch flushes on its own. */
@@ -30,7 +30,7 @@ export const FLUSH_DELAY_MS = 50;
 /** Default retention for request logs (C8: "retained per plan"; no plan column exists yet). */
 export const DEFAULT_EVENT_RETENTION_DAYS = 30;
 
-export interface DevEventSink {
+interface DevEventSink {
   write(rows: DeviceEventRow[]): Promise<void>;
 }
 
@@ -50,7 +50,7 @@ export async function writeEventRows(
 }
 
 const supabaseSink: DevEventSink = {
-  write: (rows) => writeEventRows((batch) => supabaseAdmin().from(DEV_EVENTS_TABLE).insert(batch), rows),
+  write: (rows) => writeEventRows((batch) => supabaseAdmin().from("dev_events").insert(batch), rows),
 };
 
 let sink: DevEventSink = supabaseSink;
@@ -169,19 +169,14 @@ export function flushDevEvents(): Promise<void> {
   }
 }
 
-/**
- * Delete events older than the retention window. Returns the count deleted. Throws on a database
- * error (the cron route reports it); this is NOT on any request path.
- */
-export async function pruneDevEvents(
-  options: { retentionDays?: number; now?: Date } = {}
-): Promise<number> {
-  const days = options.retentionDays ?? DEFAULT_EVENT_RETENTION_DAYS;
-  const cutoff = new Date((options.now ?? new Date()).getTime() - days * 86_400_000).toISOString();
-  const { count, error } = await supabaseAdmin()
-    .from(DEV_EVENTS_TABLE)
-    .delete({ count: "exact" })
-    .lt("ts", cutoff);
-  if (error) throw new Error(`pruneDevEvents failed: ${error.message}`);
-  return count ?? 0;
+/** Work that must never slow the request. Outside a request scope (a script, a suite) it does not run. */
+export function afterResponse(work: () => Promise<void>): void {
+  try {
+    after(work);
+  } catch {
+    // No request scope.
+  }
 }
+
+/** Flush once the response is sent; outside a request scope the batch's own timer flushes it. */
+export const flushDevEventsLater = (): void => afterResponse(flushDevEvents);

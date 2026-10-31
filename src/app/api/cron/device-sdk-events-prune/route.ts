@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCronSecret } from "@/shared/auth/require-cron-secret";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
-import { DEFAULT_EVENT_RETENTION_DAYS, pruneDevEvents } from "@/features/device-sdk/server/events";
-import { pruneDeviceText, rollSeedRows } from "@/features/device-sdk/server/retention";
+import { DEFAULT_EVENT_RETENTION_DAYS } from "@/features/device-sdk/server/events";
+import { pruneDevEvents, pruneDeviceText, rollSeedRows } from "@/features/device-sdk/server/retention";
 
 /**
  * GET /api/cron/device-sdk-events-prune — deletes Device SDK `dev_events` rows, and the message text

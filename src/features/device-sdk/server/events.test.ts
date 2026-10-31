@@ -1,6 +1,6 @@
 /**
  * `logDevEvent` (C8, A2): validated, batched, fire-and-forget, NEVER throws — not when the sink
- * throws synchronously, not when it rejects, not on an invalid row. Plus `pruneDevEvents`' cutoff.
+ * throws synchronously, not when it rejects, not on an invalid row.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeviceEventRowSchema, type DeviceEventRow } from "../types";
@@ -28,7 +28,6 @@ import {
   buildDevEvent,
   flushDevEvents,
   logDevEvent,
-  pruneDevEvents,
   setDevEventSinkForTests,
 } from "./events";
 
@@ -123,14 +122,5 @@ describe("logDevEvent", () => {
     const insert = db.calls.find((c) => c.method === "insert");
     expect(insert?.table).toBe("dev_events");
     expect((insert?.args[0] as unknown[]).length).toBe(1);
-  });
-});
-
-describe("pruneDevEvents", () => {
-  it("deletes rows older than the retention window (default 30 days)", async () => {
-    const now = new Date("2026-11-30T00:00:00.000Z");
-    expect(await pruneDevEvents({ now })).toBe(7);
-    const lt = db.calls.find((c) => c.method === "lt");
-    expect(lt).toMatchObject({ table: "dev_events", args: ["ts", "2026-10-31T00:00:00.000Z"] });
   });
 });
