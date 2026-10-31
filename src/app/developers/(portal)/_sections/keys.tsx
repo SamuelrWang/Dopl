@@ -8,11 +8,10 @@
 import { CheckCircle2, Globe, KeyRound, Plus, SearchX } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import type { KeyView } from "@/features/device-sdk/portal/view";
+import { counted, type KeyView } from "@/features/device-sdk/portal/view";
 import { errorText, portalCall } from "../../_lib/client-api";
 import { Button, ICON, SearchField, Segmented } from "../_design/ui";
 import { Between, CardSection, EmptyState, Page, PageHeader, Toast, Toolbar } from "../_design/ui-page";
-import { fmt } from "../_components/format";
 import { usePortal } from "../_components/portal-store";
 import { AddKeyCard, KeyCard } from "./keys-card";
 import { CreateKeyFlow, RevealDialog, RevokeDialog, RotateDialog } from "./keys-dialogs";
@@ -115,7 +114,7 @@ export function KeysSection({ keys }: { keys: KeyView[] }) {
           const inSection = rows.filter((key) => key.kind === kind);
           const sectionCalls = inSection.reduce((n, key) => n + key.calls7d, 0);
           return (
-            <CardSection key={kind} icon={<Glyph {...ICON} aria-hidden="true" />} title={label} meta={sectionCalls > 0 && `${fmt(sectionCalls)} calls, 7d`}>
+            <CardSection key={kind} icon={<Glyph {...ICON} aria-hidden="true" />} title={label} meta={sectionCalls > 0 && `${counted(sectionCalls, "call")}, 7d`}>
               {inSection.map((row) => (
                 <KeyCard key={row.id} row={row} canManage={canManage} onRotate={() => setRotating(row)} onRevoke={() => setRevoking(row)} />
               ))}

@@ -2,7 +2,7 @@
 
 /** A model the project uses: identity, state, what it does, how it is doing. */
 import { ChevronRight } from "lucide-react";
-import { LOW_RATE, dayOf, totalsOf, type MetricRow } from "@/features/device-sdk/portal/view";
+import { LOW_RATE, counted, dayOf, totalsOf, type MetricRow } from "@/features/device-sdk/portal/view";
 import { Badge, Button, Card, ICON, Meter } from "../_design/ui";
 import { CardFoot, CardHead, ChipRow, Figure, FigureWell, Mark, Spark, Text } from "../_design/ui-page";
 import { CategoryGlyph } from "../_components/category-glyph";
@@ -55,7 +55,7 @@ export function ModelCard({ row, metrics }: { row: ModelRow; metrics: readonly M
           <>
             <Spark bars={weekBars(row, metrics)} />
             <Text kind="small" num clip>
-              {delivered ? `${fmt(figures.deliveries)} deliveries` : "No deliveries yet"}
+              {delivered ? counted(figures.deliveries, "delivery", "deliveries") : "No deliveries yet"}
             </Text>
           </>
         }

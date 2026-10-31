@@ -7,7 +7,7 @@
  */
 import { ArrowRight, FlaskConical, Paperclip } from "lucide-react";
 import { useState } from "react";
-import { DAY_MS, activeWithin, dailyBars, figuresOfDevices, percentDelta, rateOf, rowsBetween, totalsOf, type EndpointView, type Issue, type MetricRow, type PortalUser } from "@/features/device-sdk/portal/view";
+import { DAY_MS, activeWithin, counted, dailyBars, figuresOfDevices, percentDelta, rateOf, rowsBetween, totalsOf, type EndpointView, type Issue, type MetricRow, type PortalUser } from "@/features/device-sdk/portal/view";
 import { Badge, Button, Chip, ICON, Initials, Stat, TwoLine, initialsOf } from "../_design/ui";
 import { Banner } from "../_design/ui-extras";
 import { BarChart, LineChart, Ring, Timeline, type Step } from "../_design/ui-data";
@@ -68,9 +68,9 @@ export function OverviewSection(props: OverviewProps) {
   const answers: Record<string, string> = {
     "Why are deliveries failing?": worst ? `${worst.title}: ${fmt(worst.count)} ${worst.countLabel}. ${worst.why}` : "Nothing is failing this week.",
     "Which users need a relink?": relink.length ? relink.slice(0, 3).map((u) => u.name).join(", ") + (relink.length > 3 ? ` and ${relink.length - 3} more.` : ".") : "None.",
-    "What changed this week?": `${fmt(week.deliveries)} deliveries against ${fmt(before.deliveries)} the week before. ${newUsers} new ${newUsers === 1 ? "user" : "users"}, ${issues.length} open ${issues.length === 1 ? "issue" : "issues"}.`,
+    "What changed this week?": `${counted(week.deliveries, "delivery", "deliveries")} against ${counted(before.deliveries, "delivery", "deliveries")} the week before. ${newUsers} new ${newUsers === 1 ? "user" : "users"}, ${issues.length} open ${issues.length === 1 ? "issue" : "issues"}.`,
   };
-  const summary = `${fmt(week.deliveries)} deliveries this week${week.deliveries ? `, ${rate}% taken by a device` : ""}. ${worst ? `${issues.length} ${issues.length === 1 ? "issue" : "issues"} open; ${worst.title.toLowerCase()} is the largest, with ${fmt(worst.count)} ${worst.countLabel}.` : "Nothing needs you."}`;
+  const summary = `${counted(week.deliveries, "delivery", "deliveries")} this week${week.deliveries ? `, ${rate}% taken by a device` : ""}. ${worst ? `${issues.length} ${issues.length === 1 ? "issue" : "issues"} open; ${worst.title.toLowerCase()} is the largest, with ${fmt(worst.count)} ${worst.countLabel}.` : "Nothing needs you."}`;
 
   return (
     <Page fit>

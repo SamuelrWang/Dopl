@@ -4,11 +4,11 @@
 import { Activity, AlertTriangle, Check, Copy, Cpu, Link2, RefreshCw, Send, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { KEY_SCOPES } from "@/features/device-sdk/portal/catalog";
-import type { KeyView } from "@/features/device-sdk/portal/view";
+import { counted, type KeyView } from "@/features/device-sdk/portal/view";
 import type { Environment as Env } from "@/features/device-sdk/types";
 import { Badge, Button, ICON_SM, Segmented, TwoLine } from "../_design/ui";
 import { Alert, ChipRow, CodeBlock, CodeDim, CodeStrong, ConfirmDialog, FlowDialog, Grow, Mark, ReviewWell, Row, SecretWell, Stack, Text, TextField, Tile, Tiles } from "../_design/ui-page";
-import { fmt, since } from "../_components/format";
+import { since } from "../_components/format";
 import { KIND_GLYPH } from "./keys-card";
 import { GRACE, inUse, type KeyKind } from "./keys-model";
 
@@ -193,7 +193,7 @@ export function CreateKeyFlow({ env, initialKind, onCreate, onClose }: { env: En
   );
 }
 
-const usage = (row: KeyView) => `${row.prefix}, ${row.lastUsedAt ? `used ${since(row.lastUsedAt).toLowerCase()}` : "never used"}, ${fmt(row.calls7d)} calls in 7d`;
+const usage = (row: KeyView) => `${row.prefix}, ${row.lastUsedAt ? `used ${since(row.lastUsedAt).toLowerCase()}` : "never used"}, ${counted(row.calls7d, "call")} in 7d`;
 
 export function RevokeDialog({ row, onCancel, onConfirm }: { row: KeyView; onCancel: () => void; onConfirm: () => void }) {
   return (

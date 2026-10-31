@@ -395,3 +395,14 @@ Only provable after the push, in this order.
 - **No sign-out in the portal.** `AccountRow` shows name and org only, though PLAN's shell row asked for one.
 - **A speak appears as two Activity rows** with the same words: the delivery, and the bridge's `bridge.cast` as a Request. True, a little repetitive.
 - **Live numbers are mostly seed rows,** per Samuel's seeded-rows permission. Removal SQL is above.
+
+## Phase 4 fixes: review (2026-10-31)
+
+Reviewed `38ab003fb..a8877143e`. Nothing rehearsal-only was committed: the diff is 3 source lines and this file.
+
+- **Bug, same class as the chart fix:** 12 more labels read "1 users", "1 devices", "1 calls", "1 deliveries" or "1 events" (Devices, Users, Usage, Activity, API keys, Webhooks, device cards, integration page, Overview). All now use one `counted()` in `portal/view.ts`, which also replaces the chart's ternary and the local `plural` in `issues.ts`. That `plural` didn't group digits; it now reads "1,234 events".
+- **Clean:** Team's override is one `seen.set` before the map, not a second `userId` test inside it.
+- **Checked, fine:** zero reads "0 calls", with "None" as the value where it already was. Revoked devices are excluded from the fleet read, so "to connected devices" is true. The viewer's row reads "Just now", since `since` clamps at 0. Usage reads only the member count from `readTeam`.
+- **Left alone:** the correct `=== 1 ?` ternaries elsewhere.
+
+Vitest on `view.test.ts` and `sections.test.tsx`: 23 passed. `tsc` clean. No `next build`.

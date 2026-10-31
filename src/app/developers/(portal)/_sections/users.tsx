@@ -3,7 +3,7 @@
 /** Users: the figures for what is on screen, then find anyone, then one row per user. */
 import { Download, SearchX, UserRoundX } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { DAY_MS, activeWithin, hasIssues, hasStale, needsRelink, userDeliveries, userRate, LOW_RATE, type PortalUser } from "@/features/device-sdk/portal/view";
+import { DAY_MS, activeWithin, counted, hasIssues, hasStale, needsRelink, userDeliveries, userRate, LOW_RATE, type PortalUser } from "@/features/device-sdk/portal/view";
 import { Button, ICON, StatCard } from "../_design/ui";
 import { EmptyState, Page, PageHeader, StatRow } from "../_design/ui-page";
 import { downloadCsv, fmt, portalNow } from "../_components/format";
@@ -57,7 +57,7 @@ export function UsersSection({ users }: { users: PortalUser[] }) {
       <StatRow>
         <StatCard label="Total users" value={fmt(rows.length)} hint={rows.length === users.length ? "In this environment" : `of ${fmt(users.length)}`} />
         <StatCard label="Active 7d" value={fmt(activeWithin(rows, 7 * DAY_MS, now))} hint={`${fmt(activeWithin(rows, DAY_MS, now))} today`} />
-        <StatCard label="Devices per user" value={rows.length ? (devices.length / rows.length).toFixed(1) : "0"} hint={`${fmt(devices.length)} devices, ${fmt(online)} online`} />
+        <StatCard label="Devices per user" value={rows.length ? (devices.length / rows.length).toFixed(1) : "0"} hint={`${counted(devices.length, "device")}, ${fmt(online)} online`} />
         <StatCard label="Users with issues" value={fmt(rows.filter(hasIssues).length)} hint={`${relinks} relink, ${stale} stale, ${low} low delivery`} pressed={quick === "attention"} onClick={() => pickQuick(quick === "attention" ? "all" : "attention")} />
       </StatRow>
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeIssues } from "./issues";
-import { dailyBars, deviceState, endpointFailing, percentDelta, rowsBetween, totalsOf, type MetricRow, type PortalUser } from "./view";
+import { counted, dailyBars, deviceState, endpointFailing, percentDelta, rowsBetween, totalsOf, type MetricRow, type PortalUser } from "./view";
 
 const NOW = Date.parse("2026-10-31T12:00:00Z");
 const row = (day: string, deliveries: number, delivered: number): MetricRow => ({ day, user: "u", device: "d", kind: "glasses", key: null, calls: deliveries, errors: deliveries - delivered, deliveries, delivered, failed: deliveries - delivered, last_delivery: null });
@@ -11,6 +11,13 @@ describe("the portal's shared figures", () => {
     expect(bars.map((b) => b.value)).toEqual([2, 0, 4]);
     expect(bars[1].rate).toBeNull();
     expect(bars[2].rate).toBe(75);
+  });
+
+  it("counts in the singular only at one", () => {
+    expect(counted(0, "call")).toBe("0 calls");
+    expect(counted(1, "delivery", "deliveries")).toBe("1 delivery");
+    expect(counted(1234, "delivery", "deliveries")).toBe("1,234 deliveries");
+    expect(dailyBars([row("2026-10-31", 1, 1)], 1, NOW)[0].label).toMatch(/: 1 delivery$/);
   });
 
   it("windows are inclusive of both ends, today being 0", () => {

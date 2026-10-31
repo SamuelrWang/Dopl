@@ -7,7 +7,7 @@
 import { ChevronRight, Plus, SearchX, Webhook } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { STATUS_LABEL, rateOf, type Call, type EndpointView } from "@/features/device-sdk/portal/view";
+import { STATUS_LABEL, counted, rateOf, type Call, type EndpointView } from "@/features/device-sdk/portal/view";
 import { errorText, portalCall } from "../../_lib/client-api";
 import { Badge, Button, Card, DataCell, DataRow, DataTable, ICON, PillMenu, SearchField, Segmented, StatCard, type Column } from "../_design/ui";
 import { Between, CardSection, EmptyState, Page, PageHeader, Pager, StatRow, TableFoot, TableHead, Text, Toast } from "../_design/ui-page";
@@ -187,7 +187,7 @@ export function WebhooksSection({ endpoints, events: first }: { endpoints: Endpo
             )}
             {pages > 1 && (
               <TableFoot>
-                <Text kind="smallMuted">{fmt(rows.length)} events</Text>
+                <Text kind="smallMuted">{counted(rows.length, "event")}</Text>
                 <Pager page={current} pages={pages} onPage={setPage} />
               </TableFoot>
             )}

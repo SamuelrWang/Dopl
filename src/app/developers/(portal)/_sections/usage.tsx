@@ -4,7 +4,7 @@
 import { Download } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ALL_MODELS, CATEGORIES, categoryOf, modelById, modelOfAdapter, trail, type ModelId } from "@/features/device-sdk/portal/catalog";
-import { dailyBars, rateOf, rowsBetween, totalsOf, type KeyView, type MetricRow, type PortalUser } from "@/features/device-sdk/portal/view";
+import { counted, dailyBars, rateOf, rowsBetween, totalsOf, type KeyView, type MetricRow, type PortalUser } from "@/features/device-sdk/portal/view";
 import { Badge, Button, DataCell, DataRow, DataTable, ICON, MeterFigure, PillMenu, Segmented, StatCard, TwoLine, type Column } from "../_design/ui";
 import { BarChart, Limit } from "../_design/ui-data";
 import { FillBody, FillCard, FitRows, ScrollArea, SplitLayout, useFitRows } from "../_design/ui-output";
@@ -102,7 +102,7 @@ export function UsageSection({ users, metrics, keys, keyLimit, seats, endpoints 
 
       <StatRow>
         <StatCard label="This month" value={fmt(thisMonth.deliveries)} hint="Deliveries, UTC" />
-        <StatCard label={`Deliveries, ${days}d`} value={fmt(totals.deliveries)} hint={`${fmt(totals.calls)} calls`} />
+        <StatCard label={`Deliveries, ${days}d`} value={fmt(totals.deliveries)} hint={counted(totals.calls, "call")} />
         <StatCard label="Delivered" value={totals.deliveries ? `${rateOf(totals)}%` : "None"} hint={`Taken by a device, ${days}d`} />
         <StatCard label="Failed" value={fmt(totals.failed)} hint={`${days}d`} />
       </StatRow>

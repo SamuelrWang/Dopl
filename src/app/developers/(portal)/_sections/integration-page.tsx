@@ -7,7 +7,7 @@
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { categoryById, type Integration, type ModelId } from "@/features/device-sdk/portal/catalog";
-import { LOW_RATE, STATUS_LABEL, dailyBars, devicesOfIntegration, devicesOfModel, figuresOfDevices, type Call, type MetricRow, type PortalUser } from "@/features/device-sdk/portal/view";
+import { LOW_RATE, STATUS_LABEL, counted, dailyBars, devicesOfIntegration, devicesOfModel, figuresOfDevices, type Call, type MetricRow, type PortalUser } from "@/features/device-sdk/portal/view";
 import { Badge, Button, Card, DataCell, DataRow, DataTable, ICON, MeterFigure, PillMenu, Segmented, StatCard, TwoLine, type Column } from "../_design/ui";
 import { BarChart } from "../_design/ui-data";
 import { FillCard, SplitLayout } from "../_design/ui-output";
@@ -91,7 +91,7 @@ export function IntegrationPageSection({ integration, users, calls, metrics, rul
       {tab === "overview" && (
         <>
           <StatRow>
-            <StatCard label="Connected users" value={fmt(figures.users)} hint={`${fmt(figures.devices)} devices`} />
+            <StatCard label="Connected users" value={fmt(figures.users)} hint={counted(figures.devices, "device")} />
             <StatCard label="Devices online" value={fmt(figures.online)} hint={`of ${fmt(figures.devices)}`} />
             <StatCard label="Deliveries, 7d" value={fmt(figures.deliveries)} hint={`${fmt(figures.delivered)} taken by a device`} />
             <StatCard label="Delivered" value={figures.deliveries ? `${figures.rate}%` : "None"} hint="Taken by a device, of sent" />

@@ -5,7 +5,7 @@ import type { InviteView, MemberView } from "../portal/view";
 import { listOrgMembers } from "./portal-admin";
 import { listOrgInvites } from "./portal-invites";
 
-/** Team's read: members with their last visit, and the open invites a manager may see. The reader is here now, whatever the hourly touch has written. */
+/** Team's read: members with their last visit, and the open invites a manager may see. */
 export async function readTeam(userId: string, org: PortalOrg, now: Date): Promise<{ members: MemberView[]; invites: InviteView[] }> {
   const [people, activity, invites] = await Promise.all([
     listOrgMembers(userId, org.id),
@@ -14,8 +14,9 @@ export async function readTeam(userId: string, org: PortalOrg, now: Date): Promi
   ]);
   if (activity.error) throw new Error(`readTeam failed: ${activity.error.message}`);
   const seen = new Map(((activity.data ?? []) as Array<{ user_id: string; last_active_at: string | null }>).map((m) => [m.user_id, m.last_active_at]));
+  seen.set(userId, now.toISOString()); // The hourly touch runs beside this read, so it may not have written the reader yet.
   return {
-    members: people.map((p) => ({ userId: p.userId, email: p.email, role: p.role, isOwner: p.isOwner, isYou: p.userId === userId, lastActiveAt: p.userId === userId ? now.toISOString() : (seen.get(p.userId) ?? null) })),
+    members: people.map((p) => ({ userId: p.userId, email: p.email, role: p.role, isOwner: p.isOwner, isYou: p.userId === userId, lastActiveAt: seen.get(p.userId) ?? null })),
     invites: invites.map((i) => ({ id: i.id, email: i.email, role: i.role, createdAt: i.createdAt, expired: i.expired })),
   };
 }

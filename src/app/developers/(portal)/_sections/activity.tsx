@@ -7,7 +7,7 @@
  */
 import { Download, SearchX } from "lucide-react";
 import { useMemo, useState } from "react";
-import { STATUS_LABEL, TROUBLE, WORKED, type Call, type CallKind, type CallStatus, CALL_KIND_LABEL, type PortalUser } from "@/features/device-sdk/portal/view";
+import { STATUS_LABEL, TROUBLE, counted, WORKED, type Call, type CallKind, type CallStatus, CALL_KIND_LABEL, type PortalUser } from "@/features/device-sdk/portal/view";
 import { Badge, Button, DataCell, DataRow, DataTable, ICON, PillMenu, SearchField, Segmented, StatCard, TwoLine, type Column, type Tone } from "../_design/ui";
 import { FillCard, ScrollArea, SplitLayout } from "../_design/ui-output";
 import { Between, EmptyState, FilterRow, Grow, Page, PageHeader, StatRow, TableFoot, TableHead, Text } from "../_design/ui-page";
@@ -141,7 +141,7 @@ export function CallsBrowser({ calls, users, initial, figures, test, older }: { 
       {figures && (
         <StatRow>
           <StatCard label="Calls" value={fmt(rows.length)} hint={rows.length === calls.length ? "Most recent" : `of ${fmt(calls.length)}`} />
-          <StatCard label="Succeeded" value={rows.length ? `${Math.round((worked / rows.length) * 100)}%` : "None"} hint={`${fmt(worked)} calls`} />
+          <StatCard label="Succeeded" value={rows.length ? `${Math.round((worked / rows.length) * 100)}%` : "None"} hint={counted(worked, "call")} />
           <StatCard label="Median time" value={median === null ? "None" : ms(median)} hint="API response" />
           <StatCard label="Needs a look" value={fmt(trouble)} hint="Failed, refused, retrying or unanswered" pressed={status === "trouble"} onClick={() => setStatus(status === "trouble" ? "all" : "trouble")} />
         </StatRow>

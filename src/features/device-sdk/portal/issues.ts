@@ -2,7 +2,7 @@
  * Issues are computed on read, one group per cause: nothing stores them, so none can go stale. Pure.
  * A group's copy says what the data shows and no more. First seen looks back over the same seven days as the count.
  */
-import type { EndpointView, Issue, PortalUser } from "./view";
+import { counted, type EndpointView, type Issue, type PortalUser } from "./view";
 
 export interface ErrorRow {
   event_id: string;
@@ -31,8 +31,6 @@ const TITLE: Record<string, string> = {
   rate_limited: "Rate limited",
   vendor_error: "Device transport failed",
 };
-
-const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
 export function computeIssues(input: { users: readonly PortalUser[]; errors: readonly ErrorRow[]; endpoints: readonly EndpointView[] }): Issue[] {
   const issues: Issue[] = [];
@@ -79,7 +77,7 @@ export function computeIssues(input: { users: readonly PortalUser[]; errors: rea
       code: "webhook",
       count: e.failed7d,
       countLabel: e.failed7d === 1 ? "failed event in 7 days" : "failed events in 7 days",
-      why: `This endpoint keeps failing, so these events never reach it. ${plural(e.delivered7d, "event")} got through.`,
+      why: `This endpoint keeps failing, so these events never reach it. ${counted(e.delivered7d, "event")} got through.`,
       firstSeen: null,
       userIds: [],
       latestCallId: null,

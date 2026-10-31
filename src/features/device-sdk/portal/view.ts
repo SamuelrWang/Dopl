@@ -64,6 +64,8 @@ export const hasStale = (u: PortalUser) => u.devices.some((d) => d.state === "st
 export const LOW_RATE = 90;
 export const hasIssues = (u: PortalUser) => needsRelink(u) || hasStale(u) || (userDeliveries(u) > 0 && userRate(u) < LOW_RATE);
 
+export const counted = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
+
 export interface Figures {
   deliveries: number;
   delivered: number;
@@ -141,7 +143,7 @@ export function dailyBars(rows: readonly MetricRow[], days: number, now: number)
     const day = dayOf(now, days - 1 - i);
     const t = totalsOf(rows.filter((r) => r.day === day));
     const tick = tickFormat.format(new Date(`${day}T00:00:00Z`));
-    return { key: day, value: t.deliveries, label: `${tick}: ${t.deliveries.toLocaleString("en-US")} ${t.deliveries === 1 ? "delivery" : "deliveries"}`, tick, rate: t.deliveries ? rateOf(t) : null };
+    return { key: day, value: t.deliveries, label: `${tick}: ${counted(t.deliveries, "delivery", "deliveries")}`, tick, rate: t.deliveries ? rateOf(t) : null };
   });
 }
 
