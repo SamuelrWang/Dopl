@@ -4,7 +4,7 @@ import { setDevEventSinkForTests } from "./events";
 
 const ownerRow = { project_id: "p1", env: "live", dev_projects: { org_id: "o1" } };
 const lookup = vi.fn(async (): Promise<{ data: unknown; error: { message: string } | null }> => ({ data: ownerRow, error: null }));
-const outbox = vi.fn(async (_row: unknown) => {});
+const outbox = vi.fn<(row: unknown) => Promise<void>>(async () => {});
 
 vi.mock("next/server", async (orig) => ({
   ...(await orig<typeof import("next/server")>()),
