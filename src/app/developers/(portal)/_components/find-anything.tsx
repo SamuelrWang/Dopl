@@ -6,6 +6,7 @@
  */
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { isUuid } from "@/shared/lib/id/uuid";
 import { SearchField } from "../_design/ui";
 import { SearchEmpty, SearchHit, SearchPanel } from "../_design/ui-sidebar";
 import { BASE } from "./format";
@@ -17,13 +18,11 @@ export interface FindEntry {
   href: string;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 function search(entries: readonly FindEntry[], raw: string): FindEntry[] {
   const q = raw.trim().toLowerCase();
   if (q.length < 2) return [];
   const hits = entries.filter((e) => e.id.toLowerCase().includes(q) || e.label.toLowerCase().includes(q)).slice(0, 8);
-  return hits.length === 0 && UUID.test(q) ? [{ id: q, label: q, kind: "Call", href: `${BASE}/activity?call=${q}` }] : hits;
+  return hits.length === 0 && isUuid(q) ? [{ id: q, label: q, kind: "Call", href: `${BASE}/activity?call=${q}` }] : hits;
 }
 
 export function FindAnything({ entries }: { entries: readonly FindEntry[] }) {

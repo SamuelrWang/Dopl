@@ -1,5 +1,5 @@
 import { readCalls } from "@/features/device-sdk/server/portal-activity";
-import { UUID } from "@/features/device-sdk/server/portal-http";
+import { isUuid } from "@/shared/lib/id/uuid";
 import { loadScope, loadSnapshot } from "../_lib/portal-page";
 import { ActivitySection } from "../_sections/activity";
 
@@ -8,6 +8,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
   const scope = { projectId: project.id, env, internal: project.org.internal };
   const calls = await readCalls(scope);
   // A linked call older than the newest page still opens.
-  if (params.call && UUID.test(params.call) && !calls.some((c) => c.id === params.call)) calls.push(...(await readCalls({ ...scope, ids: [params.call] })));
+  if (params.call && isUuid(params.call) && !calls.some((c) => c.id === params.call)) calls.push(...(await readCalls({ ...scope, ids: [params.call] })));
   return <ActivitySection calls={calls} users={users} initial={params} />;
 }
