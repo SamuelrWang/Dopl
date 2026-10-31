@@ -274,3 +274,124 @@ Deleted what classic left behind: `queryPortalEvents`, `countBillableEvents`, `l
 - **Device pages** still look at the newest 300 calls of the project.
 - **A stuck ask whose message was already answered** ends at delivered, without its answer. It needs both the answer's write and the sweep's race to lose; left as is.
 - **Attempts:** a page of 300 deliveries each with 8 attempts could pass the 1,000-row response cap, which would undercount attempts on the oldest.
+
+## Phase 4: rehearsal (2026-10-31, overnight, nothing pushed)
+
+Fix commit `31d9e9e05`. Production still runs old code. All evidence below is from this worktree's code on `:3000` or in throwaway harnesses, against production data.
+
+### Could not be done: the portal in a browser
+
+**`/developers` was never seen signed in.** The built-in browser has no session and lands on `/authenticate`. The repo has no local test login. No password was entered, no session was minted with the service role, and no cookie was taken from another browser. So console errors, network requests, layout, overflow and scrolling on portal pages are **unproven**.
+
+Signed out, measured: every `/developers/*` page answers 307 to `/login?redirectTo=...`, `/api/developers/activity` answers 401, `/playground/developers` answers 307 to `/developers`.
+
+### What ran instead
+
+A throwaway jsdom test (deleted, never committed) called the real `Layout` and every real `page.tsx` with the real readers against production, Live and Test. `getUser` returned Samuel's id, and `fetch` blocked every Supabase write. Blocked writes: 0.
+
+| Check | Result |
+|---|---|
+| Every page and integration tab rendered, Live and Test | No crash, 0 `console.error` |
+| Hydration: server string, then `hydrateRoot` | 0 recoverable errors. jsdom only, so it is weak on browser differences |
+| Every button clicked, each from a fresh render, up to 60 per page | 0 crashes. Each either changed the page, called a route or downloaded, except the option already selected. Live and Test read as no change only because jsdom cannot see a `path=/developers` cookie; code read: `portal-store.tsx › setEnv` writes it and refreshes |
+| Every link | All match a real route, none without `href` |
+| Server to client props | No function crosses on a page's own element tree (4 levels) |
+| `next build` of `31d9e9e05` in a clean temp worktree (deleted) | Exit 0. Real proof of client and server import boundaries |
+
+**Numbers against SQL, Live, 2026-10-31.** All match.
+
+| Page figure | Rendered | SQL |
+|---|---|---|
+| Deliveries, Delivered, 7d | 85, 75.3% | 85 and 64 from `dev_portal_metrics` |
+| Deltas | +7.6%, -13.3 | 79 and 70 the week before |
+| Usage, 30d | 277, 86.3%, 38 failed, 516 calls; G2 214, Speaker 63 | 277, 239, 38, 516; glasses 214, home_hub 63 |
+| Users, devices | 17, 32 | 17, 32 |
+| Active live keys | 6 of 10 | 6 |
+| Webhooks, 7d | 36 sent, 86.1%, 5 failed | 36, 31, 5 |
+| Issues | offline 13, grant 4, rate 1 | `dev_events` by `error_code`: 13, 4, 1 |
+
+### Walked on :3000, with temporary keys
+
+Six temporary keys, all named `Phase 4 rehearsal`, all revoked (measured: 0 unrevoked). Their secrets were never printed.
+
+| Step | Answer |
+|---|---|
+| `ping`, `context` | 200 |
+| `deliver` to the speaker with no bridge polling | 409 `device_offline` |
+| Bridge `poll` by curl-style call, no Cast | 200, device online |
+| `deliver` to the speaker, `intent: message` | 202 `queued`, `present.speak`, reason "explicit device target" |
+| Same idempotency key | 202, same delivery, not counted as a delivery |
+| Bridge `poll` | Handed over the text |
+| `ack` ok | Action `delivered`; `bridge.cast` row with text and 2529 ms delivery latency |
+| Bad bridge token | 401 |
+| `notify` to the speaker | 422 `capability_unsupported`, by design |
+| `deliver` to the offline Mac | 409 `device_offline` |
+| `/v1/events` | No `message_text` and no message words |
+| Test env `deliver`, simulated phone | 202 `done` |
+| Test key at a Live user | 404 |
+| `dopl-sdk-mcp` bin over stdio, Test key, `DOPL_BASE_URL=http://localhost:3000/api/v1` | Lists 3 tools, delivers. The base URL must include `/api/v1`; the default already does |
+| Portal routes with the session wrapper replaced, Test env | Key create 201 `no-store`, rotate, revoke. Unnamed live key refused. Webhook add 201, pause, resume. `http://` refused |
+| `logInboundMessage`, `logMirroredReply` with `after` run by hand | Rows `message.from_desktop` (`127f88ed`), `message.from_glasses` (`a5a061e6`), `message.reply_mirror`. A `web` source wrote nothing. Activity read all three with text and device |
+
+`channel_messages` on production already carries `source.kind = computer`, device `127f88ed`, on 79 posts in the last 7 days, so today's installed app sends what the inbound row needs.
+
+**Nothing was spoken and nothing reached the lens.** No bridge ran, the poll and ack were plain HTTP calls, and the mirror test wrote only a log row. The simulator was not touched.
+
+**Rehearsal rows removed.** They raised Issues from 6 to 7, so they were deleted by the temporary key ids and the `Phase 4 rehearsal` text: 19 `dev_events`, 3 `dev_actions`, 1 `dev_device_messages`, 3 `dev_webhook_outbox`, plus the temporary endpoint `27f9da46` and its vault secret. These were this run's own rows. Measured after: Issues 6, offline 13, no `Phase 4` text. **Left behind:** the 6 revoked key rows, in Revoked. The speaker's `last_seen` is now 10:10 UTC, where it was null.
+
+### Sweep and retention
+
+Real `sweepStuckActions`, `pruneDeviceText`, `pruneDevEvents` ran with every write blocked and recorded. A separate rolled-back transaction on production ran the deletes and the roll.
+
+| Case | Would touch |
+|---|---|
+| Sweep, today and at +1 hour | 0: no action is `queued` |
+| Prune, today | 0 in all four tables |
+| Text prune at +10 days, with no roll | Seed rows only, in `dev_actions` and `dev_webhook_outbox`. The cron rolls first, so this does not happen |
+| Text prune at +35 days | Real rows too: 3 `dev_device_messages`, then real actions and outbox rows. Correct at that age |
+| `dev_portal_roll_seed` after ageing all seed rows 3 days (rolled back) | Returned 3. 0 future events, actions, deliveries or attempts, 18 seed devices still online, real rows' hash unchanged |
+
+Oldest seed event is 2026-10-04, so without the roll the first seed deletes would be 2026-11-03. Oldest real event is 2026-10-30, so real rows start to go on 2026-11-29. `dev_portal_roll_seed` uses `least(x + by, now())`, which turns a null into `now()`. No seed device or key has a null today, so nothing is wrong yet.
+
+### Bugs fixed (`31d9e9e05`)
+
+| Bug | Now |
+|---|---|
+| Chart read "Oct 31: 1 deliveries" | "1 delivery" |
+| Devices read 74 deliveries, 86.5% while Overview read 85, 75.3%. Both true: 11 went to devices since revoked | Devices' hint says "74 to connected devices" |
+| Team read "Never" for the person looking, on a first visit, because the touch runs beside the read | Your own row reads now |
+
+Targeted vitest: 6 files, 59 tests. No typecheck, per repo rule.
+
+### Production speech-to-text
+
+`vercel env ls production`, names only: **`OPENAI_API_KEY` set, `GROQ_API_KEY` not set.** `stt.ts` needs either. Whether the key works is unproven; no dictation has run.
+
+### Uncommitted docs restyle
+
+**Committed code does not depend on it.** The restyle imports committed `_design`, never the reverse, and `31d9e9e05` built clean without it. Pushing without it ships the old `/docs` look with `docs.css`. It was not committed. When it lands, also remove the `docs-page.tsx` filter in `design-guard.test.ts`.
+
+### Post-push checks
+
+Only provable after the push, in this order.
+
+1. **Deploy.** CI green, Vercel status success, per the deploy gate. Confirm with `gh run list` and the commit status.
+2. **Portal, signed in, in a browser.** Load every page in the sidebar. Watch the console and network; check layout, scrolling, and Live and Test switching. Leave Activity open to feel the 3-second poll. First time anyone sees it.
+3. **Simulator online.** It read Offline at 10:06 UTC, last seen 09:11 UTC, with its process still up on 9898. Bring its window forward, do not restart. `select last_seen from devices where id = 'a5a061e6-6076-43b6-a824-720b9c993969'` should keep moving.
+4. **Mac online.** New heartbeat moves `devices.last_seen` for `127f88ed`; today's production does not.
+5. **Desktop message.** Send in a private channel. Expect a `message.from_desktop` row with text in Activity.
+6. **Message on the lens.** Open the chat on the simulator. Code read, never run on this build.
+7. **Dictate.** Expect the transcript in the channel, row `message.from_glasses`, one `input.utterance` in the outbox, and the agent waking. Needs the Mac's default mic.
+8. **Agent reply on the lens.** Expect a `message.reply_mirror` row.
+9. **Agent's deliver tool.** Not installed for any agent today. Make a new named live key in API keys, scopes `actions:write` and `devices:read`. Then `npm run build -w @dopl/sdk` in the checkout you use, and `claude mcp add dopl-sdk --env DOPL_API_KEY=<new key> -- node <checkout>/packages/sdk/dist/mcp/bin.js`. Reaching a channel agent through Use my tools has never been run. Do not show the key on camera.
+10. **Speaker.** Run `node dopl-desktop-app/main/google-home/bridge.js --say "Hello from Dopl"` on the speaker's network, then again without `--say`. Have the agent `deliver` with `intent: "message"`, `target: "6d500ade-cef6-41b4-a523-fcd14d4afce5"`. Expect speech, then Delivered and a `bridge.cast` row. Audible speech and real Cast have never run.
+11. **Portal again.** Activity shows steps 5, 7, 8 and 10 in order; opening a row shows its timeline. Devices shows Mac, G2 and Speaker online.
+12. **Webhook delivery, if shown.** Only the paused seeded endpoint listens to `action.completed`, so add one with a public receiver. Adding was proven; signing and sending from the production cron were not. Send again never ran, since on a seeded row it marks the row failed.
+13. **Crons.** After a minute, `device-sdk-webhooks-send` answers 200 with the sweep in it. After 09:15 UTC, `device-sdk-events-prune` answers 200, seed rows have moved forward by whole days, and real rows younger than 30 days remain.
+
+### Known, left alone
+
+- **Mac cards list Notify** and Capabilities says `present.notify` Allowed, from the adapter's descriptor, while the Mac's connection grants `presence.read` only and SDK delivery stays refused. Avoid that tab on the Mac in the recording, or Samuel rules on it.
+- **No sign-out in the portal.** `AccountRow` shows name and org only, though PLAN's shell row asked for one.
+- **A speak appears as two Activity rows** with the same words: the delivery, and the bridge's `bridge.cast` as a Request. True, a little repetitive.
+- **Live numbers are mostly seed rows,** per Samuel's seeded-rows permission. Removal SQL is above.
