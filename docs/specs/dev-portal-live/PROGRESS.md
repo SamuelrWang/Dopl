@@ -34,6 +34,7 @@ Phases 0 and 1 of [PLAN.md](PLAN.md), built 2026-10-31. Later phases belong to o
 
 - `DESIGN-SYSTEM.md` gap: `_design` keeps its own scoped tokens. Noted in that file; not reconciled, since `_design/README.md` and Samuel's 0.72 scale are the working decision.
 - 6 tests in `(portal)/_sections/sections.test.tsx` skipped with a reason. They were already stale against the fixture UI before the move and were never run by CI on this branch. F-785.
+- `design-guard.test.ts` no longer checks `docs-page.tsx`: the committed file still imports CSS, and only the uncommitted restyle below removes it. Drop the filter when that lands.
 - Uncommitted restyle of `src/features/marketing/docs/*` in this worktree is someone else's. It was not committed. Its `_design` imports were repointed in the working tree so it still resolves.
 
 ## Gates and deploy
