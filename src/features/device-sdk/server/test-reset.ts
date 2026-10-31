@@ -27,10 +27,10 @@ export const TEST_RESET_TABLES = [
   "devices",
   "dev_end_users",
 ] as const;
-export type TestResetTable = (typeof TEST_RESET_TABLES)[number];
-export type TestResetCounts = Record<TestResetTable, number>;
+type TestResetTable = (typeof TEST_RESET_TABLES)[number];
+type TestResetCounts = Record<TestResetTable, number>;
 
-export interface TestResetStore {
+interface TestResetStore {
   /** Delete every test-env row of `projectId` in {@link TEST_RESET_TABLES}; rows deleted per table. */
   resetTestEnv(projectId: string): Promise<TestResetCounts>;
 }

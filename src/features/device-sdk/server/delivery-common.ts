@@ -11,7 +11,7 @@ import type { DeliveryStore, DeviceRow, GrantStore, Scope, StoredAction } from "
 import { SIMULATOR_TEST_GRANT } from "./grant-store";
 import { forcedFailureOf, markForcedFailure, simulatorMagicFor } from "./test-mode";
 
-/** Everything the delivery services touch; production values in `delivery-deps.ts`. */
+/** Everything the delivery services touch; production values in `delivery-routes.ts`. */
 export interface DeliveryDeps {
   store: DeliveryStore;
   grants: GrantStore;
@@ -142,7 +142,7 @@ export function profileEventFields(c: RouteCandidate): DevEventAnnotation {
 }
 
 /** Idempotency: same key + same request → the stored response; same key + different request → conflict. */
-export type IdempotencyCheck = { kind: "fresh" } | { kind: "replay"; action: StoredAction } | { kind: "conflict" };
+type IdempotencyCheck = { kind: "fresh" } | { kind: "replay"; action: StoredAction } | { kind: "conflict" };
 
 export async function checkIdempotency(deps: DeliveryDeps, scope: Scope, key: string, hash: string): Promise<IdempotencyCheck> {
   const existing = await deps.store.findActionByKey(scope, key);

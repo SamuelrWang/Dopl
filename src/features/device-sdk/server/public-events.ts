@@ -1,12 +1,14 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { logCursor, parseLogCursor } from "../portal/scope";
+import { DEFAULT_EVENT_RETENTION_DAYS } from "./events";
 import {
   CAPABILITY_IDS,
   DELIVER_INTENTS,
   DEVICE_KINDS,
   EVENT_OUTCOMES,
   ListQuerySchema,
+  PublicDeviceEventSchema,
   toPublicDeviceEvent,
   type CapabilityId,
   type DeliverIntent,
@@ -37,8 +39,8 @@ export const EVENTS_READS_PER_MINUTE = 60;
 
 /** Default window when `since` is absent. */
 export const EVENTS_DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000;
-/** The oldest a read reaches back (= `events.ts › DEFAULT_EVENT_RETENTION_DAYS`). Older `since` reads as this. */
-export const EVENTS_MAX_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+/** The oldest a read reaches back. Older `since` reads as this. */
+export const EVENTS_MAX_WINDOW_MS = DEFAULT_EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
 /** Same token rule as the portal's free-text filters: no PostgREST syntax characters. */
 const ROUTE_TOKEN = /^[A-Za-z0-9_.:@-]{1,128}$/;
@@ -54,7 +56,7 @@ export interface EventListQuery extends ListQuery {
   after: { ts: string; eventId: string } | null;
 }
 
-export type ParsedEventQuery = { ok: true; query: EventListQuery } | { ok: false; message: string };
+type ParsedEventQuery = { ok: true; query: EventListQuery } | { ok: false; message: string };
 
 export function encodeEventCursor(row: { ts: string; event_id: string }): string {
   return Buffer.from(logCursor(row), "utf8").toString("base64url");
@@ -151,6 +153,9 @@ export function utcZ(ts: string): string {
   return Number.isNaN(t) ? ts : new Date(t).toISOString();
 }
 
+/** 🔒 Only what the public shape shows, so `org_id`, costs and message text never leave the database for this read. */
+const PUBLIC_COLUMNS = Object.keys(PublicDeviceEventSchema.shape).join(", ");
+
 /** One page of the key's own log. */
 export async function listPublicEvents(input: {
   projectId: string;
@@ -160,7 +165,7 @@ export async function listPublicEvents(input: {
   const { projectId, env, query: f } = input;
   let q = supabaseAdmin()
     .from("dev_events")
-    .select("*")
+    .select(PUBLIC_COLUMNS)
     .eq("project_id", projectId)
     .eq("env", env)
     .gte("ts", f.sinceIso);
@@ -179,7 +184,7 @@ export async function listPublicEvents(input: {
     .order("event_id", { ascending: false })
     .limit(f.limit + 1);
   if (error) throw new Error(`listPublicEvents failed: ${error.message}`);
-  const all = (data ?? []) as DeviceEventRow[];
+  const all = (data ?? []) as unknown as DeviceEventRow[];
   const rows = all.slice(0, f.limit);
   const more = all.length > f.limit;
   return {

@@ -23,9 +23,9 @@ import type { Environment } from "../types";
 
 export const DOPL_APP_NAME = "Dopl App";
 /** The secret keys the app needs: live for the backend, test for development. */
-export const DOPL_APP_KEY_ENVS: readonly Environment[] = ["live", "test"];
+const DOPL_APP_KEY_ENVS: readonly Environment[] = ["live", "test"];
 
-export interface SeedOrg {
+interface SeedOrg {
   id: string;
   internal: boolean;
 }
@@ -51,12 +51,12 @@ export interface DoplAppSeedStore {
   mintSecretKey(projectId: string, env: Environment): Promise<{ secret: string; key: SeedKey }>;
 }
 
-export interface SeedStep {
+interface SeedStep {
   action: "keep" | "create" | "update" | "mint";
   what: string;
 }
 
-export interface SeedResult {
+interface SeedResult {
   applied: boolean;
   /** Null only on a dry run that would create it. */
   orgId: string | null;

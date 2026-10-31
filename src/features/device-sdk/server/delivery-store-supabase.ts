@@ -1,4 +1,5 @@
 import "server-only";
+import { isUuid } from "@/shared/lib/id/uuid";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { ContextProfileSchema, type ContextProfile } from "../types";
 import { actionTimeColumns } from "./column-compat";
@@ -23,7 +24,7 @@ function must<T>(res: { data: T; error: { message: string } | null }): T {
 }
 
 /** A `context_profiles` row → the C5 contract, or null if it no longer validates. */
-export function profileFromRow(row: { profile_id: string; version: number; match: unknown; body: unknown }): ContextProfile | null {
+function profileFromRow(row: { profile_id: string; version: number; match: unknown; body: unknown }): ContextProfile | null {
   const body = row.body && typeof row.body === "object" ? row.body : {};
   const parsed = ContextProfileSchema.safeParse({ ...body, id: row.profile_id, version: row.version, match: row.match });
   if (!parsed.success) {
@@ -60,7 +61,7 @@ export const supabaseDeliveryStore: DeliveryStore = {
   },
   async getDevice(s, deviceId) {
     // A non-uuid id cannot exist; skip the round trip (and Postgres's cast error).
-    if (!/^[0-9a-f-]{36}$/i.test(deviceId)) return null;
+    if (!isUuid(deviceId)) return null;
     const data = must(
       await db()
         .from("devices")
@@ -116,7 +117,7 @@ export const supabaseDeliveryStore: DeliveryStore = {
     return (must(res) as StoredAction | null) ?? null;
   },
   async getAction(s, id) {
-    if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+    if (!isUuid(id)) return null;
     const data = must(
       await db().from("dev_actions").select(ACTION_COLS).eq("id", id).eq("project_id", s.projectId).eq("env", s.env).maybeSingle()
     );

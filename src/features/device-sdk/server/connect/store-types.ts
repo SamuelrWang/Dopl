@@ -4,7 +4,7 @@
  */
 import type { DeviceKind, Environment, RiskTier, WebhookEventName } from "../../types";
 
-export type ConnectSessionStatus = "open" | "paired" | "consented" | "exchanged";
+type ConnectSessionStatus = "open" | "paired" | "consented" | "exchanged";
 
 export interface ConnectSessionRow {
   id: string;
@@ -57,7 +57,7 @@ export interface ConnectionRow {
   created_at: string;
 }
 
-export interface NewSession {
+interface NewSession {
   project_id: string;
   env: Environment;
   end_user_id: string;
@@ -70,7 +70,7 @@ export interface NewSession {
   expires_at: string;
 }
 
-export interface NewSdkDevice {
+interface NewSdkDevice {
   kind: DeviceKind;
   vendor: string;
   model: string;

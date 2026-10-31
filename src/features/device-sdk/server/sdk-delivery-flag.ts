@@ -1,4 +1,5 @@
 import "server-only";
+import { isUuid } from "@/shared/lib/id/uuid";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 /**
@@ -12,7 +13,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  *
  * Fail loud: a read error throws. The caller (the glasses seam) decides its own fallback.
  */
-export interface SdkDeliveryState {
+interface SdkDeliveryState {
   on: boolean;
   deviceIds: string[];
 }
@@ -20,13 +21,11 @@ export interface SdkDeliveryState {
 type RpcResult = { data: unknown; error: { message: string } | null };
 export type SdkDeliveryRpc = (fn: "sdk_delivery_state", args: { p_user_id: string }) => PromiseLike<RpcResult>;
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 const defaultRpc: SdkDeliveryRpc = (fn, args) => supabaseAdmin().rpc(fn, args);
 
 export async function sdkDeliveryFor(userId: string, rpc: SdkDeliveryRpc = defaultRpc): Promise<SdkDeliveryState> {
   // A non-uuid can own no row; skip the round trip (and Postgres's cast error).
-  if (!UUID.test(userId)) return { on: false, deviceIds: [] };
+  if (!isUuid(userId)) return { on: false, deviceIds: [] };
   const { data, error } = await rpc("sdk_delivery_state", { p_user_id: userId });
   if (error) throw new Error(`[device-sdk] sdk_delivery_state failed: ${error.message}`);
   const row = (Array.isArray(data) ? data[0] : data) as { enabled?: unknown; device_ids?: unknown } | null | undefined;

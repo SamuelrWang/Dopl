@@ -18,7 +18,7 @@ export const connectDeps: ConnectDeps = {
 };
 
 /** Requests per minute per IP on the hosted page's POSTs (pairing codes are short). */
-export const CONNECT_PAGE_RPM = 20;
+const CONNECT_PAGE_RPM = 20;
 
 /** Per-IP limiter for the hosted page's unauthenticated POSTs; true = within the limit. */
 export function allowConnectPagePost(request: NextRequest): Promise<boolean> {

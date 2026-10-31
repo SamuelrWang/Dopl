@@ -22,7 +22,7 @@ const FAMILY_SCOPE = /^(state|present|ask|capture|input|act|act[.]motion)[.][*]$
 const isScope = (s: string): s is CapabilityScope => FAMILY_SCOPE.test(s) || (CAPABILITY_IDS as readonly string[]).includes(s);
 const isTier = (s: unknown): s is RiskTier => typeof s === "string" && (RISK_TIERS as readonly string[]).includes(s);
 
-export type ConnectionGrantRow = Pick<ConnectionRow, "granted_scopes" | "tier_grants" | "status" | "expires_at" | "revoked_at">;
+type ConnectionGrantRow = Pick<ConnectionRow, "granted_scopes" | "tier_grants" | "status" | "expires_at" | "revoked_at">;
 
 export function grantFromRow(row: ConnectionGrantRow): DeviceGrant {
   const tiers = (row.tier_grants ?? {}) as Record<string, unknown>;

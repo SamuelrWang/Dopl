@@ -1,3 +1,4 @@
+import { isUuid } from "@/shared/lib/id/uuid";
 import type { AdapterRegistry } from "../../adapters/registry";
 import type { ConnectPairingPort } from "@/features/glasses/core/devices/pairing";
 import type { DeviceStore } from "@/features/glasses/core/devices/types";
@@ -17,7 +18,6 @@ import {
   CONNECT_TOKEN_PREFIX,
   ConnectError,
   hashToken,
-  isUuid,
   newToken,
   toApiDevice,
   toConnection,

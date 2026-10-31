@@ -14,7 +14,7 @@ import "server-only";
 
 export const RECHECK_MS = 5 * 60 * 1000;
 
-export interface ColumnCompat {
+interface ColumnCompat {
   /** True when `error` says the database lacks one of these columns. */
   isMissing(error: unknown): boolean;
   /** The row to write right now: without the columns while they are known missing. */

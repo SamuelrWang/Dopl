@@ -41,11 +41,8 @@ export class ConnectError extends Error {
   }
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export const isUuid = (s: string) => UUID_RE.test(s);
-
 /** Postgres answers `…+00:00`; the contracts' `z.iso.datetime()` wants `…Z`. */
-export const isoOf = (t: string): string => new Date(t).toISOString();
+const isoOf = (t: string): string => new Date(t).toISOString();
 const isoOrNull = (t: string | null): string | null => (t === null ? null : isoOf(t));
 
 /** A `devices` row as the API returns it: descriptors and health come from its adapter (C9). */

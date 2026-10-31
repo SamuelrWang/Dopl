@@ -51,7 +51,7 @@ export interface StoredAction {
 }
 
 export type NewAction = Omit<StoredAction, "id" | "created_at" | "updated_at"> & { id?: string };
-export type ActionPatch = Partial<Pick<StoredAction, "status" | "result" | "error" | "response" | "http_status" | "delivered_at" | "settled_at">>;
+type ActionPatch = Partial<Pick<StoredAction, "status" | "result" | "error" | "response" | "http_status" | "delivered_at" | "settled_at">>;
 
 /** The timestamps a status earns when an action first reaches it. */
 export function actionTimes(status: ActionStatus, at: string): Pick<ActionPatch, "delivered_at" | "settled_at"> {
