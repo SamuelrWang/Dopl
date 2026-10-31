@@ -99,4 +99,4 @@ async function renderCard(card, { run = defaultRun, dir = workDir(), platform = 
   return { file: out, contentType: 'image/png' };
 }
 
-module.exports = { synthesizeSpeech, renderCard, cardSvg, wrap, escapeXml };
+module.exports = { synthesizeSpeech, renderCard, cardSvg, wrap };

@@ -28,11 +28,7 @@ async function main(argv) {
   process.stdin.on('close', stop);
 }
 
-if (require.main === module) {
-  main(process.argv.slice(2)).catch((err) => {
-    process.stderr.write(`dopl-google-home: ${err && err.message ? err.message : err}\n`);
-    process.exit(1);
-  });
-}
-
-module.exports = { main };
+main(process.argv.slice(2)).catch((err) => {
+  process.stderr.write(`dopl-google-home: ${err && err.message ? err.message : err}\n`);
+  process.exit(1);
+});

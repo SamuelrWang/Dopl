@@ -21,7 +21,7 @@ function varint(n) {
 const key = (field, wire) => varint((field << 3) | wire);
 
 function lenField(field, value) {
-  const buf = Buffer.isBuffer(value) ? value : Buffer.from(String(value), 'utf8');
+  const buf = Buffer.from(value, 'utf8');
   return Buffer.concat([key(field, WIRE_LEN), varint(buf.length), buf]);
 }
 
@@ -60,9 +60,13 @@ function readVarint(buf, at) {
   }
 }
 
+function parseJson(text) {
+  try { return JSON.parse(text); } catch (_) { return null; }
+}
+
 /** Decode one CastMessage body. Unknown fields are skipped; `data` is parsed JSON when it parses. */
 function decodeMessage(buf) {
-  const out = { sourceId: '', destinationId: '', namespace: '', payloadType: 0, payload: '', data: null };
+  const out = { sourceId: '', destinationId: '', namespace: '', data: null };
   let pos = 0;
   while (pos < buf.length) {
     const k = readVarint(buf, pos);
@@ -70,9 +74,7 @@ function decodeMessage(buf) {
     const field = Math.floor(k.value / 8);
     const wire = k.value & 7;
     if (wire === WIRE_VARINT) {
-      const v = readVarint(buf, pos);
-      pos = v.next;
-      if (field === 5) out.payloadType = v.value;
+      pos = readVarint(buf, pos).next;
     } else if (wire === WIRE_LEN) {
       const len = readVarint(buf, pos);
       const end = len.next + len.value;
@@ -82,12 +84,11 @@ function decodeMessage(buf) {
       if (field === 2) out.sourceId = slice.toString('utf8');
       else if (field === 3) out.destinationId = slice.toString('utf8');
       else if (field === 4) out.namespace = slice.toString('utf8');
-      else if (field === 6) out.payload = slice.toString('utf8');
+      else if (field === 6) out.data = parseJson(slice.toString('utf8'));
     } else {
       throw new Error(`cast frame: unsupported wire type ${wire}`);
     }
   }
-  if (out.payload) { try { out.data = JSON.parse(out.payload); } catch (_) { out.data = null; } }
   return out;
 }
 
@@ -109,4 +110,4 @@ function createFrameReader(onMessage) {
   };
 }
 
-module.exports = { encodeMessage, encodeFrame, decodeMessage, createFrameReader };
+module.exports = { encodeFrame, decodeMessage, createFrameReader };

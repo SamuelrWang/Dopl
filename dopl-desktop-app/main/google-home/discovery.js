@@ -1,6 +1,6 @@
 // Finds Google Cast devices (Google Home / Nest speakers, Nest Hubs, Chromecasts, speaker groups)
 // on the LAN over mDNS (`_googlecast._tcp.local`). Discovery only: it opens no Cast connection.
-// mDNS is `bonjour-service` (MIT, pure JS, no native build) — required lazily so a test or a build
+// mDNS is `bonjour-service` (MIT, pure JS, no native build), required lazily so a test or a build
 // without it never loads it.
 
 const DEFAULT_TIMEOUT_MS = 3000;
@@ -42,8 +42,8 @@ function toDevice(svc) {
   };
 }
 
-function defaultBrowserFactory() {
-  const { Bonjour } = require('bonjour-service');
+/** A browser over a loaded `bonjour-service` module. */
+function bonjourBrowser({ Bonjour }) {
   const bonjour = new Bonjour();
   return {
     find: (onUp) => bonjour.find({ type: 'googlecast' }, onUp),
@@ -55,7 +55,7 @@ function defaultBrowserFactory() {
  * Browse for `timeoutMs` and return every device seen, de-duplicated by id, speakers before
  * groups, then by name. `browserFactory` is the seam tests replace.
  */
-function discoverDevices({ timeoutMs = DEFAULT_TIMEOUT_MS, browserFactory = defaultBrowserFactory } = {}) {
+function discoverDevices({ timeoutMs = DEFAULT_TIMEOUT_MS, browserFactory = () => bonjourBrowser(require('bonjour-service')) } = {}) {
   return new Promise((resolve, reject) => {
     let browser;
     try { browser = browserFactory(); } catch (err) { reject(new Error(`mDNS unavailable: ${err.message}`)); return; }
@@ -71,4 +71,4 @@ function discoverDevices({ timeoutMs = DEFAULT_TIMEOUT_MS, browserFactory = defa
   });
 }
 
-module.exports = { discoverDevices, toDevice, CAP_VIDEO_OUT };
+module.exports = { discoverDevices, bonjourBrowser, toDevice };

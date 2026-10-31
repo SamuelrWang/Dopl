@@ -1,14 +1,13 @@
 // The Google Home MCP tools. Names follow the glasses set (`glasses_status`, `glasses_capabilities`,
 // `glasses_notify`, `glasses_show`) with the device in the prefix, so an agent that knows one device
 // knows the other. `device_status` / `device_command` are device-generic on purpose: each device reports
-// the commands it accepts now, so control never grows a tool per app or per command. There is no `google_home_ask`: Cast cannot carry an answer back, and
-// `google_home_capabilities` says so rather than offering a tool that would never return one.
+// the commands it accepts now, so control never grows a tool per app or per command. There is no
+// `google_home_ask`: Cast cannot carry an answer back, and `google_home_capabilities` says so rather
+// than offering a tool that would never return one.
 // Result shape matches the glasses tools: one JSON text block, `isError` on a refusal.
 
 const { z } = require('zod');
 const { GoogleHomeError, LIMITS: L } = require('./service');
-
-const TOOL_NAMES = ['google_home_status', 'google_home_capabilities', 'google_home_notify', 'google_home_show', 'device_status', 'device_command'];
 
 const errorResult = (text) => ({ content: [{ type: 'text', text }], isError: true });
 
@@ -42,7 +41,7 @@ function registerGoogleHomeTools(server, home) {
       description: 'What Google Home can do through Dopl and its limits. ask is not supported. Read once.',
       inputSchema: z.object({}),
     },
-    () => runTool(async () => home.capabilities()),
+    () => runTool(() => home.capabilities()),
   );
 
   server.registerTool(
@@ -103,4 +102,4 @@ function registerGoogleHomeTools(server, home) {
   );
 }
 
-module.exports = { registerGoogleHomeTools, TOOL_NAMES };
+module.exports = { registerGoogleHomeTools };

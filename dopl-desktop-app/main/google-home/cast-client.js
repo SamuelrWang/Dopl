@@ -21,23 +21,19 @@ const SENDER = 'sender-0';
 const RECEIVER = 'receiver-0';
 const HEARTBEAT_MS = 5000;
 
-/**
- * One open Cast channel. `connect` is injectable so tests drive a fake socket; it must return a
- * duplex with `write`, `end`/`destroy` and `on('data'|'error'|'close'|connectEvent)`.
- */
-function openCastChannel({ host, port = 8009, timeoutMs = 10000, connect } = {}) {
+/** One open Cast channel. `connect` is the seam tests use to drive a fake socket. */
+function openCastChannel({ host, port = 8009, timeoutMs = 10000, connect }) {
   const dial = connect || ((opts, onReady) => tls.connect(opts, onReady));
   return new Promise((resolve, reject) => {
     let settled = false;
     let nextId = 1;
     const waiters = new Map(); // requestId -> {resolve, reject, timer}
-    const listeners = new Set();
     let heartbeat = null;
 
     const fail = (err) => {
       for (const w of waiters.values()) { clearTimeout(w.timer); w.reject(err); }
       waiters.clear();
-      if (heartbeat) clearInterval(heartbeat);
+      clearInterval(heartbeat);
       if (!settled) { settled = true; reject(err); }
     };
 
@@ -46,7 +42,6 @@ function openCastChannel({ host, port = 8009, timeoutMs = 10000, connect } = {})
       if (settled) return;
       settled = true;
       heartbeat = setInterval(() => send(NS.heartbeat, RECEIVER, { type: 'PING' }), HEARTBEAT_MS);
-      if (heartbeat.unref) heartbeat.unref();
       send(NS.connection, RECEIVER, { type: 'CONNECT' });
       resolve(channel);
     }));
@@ -67,7 +62,6 @@ function openCastChannel({ host, port = 8009, timeoutMs = 10000, connect } = {})
       }
       const w = data.requestId !== undefined ? waiters.get(data.requestId) : null;
       if (w) { waiters.delete(data.requestId); clearTimeout(w.timer); w.resolve(data); }
-      for (const fn of listeners) fn(msg);
     });
 
     socket.on('data', (chunk) => { try { read(chunk); } catch (err) { fail(err); close(); } });
@@ -84,13 +78,22 @@ function openCastChannel({ host, port = 8009, timeoutMs = 10000, connect } = {})
     });
 
     const close = () => {
-      if (heartbeat) clearInterval(heartbeat);
-      heartbeat = null;
+      clearInterval(heartbeat);
       try { socket.end(); } catch (_) { /* already closed */ }
     };
 
-    const channel = { send, request, close, onMessage: (fn) => { listeners.add(fn); return () => listeners.delete(fn); } };
+    const channel = { send, request, close };
   });
+}
+
+/** Run `use(channel)` on a fresh channel to `target`, which is always closed afterwards. */
+async function withCastChannel(target, { connect, timeoutMs } = {}, use) {
+  const channel = await openCastChannel({ host: target.host, port: target.port, connect, timeoutMs });
+  try {
+    return await use(channel);
+  } finally {
+    channel.close();
+  }
 }
 
 /** The running Default Media Receiver's transport, launching it if needed. */
@@ -110,9 +113,8 @@ const LOAD_FAILURES = new Set(['LOAD_FAILED', 'LOAD_CANCELLED', 'INVALID_REQUEST
  * Cast one media item: `{url, contentType, title?, subtitle?, imageUrl?}`. Resolves once the
  * device accepted the LOAD (it then plays on its own; the sender may hang up).
  */
-async function castMedia(target, media, { connect, timeoutMs } = {}) {
-  const channel = await openCastChannel({ host: target.host, port: target.port, connect, timeoutMs });
-  try {
+function castMedia(target, media, options) {
+  return withCastChannel(target, options, async (channel) => {
     const { transportId, sessionId } = await launchMediaReceiver(channel);
     const metadata = { metadataType: 0, title: media.title || 'Dopl' };
     if (media.subtitle) metadata.subtitle = media.subtitle;
@@ -126,9 +128,7 @@ async function castMedia(target, media, { connect, timeoutMs } = {}) {
     if (LOAD_FAILURES.has(reply.type)) throw new Error(`cast: device refused the media (${reply.type}${reply.reason ? `: ${reply.reason}` : ''})`);
     const first = Array.isArray(reply.status) ? reply.status[0] : null;
     return { mediaSessionId: first ? first.mediaSessionId : null, playerState: first ? first.playerState : null };
-  } finally {
-    channel.close();
-  }
+  });
 }
 
-module.exports = { openCastChannel, launchMediaReceiver, castMedia, NS, DEFAULT_MEDIA_RECEIVER };
+module.exports = { withCastChannel, castMedia, NS, RECEIVER, DEFAULT_MEDIA_RECEIVER };

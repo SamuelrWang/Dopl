@@ -12,9 +12,8 @@
 // Commands: set_volume / mute / unmute (receiver, always), stop (receiver STOP of the running
 // session), pause / play (media, when the session reports it can).
 
-const { openCastChannel, NS } = require('./cast-client');
+const { withCastChannel, NS, RECEIVER } = require('./cast-client');
 
-const RECEIVER = 'receiver-0';
 const MEDIA_STATUS_MS = 3000;
 // supportedMediaCommands bit 0 = PAUSE (Cast media spec).
 const CAN_PAUSE = 1;
@@ -95,19 +94,13 @@ function publicState({ app, media, volume }) {
 }
 
 /** What `target` is doing and the commands it accepts now. */
-async function readDeviceState(target, { connect, timeoutMs } = {}) {
-  const channel = await openCastChannel({ host: target.host, port: target.port, connect, timeoutMs });
-  try {
-    return publicState(await readState(channel));
-  } finally {
-    channel.close();
-  }
+function readDeviceState(target, options) {
+  return withCastChannel(target, options, async (channel) => publicState(await readState(channel)));
 }
 
 /** Send one command (a name from `commands`), then return the device's state after it. */
-async function sendDeviceCommand(target, command, args = {}, { connect, timeoutMs } = {}) {
-  const channel = await openCastChannel({ host: target.host, port: target.port, connect, timeoutMs });
-  try {
+function sendDeviceCommand(target, command, args = {}, options) {
+  return withCastChannel(target, options, async (channel) => {
     const state = await readState(channel);
     const allowed = commandsFor(state).map((c) => c.name);
     if (!allowed.includes(command)) {
@@ -126,9 +119,7 @@ async function sendDeviceCommand(target, command, args = {}, { connect, timeoutM
       await channel.request(NS.media, app.transportId, { type: command === 'pause' ? 'PAUSE' : 'PLAY', mediaSessionId: media.mediaSessionId });
     }
     return publicState(await readState(channel));
-  } finally {
-    channel.close();
-  }
+  });
 }
 
-module.exports = { readDeviceState, sendDeviceCommand, commandsFor, runningApp, DeviceCommandError };
+module.exports = { readDeviceState, sendDeviceCommand, commandsFor, DeviceCommandError };

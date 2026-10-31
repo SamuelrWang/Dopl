@@ -8,15 +8,16 @@
 //   --device "name"  which speaker, when the network has several.
 //
 // The device token lives in ~/.dopl/google-home-bridge.json (`{ apiUrl, token }`, mode 600), outside
-// the repo. The server keeps only its sha256. Everything with an effect goes through `deps`.
+// the repo. The server keeps only its sha256.
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { createRequire } = require('module');
+const { setTimeout: wait } = require('timers/promises');
 const { createGoogleHome, matches } = require('./service');
-const { discoverDevices } = require('./discovery');
+const { discoverDevices, bonjourBrowser } = require('./discovery');
 
 const POLL_MS = 3000;
 const REDISCOVER_MS = 30 * 1000;
@@ -41,14 +42,6 @@ function loadBonjour() {
     return local('bonjour-service');
   }
 }
-
-function browserFactory() {
-  const { Bonjour } = loadBonjour();
-  const bonjour = new Bonjour();
-  return { find: (onUp) => bonjour.find({ type: 'googlecast' }, onUp), destroy: () => bonjour.destroy() };
-}
-
-const realDiscover = () => discoverDevices({ browserFactory });
 
 function readConfig(file = CONFIG_PATH) {
   let raw;
@@ -95,6 +88,8 @@ const HINTS = {
 /** The speaker pulls the audio from this process and a new cast cuts off the last, so both wait this long. */
 const speechMs = (text) => Math.max(8000, text.length * 90);
 
+const reasonOf = (err) => String((err && err.message) || err);
+
 const newPassState = () => ({ unacked: new Map(), busyUntil: 0 });
 
 async function cast({ home, device, log, state, now }, m) {
@@ -104,7 +99,7 @@ async function cast({ home, device, log, state, now }, m) {
     log(`Cast: "${m.text}"`);
     return { id: m.id, ok: true };
   } catch (err) {
-    const error = String((err && err.message) || err).slice(0, 500);
+    const error = reasonOf(err).slice(0, 500);
     log(`Cast failed: ${error}`);
     return { id: m.id, ok: false, error };
   }
@@ -135,7 +130,7 @@ async function pass({ client, home, device, identity, log, state = newPassState(
 }
 
 /** Keeps going through any failure, until `stop()` says otherwise, and says each distinct problem once. */
-async function run({ client, home, device, log, sleep, stop, now = Date.now }) {
+async function run({ client, home, device, log, sleep = wait, stop = () => false, now = Date.now }) {
   const state = newPassState();
   let speaker = null;
   let reported = false;
@@ -161,7 +156,7 @@ async function run({ client, home, device, log, sleep, stop, now = Date.now }) {
       if (lastProblem) log('Connected to Dopl again.');
       lastProblem = null;
     } catch (err) {
-      const problem = HINTS[err && err.status] || String((err && err.message) || err);
+      const problem = HINTS[err && err.status] || reasonOf(err);
       if (problem !== lastProblem) log(problem);
       lastProblem = problem;
     }
@@ -177,7 +172,7 @@ const flag = (argv, name) => {
 async function main(argv) {
   const log = (line) => process.stdout.write(`${line}\n`);
   const device = flag(argv, '--device');
-  const home = createGoogleHome({ discover: realDiscover });
+  const home = createGoogleHome({ discover: () => discoverDevices({ browserFactory: () => bonjourBrowser(loadBonjour()) }) });
   if (argv.includes('--discover')) {
     log(JSON.stringify(await home.status(), null, 2));
     home.close();
@@ -187,21 +182,21 @@ async function main(argv) {
   if (say !== undefined) {
     const r = await home.notify({ text: say, device });
     log(`Sent to ${r.device.name}: ${r.status}. Listen for it; Cast cannot confirm that it played.`);
-    await new Promise((resolve) => { setTimeout(resolve, speechMs(say)); });
+    await wait(speechMs(say));
     home.close();
     return;
   }
   const client = createClient(readConfig());
-  const stop = () => { home.close(); process.exit(0); };
-  process.on('SIGINT', stop);
-  process.on('SIGTERM', stop);
+  const shutdown = () => { home.close(); process.exit(0); };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
   log('Bridge running. Ctrl-C stops it, and the speaker reads offline a minute later.');
-  await run({ client, home, device, log, sleep: (ms) => new Promise((r) => { setTimeout(r, ms); }), stop: () => false });
+  await run({ client, home, device, log });
 }
 
 if (require.main === module) {
   main(process.argv.slice(2)).catch((err) => {
-    process.stderr.write(`google-home-bridge: ${err && err.message ? err.message : err}\n`);
+    process.stderr.write(`google-home-bridge: ${reasonOf(err)}\n`);
     process.exit(1);
   });
 }

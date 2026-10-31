@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { createGoogleHome } = require('../main/google-home/service.js');
-const { registerGoogleHomeTools, TOOL_NAMES } = require('../main/google-home/mcp-tools.js');
+const { registerGoogleHomeTools } = require('../main/google-home/mcp-tools.js');
 
 const SPEAKER = { id: 's1', name: 'Office speaker', model: 'Google Home', host: '10.0.0.2', port: 8009, display: false, group: false };
 const HUB = { id: 'h1', name: 'Kitchen display', model: 'Google Nest Hub', host: '10.0.0.3', port: 8009, display: true, group: false };
@@ -119,7 +119,7 @@ test('MCP: the six tools (four google_home_*, device_status, device_command), no
   const server = fakeServer();
   const { home } = harness();
   registerGoogleHomeTools(server, home);
-  assert.deepEqual([...server.tools.keys()], TOOL_NAMES);
+  assert.deepEqual([...server.tools.keys()], ['google_home_status', 'google_home_capabilities', 'google_home_notify', 'google_home_show', 'device_status', 'device_command']);
   assert.ok(!server.tools.has('google_home_ask'));
   const ok = await server.tools.get('google_home_notify').handler({ text: 'hi', device: 's1' });
   assert.equal(ok.isError, undefined);

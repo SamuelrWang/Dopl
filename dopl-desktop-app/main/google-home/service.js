@@ -1,7 +1,8 @@
 // The Google Home device for Dopl: status, capabilities, notify (spoken) and show (a card on a
-// Nest Hub), plus the cross-device control pair (device_status / device_command). Same intent vocabulary as the glasses (`glasses_status/capabilities/notify/show`), so
-// Google Home is the second device behind one set of intents. `ask` is NOT offered: Cast is
-// output-only (no tap or voice answer reaches a third-party sender), and capabilities says so.
+// Nest Hub), plus the cross-device control pair (device_status / device_command). Same intent
+// vocabulary as the glasses (`glasses_status/capabilities/notify/show`), so Google Home is the second
+// device behind one set of intents. `ask` is NOT offered: Cast is output-only (no tap or voice answer
+// reaches a third-party sender), and capabilities says so.
 // Every network effect goes through `deps`, so tests run with no LAN.
 
 const { discoverDevices } = require('./discovery');
@@ -31,6 +32,17 @@ const httpUrl = (value, field) => {
 
 const publicRow = (d) => ({ id: d.id, name: d.name, model: d.model, display: d.display, group: d.group });
 
+const castResult = (target, r) => ({ ok: true, device: publicRow(target), status: r.playerState || 'loaded', media_session_id: r.mediaSessionId });
+
+function matches(d, wanted) {
+  const w = String(wanted).trim().toLowerCase();
+  return d.id.toLowerCase() === w || d.name.toLowerCase() === w;
+}
+
+const IMAGE_TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', png: 'image/png' };
+const imageType = (url) => IMAGE_TYPES[(/\.([a-z]+)$/i.exec(new URL(url).pathname) || [])[1]?.toLowerCase()] || 'image/png';
+const names = (list) => list.map((d) => `${d.name}${d.display ? ' (screen)' : ''}${d.group ? ' (group)' : ''}`).join(', ');
+
 function createGoogleHome(overrides = {}) {
   const deps = {
     discover: discoverDevices,
@@ -40,7 +52,7 @@ function createGoogleHome(overrides = {}) {
     media: null,
     state: readDeviceState,
     control: sendDeviceCommand,
-    now: () => Date.now(),
+    now: Date.now,
     ...overrides,
   };
   const media = () => (deps.media ??= createMediaServer());
@@ -103,7 +115,7 @@ function createGoogleHome(overrides = {}) {
   async function notify(args = {}) {
     const target = await resolveDevice(args.device);
     let url;
-    let contentType = 'audio/mp4';
+    let contentType;
     let text = '';
     if (args.audio_url) {
       url = httpUrl(args.audio_url, 'audio_url');
@@ -111,10 +123,10 @@ function createGoogleHome(overrides = {}) {
     } else {
       text = bounded(args.text, LIMITS.text, 'text');
       const audio = await deps.speak(text, { voice: args.voice });
-      url = await media().publish(audio.file, audio.contentType, target.host);
+      contentType = audio.contentType;
+      url = await media().publish(audio.file, contentType, target.host);
     }
-    const r = await deps.cast(target, { url, contentType, title: args.title || 'Dopl', subtitle: text.slice(0, LIMITS.line) || undefined });
-    return { ok: true, device: publicRow(target), status: r.playerState || 'loaded', media_session_id: r.mediaSessionId };
+    return castResult(target, await deps.cast(target, { url, contentType, subtitle: text.slice(0, LIMITS.line) || undefined }));
   }
 
   async function show(args = {}) {
@@ -123,20 +135,19 @@ function createGoogleHome(overrides = {}) {
     const lines = Array.isArray(args.lines) ? args.lines : [];
     if (lines.length > LIMITS.lines) throw new GoogleHomeError(`lines has ${lines.length} items; max ${LIMITS.lines}`);
     lines.forEach((l, i) => bounded(l, LIMITS.line, `lines[${i}]`));
-    const imageUrl = args.image_url
-      ? httpUrl(args.image_url, 'image_url')
-      : await media().publish((await deps.card({ title, lines })).file, 'image/png', target.host);
-    const subtitle = lines.join(' · ').slice(0, LIMITS.line) || undefined;
-    let r;
-    if (args.speak) {
-      // Spoken copy: play the speech with the card as its artwork, so the Hub shows it while talking.
-      const audio = await deps.speak([title, ...lines].join('. '), { voice: args.voice });
-      const url = await media().publish(audio.file, audio.contentType, target.host);
-      r = await deps.cast(target, { url, contentType: audio.contentType, title, subtitle, imageUrl });
+    let imageUrl;
+    if (args.image_url) {
+      imageUrl = httpUrl(args.image_url, 'image_url');
     } else {
-      r = await deps.cast(target, { url: imageUrl, contentType: imageType(imageUrl), title, subtitle });
+      const card = await deps.card({ title, lines });
+      imageUrl = await media().publish(card.file, card.contentType, target.host);
     }
-    return { ok: true, device: publicRow(target), status: r.playerState || 'loaded', media_session_id: r.mediaSessionId };
+    const subtitle = lines.join(' · ').slice(0, LIMITS.line) || undefined;
+    if (!args.speak) return castResult(target, await deps.cast(target, { url: imageUrl, contentType: imageType(imageUrl), title, subtitle }));
+    // Spoken copy: play the speech with the card as its artwork, so the Hub shows it while talking.
+    const audio = await deps.speak([title, ...lines].join('. '), { voice: args.voice });
+    const url = await media().publish(audio.file, audio.contentType, target.host);
+    return castResult(target, await deps.cast(target, { url, contentType: audio.contentType, title, subtitle, imageUrl }));
   }
 
   /** Live state + accepted commands. `device` omitted: every device that is not a group. */
@@ -169,13 +180,5 @@ function createGoogleHome(overrides = {}) {
 
   return { status, capabilities, notify, show, deviceStatus, deviceCommand, close: () => deps.media && deps.media.close() };
 }
-
-function matches(d, wanted) {
-  const w = String(wanted).trim().toLowerCase();
-  return d.id.toLowerCase() === w || d.name.toLowerCase() === w;
-}
-const IMAGE_TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', png: 'image/png' };
-const imageType = (url) => IMAGE_TYPES[(/\.([a-z]+)$/i.exec(new URL(url).pathname) || [])[1]?.toLowerCase()] || 'image/png';
-const names = (list) => list.map((d) => `${d.name}${d.display ? ' (screen)' : ''}${d.group ? ' (group)' : ''}`).join(', ');
 
 module.exports = { createGoogleHome, GoogleHomeError, LIMITS, matches };

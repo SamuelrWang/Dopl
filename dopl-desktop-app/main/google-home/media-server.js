@@ -40,8 +40,7 @@ function parseRange(header, size) {
 
 function createMediaServer({ ttlMs = DEFAULT_TTL_MS, interfaces } = {}) {
   const files = new Map(); // token -> {file, contentType, timer}
-  let server = null;
-  let port = null;
+  let listening = null; // Promise<http.Server>, shared so concurrent publishes start one server
 
   const handle = (req, res) => {
     const token = (req.url || '').split('/')[1] || '';
@@ -50,24 +49,24 @@ function createMediaServer({ ttlMs = DEFAULT_TTL_MS, interfaces } = {}) {
     let size;
     try { size = fs.statSync(entry.file).size; } catch (_) { res.writeHead(404).end(); return; }
     const range = parseRange(req.headers.range, size);
-    const headers = { 'Content-Type': entry.contentType, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' };
-    if (range) {
-      res.writeHead(206, { ...headers, 'Content-Range': `bytes ${range.start}-${range.end}/${size}`, 'Content-Length': range.end - range.start + 1 });
-      if (req.method === 'HEAD') { res.end(); return; }
-      fs.createReadStream(entry.file, range).pipe(res);
-      return;
-    }
-    res.writeHead(200, { ...headers, 'Content-Length': size });
+    res.writeHead(range ? 206 : 200, {
+      'Content-Type': entry.contentType,
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'no-store',
+      'Access-Control-Allow-Origin': '*',
+      'Content-Length': range ? range.end - range.start + 1 : size,
+      ...(range && { 'Content-Range': `bytes ${range.start}-${range.end}/${size}` }),
+    });
     if (req.method === 'HEAD') { res.end(); return; }
-    fs.createReadStream(entry.file).pipe(res);
+    // The file can expire between the stat and the open; an unheard stream error would end the process.
+    fs.createReadStream(entry.file, range || undefined).on('error', () => res.destroy()).pipe(res);
   };
 
-  const listen = () => new Promise((resolve, reject) => {
-    if (server) { resolve(); return; }
-    const s = http.createServer(handle);
-    s.once('error', reject);
-    s.listen(0, '0.0.0.0', () => { server = s; port = s.address().port; resolve(); });
-  });
+  const listen = () => (listening ??= new Promise((resolve, reject) => {
+    const server = http.createServer(handle);
+    server.once('error', (err) => { listening = null; reject(err); });
+    server.listen(0, '0.0.0.0', () => resolve(server));
+  }));
 
   const drop = (token) => {
     const entry = files.get(token);
@@ -79,21 +78,21 @@ function createMediaServer({ ttlMs = DEFAULT_TTL_MS, interfaces } = {}) {
 
   /** Publish a local file for one device; returns the URL to cast. The file is deleted at expiry. */
   async function publish(file, contentType, deviceHost) {
-    await listen();
+    const { port } = (await listen()).address();
     const token = crypto.randomBytes(16).toString('hex');
     const timer = setTimeout(() => drop(token), ttlMs);
-    if (timer.unref) timer.unref();
+    timer.unref();
     files.set(token, { file, contentType, timer });
     return `http://${lanAddress(deviceHost, interfaces)}:${port}/${token}/${path.basename(file)}`;
   }
 
   function close() {
     for (const token of [...files.keys()]) drop(token);
-    if (server) server.close();
-    server = null;
+    if (listening) listening.then((server) => server.close(), () => {});
+    listening = null;
   }
 
-  return { publish, close, size: () => files.size };
+  return { publish, close };
 }
 
 module.exports = { createMediaServer, lanAddress, parseRange };
