@@ -6,7 +6,8 @@ import flow from "../_design/flow.module.css";
 import { Segmented } from "../_design/interactive";
 import k from "../_design/keys.module.css";
 import o from "../_design/surfaces.module.css";
-import { Card, Initials, Section, cx, ICON, ICON_SM } from "../_design/components";
+import { Initials, Section, cx, ICON, ICON_SM } from "../_design/components";
+import { Card } from "../_design/ui";
 
 function KeyCardDemo({ name, token, state, stateClass, scopes, figures, owner, initials }: { name: string; token: string; state: string; stateClass: string; scopes: string[]; figures: string[][]; owner: string; initials: string }) {
   return (
@@ -98,7 +99,7 @@ export function CredentialsGroup() {
           </div>
         </div>
         <div className={b.col}>
-          <Card className={b.stageCard}>
+          <Card tight>
             <div className={cx(o.stage, o.stageCenter)}>
               <div className={cx(o.dialog, k.confirm)}>
                 <div className={b.tile}>
@@ -119,7 +120,7 @@ export function CredentialsGroup() {
               </div>
             </div>
           </Card>
-          <Card className={b.stageCard}>
+          <Card tight>
             <div className={cx(o.stage, o.stageCenter)}>
               <div className={cx(o.dialog, k.confirm)}>
                 <div className={cx(b.tile, b.tileDanger)}>

@@ -1,8 +1,8 @@
 import { AlertCircle, AlertTriangle, CheckCircle2, CloudOff, Info, Loader2, Undo2, X } from "lucide-react";
-import { Badge, Button } from "../_design/ui";
+import { Badge, Button, Card } from "../_design/ui";
 import b from "../_design/base.module.css";
 import o from "../_design/surfaces.module.css";
-import { Card, Section, cx, ICON, U, u } from "../_design/components";
+import { Section, cx, ICON, U, u } from "../_design/components";
 
 function Ring({ value }: { value: number }) {
   const r = 34;
@@ -103,7 +103,7 @@ export function FeedbackGroup() {
           </Card>
         </div>
         <div className={b.col}>
-          <Card className={b.spread}>
+          <Card spread>
             <div className={b.between}>
               <div className={b.stack}>
                 <div className={o.tooltip}>Copied to clipboard</div>

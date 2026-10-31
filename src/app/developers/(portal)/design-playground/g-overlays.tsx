@@ -1,10 +1,10 @@
 import { AlertTriangle, ChevronDown, Link2, X } from "lucide-react";
-import { Badge, Button, Chip } from "../_design/ui";
+import { Badge, Button, Card, Chip } from "../_design/ui";
 import b from "../_design/base.module.css";
 import f from "../_design/forms.module.css";
 import o from "../_design/surfaces.module.css";
 import { Switch } from "../_design/interactive";
-import { Card, Face, Initials, Section, cx, ICON } from "../_design/components";
+import { Face, Initials, Section, cx, ICON } from "../_design/components";
 
 function Ghost({ rows = 7 }: { rows?: number }) {
   return (
@@ -21,7 +21,7 @@ export function OverlaysGroup() {
     <Section label="Overlays">
       <div className={cx(b.cols, b.c3r)}>
         <div className={b.col}>
-          <Card className={b.stageCard}>
+          <Card tight>
             <div className={cx(o.stage, o.stageCenter)}>
               <Ghost rows={12} />
               <div className={o.dialog}>
@@ -61,7 +61,7 @@ export function OverlaysGroup() {
           </Card>
         </div>
         <div className={b.col}>
-          <Card className={b.stageCard}>
+          <Card tight>
             <div className={cx(o.stage, o.stageCenter)}>
               <Ghost rows={6} />
               <div className={o.dialog}>
@@ -100,7 +100,7 @@ export function OverlaysGroup() {
           </Card>
         </div>
         <div className={b.col}>
-          <Card className={b.stageCard}>
+          <Card tight>
             <div className={cx(o.stage, o.stageRight)}>
               <Ghost rows={14} />
               <div className={o.sheet}>

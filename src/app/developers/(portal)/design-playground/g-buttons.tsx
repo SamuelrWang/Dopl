@@ -1,7 +1,7 @@
 import { ChevronDown, Copy, Download, FileText, Heart, Loader2, MoreHorizontal, Pencil, Plus, Share2, Trash2, Upload } from "lucide-react";
-import { Badge, Button } from "../_design/ui";
+import { Badge, Button, Card } from "../_design/ui";
 import b from "../_design/base.module.css";
-import { Card, Section, cx, ICON } from "../_design/components";
+import { Section, cx, ICON } from "../_design/components";
 
 const Spin = () => <Loader2 {...ICON} className={b.spinner} />;
 
@@ -66,7 +66,7 @@ export function ButtonsGroup() {
           </Card>
         </div>
         <div className={b.col}>
-          <Card className={b.spread}>
+          <Card spread>
             <div className={b.between}>
               <div className={b.row}>
                 <span className={b.tile}>

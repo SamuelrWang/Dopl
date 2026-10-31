@@ -1,18 +1,18 @@
 import { AlertCircle, Battery, Bell, Check, ChevronRight, Download, FileText, Globe, Glasses, Lock, MessageCircle, MoreHorizontal, Plus, Trash2, Upload, Wifi } from "lucide-react";
-import { Badge, Button, Chip } from "../_design/ui";
+import { Badge, Button, Card, Chip } from "../_design/ui";
 import b from "../_design/base.module.css";
 import d from "../_design/data.module.css";
 import f from "../_design/forms.module.css";
 import o from "../_design/surfaces.module.css";
 import { Switch } from "../_design/interactive";
-import { Card, Face, Initials, Section, cx, ICON, ICON_SM, U, u } from "../_design/components";
+import { Face, Initials, Section, cx, ICON, ICON_SM, U, u } from "../_design/components";
 
 const FEATURES = ["Unlimited collections", "20 GB of audio storage", "Version history", "Priority review"];
 const FUNCTIONS = ["Camera", "Microphone", "Display", "Translate", "Navigate"];
 
 function Pricing() {
   return (
-    <Card className={b.spread}>
+    <Card spread>
       <div className={b.between}>
         <span className={b.h3}>Curator</span>
         <Badge tone="ink">Most popular</Badge>
@@ -37,7 +37,7 @@ function Pricing() {
 
 function Profile() {
   return (
-    <Card className={b.flush}>
+    <Card flush>
       <div className={d.profileHead}>
         <div className={d.profileFace}>
           <Face who="agus" clip />
@@ -170,7 +170,7 @@ function Invite() {
 
 function SettingsRows() {
   return (
-    <Card className={b.flush}>
+    <Card flush>
       {[
         { icon: Bell, label: "Push notifications", value: "All activity", toggle: true },
         { icon: Globe, label: "Language", value: "Bahasa Indonesia" },

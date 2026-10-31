@@ -1,9 +1,9 @@
 import { Minus, Monitor, Moon, Plus, Sun } from "lucide-react";
-import { Chip } from "../_design/ui";
+import { Card, Chip } from "../_design/ui";
 import b from "../_design/base.module.css";
 import f from "../_design/forms.module.css";
 import { Check, Radios, Segmented, Switch } from "../_design/interactive";
-import { Card, Section, cx, ICON } from "../_design/components";
+import { Section, cx, ICON } from "../_design/components";
 
 const THEMES = [
   { label: "Light", icon: Sun },

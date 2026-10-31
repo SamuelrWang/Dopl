@@ -20,7 +20,7 @@ export function OutputsGroup() {
           </LensScreen>
         </Stage>
         <Stage>
-          <PanelScreen app="Larkfield Assist" lines={["Hot work permit for Bay 9 expires in 30 minutes."]} />
+          <PanelScreen app="Dopl Assist" lines={["Hot work permit for Bay 9 expires in 30 minutes."]} />
         </Stage>
         <Stage>
           <SpeakerOutput text="Pump 4 at Site 12 is over pressure." />

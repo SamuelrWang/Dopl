@@ -1,10 +1,10 @@
 import { Archive, Bell, BookOpen, Check, ChevronLeft, ChevronRight, Home, Layers, MoreHorizontal, Search, Settings, Users } from "lucide-react";
-import { Button } from "../_design/ui";
+import { Button, Card } from "../_design/ui";
 import b from "../_design/base.module.css";
 import f from "../_design/forms.module.css";
 import o from "../_design/surfaces.module.css";
 import { Tabs } from "../_design/interactive";
-import { Card, Face, Section, cx, ICON, U } from "../_design/components";
+import { Face, Section, cx, ICON, U } from "../_design/components";
 
 const NAV = [
   { icon: Home, label: "Home" },
@@ -20,7 +20,7 @@ export function NavigationGroup() {
     <Section label="Navigation">
       <div className={cx(b.cols, b.c2r)}>
         <div className={b.col}>
-          <Card className={b.spread}>
+          <Card spread>
             <div className={b.stack}>
               <div className={b.row}>
                 <span className={cx(b.tile, b.tileBlack)}>
@@ -59,7 +59,7 @@ export function NavigationGroup() {
           </Card>
         </div>
         <div className={b.col}>
-          <Card className={b.flush}>
+          <Card flush>
             <div className={cx(b.between, b.padRow)}>
               <div className={o.crumb}>
                 Collections
@@ -85,7 +85,7 @@ export function NavigationGroup() {
               <Tabs options={["Overview", "Recordings", "Contributors", "Sources", "History"]} start={1} />
             </div>
           </Card>
-          <Card className={b.spread}>
+          <Card spread>
             <div className={o.steps}>
               {STEPS.map((step, i) => (
                 <div key={step} className={cx(b.row, i < STEPS.length - 1 && b.grow)}>

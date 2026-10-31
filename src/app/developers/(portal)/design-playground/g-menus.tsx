@@ -1,9 +1,9 @@
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Download, FolderInput, Link2, LogOut, Pencil, Search, Settings, Trash2, User } from "lucide-react";
-import { Badge, Button, Chip } from "../_design/ui";
+import { Badge, Button, Card, Chip } from "../_design/ui";
 import b from "../_design/base.module.css";
 import f from "../_design/forms.module.css";
 import o from "../_design/surfaces.module.css";
-import { Card, Face, Initials, Section, cx, ICON } from "../_design/components";
+import { Face, Initials, Section, cx, ICON } from "../_design/components";
 
 const DAY_NAMES = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const LEAD = [30];
