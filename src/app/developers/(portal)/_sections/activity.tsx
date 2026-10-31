@@ -7,16 +7,16 @@
  */
 import { Download, SearchX } from "lucide-react";
 import { useMemo, useState } from "react";
-import { STATUS_LABEL, TROUBLE, counted, WORKED, type Call, type CallKind, type CallStatus, CALL_KIND_LABEL, type PortalUser } from "@/features/device-sdk/portal/view";
-import { Badge, Button, DataCell, DataRow, DataTable, ICON, PillMenu, SearchField, Segmented, StatCard, TwoLine, type Column, type Tone } from "../_design/ui";
+import { CALL_KIND_LABEL, STATUS_LABEL, TROUBLE, WORKED, counted, type Call, type CallKind, type CallStatus, type PortalUser } from "@/features/device-sdk/portal/view";
+import { Button, DataCell, DataRow, DataTable, ICON, PillMenu, SearchField, Segmented, StatCard, TwoLine, type Column } from "../_design/ui";
 import { FillCard, ScrollArea, SplitLayout } from "../_design/ui-output";
 import { Between, EmptyState, FilterRow, Grow, Page, PageHeader, StatRow, TableFoot, TableHead, Text } from "../_design/ui-page";
 import { downloadCsv, fmt, ms, portalNow, since } from "../_components/format";
 import { usePortal } from "../_components/portal-store";
 import { useLiveCalls } from "../_components/use-live-calls";
 import { CallDetail } from "./activity-detail";
+import { CallStatusBadge, userNameOf } from "./activity-parts";
 
-export const STATUS_TONE: Partial<Record<CallStatus, Tone>> = { delivered: "ok", answered: "ok", ok: "ok", received: "ok", dismissed: "ok", failed: "error", refused: "error", retrying: "warn", expired: "warn" };
 const KINDS: { label: string; value: CallKind | "all" }[] = [
   { label: "All", value: "all" },
   { label: "Deliveries", value: "delivery" },
@@ -37,16 +37,6 @@ const COLUMNS: Column[] = [
   { key: "at", label: "When", width: "16%" },
 ];
 const labelOf = (options: { value: string; label: string }[], value: string) => options.find((o) => o.value === value)?.label ?? value;
-
-export const userNameOf = (users: readonly PortalUser[], id: string | null) => (id ? (users.find((u) => u.id === id)?.name ?? id) : null);
-export const deviceNameOf = (users: readonly PortalUser[], id: string | null) => {
-  if (!id) return null;
-  for (const u of users) {
-    const d = u.devices.find((x) => x.id === id);
-    if (d) return d.name;
-  }
-  return null;
-};
 
 function namesOf(users: readonly PortalUser[]) {
   return {
@@ -127,24 +117,24 @@ export function CallsBrowser({ calls, users, initial, figures, test, older }: { 
   return (
     <>
       {figures && (
-        <PageHeader
-          title="Activity"
-          test={test}
-          action={
-            <Button variant="ink" disabled={rows.length === 0} onClick={exportCsv}>
-              <Download {...ICON} aria-hidden="true" />
-              Export
-            </Button>
-          }
-        />
-      )}
-      {figures && (
-        <StatRow>
-          <StatCard label="Calls" value={fmt(rows.length)} hint={rows.length === calls.length ? "Most recent" : `of ${fmt(calls.length)}`} />
-          <StatCard label="Succeeded" value={rows.length ? `${Math.round((worked / rows.length) * 100)}%` : "None"} hint={counted(worked, "call")} />
-          <StatCard label="Median time" value={median === null ? "None" : ms(median)} hint="API response" />
-          <StatCard label="Needs a look" value={fmt(trouble)} hint="Failed, refused, retrying or unanswered" pressed={status === "trouble"} onClick={() => setStatus(status === "trouble" ? "all" : "trouble")} />
-        </StatRow>
+        <>
+          <PageHeader
+            title="Activity"
+            test={test}
+            action={
+              <Button variant="ink" disabled={rows.length === 0} onClick={exportCsv}>
+                <Download {...ICON} aria-hidden="true" />
+                Export
+              </Button>
+            }
+          />
+          <StatRow>
+            <StatCard label="Calls" value={fmt(rows.length)} hint={rows.length === calls.length ? "Most recent" : `of ${fmt(calls.length)}`} />
+            <StatCard label="Succeeded" value={rows.length ? `${Math.round((worked / rows.length) * 100)}%` : "None"} hint={counted(worked, "call")} />
+            <StatCard label="Median time" value={median === null ? "None" : ms(median)} hint="API response" />
+            <StatCard label="Needs a look" value={fmt(trouble)} hint="Failed, refused, retrying or unanswered" pressed={status === "trouble"} onClick={() => setStatus(status === "trouble" ? "all" : "trouble")} />
+          </StatRow>
+        </>
       )}
       <SplitLayout
         wide
@@ -179,9 +169,7 @@ export function CallsBrowser({ calls, users, initial, figures, test, older }: { 
                         <TwoLine title={c.title} sub={metaOf(c, names)} />
                       </DataCell>
                       <DataCell>
-                        <Badge tone={STATUS_TONE[c.status] ?? "neutral"} dot>
-                          {STATUS_LABEL[c.status]}
-                        </Badge>
+                        <CallStatusBadge status={c.status} />
                       </DataCell>
                       <DataCell>
                         <Text nowrap>{since(c.at)}</Text>

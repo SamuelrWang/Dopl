@@ -22,7 +22,6 @@
 .sidebar .alert { display: inline-flex; align-items: center; gap: calc(6.25 * var(--u)); font-weight: 500; color: var(--warn); }
 [aria-current] > .alert.alert { color: inherit; }
 .foot { display: flex; align-items: center; gap: calc(12.5 * var(--u)); flex: none; min-width: 0; padding-top: calc(15 * var(--u)); box-shadow: inset 0 calc(1.25 * var(--u)) 0 var(--line-tool); }
-.ellipsis { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .find { position: relative; width: 100%; }
 .sidebar .hits { left: 0; right: 0; width: auto; }
 .none { padding: calc(7.5 * var(--u)) calc(11.25 * var(--u)); }

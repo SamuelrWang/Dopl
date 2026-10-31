@@ -4,7 +4,7 @@ One implementation for the Design Playground and every overhauled page, so a pag
 
 ## The rule
 
-Pages compose `ui.tsx` and `ui-page.tsx`. A page in `_sections` imports no `_design/*.module.css` and has no CSS module of its own. `design-guard.test.ts` enforces this for the pages listed in it; add a page to that list when it moves.
+Pages compose `ui.tsx`, `ui-page.tsx` and `ui-overlay.tsx`. A page in `_sections` imports no `_design/*.module.css` and has no CSS module of its own. `design-guard.test.ts` enforces this for the pages listed in it; add a page to that list when it moves.
 
 ## Scale
 
@@ -12,14 +12,16 @@ Pages compose `ui.tsx` and `ui-page.tsx`. A page in `_sections` imports no `_des
 
 ## Components
 
-- `ui.tsx`: Button, SplitButton, Badge, StateDot, Chip, Card, Stat, StatCard, Meter, MeterFigure, SearchField, NavRow, DataTable, DataRow, DataCell, TwoLine, plus Segmented, PillMenu, PopMenu.
-- `ui-page.tsx`: Text, Row, Between, Stack, Grow, Page, PageHeader, StatRow, Toolbar, FilterRow, EmptyState, Toast, Mark, CardSection, CardHead, ChipRow, FigureWell, Figure, CardFoot, Spark, AddCard, BoxRow, ListRow, FigureGrid, TableFoot, MenuItem, Pager, SideSheet, FlowDialog, Tiles, Tile, ReviewWell, ConfirmDialog, Alert, TextField, SecretWell, CodeBlock.
+- `ui.tsx`: Button, Badge, StateDot, Chip, Card, Stat, StatCard, Meter, MeterFigure, SearchField, NavRow, DataTable, DataRow, DataCell, TwoLine, plus Segmented, SegmentedBy, PillMenu, PopMenu.
+- `ui-page.tsx`: Text, Row, Between, Stack, Grow, Page, PageHeader, StatRow, Toolbar, FilterRow, FilterChips, EmptyState, Toast, Mark, CardSection, CardHead, ChipRow, FigureWell, Figure, CardFoot, Spark, AddCard, BoxRow, ListRow, FigureGrid, TableFoot, MenuItem, Pager, ReviewWell, Alert, ProblemAlert, TextField, SecretWell, CopyButton, CopyWell, CodeBlock.
 
-- `ui-sidebar.tsx`: Sidebar, NavGroup, ProjectPicker, AccountRow, SearchPanel, SearchHit, SearchEmpty.
+- `ui-overlay.tsx`: SideSheet, FlowDialog, DoneFoot, Tiles, Tile, ConfirmDialog.
 
-- `ui-output.tsx`: Stage, SplitLayout, LensScreen, PanelScreen, SpeakerOutput, HapticOutput, ChangeOutput, ReadOutput, CaptureOutput. InkPanel, InkQuote, InkPrompt, InkFoot (the black frame), StatStrip, ThreeUp, AvatarStack, PickRow. A call draws by capability, never by device. `g2-screen.tsx`: G2Screen, the 576x288 G2 display on Even's font metrics.
+- `ui-sidebar.tsx`: PortalFrame, Sidebar, NavGroup, ProjectSwitcher, AccountRow, SearchPanel, SearchHit, SearchEmpty.
 
-- `ui-extras.tsx`: CodeCells, Dropzone, DateRange, PlanCard, Banner, StatTriple.
+- `ui-output.tsx`: Stage, SplitLayout, LensScreen, PanelScreen, SpeakerOutput, HapticOutput, ChangeOutput, ReadOutput, CaptureOutput. InkPanel, InkQuote, InkFoot (the black frame), StatStrip, ThreeUp, AvatarStack, PickRow. A call draws by capability, never by device. `g2-screen.tsx`: G2Screen, the 576x288 G2 display on Even's font metrics.
+
+- `ui-extras.tsx`: CodeCells, DateRange, PlanCard, Banner, StatTriple.
 - `ui-data.tsx`: BarChart, Limit, Timeline, LineChart, Ring.
 
 - `ui-docs.tsx`: the docs site (`src/features/marketing/docs`). DocNavSlot, DocMain, DocMobileBar, DocFootActions, DocBrand, NavFolder, NavSubhead, NavAnchors, DocColumn, DocHead, DocSplit, DocIntro, DocFoot, DocSocial, Prose, Inline, Anchored, DocGrid, Callout, InkCopy, CodeTabs, DocEndpoint, ParamRow, DocTable, DocSteps, DocFlow, DocFacts, DocLog.

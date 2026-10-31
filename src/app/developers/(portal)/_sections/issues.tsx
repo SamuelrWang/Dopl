@@ -39,7 +39,6 @@ export function IssuesSection({ issues, users }: { issues: Issue[]; users: Porta
                   const Glyph = GLYPH[i.kind];
                   return (
                     <PickRow key={i.id} selected={issue.id === i.id} onClick={() => setPicked(i.id)}>
-                      <span className="sr-only">{i.title}</span>
                       <Glyph {...ICON} aria-hidden="true" />
                       <TwoLine title={i.title} sub={`${fmt(i.count)} ${i.countLabel}`} />
                       <Grow />

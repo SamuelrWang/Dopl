@@ -5,15 +5,15 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { Activity, AlertCircle, BarChart3, Cpu, FlaskConical, KeyRound, LayoutGrid, Link2, Users, UsersRound, Webhook, type LucideIcon } from "lucide-react";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
-import { NavRow, Segmented } from "../_design/ui";
+import { NavRow, SegmentedBy } from "../_design/ui";
 import { AccountRow, NavGroup, PortalFrame, ProjectSwitcher, Sidebar } from "../_design/ui-sidebar";
 import { FindAnything, type FindEntry } from "./find-anything";
 import { BASE } from "./format";
 import { usePortal, useLiveRefresh } from "./portal-store";
 
 const ENVS = [
-  { value: "live", label: "Live" },
-  { value: "test", label: "Test" },
+  { key: "live", label: "Live" },
+  { key: "test", label: "Test" },
 ] as const;
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
@@ -65,7 +65,7 @@ function PortalSidebar({ fontClass, counts }: { fontClass?: string; counts: Shel
       identity={
         <>
           <ProjectSwitcher label="Project" options={options} value={project.id} onChange={setProject} />
-          <Segmented label="Environment" options={ENVS.map((e) => e.label)} value={ENVS.findIndex((e) => e.value === env)} onChange={(i) => setEnv(ENVS[i].value)} />
+          <SegmentedBy label="Environment" options={ENVS} value={env} onChange={setEnv} />
           <FindAnything entries={counts.find} />
         </>
       }

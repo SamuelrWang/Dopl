@@ -4,13 +4,13 @@
  * Playground: one real `/v1` call with a test key, and what came back. The call runs on the server, against the
  * project's test data only; the key is held in memory for this call and never stored.
  */
-import { AlertTriangle, FlaskConical, Play } from "lucide-react";
+import { FlaskConical, Play } from "lucide-react";
 import { useState } from "react";
 import { PLAYGROUND_OPS, playgroundOp, type PlaygroundOp } from "@/features/device-sdk/portal/playground-ops";
 import type { PlaygroundRun } from "@/features/device-sdk/portal/playground-types";
 import { Badge, Button, ICON, PillMenu, TwoLine } from "../_design/ui";
 import { CodeEditor, FillBody, FillCard, LabeledField, SplitLayout } from "../_design/ui-output";
-import { Alert, Between, CodeBlock, EmptyState, Page, PageHeader, Stack, Text, TextField } from "../_design/ui-page";
+import { Between, CodeBlock, EmptyState, Page, PageHeader, ProblemAlert, Stack, Text, TextField } from "../_design/ui-page";
 import { usePortal } from "../_components/portal-store";
 
 const OPTIONS = PLAYGROUND_OPS.map((op) => ({ value: op.id, label: op.label }));
@@ -106,11 +106,7 @@ export function PlaygroundSection() {
                     <CodeEditor label="Body" value={body} onChange={setBody} />
                   </LabeledField>
                 )}
-                {problem && (
-                  <Alert tone="error" icon={AlertTriangle}>
-                    {problem}
-                  </Alert>
-                )}
+                <ProblemAlert problem={problem} />
               </Stack>
             </FillBody>
             <Button block variant="ink" loading={busy} disabled={key.trim() === ""} onClick={() => void send()}>

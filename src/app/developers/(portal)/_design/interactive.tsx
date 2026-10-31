@@ -76,6 +76,11 @@ export function Segmented({ options, start = 0, value, onChange, label }: { opti
   );
 }
 
+/** Segmented for a page that holds the option's key rather than its position. */
+export function SegmentedBy<K extends string>({ label, options, value, onChange }: { label: string; options: readonly { key: K; label: string }[]; value: K; onChange: (key: K) => void }) {
+  return <Segmented label={label} options={options.map((o) => o.label)} value={options.findIndex((o) => o.key === value)} onChange={(i) => onChange(options[i].key)} />;
+}
+
 export function Tabs({ options, start = 0 }: { options: string[]; start?: number }) {
   const [value, set] = useState(start);
   return (
@@ -142,6 +147,8 @@ export interface PillOption {
   label: string;
   count?: number;
 }
+
+export const withAll = (options: PillOption[]): PillOption[] => [{ value: "all", label: "All" }, ...options];
 
 /** The reference's "Filter by" pill: label and chevron, one menu, the choice ticked inside. */
 export function PillMenu({ label, value, options, stable, onChange }: { label: string; value: string; options: PillOption[]; /** The label shows the choice, so the pill holds the width of its longest option. */ stable?: boolean; onChange: (value: string) => void }) {

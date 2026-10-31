@@ -1,15 +1,14 @@
 "use client";
 
 /** One call's story: what it said, each step it took, the devices considered, the raw response. */
-import { Check, Copy, ExternalLink } from "lucide-react";
-import { useState } from "react";
-import { CALL_KIND_LABEL, STATUS_LABEL, type Call, type PortalUser, type WebhookCall } from "@/features/device-sdk/portal/view";
+import { ExternalLink } from "lucide-react";
+import { CALL_KIND_LABEL, type Call, type PortalUser, type WebhookCall } from "@/features/device-sdk/portal/view";
 import { Badge, Button, ICON_SM, TwoLine, type Tone } from "../_design/ui";
 import { Timeline, type Step } from "../_design/ui-data";
 import { FillBody } from "../_design/ui-output";
-import { BoxRow, Between, CodeBlock, Grow, ListRow, ReviewWell, Stack, Text } from "../_design/ui-page";
+import { BoxRow, Between, CodeBlock, CopyButton, Grow, ListRow, ReviewWell, Stack, Text } from "../_design/ui-page";
 import { BASE, clockOf, ms, since } from "../_components/format";
-import { STATUS_TONE, deviceNameOf, userNameOf } from "./activity";
+import { CallStatusBadge, deviceNameOf, userNameOf } from "./activity-parts";
 
 const VERDICT: Record<string, [string, Tone]> = { chosen: ["Chosen", "ok"], eligible: ["Eligible", "neutral"], skipped: ["Skipped", "neutral"] };
 
@@ -36,16 +35,13 @@ export function AttemptList({ attempts }: { attempts: WebhookCall["attempts"] })
 }
 
 export function CallDetail({ call, users }: { call: Call; users: PortalUser[] }) {
-  const [copied, setCopied] = useState<string | null>(null);
   const user = userNameOf(users, call.userId);
   const device = deviceNameOf(users, call.deviceId);
   const steps: Step[] = call.steps.map((s) => ({ key: s.key, label: s.label, detail: s.detail, at: s.at === undefined ? undefined : ms(s.at), state: s.state }));
   return (
     <>
       <Between>
-        <Badge tone={STATUS_TONE[call.status] ?? "neutral"} dot>
-          {STATUS_LABEL[call.status]}
-        </Badge>
+        <CallStatusBadge status={call.status} />
         <Text kind="smallMuted">{CALL_KIND_LABEL[call.kind]}</Text>
       </Between>
       <TwoLine title={<Text kind="h3">{call.title}</Text>} sub={call.id} />
@@ -84,16 +80,7 @@ export function CallDetail({ call, users }: { call: Call; users: PortalUser[] })
         {call.response != null && <CodeBlock title={call.route ?? "Response"}>{JSON.stringify(call.response, null, 2)}</CodeBlock>}
       </FillBody>
       <Between>
-        <Button
-          size="sm"
-          onClick={() => {
-            void navigator.clipboard?.writeText(call.id);
-            setCopied(call.id);
-          }}
-        >
-          {copied === call.id ? <Check {...ICON_SM} aria-hidden="true" /> : <Copy {...ICON_SM} aria-hidden="true" />}
-          {copied === call.id ? "Copied" : "Copy ID"}
-        </Button>
+        <CopyButton key={call.id} text={call.id} idle="Copy ID" />
         {call.userId && (
           <Button size="sm" variant="ghost" href={`${BASE}/users/${encodeURIComponent(call.userId)}`}>
             <ExternalLink {...ICON_SM} aria-hidden="true" />

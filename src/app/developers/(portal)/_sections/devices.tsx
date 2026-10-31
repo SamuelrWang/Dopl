@@ -11,7 +11,7 @@ import { counted, figuresOfDevices, rowsBetween, type MetricRow, type PortalUser
 import { Button, ICON, StatCard } from "../_design/ui";
 import { CardSection, EmptyState, Page, PageHeader, StatRow } from "../_design/ui-page";
 import { CategoryGlyph } from "../_components/category-glyph";
-import { fmt, portalNow } from "../_components/format";
+import { BASE, fmt, portalNow } from "../_components/format";
 import { usePortal } from "../_components/portal-store";
 import { ModelCard } from "./devices-card";
 import { NO_DEVICE_FILTERS, attentionOf, keeps, modelRows, type DeviceFilters } from "./devices-model";
@@ -35,7 +35,7 @@ export function DevicesSection({ users, metrics }: { users: PortalUser[]; metric
       <PageHeader title="Devices" test={test} />
 
       <StatRow>
-        <StatCard label="Models" value={fmt(rows.length)} hint={`${fmt(categories.length)} ${categories.length === 1 ? "category" : "categories"}`} />
+        <StatCard label="Models" value={fmt(rows.length)} hint={counted(categories.length, "category", "categories")} />
         <StatCard label="Connected devices" value={fmt(figures.devices)} hint={`${fmt(figures.online)} online, ${counted(figures.users, "user")}`} />
         <StatCard label="Delivered, 7d" value={figures.deliveries ? `${figures.rate}%` : "None"} hint={`${fmt(figures.deliveries)} to connected devices`} />
         <StatCard label="Devices with issues" value={fmt(rows.reduce((n, r) => n + attentionOf(r), 0))} hint={`${relink} relink, ${stale} stale`} pressed={filters.quick === "attention"} onClick={() => patch({ quick: filters.quick === "attention" ? "all" : "attention" })} />
@@ -44,7 +44,7 @@ export function DevicesSection({ users, metrics }: { users: PortalUser[]; metric
       <DevicesToolbar rows={all} filters={filters} onChange={patch} />
 
       {all.length === 0 ? (
-        <EmptyState icon={Cpu} title="No devices connected" action={<Button href="/developers/connect">Open Connect</Button>} />
+        <EmptyState icon={Cpu} title="No devices connected" action={<Button href={`${BASE}/connect`}>Open Connect</Button>} />
       ) : categories.length === 0 ? (
         <EmptyState icon={SearchX} title="No models match" action={<Button onClick={() => setFilters(NO_DEVICE_FILTERS)}>Clear filters</Button>} />
       ) : (
@@ -52,7 +52,7 @@ export function DevicesSection({ users, metrics }: { users: PortalUser[]; metric
           const inSection = rows.filter((r) => r.category.id === category.id);
           const devices = inSection.reduce((n, r) => n + r.figures.devices, 0);
           return (
-            <CardSection key={category.id} icon={<CategoryGlyph id={category.id} size={ICON} />} title={category.name} meta={`${fmt(devices)} ${devices === 1 ? "device" : "devices"}`}>
+            <CardSection key={category.id} icon={<CategoryGlyph id={category.id} size={ICON} />} title={category.name} meta={counted(devices, "device")}>
               {inSection.map((row) => (
                 <ModelCard key={row.model.id} row={row} metrics={week} />
               ))}

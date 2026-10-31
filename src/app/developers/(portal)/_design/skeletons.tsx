@@ -8,7 +8,7 @@ import out from "./output.module.css";
 import p from "./page.module.css";
 import tokens from "./tokens.module.css";
 
-export const Bone = ({ w, h = 15, round }: { w: number | string; h?: number; round?: boolean }) => (
+const Bone = ({ w, h = 15, round }: { w: number | string; h?: number; round?: boolean }) => (
   <span className={x.skel} style={{ width: typeof w === "number" ? u(w) : w, height: u(h), borderRadius: round ? "50%" : undefined }} />
 );
 

@@ -43,10 +43,11 @@ export function UsageSection({ users, metrics, keys, keyLimit, seats, endpoints 
   const days = RANGES[range].days;
 
   const models = useMemo(() => new Map(users.flatMap((u) => u.devices.map((d) => [d.id, d.modelId] as const))), [users]);
+  const inScope = (id: ModelId) => (category === "all" || categoryOf(id).id === category) && (modelId === "all" || id === modelId);
   const inFilter = (m: MetricRow) => {
     if (category === "all" && modelId === "all") return true;
     const id = modelOfRow(m, models);
-    return id !== null && (category === "all" || categoryOf(id).id === category) && (modelId === "all" || id === modelId);
+    return id !== null && inScope(id);
   };
   const filtered = metrics.filter(inFilter);
   const inRange = rowsBetween(filtered, now, days - 1);
@@ -60,14 +61,14 @@ export function UsageSection({ users, metrics, keys, keyLimit, seats, endpoints 
     const rows = rowsBetween(metrics, now, days - 1);
     if (by === 0) {
       return [
-        ...usedModels.filter((m) => (category === "all" || categoryOf(m.id).id === category) && (modelId === "all" || m.id === modelId)).map((m) => {
+        ...usedModels.filter((m) => inScope(m.id)).map((m) => {
           const owners = users.filter((u) => u.devices.some((d) => d.modelId === m.id)).length;
           return { id: m.id as string, name: m.name, sub: trail(m.id).slice(0, 2).join(", "), calls: totalsOf(rows.filter((r) => modelOfRow(r, models) === m.id)).deliveries, detail: `${owners} ${owners === 1 ? "user" : "users"}` };
         }),
         { id: "unrouted", name: "No device", sub: "Refused before routing", calls: totalsOf(rows.filter((r) => !r.device)).deliveries, detail: "" },
       ];
     }
-    if (by === 1) return users.map((u) => ({ id: u.id, name: u.name, sub: u.named ? u.id : "", calls: totalsOf(rows.filter((r) => r.user === u.id)).deliveries, detail: `${u.devices.length} ${u.devices.length === 1 ? "device" : "devices"}` }));
+    if (by === 1) return users.map((u) => ({ id: u.id, name: u.name, sub: u.named ? u.id : "", calls: totalsOf(rows.filter((r) => r.user === u.id)).deliveries, detail: counted(u.devices.length, "device") }));
     return [
       ...keys.filter((k) => !k.revokedAt).map((k) => ({ id: k.id, name: k.name, sub: `${k.prefix}••••`, calls: totalsOf(rows.filter((r) => r.key === k.id)).calls, detail: k.kind === "secret" ? "Secret" : "Publishable" })),
       { id: "none", name: "No key", sub: "Before keys were recorded, or from a device", calls: totalsOf(rows.filter((r) => !r.key)).calls, detail: "" },
@@ -76,7 +77,7 @@ export function UsageSection({ users, metrics, keys, keyLimit, seats, endpoints 
   const sorted = rowsOf().filter((r) => r.calls > 0).sort((a, b) => b.calls - a.calls);
   const total = Math.max(sorted.reduce((n, r) => n + r.calls, 0), 1);
   const unit = by === 2 ? "Calls" : "Deliveries";
-  const COLUMNS: Column[] = [
+  const columns: Column[] = [
     { key: "name", label: "Name", width: "40%" },
     { key: "calls", label: `${unit}, ${days}d`, width: "20%" },
     { key: "detail", label: "Detail", width: "20%" },
@@ -146,7 +147,7 @@ export function UsageSection({ users, metrics, keys, keyLimit, seats, endpoints 
             <Segmented label="Break down by" options={BREAKDOWNS} value={by} onChange={setBy} />
           </TableHead>
           <ScrollArea areaRef={fit.ref}>
-            <DataTable columns={COLUMNS}>
+            <DataTable columns={columns}>
               {sorted.slice(0, fit.count).map((r) => (
                 <DataRow key={r.id}>
                   <DataCell>

@@ -2,12 +2,13 @@
 
 /** One event over the list: what was sent, every attempt, and sending it again. */
 import { RotateCcw } from "lucide-react";
-import { STATUS_LABEL, type Call } from "@/features/device-sdk/portal/view";
-import { Badge, Button, ICON, TwoLine } from "../_design/ui";
-import { CodeBlock, FigureGrid, GridFigure, SideSheet, Text } from "../_design/ui-page";
+import type { Call } from "@/features/device-sdk/portal/view";
+import { Button, ICON, TwoLine } from "../_design/ui";
+import { SideSheet } from "../_design/ui-overlay";
+import { CodeBlock, FigureGrid, GridFigure, Text } from "../_design/ui-page";
 import { since } from "../_components/format";
-import { STATUS_TONE } from "./activity";
 import { AttemptList } from "./activity-detail";
+import { CallStatusBadge } from "./activity-parts";
 
 export function EventSheet({ call, canManage, busy, onClose, onRetry }: { call: Call; canManage: boolean; busy: boolean; onClose: () => void; onRetry: () => void }) {
   const hook = call.webhook!;
@@ -26,7 +27,7 @@ export function EventSheet({ call, canManage, busy, onClose, onRetry }: { call: 
       }
     >
       <FigureGrid>
-        <GridFigure label="Status" value={<Badge tone={STATUS_TONE[call.status] ?? "neutral"} dot>{STATUS_LABEL[call.status]}</Badge>} />
+        <GridFigure label="Status" value={<CallStatusBadge status={call.status} />} />
         <GridFigure label="Attempts" value={hook.attempts.length} />
         <GridFigure label="Sent" value={since(call.at)} />
       </FigureGrid>

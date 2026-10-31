@@ -7,14 +7,15 @@
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { categoryById, type Integration, type ModelId } from "@/features/device-sdk/portal/catalog";
-import { LOW_RATE, STATUS_LABEL, counted, dailyBars, devicesOfIntegration, devicesOfModel, figuresOfDevices, type Call, type MetricRow, type PortalUser } from "@/features/device-sdk/portal/view";
-import { Badge, Button, Card, DataCell, DataRow, DataTable, ICON, MeterFigure, PillMenu, Segmented, StatCard, TwoLine, type Column } from "../_design/ui";
+import { LOW_RATE, counted, dailyBars, devicesOfIntegration, devicesOfModel, figuresOfDevices, type Call, type MetricRow, type PortalUser } from "@/features/device-sdk/portal/view";
+import { Badge, Button, Card, DataCell, DataRow, DataTable, ICON, MeterFigure, PillMenu, SegmentedBy, StatCard, TwoLine, type Column } from "../_design/ui";
 import { BarChart } from "../_design/ui-data";
 import { FillCard, SplitLayout } from "../_design/ui-output";
 import { Between, Breadcrumbs, Grow, Mark, Page, Row, Stack, StatRow, TableHead, Text } from "../_design/ui-page";
 import { CategoryGlyph } from "../_components/category-glyph";
 import { BASE, fmt, portalNow, since } from "../_components/format";
-import { CallsBrowser, STATUS_TONE } from "./activity";
+import { CallsBrowser } from "./activity";
+import { CallStatusBadge } from "./activity-parts";
 import { CapabilitiesTab, type RulesOfModel } from "./integration-capabilities";
 import { ReceivesTab } from "./receives";
 import { UserSheet } from "./users-sheet";
@@ -72,7 +73,7 @@ export function IntegrationPageSection({ integration, users, calls, metrics, rul
   const modelUsers = sortUsers(users.filter((u) => u.devices.some((d) => d.modelId === model)), sort);
   const selected = modelUsers.find((u) => u.id === openUser) ?? null;
   const bars = dailyBars(metrics.filter((m) => m.device !== null && ids.has(m.device)), 14, portalNow());
-  const tabs = <Segmented label="Device sections" options={TABS.map((t) => t.label)} value={TABS.findIndex((t) => t.key === tab)} onChange={(i) => setTab(TABS[i].key)} />;
+  const tabs = <SegmentedBy label="Device sections" options={TABS} value={tab} onChange={setTab} />;
 
   if (tab === "calls") {
     return (
@@ -156,9 +157,7 @@ export function IntegrationPageSection({ integration, users, calls, metrics, rul
                       <TwoLine title={c.title} sub={c.capability ?? undefined} />
                     </DataCell>
                     <DataCell>
-                      <Badge tone={STATUS_TONE[c.status] ?? "neutral"} dot>
-                        {STATUS_LABEL[c.status]}
-                      </Badge>
+                      <CallStatusBadge status={c.status} />
                     </DataCell>
                     <DataCell>
                       <Text nowrap>{since(c.at)}</Text>

@@ -18,11 +18,6 @@ export function Section({ label, children }: { label: string; children: ReactNod
   );
 }
 
-/** Old; pages use ui.tsx › Card. Remove once g-credentials and _sections/keys* move. */
-export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cx(b.card, className)}>{children}</div>;
-}
-
 const FACES = { ada, terus, agus };
 
 /** The three crops from the reference. Only they are photos; everyone else gets initials. */

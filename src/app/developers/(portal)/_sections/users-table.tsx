@@ -6,18 +6,15 @@ import { Badge, Card, DataCell, DataRow, DataTable, ICON, ICON_SM, Initials, Met
 import { FillCard, ScrollArea, useFitRows } from "../_design/ui-output";
 import { Pager, PlainButton, TableFoot, Text } from "../_design/ui-page";
 import { modelById } from "@/features/device-sdk/portal/catalog";
-import { categoryIdOf, userDeliveries, userRate, type DeviceState, type OwnedDevice, type PortalUser } from "@/features/device-sdk/portal/view";
+import { LOW_RATE, categoryIdOf, userDeliveries, userRate, type DeviceState, type OwnedDevice, type PortalUser } from "@/features/device-sdk/portal/view";
 import { CategoryGlyph } from "../_components/category-glyph";
 import { since } from "../_components/format";
 import { FIRST_DIR, STATUS_LABELS, activeDevice, devicesInOrder, statusOf, type Sort, type SortKey, type Status } from "./users-model";
 
 const PAGE_SIZE = 10;
 
-export function DeviceGlyph({ device, size }: { device: OwnedDevice; size: typeof ICON | typeof ICON_SM }) {
-  return <CategoryGlyph id={categoryIdOf(device.modelId)} size={size} />;
-}
-
-export const DOT: Record<DeviceState, "ok" | "off" | "warn" | "error"> = { online: "ok", offline: "off", stale: "warn", needs_relink: "error" };
+export const STATE_BADGE: Record<DeviceState, Tone> = { online: "ok", offline: "neutral", stale: "warn", needs_relink: "error" };
+const DOT: Record<DeviceState, "ok" | "off" | "warn" | "error"> = { online: "ok", offline: "off", stale: "warn", needs_relink: "error" };
 const STATUS_TONE: Record<Status, Tone> = { online: "ok", offline: "neutral", stale: "warn", relink: "error" };
 
 export function StatusBadge({ status }: { status: Status }) {
@@ -31,7 +28,7 @@ export function StatusBadge({ status }: { status: Status }) {
 function DeviceChip({ device }: { device: OwnedDevice }) {
   return (
     <Badge title={device.name}>
-      <DeviceGlyph device={device} size={ICON_SM} />
+      <CategoryGlyph id={categoryIdOf(device.modelId)} size={ICON_SM} />
       {modelById(device.modelId).name}
       <StateDot tone={DOT[device.state]} />
     </Badge>
@@ -74,7 +71,7 @@ function UserRow({ user, open, onOpen }: { user: PortalUser; open: boolean; onOp
       <DataCell>
         <Text nowrap>{since(user.lastDeliveryAt)}</Text>
       </DataCell>
-      <DataCell>{delivered ? <MeterFigure value={rate} low={rate < 90} /> : <Text kind="faint">None</Text>}</DataCell>
+      <DataCell>{delivered ? <MeterFigure value={rate} low={rate < LOW_RATE} /> : <Text kind="faint">None</Text>}</DataCell>
       <DataCell>
         <StatusBadge status={statusOf(user)} />
       </DataCell>

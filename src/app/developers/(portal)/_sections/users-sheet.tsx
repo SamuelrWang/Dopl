@@ -2,19 +2,20 @@
 
 /** A user over the list: identity, devices, the week, latest deliveries. */
 import { useEffect, useState } from "react";
-import { STATE_LABEL, STATUS_LABEL, userDelivered, userDeliveries, userRate, type Call, type DeviceState, type PortalUser } from "@/features/device-sdk/portal/view";
+import { STATE_LABEL, categoryIdOf, userDelivered, userDeliveries, userRate, type Call, type PortalUser } from "@/features/device-sdk/portal/view";
 import { modelById } from "@/features/device-sdk/portal/catalog";
-import { Badge, Button, ICON, Initials, StateDot, TwoLine, initialsOf, type Tone } from "../_design/ui";
+import { Badge, Button, ICON, Initials, StateDot, TwoLine, initialsOf } from "../_design/ui";
 import { StatTriple } from "../_design/ui-extras";
-import { BoxRow, Grow, ListRow, Row, SideSheet, Stack, Text } from "../_design/ui-page";
+import { SideSheet } from "../_design/ui-overlay";
+import { BoxRow, Grow, ListRow, Row, Stack, Text } from "../_design/ui-page";
+import { CategoryGlyph } from "../_components/category-glyph";
 import { BASE, fmt, since } from "../_components/format";
 import { usePortal } from "../_components/portal-store";
 import { readFeed } from "../_components/use-live-calls";
-import { STATUS_TONE, deviceNameOf } from "./activity";
-import { DeviceGlyph, StatusBadge } from "./users-table";
+import { CallStatusBadge, deviceNameOf } from "./activity-parts";
+import { STATE_BADGE, StatusBadge } from "./users-table";
 import { devicesInOrder, statusOf } from "./users-model";
 
-export const STATE_BADGE: Record<DeviceState, Tone> = { online: "ok", offline: "neutral", stale: "warn", needs_relink: "error" };
 const LATEST = 5;
 
 export function UserSheet({ user, onClose }: { user: PortalUser; onClose: () => void }) {
@@ -65,7 +66,7 @@ export function UserSheet({ user, onClose }: { user: PortalUser; onClose: () => 
         {user.devices.length === 0 && <Text kind="faint">None</Text>}
         {devicesInOrder(user).map((d) => (
           <BoxRow key={d.id}>
-            <DeviceGlyph device={d} size={ICON} />
+            <CategoryGlyph id={categoryIdOf(d.modelId)} size={ICON} />
             <TwoLine
               title={
                 <Row>
@@ -96,7 +97,7 @@ export function UserSheet({ user, onClose }: { user: PortalUser; onClose: () => 
             <ListRow key={c.id} line={i < deliveries.length - 1}>
               <TwoLine strong={false} title={c.title} sub={deviceNameOf([user], c.deviceId) ?? "No device"} />
               <Grow />
-              <Badge tone={STATUS_TONE[c.status]}>{STATUS_LABEL[c.status]}</Badge>
+              <CallStatusBadge status={c.status} noDot />
               <Text kind="smallMuted" nowrap>
                 {since(c.at)}
               </Text>

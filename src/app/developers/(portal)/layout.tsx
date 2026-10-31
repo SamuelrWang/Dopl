@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { hasIssues } from "@/features/device-sdk/portal/view";
 import { designFont } from "./_design/font";
+import { FontScope } from "./_design/font-scope";
 import { PortalShell } from "./_components/portal-shell";
 import { PortalProvider } from "./_components/portal-store";
 import { BASE } from "./_components/format";
@@ -25,9 +26,8 @@ export default async function Layout({ children }: { children: ReactNode }) {
   return (
     <PortalProvider data={{ email: scope.email, projects: scope.projects, project: scope.project, env: scope.env, now: scope.now.toISOString() }}>
       <PortalShell fontClass={designFont.className} counts={{ issues: snapshot.issues.length, attention: snapshot.users.filter(hasIssues).length, find }}>
-        <div key={`${scope.project.id}:${scope.env}`} className={designFont.className} style={{ display: "contents" }}>
-          {children}
-        </div>
+        {/* Keyed so a page's own state starts over when the project or environment changes. */}
+        <FontScope key={`${scope.project.id}:${scope.env}`}>{children}</FontScope>
       </PortalShell>
     </PortalProvider>
   );

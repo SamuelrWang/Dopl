@@ -6,15 +6,11 @@ import { getInviteForToken } from "@/features/device-sdk/server/portal-invites";
 import { AcceptInvite } from "./accept-invite";
 
 /**
- * `/developers/invite/{token}` — accept a developer org invite (P3). Signed-in only: the proxy
- * gates `/developers`, and a signed-out visitor comes back here after signing in or signing up.
- * The token is the secret; the page shows the org, the role and the invited email, and the Accept
- * call re-checks everything server-side (the confirmed email must match).
- * ⚠ The token sits in this URL's PATH, so it can reach access logs; it is single-use, email-bound
- * and expires in 7 days, which is what bounds that, and `referrer: "no-referrer"` keeps it out of
- * any Referer header a link on this page would send.
+ * Accepts a developer org invite, signed in only; a signed-out visitor comes back here after signing in.
+ * The Accept call re-checks everything server-side (the confirmed email must match).
+ * ⚠ The token sits in this URL's PATH, so it can reach access logs. Being single-use, email-bound and
+ * expiring in 7 days is what bounds that, and `no-referrer` keeps it out of any Referer header.
  */
-/** The token is in this path: never send it onward as a Referer. */
 export const metadata: Metadata = { referrer: "no-referrer" };
 
 export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
@@ -26,7 +22,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   const state = !invite
     ? ({ kind: "missing" } as const)
     : invite.state === "accepted" && invite.acceptedBy === user.id
-      ? ({ kind: "joined", orgId: invite.orgId } as const)
+      ? ({ kind: "joined" } as const)
       : invite.state !== "open"
         ? ({ kind: invite.state } as const)
         : (user.email ?? "").trim().toLowerCase() !== invite.email

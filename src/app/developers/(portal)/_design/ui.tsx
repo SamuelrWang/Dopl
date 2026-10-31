@@ -14,15 +14,15 @@ import f from "./forms.module.css";
 import side from "./sidebar.module.css";
 import o from "./surfaces.module.css";
 
-export { PillMenu, PopMenu, Segmented, Switch, type PillOption } from "./interactive";
+export { PillMenu, PopMenu, Segmented, SegmentedBy, Switch, withAll, type PillOption } from "./interactive";
 export { Initials, cx, initialsOf, ICON, ICON_SM } from "./components";
 
 /* Buttons */
 /** `ink` and `dangerFlat` are the flat page actions; `primary` and `danger` carry the raised ring. */
-export type ButtonVariant = "primary" | "ink" | "secondary" | "ghost" | "danger" | "dangerFlat" | "dangerOutline";
+type ButtonVariant = "primary" | "ink" | "secondary" | "ghost" | "danger" | "dangerFlat" | "dangerOutline";
 const BUTTON: Record<ButtonVariant, string | undefined> = { primary: b.primary, ink: b.ink, secondary: undefined, ghost: b.ghost, danger: b.danger, dangerFlat: b.dangerFlat, dangerOutline: b.dangerOutline };
 
-export interface ButtonProps {
+interface ButtonProps {
   variant?: ButtonVariant;
   size?: "sm" | "md" | "lg";
   /** Icon-only and square; pass the icon as children and name it with `label`. */
@@ -65,21 +65,6 @@ export function Button({ variant = "secondary", size = "md", square, full, block
     <button ref={buttonRef} type="button" className={className} aria-label={label} aria-pressed={pressed} aria-expanded={expanded} aria-haspopup={haspopup} title={title} disabled={disabled} onClick={onClick}>
       {body}
     </button>
-  );
-}
-
-/** One black button with a menu half, as in the reference. */
-export function SplitButton({ onClick, onMore, moreLabel, children, more }: { onClick?: () => void; onMore?: () => void; moreLabel: string; children: ReactNode; more: ReactNode }) {
-  return (
-    <span className={b.split}>
-      <button type="button" className={b.splitMain} onClick={onClick}>
-        {children}
-      </button>
-      <span className={b.splitDivider} />
-      <button type="button" aria-label={moreLabel} className={b.splitMore} onClick={onMore}>
-        {more}
-      </button>
-    </span>
   );
 }
 

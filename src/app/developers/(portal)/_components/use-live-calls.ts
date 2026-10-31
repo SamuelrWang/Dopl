@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Call, CallStatus } from "@/features/device-sdk/portal/view";
 import { setPortalClock } from "./format";
 import { usePortal } from "./portal-store";
@@ -19,8 +19,12 @@ type FeedParams = Record<string, string | undefined>;
 export async function readFeed(project: string, env: string, params: FeedParams, signal?: AbortSignal): Promise<{ calls: Call[]; now: string } | null> {
   const query = new URLSearchParams({ project, env });
   for (const [k, v] of Object.entries(params)) if (v) query.set(k, v);
-  const res = await fetch(`/api/developers/activity?${query}`, { signal }).catch(() => null);
-  return res?.ok ? ((await res.json()) as { calls: Call[]; now: string }) : null;
+  try {
+    const res = await fetch(`/api/developers/activity?${query}`, { signal });
+    return res.ok ? ((await res.json()) as { calls: Call[]; now: string }) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Keeps `current` itself when nothing changed, so an idle poll renders nothing new. */
@@ -50,6 +54,7 @@ export function useLiveCalls(initial: Call[], source?: "webhooks") {
   }
   const [more, setMore] = useState(initial.length >= OLDER_ROWS);
   const [loading, setLoading] = useState(false);
+  // Each answered poll renders, even with no new rows, so "2m ago" keeps moving with the clock it just set.
   const [, setBeat] = useState(0);
   const held = useRef(calls);
   useEffect(() => {
@@ -75,7 +80,7 @@ export function useLiveCalls(initial: Call[], source?: "webhooks") {
           open: held.current.filter((c) => MOVING.includes(c.status)).slice(0, MAX_OPEN).map((c) => c.id).join(","),
         },
         abort.signal
-      ).catch(() => null);
+      );
       busy = false;
       if (abort.signal.aborted) return;
       if (body) {
@@ -95,7 +100,7 @@ export function useLiveCalls(initial: Call[], source?: "webhooks") {
     };
   }, [project.id, env, source]);
 
-  const loadOlder = useCallback(async () => {
+  const loadOlder = async () => {
     const oldest = held.current.at(-1)?.at;
     if (!oldest) return;
     setLoading(true);
@@ -104,7 +109,7 @@ export function useLiveCalls(initial: Call[], source?: "webhooks") {
     if (!body) return;
     setCalls((c) => merged(c, body.calls));
     setMore(body.calls.length >= OLDER_ROWS && held.current.length < KEPT);
-  }, [project.id, env, source]);
+  };
 
   return { calls, more, loading, loadOlder };
 }

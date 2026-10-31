@@ -438,3 +438,13 @@ The 13 checks above stand. Verified against the tree: cron schedules in `vercel.
 - **Check 4:** `select last_seen from devices where id::text like '127f88ed-%'` should keep moving.
 - **Check 10:** `--say` needs nothing but the network. Without `--say`, the bridge needs `~/.dopl/google-home-bridge.json` at mode 600 and refuses to start otherwise. Its first run installs `bonjour-service`, so it needs internet once.
 - **Check 13:** the seed rows moved if `select max(ts) from dev_events where event_id::text like '5eed0000-%'` is within the last day.
+
+## Final cleanup: UI half (2026-10-31)
+
+Read all of `src/app/developers`. No size, spacing, radius, type or copy changed; `--u` stays 0.72.
+
+- **Removed:** the unused SplitButton, Dropzone, TextArea, PairWell, QrPattern, BoxList, BoxListRow, WarnNote, MenuLine, DetailsPane, FieldGrid, PreviewStage, RuleRow, InkPrompt, `g2Wrap`, the old className Card and every CSS rule only they used, plus other rules no code reached. The gallery keeps recipes real pages don't use yet.
+- **One implementation:** CopyButton and CopyWell (4 hand-rolled copies), ProblemAlert (7), DoneFoot (3), FilterChips (2), SegmentedBy (6), `withAll` (2), `useNotice` (3), FontScope (3), `writePortalCookie` (2), and CallStatusBadge with the name lookups in `activity-parts.tsx`, which also ends the `activity` and `activity-detail` import cycle.
+- **Split:** `ui-overlay.tsx` from `ui-page.tsx`, `team-flows.tsx` from `team.tsx`.
+- **Bugs fixed:** pressing Enter twice in Create key could create two keys and lose the first secret. New project could post an empty name on Enter, double-post, and kept an old error showing. A bad JSON body on Load older left its spinner on forever. Returning to a tab re-read the page twice (focus and visibilitychange), three times on Webhooks. Clipboard refusals went unhandled outside API keys. Issues read each title twice to a screen reader.
+- **Gates:** eslint clean on `src/app/developers`. Vitest on `sections.test.tsx` and `design-guard.test.ts`: 57 passed. One typecheck scoped to this tree and the docs: its only errors are `UUID` from `portal-http.ts`, which the server cleanup is editing. No `next build`, not opened in a browser.

@@ -9,28 +9,10 @@ import { getTextWidth } from "@evenrealities/pretext";
 import { useEffect, useRef } from "react";
 import x from "./output.module.css";
 
-export const G2 = { width: 576, height: 288, lineHeight: 27, maxLines: 10, textWidth: 552, inset: 12 } as const;
+const G2 = { width: 576, height: 288, lineHeight: 27, maxLines: 10, textWidth: 552, inset: 12 } as const;
 const SAMPLE = "The quick brown fox jumps over the lazy dog, 0123456789";
 /** Cuts the edge blur of browser text down to the hard steps of a low-resolution panel. */
 const levelOf = (v: number) => (v > 120 ? 1 : v > 70 ? 0.45 : 0);
-
-/** Greedy word wrap on the firmware's own widths. */
-export function g2Wrap(text: string): string[] {
-  const lines: string[] = [];
-  for (const paragraph of text.split("\n")) {
-    let line = "";
-    for (const word of paragraph.split(/\s+/).filter(Boolean)) {
-      const next = line ? `${line} ${word}` : word;
-      if (getTextWidth(next) <= G2.textWidth) line = next;
-      else {
-        if (line) lines.push(line);
-        line = word;
-      }
-    }
-    lines.push(line);
-  }
-  return lines;
-}
 
 function draw(canvas: HTMLCanvasElement, lines: string[]) {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });

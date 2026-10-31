@@ -7,12 +7,12 @@ import { useState } from "react";
 import { scopesCover } from "@/features/device-sdk/delivery/resolve-profile";
 import { modelById, trail } from "@/features/device-sdk/portal/catalog";
 import { STATE_LABEL, categoryIdOf, userDeliveries, userRate, type Call, type OwnedDevice, type PortalUser } from "@/features/device-sdk/portal/view";
-import { Badge, Card, ICON, Initials, Segmented, StatCard, TwoLine, initialsOf } from "../_design/ui";
+import { Badge, Card, ICON, Initials, SegmentedBy, StatCard, TwoLine, initialsOf } from "../_design/ui";
 import { Between, Breadcrumbs, CardFoot, CardHead, CardSection, ChipRow, EmptyState, Figure, FigureWell, Grow, ListRow, Mark, Page, Row, Stack, StatRow, Text } from "../_design/ui-page";
 import { BASE, fmt, since } from "../_components/format";
 import { CategoryGlyph } from "../_components/category-glyph";
 import { CallsBrowser } from "./activity";
-import { STATE_BADGE } from "./users-sheet";
+import { STATE_BADGE } from "./users-table";
 
 const TABS = [
   { key: "devices", label: "Devices" },
@@ -87,7 +87,7 @@ export function UserPageSection({ user, calls, initialTab }: { user: PortalUser;
       </Row>
     </Stack>
   );
-  const tabs = <Segmented label="User sections" options={TABS.map((t) => t.label)} value={TABS.findIndex((t) => t.key === tab)} onChange={(i) => setTab(TABS[i].key)} />;
+  const tabs = <SegmentedBy label="User sections" options={TABS} value={tab} onChange={setTab} />;
 
   if (tab === "deliveries") {
     return (

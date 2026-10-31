@@ -10,7 +10,7 @@ import tokens from "./tokens.module.css";
 import { Initials, PopMenu, TwoLine, initialsOf } from "./ui";
 import { Text } from "./ui-page";
 
-/** One surface: sidebar, then content. `rootClass` keeps the app's reset for pages not yet moved. */
+/** One surface: sidebar, then content. `rootClass` carries the app shell's reset. */
 export function PortalFrame({ rootClass, sidebar, children }: { rootClass?: string; sidebar: ReactNode; children: ReactNode }) {
   return (
     <div className={cx(rootClass, side.portal, tokens.scope)}>

@@ -3,6 +3,13 @@ export const BASE = "/developers";
 export const PROJECT_COOKIE = "dopl_dev_project";
 export const ENV_COOKIE = "dopl_dev_env";
 
+const YEAR_S = 365 * 86_400;
+
+/** The chosen project or environment, for `loadScope` to read. Call from the browser. */
+export function writePortalCookie(name: string, value: string): void {
+  document.cookie = `${name}=${value}; path=/developers; max-age=${YEAR_S}; samesite=lax`;
+}
+
 let clock = 0;
 
 export function setPortalClock(iso: string): void {

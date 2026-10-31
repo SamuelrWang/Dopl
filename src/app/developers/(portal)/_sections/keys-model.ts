@@ -1,5 +1,6 @@
 /** The API keys page's rules: what a key's state is and what each view keeps. */
 import type { KeyView as Key } from "@/features/device-sdk/portal/view";
+import type { Tone } from "../_design/ui";
 import { portalNow } from "../_components/format";
 
 export type KeyKind = Key["kind"];
@@ -21,7 +22,7 @@ function quietDays(k: Key) {
   return days(last);
 }
 
-export const isExpired = (k: Key) => k.expiresAt !== null && Date.parse(k.expiresAt) <= portalNow();
+const isExpired = (k: Key) => k.expiresAt !== null && Date.parse(k.expiresAt) <= portalNow();
 export const isDead = (k: Key) => k.revokedAt !== null || isExpired(k);
 const isUnused = (k: Key) => !isDead(k) && quietDays(k) >= UNUSED_DAYS;
 export const inUse = (k: Key) => !isDead(k) && k.lastUsedAt !== null && minsSince(k.lastUsedAt) < DAY;
@@ -32,12 +33,12 @@ export function keepsKey(k: Key, view: KeyTab, q: string) {
   return inView && (!needle || [k.name, k.prefix, ...k.scopes].some((text) => text.toLowerCase().includes(needle)));
 }
 
-export function stateOf(k: Key): { label: string; tone: "ok" | "warn" | "plain" } {
-  if (k.revokedAt) return { label: "Revoked", tone: "plain" };
-  if (isExpired(k)) return { label: "Expired", tone: "plain" };
+export function stateOf(k: Key): { label: string; tone: Tone } {
+  if (k.revokedAt) return { label: "Revoked", tone: "neutral" };
+  if (isExpired(k)) return { label: "Expired", tone: "neutral" };
   if (isUnused(k)) return { label: `Unused ${quietDays(k)}d`, tone: "warn" };
   if (inUse(k)) return { label: "In use", tone: "ok" };
-  return { label: k.lastUsedAt && Date.parse(k.lastUsedAt) > Date.parse(k.createdAt) ? "Idle" : "Not used yet", tone: "plain" };
+  return { label: k.lastUsedAt && Date.parse(k.lastUsedAt) > Date.parse(k.createdAt) ? "Idle" : "Not used yet", tone: "neutral" };
 }
 
 /** A rotated-out key still works until this. */

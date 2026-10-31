@@ -68,13 +68,13 @@ export function OverviewSection(props: OverviewProps) {
   const answers: Record<string, string> = {
     "Why are deliveries failing?": worst ? `${worst.title}: ${fmt(worst.count)} ${worst.countLabel}. ${worst.why}` : "Nothing is failing this week.",
     "Which users need a relink?": relink.length ? relink.slice(0, 3).map((u) => u.name).join(", ") + (relink.length > 3 ? ` and ${relink.length - 3} more.` : ".") : "None.",
-    "What changed this week?": `${counted(week.deliveries, "delivery", "deliveries")} against ${counted(before.deliveries, "delivery", "deliveries")} the week before. ${newUsers} new ${newUsers === 1 ? "user" : "users"}, ${issues.length} open ${issues.length === 1 ? "issue" : "issues"}.`,
+    "What changed this week?": `${counted(week.deliveries, "delivery", "deliveries")} against ${counted(before.deliveries, "delivery", "deliveries")} the week before. ${newUsers} new ${newUsers === 1 ? "user" : "users"}, ${counted(issues.length, "open issue", "open issues")}.`,
   };
-  const summary = `${counted(week.deliveries, "delivery", "deliveries")} this week${week.deliveries ? `, ${rate}% taken by a device` : ""}. ${worst ? `${issues.length} ${issues.length === 1 ? "issue" : "issues"} open; ${worst.title.toLowerCase()} is the largest, with ${fmt(worst.count)} ${worst.countLabel}.` : "Nothing needs you."}`;
+  const summary = `${counted(week.deliveries, "delivery", "deliveries")} this week${week.deliveries ? `, ${rate}% taken by a device` : ""}. ${worst ? `${counted(issues.length, "issue")} open; ${worst.title.toLowerCase()} is the largest, with ${fmt(worst.count)} ${worst.countLabel}.` : "Nothing needs you."}`;
 
   return (
     <Page fit>
-      <PageHeader title="Overview" test={test} action={worst && <Button href={`${BASE}/issues`}>{issues.length} open {issues.length === 1 ? "issue" : "issues"}<ArrowRight {...ICON} aria-hidden="true" /></Button>} />
+      <PageHeader title="Overview" test={test} action={worst && <Button href={`${BASE}/issues`}>{counted(issues.length, "open issue", "open issues")}<ArrowRight {...ICON} aria-hidden="true" /></Button>} />
       {test && (
         <Banner icon={FlaskConical} action="Switch to Live" onAction={() => setEnv("live")}>
           Test environment. Nothing here reaches real users.

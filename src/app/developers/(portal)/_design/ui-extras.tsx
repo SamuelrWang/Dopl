@@ -1,15 +1,15 @@
 "use client";
 
-/** Single-purpose parts: a code to read, a file to drop, a date range, a plan, a notice. */
-import { Check, ChevronLeft, ChevronRight, Calendar, FileImage, Upload, X, type LucideIcon } from "lucide-react";
-import { createElement, useRef, useState, type ReactNode } from "react";
+/** Single-purpose parts: a code to read, a date range, a plan, a notice. */
+import { Calendar, Check, ChevronLeft, ChevronRight, X, type LucideIcon } from "lucide-react";
+import { createElement, useState, type ReactNode } from "react";
 import b from "./base.module.css";
 import { cx, ICON, ICON_SM } from "./components";
 import d from "./data.module.css";
 import x from "./extras.module.css";
 import o from "./surfaces.module.css";
 import { Badge, Button, Chip, PopMenu } from "./ui";
-import { PlainButton, Text } from "./ui-page";
+import { Text } from "./ui-page";
 
 /** A short code, one box per character, read off one screen and typed on another. */
 export function CodeCells({ value }: { value: string }) {
@@ -24,63 +24,13 @@ export function CodeCells({ value }: { value: string }) {
   );
 }
 
-/** Drop or choose one image. Once chosen, the file's row takes its place. */
-export function Dropzone({ title, sub, fileName, onPick, onClear }: { title: string; sub: string; fileName?: string; onPick: (file: File) => void; onClear: () => void }) {
-  const input = useRef<HTMLInputElement>(null);
-  const [over, setOver] = useState(false);
-  if (fileName) {
-    return (
-      <div className={cx(b.box, d.fileRow)}>
-        <FileImage {...ICON} aria-hidden="true" />
-        <Text clip>{fileName}</Text>
-        <span className={b.grow} />
-        <PlainButton label={`Remove ${fileName}`} onClick={onClear}>
-          <X {...ICON} className={b.iconSoft} />
-        </PlainButton>
-      </div>
-    );
-  }
-  return (
-    <button
-      type="button"
-      className={cx(x.drop, over && x.dropOver)}
-      onClick={() => input.current?.click()}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setOver(true);
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setOver(false);
-        const file = e.dataTransfer.files[0];
-        if (file) onPick(file);
-      }}
-    >
-      <input
-        ref={input}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onPick(file);
-        }}
-      />
-      <Upload {...ICON} aria-hidden="true" />
-      <Text kind="strong">{title}</Text>
-      <Text kind="smallMuted">{sub}</Text>
-    </button>
-  );
-}
-
-export interface DateSpan {
+interface DateSpan {
   from: string;
   to: string;
 }
 const DAY_NAMES = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const iso = (y: number, m: number, day: number) => new Date(Date.UTC(y, m, day)).toISOString().slice(0, 10);
-export const spanLabel = (s: DateSpan) => {
+const spanLabel = (s: DateSpan) => {
   const fmt = (v: string) => new Date(`${v}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
   return s.from === s.to ? fmt(s.from) : `${fmt(s.from)} to ${fmt(s.to)}`;
 };

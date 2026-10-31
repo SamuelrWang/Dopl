@@ -1,13 +1,15 @@
 "use client";
 
 /** Everything that interrupts the list: the create flow, the once-only reveal, rotate and revoke. */
-import { Activity, AlertTriangle, Check, Copy, Cpu, Link2, RefreshCw, Send, type LucideIcon } from "lucide-react";
+import { Activity, AlertTriangle, Cpu, Link2, RefreshCw, Send, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { KEY_SCOPES } from "@/features/device-sdk/portal/catalog";
 import { counted, type KeyView } from "@/features/device-sdk/portal/view";
 import type { Environment as Env } from "@/features/device-sdk/types";
-import { Badge, Button, ICON_SM, Segmented, TwoLine } from "../_design/ui";
-import { Alert, ChipRow, CodeBlock, CodeDim, CodeStrong, ConfirmDialog, FlowDialog, Grow, Mark, ReviewWell, Row, SecretWell, Stack, Text, TextField, Tile, Tiles } from "../_design/ui-page";
+import { errorText } from "../../_lib/client-api";
+import { Badge, Button, Segmented, TwoLine } from "../_design/ui";
+import { ConfirmDialog, DoneFoot, FlowDialog, Tile, Tiles } from "../_design/ui-overlay";
+import { Alert, ChipRow, CodeBlock, CodeDim, CodeStrong, CopyWell, Grow, Mark, ProblemAlert, ReviewWell, Row, Stack, Text, TextField } from "../_design/ui-page";
 import { since } from "../_components/format";
 import { KIND_GLYPH } from "./keys-card";
 import { GRACE, inUse, type KeyKind } from "./keys-model";
@@ -19,30 +21,6 @@ const SCOPE_GLYPH: Record<string, LucideIcon> = { "actions:write": Send, "device
 const STEP_TYPE = "Choose a key type";
 const STEP_SCOPES = "Choose what it can do";
 const STEP_NAME = "Name this key";
-
-const copyText = (text: string) => void navigator.clipboard?.writeText(text)?.catch(() => {});
-
-export function CopyWell({ value, label }: { value: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <SecretWell
-      value={value}
-      action={
-        <Button
-          size="sm"
-          label={label}
-          onClick={() => {
-            copyText(value);
-            setCopied(true);
-          }}
-        >
-          {copied ? <Check {...ICON_SM} aria-hidden="true" /> : <Copy {...ICON_SM} aria-hidden="true" />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      }
-    />
-  );
-}
 
 function Reveal({ kind, token }: { kind: KeyKind; token: string }) {
   return (
@@ -65,15 +43,6 @@ function Reveal({ kind, token }: { kind: KeyKind; token: string }) {
     </Stack>
   );
 }
-
-const DoneFoot = ({ onDone }: { onDone: () => void }) => (
-  <>
-    <Grow />
-    <Button variant="ink" onClick={onDone}>
-      Done
-    </Button>
-  </>
-);
 
 /** A rotation's new secret, on its own. */
 export function RevealDialog({ row, env, token, onDone }: { row: KeyView; env: Env; token: string; onDone: () => void }) {
@@ -106,13 +75,13 @@ export function CreateKeyFlow({ env, initialKind, onCreate, onClose }: { env: En
   const last = step === steps.length - 1;
   const canContinue = title === STEP_TYPE ? kind !== null : title === STEP_SCOPES ? scopes.length > 0 : name.trim() !== "";
   const create = async () => {
-    if (!kind || !canContinue) return;
+    if (!kind || !canContinue || busy) return;
     setBusy(true);
     setProblem(null);
     try {
       setToken(await onCreate({ name: name.trim(), kind, scopes }));
     } catch (e) {
-      setProblem(e instanceof Error && e.message ? e.message : "Could not create this key.");
+      setProblem(errorText(e, "Could not create this key."));
     } finally {
       setBusy(false);
     }
@@ -182,11 +151,7 @@ export function CreateKeyFlow({ env, initialKind, onCreate, onClose }: { env: En
               </Badge>
             ))}
           </ChipRow>
-          {problem && (
-            <Alert tone="error" icon={AlertTriangle}>
-              {problem}
-            </Alert>
-          )}
+          <ProblemAlert problem={problem} />
         </Stack>
       )}
     </FlowDialog>

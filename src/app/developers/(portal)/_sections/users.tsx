@@ -2,7 +2,7 @@
 
 /** Users: the figures for what is on screen, then find anyone, then one row per user. */
 import { Download, SearchX, UserRoundX } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { DAY_MS, activeWithin, counted, hasIssues, hasStale, needsRelink, userDeliveries, userRate, LOW_RATE, type PortalUser } from "@/features/device-sdk/portal/view";
 import { Button, ICON, StatCard } from "../_design/ui";
 import { EmptyState, Page, PageHeader, StatRow } from "../_design/ui-page";
@@ -23,7 +23,6 @@ export function UsersSection({ users }: { users: PortalUser[] }) {
 
   const rows = useMemo(() => sortUsers(users.filter((u) => matches(u, filters) && inQuick(u, quick)), sort), [users, filters, quick, sort]);
   const open = openId ? (users.find((u) => u.id === openId) ?? null) : null;
-  const closeSheet = useCallback(() => setOpenId(null), []);
   const patch = (next: Partial<UserFilters>) => {
     setFilters((f) => ({ ...f, ...next }));
     setPage(1);
@@ -42,7 +41,7 @@ export function UsersSection({ users }: { users: PortalUser[] }) {
   const hasFilter = quick !== "all" || Object.entries(filters).some(([k, v]) => v !== NO_FILTERS[k as keyof UserFilters]);
 
   return (
-    <Page fit overlays={open && <UserSheet user={open} onClose={closeSheet} />}>
+    <Page fit overlays={open && <UserSheet user={open} onClose={() => setOpenId(null)} />}>
       <PageHeader
         title="Users"
         test={test}

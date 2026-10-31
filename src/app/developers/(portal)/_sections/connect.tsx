@@ -4,17 +4,14 @@
  * Connect page: what the screen Dopl hosts shows when an end user links a device, as it stands. Read only until
  * branding can be saved. Each session is created in code, so the snippet is the page's one action.
  */
-import { Check, Copy } from "lucide-react";
-import { useState } from "react";
-import { CAPABILITY_RISK_TIER, type RiskTier } from "@dopl/device-contracts";
+import { CAPABILITY_RISK_TIER, RISK_TIERS } from "@dopl/device-contracts";
 import { TIER_LABEL, categoryById, type Integration } from "@/features/device-sdk/portal/catalog";
-import { Badge, Button, Card, ICON, ICON_SM, TwoLine } from "../_design/ui";
+import { Badge, Card, ICON, TwoLine } from "../_design/ui";
 import { LabeledField, SplitLayout, Swatch, TierRow } from "../_design/ui-output";
-import { Between, BoxRow, CodeBlock, Mark, Page, PageHeader, Row, Stack, Text } from "../_design/ui-page";
+import { Between, BoxRow, CodeBlock, CopyButton, Mark, Page, PageHeader, Row, Stack, Text } from "../_design/ui-page";
 import { CategoryGlyph } from "../_components/category-glyph";
 import { usePortal } from "../_components/portal-store";
 
-const TIERS: RiskTier[] = ["T0", "T1", "T2", "T3", "T4"];
 const SNIPPET = `const session = await dopl.connectSessions.create({
   external_user_id: "user_123",
   requested_scopes: ["presence.read", "present.*", "ask.choice"],
@@ -24,7 +21,6 @@ const SNIPPET = `const session = await dopl.connectSessions.create({
 
 export function ConnectSection({ branding, integrations }: { branding: { name: string; accent: string | null; logoUrl: string | null }; integrations: Integration[] }) {
   const { test } = usePortal();
-  const [copied, setCopied] = useState(false);
   const capabilities = Object.keys(CAPABILITY_RISK_TIER) as (keyof typeof CAPABILITY_RISK_TIER)[];
   return (
     <Page>
@@ -51,16 +47,7 @@ export function ConnectSection({ branding, integrations }: { branding: { name: s
             <Card>
               <Between>
                 <Text kind="h3">Start a session</Text>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    void navigator.clipboard?.writeText(SNIPPET);
-                    setCopied(true);
-                  }}
-                >
-                  {copied ? <Check {...ICON_SM} aria-hidden="true" /> : <Copy {...ICON_SM} aria-hidden="true" />}
-                  {copied ? "Copied" : "Copy"}
-                </Button>
+                <CopyButton text={SNIPPET} />
               </Between>
               <CodeBlock title="JavaScript">{SNIPPET}</CodeBlock>
             </Card>
@@ -84,7 +71,7 @@ export function ConnectSection({ branding, integrations }: { branding: { name: s
             <Card>
               <Text kind="h3">Permissions a session can ask for</Text>
               <Stack>
-                {TIERS.map((tier) => (
+                {RISK_TIERS.map((tier) => (
                   <TierRow key={tier} label={TIER_LABEL[tier]}>
                     {capabilities
                       .filter((c) => CAPABILITY_RISK_TIER[c] === tier)

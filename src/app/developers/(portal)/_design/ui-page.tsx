@@ -4,9 +4,9 @@
  * Page-level parts on top of ui.tsx: the frame, section headers, item cards, sheets and popups. Pages
  * compose these and add only their own grid widths. None takes a className. See README.md.
  */
-import { Check, ChevronLeft, ChevronRight, Undo2, X, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Copy, Undo2, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { createElement, useEffect, useRef, type ReactNode, type Ref } from "react";
+import { createElement, useState, type ReactNode, type Ref } from "react";
 import b from "./base.module.css";
 import c from "./catalog.module.css";
 import { cx, ICON, ICON_SM } from "./components";
@@ -17,7 +17,7 @@ import k from "./keys.module.css";
 import p from "./page.module.css";
 import o from "./surfaces.module.css";
 import tokens from "./tokens.module.css";
-import { Badge, Button } from "./ui";
+import { Badge, Button, Chip } from "./ui";
 
 /* Type */
 const TEXT = { title: b.title, h3: b.h3, strong: b.strong, text: b.text, muted: b.muted, small: b.small, smallMuted: b.smallMuted, faint: b.faint, onInk: b.onInk, token: k.token, mono: flow.mono, code: flow.code };
@@ -89,6 +89,23 @@ export function Breadcrumbs({ items }: { items: { label: string; href?: string }
 export const StatRow = ({ children }: { children: ReactNode }) => <div className={p.stats}>{children}</div>;
 export const Toolbar = ({ children }: { children: ReactNode }) => <div className={b.card}>{children}</div>;
 export const FilterRow = ({ children }: { children: ReactNode }) => <div className={p.filterRow}>{children}</div>;
+
+/** The filters that are on, each removable, then one way to clear them all. Nothing while none is on. */
+export function FilterChips<Patch>({ chips, onRemove, onClear }: { chips: { key: string; label: string; clear: Patch }[]; onRemove: (clear: Patch) => void; onClear: () => void }) {
+  if (chips.length === 0) return null;
+  return (
+    <FilterRow>
+      {chips.map((chip) => (
+        <Chip key={chip.key} kind="tag" removeLabel={`Remove ${chip.label}`} onRemove={() => onRemove(chip.clear)}>
+          {chip.label}
+        </Chip>
+      ))}
+      <Button variant="ghost" size="sm" onClick={onClear}>
+        Clear
+      </Button>
+    </FilterRow>
+  );
+}
 
 export function EmptyState({ icon, title, action }: { icon: LucideIcon; title: string; action?: ReactNode }) {
   return (
@@ -244,7 +261,6 @@ export function MenuItem({ onClick, children }: { onClick: () => void; children:
     </button>
   );
 }
-export const MenuLine = () => <div className={o.menuLine} />;
 
 export function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (page: number) => void }) {
   const near = Array.from({ length: pages }, (_, i) => i + 1).filter((n) => n === 1 || n === pages || Math.abs(n - page) <= 1);
@@ -268,100 +284,6 @@ export function Pager({ page, pages, onPage }: { page: number; pages: number; on
   );
 }
 
-function useEscape(onEscape: (() => void) | null) {
-  useEffect(() => {
-    if (!onEscape) return;
-    const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onEscape();
-    };
-    document.addEventListener("keydown", key);
-    return () => document.removeEventListener("keydown", key);
-  }, [onEscape]);
-}
-
-/* Over the page */
-export function SideSheet({ label, onClose, face, head, foot, children }: { label: string; onClose: () => void; /** A person's sheet: a black band with their face over its edge. */ face?: ReactNode; head: ReactNode; foot: ReactNode; children: ReactNode }) {
-  const close = useRef<HTMLButtonElement>(null);
-  useEffect(() => close.current?.focus(), []);
-  useEscape(onClose);
-  return (
-    <div className={p.sheetLayer}>
-      <button type="button" className={p.scrim} aria-label="Close" tabIndex={-1} onClick={onClose} />
-      <aside className={p.sheet} role="dialog" aria-modal="true" aria-label={label}>
-        {face && (
-          <div className={d.profileHead}>
-            <span className={d.profileFace}>{face}</span>
-            <span className={p.sheetBandClose}>
-              <PlainButton buttonRef={close} label="Close" onClick={onClose}>
-                <X {...ICON} />
-              </PlainButton>
-            </span>
-          </div>
-        )}
-        <div className={cx(p.sheetBody, Boolean(face) && p.sheetBodyFace)}>
-          <header className={b.between}>
-            {head}
-            {!face && (
-              <PlainButton buttonRef={close} label="Close" onClick={onClose}>
-                <X {...ICON} className={b.iconSoft} />
-              </PlainButton>
-            )}
-          </header>
-          {children}
-        </div>
-        <footer className={p.sheetFoot}>{foot}</footer>
-      </aside>
-    </div>
-  );
-}
-
-/** A popup flow's frame. Without onDismiss it closes only through its footer. */
-export function FlowDialog({ label, eyebrow, title, progress, onDismiss, foot, children }: { label: string; eyebrow: string; title: string; progress?: { step: number; of: number }; onDismiss: (() => void) | null; foot: ReactNode; children: ReactNode }) {
-  const dialog = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!dialog.current?.contains(document.activeElement)) dialog.current?.focus();
-  }, []);
-  useEscape(onDismiss);
-  return (
-    <div className={cx(flow.layer, tokens.scope)}>
-      <button type="button" className={flow.scrim} aria-label="Dismiss" tabIndex={-1} onClick={onDismiss ?? undefined} />
-      <div ref={dialog} className={flow.dialog} role="dialog" aria-modal="true" aria-label={label} tabIndex={-1}>
-        {onDismiss && (
-          <button type="button" className={cx(b.reset, flow.close)} onClick={onDismiss} aria-label="Close">
-            <X {...ICON} />
-          </button>
-        )}
-        <header className={flow.head}>
-          <span className={cx(b.smallMuted, b.num)}>{eyebrow}</span>
-          <Text kind="title" as="h2">
-            {title}
-          </Text>
-          {progress && (
-            <span className={flow.progress} aria-hidden="true">
-              {Array.from({ length: progress.of }, (_, i) => (
-                <i key={i} className={cx(flow.progressStep, i <= progress.step && flow.progressOn)} />
-              ))}
-            </span>
-          )}
-        </header>
-        <div className={flow.body}>{children}</div>
-        <footer className={flow.foot}>{foot}</footer>
-      </div>
-    </div>
-  );
-}
-
-export const Tiles = ({ cols = 2, children }: { cols?: 2 | 3; children: ReactNode }) => <div className={cols === 3 ? flow.tiles3 : flow.tiles2}>{children}</div>;
-
-export function Tile({ selected, disabled, onClick, children }: { selected: boolean; disabled?: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button type="button" aria-pressed={selected} disabled={disabled} onClick={onClick} className={cx(flow.tile, selected && flow.tileOn, disabled && flow.tileOff)}>
-      {selected && <Check {...ICON_SM} aria-hidden="true" className={flow.tileCheck} />}
-      {children}
-    </button>
-  );
-}
-
 /** Label over value in a two-up well: a popup's review. */
 export function ReviewWell({ items }: { items: [string, ReactNode][] }) {
   return (
@@ -376,38 +298,22 @@ export function ReviewWell({ items }: { items: [string, ReactNode][] }) {
   );
 }
 
-/** A short question over the page. Cancel holds focus. */
-export function ConfirmDialog({ label, mark, title, sub, cancel = "Cancel", onCancel, action, children }: { label: string; mark: ReactNode; title: string; sub: string; cancel?: string; onCancel: () => void; action: ReactNode; children?: ReactNode }) {
-  const first = useRef<HTMLButtonElement>(null);
-  useEffect(() => first.current?.focus(), []);
-  useEscape(onCancel);
-  return (
-    <div className={cx(flow.layer, tokens.scope)}>
-      <button type="button" className={flow.scrim} aria-label="Dismiss" tabIndex={-1} onClick={onCancel} />
-      <div className={cx(o.dialog, k.confirm)} role="alertdialog" aria-modal="true" aria-label={label}>
-        {mark}
-        <div className={b.tight}>
-          <span className={b.title}>{title}</span>
-          <span className={b.muted}>{sub}</span>
-        </div>
-        {children}
-        <div className={b.row}>
-          <Button full buttonRef={first} onClick={onCancel}>
-            {cancel}
-          </Button>
-          {action}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function Alert({ tone, icon, children }: { tone: "warn" | "error"; icon: LucideIcon; children: ReactNode }) {
   return (
     <div className={cx(o.alert, tone === "warn" ? o.alertWarn : o.alertError)}>
       {createElement(icon, { ...ICON, "aria-hidden": true })}
       {children}
     </div>
+  );
+}
+
+/** What the server refused, or nothing. */
+export function ProblemAlert({ problem }: { problem: string | null }) {
+  if (!problem) return null;
+  return (
+    <Alert tone="error" icon={AlertTriangle}>
+      {problem}
+    </Alert>
   );
 }
 
@@ -432,14 +338,6 @@ export function TextField({ label, placeholder, value, autoFocus, grow, type, mi
   );
 }
 
-export function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (next: string) => void }) {
-  return (
-    <label className={f.textarea}>
-      <textarea className={f.areaInput} aria-label={label} rows={4} value={value} onChange={(e) => onChange(e.target.value)} />
-    </label>
-  );
-}
-
 /** A value to copy, with its button. */
 export function SecretWell({ value, action }: { value: string; action: ReactNode }) {
   return (
@@ -449,6 +347,26 @@ export function SecretWell({ value, action }: { value: string; action: ReactNode
     </div>
   );
 }
+
+/** Copies on press and says so. Give it a `key` when what it copies can change under it. */
+export function CopyButton({ text, label, idle = "Copy" }: { text: string; label?: string; idle?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      size="sm"
+      label={label}
+      onClick={() => {
+        void navigator.clipboard?.writeText(text)?.catch(() => {});
+        setCopied(true);
+      }}
+    >
+      {copied ? <Check {...ICON_SM} aria-hidden="true" /> : <Copy {...ICON_SM} aria-hidden="true" />}
+      {copied ? "Copied" : idle}
+    </Button>
+  );
+}
+
+export const CopyWell = ({ value, label }: { value: string; label: string }) => <SecretWell value={value} action={<CopyButton text={value} label={label} />} />;
 
 export function CodeBlock({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -462,22 +380,3 @@ export function CodeBlock({ title, children }: { title: string; children: ReactN
 }
 export const CodeDim = ({ children }: { children: ReactNode }) => <span className={d.codeDim}>{children}</span>;
 export const CodeStrong = ({ children }: { children: ReactNode }) => <span className={d.codeStrong}>{children}</span>;
-
-/* Pairing */
-export const PairWell = ({ children }: { children: ReactNode }) => <div className={flow.pair}>{children}</div>;
-
-export function QrPattern({ seed }: { seed: string }) {
-  // A deterministic, decorative pattern: the real page draws the pairing QR.
-  const cells = Array.from({ length: 121 }, (_, i) => (seed.charCodeAt(i % seed.length) * (i + 7) * 2654435761) % 7 < 3);
-  return (
-    <span className={flow.qr} aria-label="Pairing code" role="img">
-      {cells.map((on, i) => (
-        <i key={i} className={on ? flow.qrOn : undefined} />
-      ))}
-    </span>
-  );
-}
-
-export const BoxList = ({ children }: { children: ReactNode }) => <ul className={b.box}>{children}</ul>;
-export const BoxListRow = ({ children }: { children: ReactNode }) => <li className={flow.testRow}>{children}</li>;
-export const WarnNote = ({ children }: { children: ReactNode }) => <p className={cx(b.small, flow.warning)}>{children}</p>;

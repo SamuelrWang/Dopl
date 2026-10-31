@@ -13,7 +13,7 @@ import { BASE } from "./format";
 export interface FindEntry {
   id: string;
   label: string;
-  kind: "User" | "Device";
+  kind: "User" | "Device" | "Call";
   href: string;
 }
 
@@ -23,7 +23,7 @@ function search(entries: readonly FindEntry[], raw: string): FindEntry[] {
   const q = raw.trim().toLowerCase();
   if (q.length < 2) return [];
   const hits = entries.filter((e) => e.id.toLowerCase().includes(q) || e.label.toLowerCase().includes(q)).slice(0, 8);
-  return hits.length === 0 && UUID.test(q) ? [{ id: q, label: q, kind: "User", href: `${BASE}/activity?call=${q}` }] : hits;
+  return hits.length === 0 && UUID.test(q) ? [{ id: q, label: q, kind: "Call", href: `${BASE}/activity?call=${q}` }] : hits;
 }
 
 export function FindAnything({ entries }: { entries: readonly FindEntry[] }) {
@@ -40,7 +40,7 @@ export function FindAnything({ entries }: { entries: readonly FindEntry[] }) {
           <SearchHit
             key={`${h.kind}:${h.id}`}
             label={h.label}
-            kind={h.href.includes("/activity") ? "Call" : h.kind}
+            kind={h.kind}
             onClick={() => {
               setOpen(false);
               setQ("");

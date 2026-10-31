@@ -46,9 +46,7 @@
 .stepValue { display: flex; align-items: center; justify-content: center; width: calc(62.5 * var(--u)); height: 100%; font-size: calc(20 * var(--u)); font-weight: 500; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; box-shadow: inset calc(1.25 * var(--u)) 0 0 var(--line), inset calc(-1.25 * var(--u)) 0 0 var(--line); }
 .optionTile { display: flex; align-items: center; gap: calc(12.5 * var(--u)); padding: calc(15 * var(--u)) calc(13 * var(--u)); border-radius: var(--radius-box); background: var(--surface); box-shadow: var(--ring); }
 .optionTileOn { box-shadow: inset 0 0 0 calc(1.25 * var(--u)) var(--ink), 0 0 0 calc(2.5 * var(--u)) var(--pale); }
-.gridTwo { display: grid; grid-template-columns: 1fr 1fr; gap: calc(12.5 * var(--u)); }
 .fieldInput { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: none; font: inherit; letter-spacing: inherit; color: var(--ink); }
-.areaInput { flex: 1; width: 100%; padding: 0; border: 0; outline: 0; resize: none; background: none; font: inherit; line-height: calc(25 * var(--u)); letter-spacing: inherit; color: var(--ink); }
 .fieldInput::placeholder { color: var(--faint); }
 .field:focus-within { box-shadow: var(--ring-focus); }
 .fieldGrow { flex: 1; }

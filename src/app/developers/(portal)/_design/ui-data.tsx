@@ -8,7 +8,7 @@ import d from "./data.module.css";
 import { Meter } from "./ui";
 import { Text } from "./ui-page";
 
-export interface Bar {
+interface Bar {
   key: string;
   value: number;
   label: string;
@@ -45,22 +45,16 @@ export function BarChart({ bars, ticks = 6 }: { bars: Bar[]; ticks?: number }) {
 }
 
 /** A plan limit: name, used of limit, its meter. Red when nearly full. */
-function LimitRow({ label, used, limit }: { label: string; used: string; limit: string }) {
-  return (
-    <span className={c.limitHead}>
-      <Text>{label}</Text>
-      <Text kind="smallMuted" num nowrap>
-        {used} of {limit}
-      </Text>
-    </span>
-  );
-}
-
 export function Limit({ label, used, limit, goal, format = String }: { label: string; used: number; limit: number; /** Full is the aim, as with tests passed, so it never turns red. */ goal?: boolean; format?: (n: number) => string }) {
   const share = Math.min(100, Math.round((used / limit) * 100));
   return (
     <div className={c.limit}>
-      <LimitRow label={label} used={format(used)} limit={format(limit)} />
+      <span className={c.limitHead}>
+        <Text>{label}</Text>
+        <Text kind="smallMuted" num nowrap>
+          {format(used)} of {format(limit)}
+        </Text>
+      </span>
       <Meter value={share} tone={!goal && share >= 90 ? "error" : "ink"} />
     </div>
   );

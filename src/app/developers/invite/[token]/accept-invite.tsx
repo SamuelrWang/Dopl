@@ -1,23 +1,23 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Card } from "../../(portal)/_design/ui";
-import { designFont } from "../../(portal)/_design/font";
-import { Alert, Page, PageHeader, Stack, Text } from "../../(portal)/_design/ui-page";
+import { BASE } from "../../(portal)/_components/format";
+import { FontScope } from "../../(portal)/_design/font-scope";
+import { Page, PageHeader, ProblemAlert, Stack, Text } from "../../(portal)/_design/ui-page";
 import { errorText, portalCall } from "../../_lib/client-api";
 
-export type InviteState =
+type InviteState =
   | { kind: "open" }
-  | { kind: "joined"; orgId: string }
+  | { kind: "joined" }
   | { kind: "missing" }
   | { kind: "accepted" }
   | { kind: "revoked" }
   | { kind: "expired" }
   | { kind: "mismatch"; invited: string; signedIn: string };
 
-const DEAD: Record<"missing" | "accepted" | "revoked" | "expired", string> = {
+const DEAD: Partial<Record<InviteState["kind"], string>> = {
   missing: "This invite link is not valid.",
   accepted: "This invite was already used.",
   revoked: "This invite was revoked. Ask for a new one.",
@@ -28,6 +28,7 @@ export function AcceptInvite({ token, orgName, role, state }: { token: string; o
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dead = DEAD[state.kind];
 
   const accept = async () => {
     if (busy) return;
@@ -35,7 +36,7 @@ export function AcceptInvite({ token, orgName, role, state }: { token: string; o
     setError(null);
     try {
       await portalCall("/api/developers/invites/accept", "POST", { token });
-      router.push("/developers/team");
+      router.push(`${BASE}/team`);
       router.refresh();
     } catch (e) {
       setError(errorText(e, "Could not accept the invite"));
@@ -44,7 +45,7 @@ export function AcceptInvite({ token, orgName, role, state }: { token: string; o
   };
 
   return (
-    <div className={designFont.className} style={{ display: "contents" }}>
+    <FontScope>
       <Page>
         <PageHeader title={orgName ? `Join ${orgName}` : "Developer invite"} />
         <Card>
@@ -54,11 +55,7 @@ export function AcceptInvite({ token, orgName, role, state }: { token: string; o
                 <Text>
                   You are invited to {orgName} as {role}.
                 </Text>
-                {error && (
-                  <Alert tone="error" icon={AlertTriangle}>
-                    {error}
-                  </Alert>
-                )}
+                <ProblemAlert problem={error} />
                 <Button variant="ink" loading={busy} onClick={() => void accept()}>
                   Accept invite
                 </Button>
@@ -67,7 +64,7 @@ export function AcceptInvite({ token, orgName, role, state }: { token: string; o
             {state.kind === "joined" && (
               <>
                 <Text>You are already in {orgName}.</Text>
-                <Button variant="ink" href="/developers/team">
+                <Button variant="ink" href={`${BASE}/team`}>
                   Open the org
                 </Button>
               </>
@@ -77,10 +74,10 @@ export function AcceptInvite({ token, orgName, role, state }: { token: string; o
                 This invite is for {state.invited}. You are signed in as {state.signedIn}. Sign in with the invited email to accept it.
               </Text>
             )}
-            {(state.kind === "missing" || state.kind === "accepted" || state.kind === "revoked" || state.kind === "expired") && <Text>{DEAD[state.kind]}</Text>}
+            {dead && <Text>{dead}</Text>}
           </Stack>
         </Card>
       </Page>
-    </div>
+    </FontScope>
   );
 }

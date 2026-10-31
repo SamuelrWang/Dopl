@@ -7,14 +7,15 @@
 import { ChevronRight, Plus, SearchX, Webhook } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { STATUS_LABEL, counted, rateOf, type Call, type EndpointView } from "@/features/device-sdk/portal/view";
+import { counted, rateOf, type Call, type EndpointView } from "@/features/device-sdk/portal/view";
 import { errorText, portalCall } from "../../_lib/client-api";
-import { Badge, Button, Card, DataCell, DataRow, DataTable, ICON, PillMenu, SearchField, Segmented, StatCard, type Column } from "../_design/ui";
+import { Button, Card, DataCell, DataRow, DataTable, ICON, PillMenu, SearchField, Segmented, StatCard, type Column } from "../_design/ui";
 import { Between, CardSection, EmptyState, Page, PageHeader, Pager, StatRow, TableFoot, TableHead, Text, Toast } from "../_design/ui-page";
 import { fmt, since } from "../_components/format";
 import { useLiveRefresh, usePortal } from "../_components/portal-store";
 import { useLiveCalls } from "../_components/use-live-calls";
-import { STATUS_TONE } from "./activity";
+import { useNotice } from "../_components/use-notice";
+import { CallStatusBadge } from "./activity-parts";
 import { AddEndpointFlow } from "./webhooks-add";
 import { EndpointCard } from "./webhooks-card";
 import { EventSheet } from "./webhooks-sheet";
@@ -47,13 +48,9 @@ export function WebhooksSection({ endpoints, events: first }: { endpoints: Endpo
   const [view, setView] = useState(0);
   const [endpointId, setEndpointId] = useState("all");
   const [q, setQ] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
+  const { notice, say } = useNotice();
   const [busy, setBusy] = useState(false);
 
-  const say = (text: string) => {
-    setNotice(text);
-    window.setTimeout(() => setNotice((now) => (now === text ? null : now)), 3200);
-  };
   const rows = events.filter((c) => (endpointId === "all" || c.webhook!.endpointId === endpointId) && (view === 0 || isFailure(c)) && (q === "" || c.webhook!.event.includes(q.toLowerCase())));
   const pages = Math.max(1, Math.ceil(rows.length / SHOWN));
   const current = Math.min(page, pages);
@@ -121,7 +118,7 @@ export function WebhooksSection({ endpoints, events: first }: { endpoints: Endpo
         <StatCard label="Endpoints" value={fmt(endpoints.length)} hint={`${endpoints.filter((e) => e.state === "healthy").length} healthy`} />
         <StatCard label="Sent, 7d" value={fmt(sent)} hint="Across all endpoints" />
         <StatCard label="Delivered" value={delivered + failedCount ? `${rate}%` : "None"} hint="Answered with a 2xx" />
-        <StatCard label="Failed events" value={fmt(failedCount)} hint={`${failing.length} ${failing.length === 1 ? "endpoint" : "endpoints"} failing`} pressed={view === 1} onClick={() => setView(view === 1 ? 0 : 1)} />
+        <StatCard label="Failed events" value={fmt(failedCount)} hint={`${counted(failing.length, "endpoint")} failing`} pressed={view === 1} onClick={() => setView(view === 1 ? 0 : 1)} />
       </StatRow>
 
       {endpoints.length === 0 ? (
@@ -165,9 +162,7 @@ export function WebhooksSection({ endpoints, events: first }: { endpoints: Endpo
                       <Text clip>{c.webhook!.endpointName}</Text>
                     </DataCell>
                     <DataCell>
-                      <Badge tone={STATUS_TONE[c.status] ?? "neutral"} dot>
-                        {STATUS_LABEL[c.status]}
-                      </Badge>
+                      <CallStatusBadge status={c.status} />
                     </DataCell>
                     <DataCell>
                       <Text num>{lastCode(c) ?? "None"}</Text>

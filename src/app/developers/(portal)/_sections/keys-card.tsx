@@ -3,13 +3,12 @@
 /** A key: what it is, whether it is in use, what it may do, how much it does, what to do with it. */
 import { Globe, KeyRound, RefreshCw, type LucideIcon } from "lucide-react";
 import type { KeyView } from "@/features/device-sdk/portal/view";
-import { Badge, Button, Card, ICON_SM, Initials, initialsOf, type Tone } from "../_design/ui";
-import { AddCard, CardFoot, CardHead, ChipRow, Figure, FigureWell, Mark, Text } from "../_design/ui-page";
+import { Badge, Button, Card, ICON_SM, Initials, initialsOf } from "../_design/ui";
+import { CardFoot, CardHead, ChipRow, Figure, FigureWell, Mark, Text } from "../_design/ui-page";
 import { fmt, since } from "../_components/format";
 import { isDead, oldSecretLeft, stateOf, type KeyKind } from "./keys-model";
 
 export const KIND_GLYPH: Record<KeyKind, LucideIcon> = { secret: KeyRound, publishable: Globe };
-const TONE: Record<"ok" | "warn" | "plain", Tone> = { ok: "ok", warn: "warn", plain: "neutral" };
 
 export function KeyCard({ row, canManage, onRotate, onRevoke }: { row: KeyView; canManage: boolean; onRotate: () => void; onRevoke: () => void }) {
   const state = stateOf(row);
@@ -23,7 +22,7 @@ export function KeyCard({ row, canManage, onRotate, onRevoke }: { row: KeyView; 
         sub={<Text kind="token">{`${row.prefix}••••`}</Text>}
         badges={
           <>
-            <Badge tone={TONE[state.tone]} dot={state.tone === "ok"}>
+            <Badge tone={state.tone} dot={state.tone === "ok"}>
               {state.label}
             </Badge>
             {left && <Badge tone="warn">{left}</Badge>}
@@ -75,9 +74,4 @@ export function KeyCard({ row, canManage, onRotate, onRevoke }: { row: KeyView; 
       </CardFoot>
     </Card>
   );
-}
-
-/** Stands in for an empty section and starts the flow on that type. */
-export function AddKeyCard({ label, env, onClick }: { label: string; env: string; onClick: () => void }) {
-  return <AddCard wide title={label} sub={env} onClick={onClick} />;
 }

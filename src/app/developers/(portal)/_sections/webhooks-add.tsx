@@ -6,9 +6,9 @@ import { useState } from "react";
 import { LIVE_WEBHOOK_EVENTS } from "@/features/device-sdk/portal/catalog";
 import { portalCall, errorText } from "../../_lib/client-api";
 import { Button } from "../_design/ui";
-import { Alert, FlowDialog, Grow, Stack, Text, TextField, Tile, Tiles } from "../_design/ui-page";
+import { DoneFoot, FlowDialog, Tile, Tiles } from "../_design/ui-overlay";
+import { Alert, CopyWell, Grow, ProblemAlert, Stack, Text, TextField } from "../_design/ui-page";
 import { usePortal } from "../_components/portal-store";
-import { CopyWell } from "./keys-dialogs";
 
 export function AddEndpointFlow({ onClose }: { onClose: () => void }) {
   const { project, env } = usePortal();
@@ -42,14 +42,7 @@ export function AddEndpointFlow({ onClose }: { onClose: () => void }) {
         eyebrow={name}
         title="Copy your signing secret"
         onDismiss={null}
-        foot={
-          <>
-            <Grow />
-            <Button variant="ink" onClick={onClose}>
-              Done
-            </Button>
-          </>
-        }
+        foot={<DoneFoot onDone={onClose} />}
       >
         <Stack>
           <CopyWell value={secret} label="Copy secret" />
@@ -108,11 +101,7 @@ export function AddEndpointFlow({ onClose }: { onClose: () => void }) {
               );
             })}
           </Tiles>
-          {problem && (
-            <Alert tone="error" icon={AlertTriangle}>
-              {problem}
-            </Alert>
-          )}
+          <ProblemAlert problem={problem} />
         </Stack>
       )}
     </FlowDialog>

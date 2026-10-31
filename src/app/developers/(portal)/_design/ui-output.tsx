@@ -1,7 +1,7 @@
 "use client";
 
 /** What a device did with a call, drawn per capability. A device with no screen still has an output. */
-import { ArrowRight, CornerDownLeft, Image as ImageIcon, Pause, Play } from "lucide-react";
+import { ArrowRight, Image as ImageIcon, Pause, Play } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import b from "./base.module.css";
 import { cx, ICON } from "./components";
@@ -37,8 +37,6 @@ export function PanelScreen({ app, lines, children }: { app: string; lines: stri
   );
 }
 
-const barsOf = (text: string) => Array.from({ length: 44 }, (_, i) => 22 + ((text.charCodeAt(i % Math.max(text.length, 1)) || 60) * (i + 3) * 37) % 78);
-
 /** A card that fills its column, for pages that fit the window. */
 export const FillCard = ({ flush, children }: { flush?: boolean; children: ReactNode }) => <div className={cx(b.card, x.fill, flush && x.fillFlush)}>{children}</div>;
 /** Scrolls inside a FillCard, with any table's header held at the top. */
@@ -70,7 +68,6 @@ export function useFitRows(fallback: number) {
 export const FillBody = ({ even, children }: { /** Shares the card's height out between its rows. */ even?: boolean; children: ReactNode }) => <div className={cx(x.fillBody, even && x.fillEven)}>{children}</div>;
 /** Stacked rows that share a fit page's height equally. */
 export const FitRows = ({ children }: { children: ReactNode }) => <div className={x.fitRows}>{children}</div>;
-export const DetailsPane = ({ children }: { children: ReactNode }) => <div className={x.details}>{children}</div>;
 
 export function CodeEditor({ label, value, onChange }: { label: string; value: string; onChange: (next: string) => void }) {
   return (
@@ -80,6 +77,8 @@ export function CodeEditor({ label, value, onChange }: { label: string; value: s
     </div>
   );
 }
+
+const barsOf = (text: string) => Array.from({ length: 44 }, (_, i) => 22 + ((text.charCodeAt(i % Math.max(text.length, 1)) || 60) * (i + 3) * 37) % 78);
 
 /** Plays in the browser's own voice: close enough to hear the words and the length. */
 export function SpeakerOutput({ text }: { text: string }) {
@@ -173,8 +172,6 @@ export function CaptureOutput() {
   );
 }
 
-export const FieldGrid = ({ children }: { children: ReactNode }) => <div className={x.fieldGrid}>{children}</div>;
-
 /** A label over its control. */
 export function LabeledField({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -196,19 +193,6 @@ export function TierRow({ label, children }: { label: string; children: ReactNod
 }
 
 export const Swatch = ({ color }: { color: string }) => <span className={x.swatch} style={{ backgroundColor: color }} aria-hidden="true" />;
-export const PreviewStage = ({ children }: { children: ReactNode }) => <div className={x.previewStage}>{children}</div>;
-
-/** A setting: its name, where it comes from and what to do, then its value or editor at full width. */
-export function RuleRow({ label, children, actions }: { label: string; children: ReactNode; actions: ReactNode }) {
-  return (
-    <div className={x.ruleRow}>
-      <Text kind="strong">{label}</Text>
-      <div className={x.ruleActions}>{actions}</div>
-      <div className={x.ruleValue}>{children}</div>
-    </div>
-  );
-}
-
 /** The black frame: a tab of black on top, a white panel inside it. For the one thing a page leads with. */
 export function InkPanel({ title, icon, action, fill, children }: { title: string; icon?: ReactNode; action?: ReactNode; /** Takes its row's height. */ fill?: boolean; children: ReactNode }) {
   return (
@@ -224,28 +208,6 @@ export function InkPanel({ title, icon, action, fill, children }: { title: strin
 }
 export const InkQuote = ({ children }: { children: ReactNode }) => <div className={x.inkQuote}>{children}</div>;
 export const InkFoot = ({ children }: { children: ReactNode }) => <div className={x.inkFoot}>{children}</div>;
-
-/** A prompt line: type, then send. */
-export function InkPrompt({ value, placeholder, send, onChange, onSend }: { value: string; placeholder: string; send: string; onChange: (next: string) => void; onSend: () => void }) {
-  return (
-    <div className={x.inkPrompt}>
-      <input
-        className={x.inkInput}
-        aria-label={placeholder}
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && value.trim()) onSend();
-        }}
-      />
-      <button type="button" className={x.inkSend} disabled={!value.trim()} onClick={onSend}>
-        {send}
-        <CornerDownLeft {...ICON} aria-hidden="true" />
-      </button>
-    </div>
-  );
-}
 
 export const ThreeUp = ({ children }: { children: ReactNode }) => <div className={x.three}>{children}</div>;
 export const StatStrip = ({ children }: { children: ReactNode }) => <div className={cx(b.card, x.statStrip)}>{children}</div>;
