@@ -17,7 +17,7 @@ export function familyOf(c: CapabilityId): Family {
 
 export const sendable = (model: Model) => model.capabilities.filter((c) => !c.startsWith("input."));
 
-const READ_LABEL: Partial<Record<CapabilityId, string>> = { "presence.read": "Presence", "state.read": "Read state", "telemetry.read": "Telemetry", "capture.audio": "Microphone", "capture.screen": "Screen capture", "capture.video_stream": "Video", "act.motion.vehicle": "Drive", "act.motion.move": "Move", "act.motion.gripper": "Gripper", "act.motion": "Motion", "present.hologram": "Hologram" };
+const READ_LABEL: Partial<Record<CapabilityId, string>> = { "presence.read": "Presence", "state.read": "Read state", "telemetry.read": "Telemetry", "capture.audio": "Microphone", "capture.screen": "Screen capture", "capture.video_stream": "Video", "act.motion.vehicle": "Drive", "act.motion.move": "Move", "act.motion.gripper": "Gripper" };
 export const labelOf = (c: CapabilityId) => CAPABILITY_LABEL[c] ?? READ_LABEL[c] ?? c;
 
 /** The choices a capability takes, shown as visible pills. */

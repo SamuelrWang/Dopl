@@ -18,7 +18,7 @@ import { createColumnCompat } from "./column-compat";
  * The sink is injectable (`setDevEventSinkForTests`); the default inserts with the service role.
  *
  * 🔒 HOT PATH (docs/INVARIANTS.md §12): one unknown column would lose the WHOLE batch, so the default
- * sink drops the portal's columns (`20261125100000_dev_portal_log_fields.sql`) and retries when the
+ * sink drops the portal's columns (`20261124100000_dev_portal_log_fields.sql`) and retries when the
  * database does not have them yet. The row survives without them.
  */
 

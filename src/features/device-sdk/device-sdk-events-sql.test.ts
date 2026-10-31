@@ -30,7 +30,7 @@ describe("device SDK events migration", () => {
   });
 
   it("columns are exactly the C8 row, in the contract's order", () => {
-    // The portal's columns came later, additively (`20261125100000_dev_portal_log_fields.sql`).
+    // The portal's columns came later, additively (`20261124100000_dev_portal_log_fields.sql`).
     const later = ["api_key_id", "action_id", "operation", "http_method", "route", "http_status"];
     expect(columns).toEqual(EVENT_ROW_FIELDS.filter((f) => !later.includes(f)));
     expect(EVENT_ROW_FIELDS.slice(-later.length)).toEqual(later);

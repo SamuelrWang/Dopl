@@ -46,5 +46,5 @@ export function createColumnCompat(columns: readonly string[], now: () => number
   };
 }
 
-/** `dev_actions.delivered_at`, `settled_at` (`20261125100000_dev_portal_log_fields.sql`). */
+/** `dev_actions.delivered_at`, `settled_at` (`20261124100000_dev_portal_log_fields.sql`). */
 export const actionTimeColumns = createColumnCompat(["delivered_at", "settled_at"]);

@@ -294,7 +294,7 @@ export function DataTable({ columns, sort, onSort, children }: { columns: Column
 
 export function DataRow({ selected, onClick, children }: { selected?: boolean; onClick?: () => void; children: ReactNode }) {
   return (
-    <tr className={cx(d.dtRow, selected && d.dtRowOn, onClick && d.dtRowClick)} onClick={onClick}>
+    <tr className={cx(d.dtRow, selected && d.dtRowOn, onClick && d.dtRowClick)} data-clickable="" onClick={onClick}>
       {children}
     </tr>
   );

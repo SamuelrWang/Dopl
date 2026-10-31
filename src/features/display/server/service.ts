@@ -37,8 +37,7 @@ import {
 import { compileForLens, isReservedLensId, lensState, pushAsk, pushScreen } from "./lens";
 import { channelWorkspaceOf, findByDisplayId, hasAnswerMessage, replaceDisplay } from "./repository";
 import { sdkAskKey } from "./sdk-ask-key";
-import { SdkLensError, type LensDevices, type SdkAskOutcome, type SdkAskTicket } from "./sdk-lens";
-import { logProsumerFallback } from "@/features/device-sdk/server/internal-events";
+import { logProsumerFallback, SdkLensError, type LensDevices, type SdkAskOutcome, type SdkAskTicket } from "./sdk-lens";
 import { productionSdkLens, sdkLensFor, sdkPlanOf, type SdkPlan, type ShowDeps } from "./sdk-seam";
 
 /**
@@ -293,9 +292,7 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
   }
   if (row && posted && row.channel_message_id !== posted.id) await deps.store.linkChannelMessage(ctx.userId, row.id, posted.id);
   const path = !wantLens ? "none" : row ? (fallbackReason ? "prosumer_fallback" : "prosumer") : sdk ? "sdk" : "prosumer";
-  if (path === "prosumer_fallback" && fallbackReason) {
-    await deps.logFallback?.(ctx.userId, { operation: "display.prosumer_fallback", capability: "present.display", reason: fallbackReason });
-  }
+  if (path === "prosumer_fallback" && fallbackReason) await deps.logFallback?.(ctx.userId, { operation: "display.prosumer_fallback", capability: "present.display", reason: fallbackReason });
 
   console.info(
     "[display] " +
