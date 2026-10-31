@@ -153,7 +153,8 @@ function cursorOrNull(value: string | null): string | null {
 
 /**
  * Raw search params → the portal's state. `project` falls back to the caller's first project
- * when absent or not theirs (a foreign id never reaches a query). `env` defaults to `test`.
+ * when absent or not theirs (a foreign id never reaches a query). `env` defaults to `live` for an
+ * internal project, whose traffic is all live, and to `test` otherwise.
  */
 export function parsePortalParams(raw: RawSearchParams, projects: readonly PortalProject[]): PortalParams {
   const wanted = first(raw, "project");
@@ -166,7 +167,7 @@ export function parsePortalParams(raw: RawSearchParams, projects: readonly Porta
   const eventId = first(raw, "event");
   return {
     project,
-    env: oneOf(first(raw, "env"), ENVIRONMENTS) ?? "test",
+    env: oneOf(first(raw, "env"), ENVIRONMENTS) ?? (projects.find((p) => p.id === project)?.org.internal ? "live" : "test"),
     filters: {
       outcome: oneOf(first(raw, "outcome"), EVENT_OUTCOMES),
       deviceKind: oneOf(first(raw, "kind"), DEVICE_KINDS),

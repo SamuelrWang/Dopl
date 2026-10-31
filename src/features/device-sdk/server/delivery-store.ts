@@ -42,12 +42,24 @@ export interface StoredAction {
   result: Record<string, unknown> | null;
   error: ErrorBody | null;
   route_decision: RouteDecision | null;
+  /** When the device took it. Written, not in `ACTION_COLS`: nothing on a delivery path reads it. */
+  delivered_at?: string | null;
+  /** When it reached `done` or `failed`. */
+  settled_at?: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export type NewAction = Omit<StoredAction, "id" | "created_at" | "updated_at"> & { id?: string };
-export type ActionPatch = Partial<Pick<StoredAction, "status" | "result" | "error" | "response" | "http_status">>;
+export type ActionPatch = Partial<Pick<StoredAction, "status" | "result" | "error" | "response" | "http_status" | "delivered_at" | "settled_at">>;
+
+/** The timestamps a status earns when an action first reaches it. */
+export function actionTimes(status: ActionStatus, at: string): Pick<ActionPatch, "delivered_at" | "settled_at"> {
+  if (status === "delivered") return { delivered_at: at };
+  if (status === "done") return { delivered_at: at, settled_at: at };
+  if (status === "failed") return { settled_at: at };
+  return {};
+}
 
 export interface DeliveryStore {
   /** `dev_end_users.id` for the developer's external user id, or null. */

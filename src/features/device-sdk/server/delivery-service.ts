@@ -12,6 +12,7 @@ import {
   errorBodyOf,
   execute,
   grantFor,
+  notifySettled,
   nowOf,
   profileEventFields,
   replayResult,
@@ -21,7 +22,7 @@ import {
   type ServiceResult,
 } from "./delivery-common";
 import { holdAndSettle } from "./action-service";
-import type { Scope } from "./delivery-store";
+import { actionTimes, type Scope, type StoredAction } from "./delivery-store";
 
 /**
  * `GET /v1/users/{id}/context` and `POST /v1/users/{id}/deliver` (C4 intent level, C5).
@@ -182,18 +183,23 @@ export async function deliver(
   }
   const action = claim.action;
   const confirmation = { required: policy.confirmation.required, result: null };
-  const ev = () => ({ ...baseEvent(), risk_tier: policy.tier, confirmation });
+  const ev = () => ({ ...baseEvent(), action_id: action.id, risk_tier: policy.tier, confirmation });
+  let stored: StoredAction | null = null;
+  const timeOf = (status: typeof action.status) => actionTimes(status, new Date(nowOf(deps)).toISOString());
 
   const finish = async (status: typeof action.status, result: Record<string, unknown> | null, error: ReturnType<typeof errorBodyOf> | null, extra: Record<string, unknown> = {}) => {
     const response = { delivery_id: action.id, routed_to: routedTo, status, ...extra };
-    await deps.store.updateAction(scope, action.id, { status, result, error, response, http_status: 202 });
+    stored = await deps.store.updateAction(scope, action.id, { status, result, error, response, http_status: 202 });
     return { ok: true as const, status: 202, body: response, decision, event: ev() };
   };
 
   if (fit.kind === "callback") {
-    return finish("failed", null, errorBodyOf("invalid_request", "Content exceeds the profile's limits (overflow: callback)."), {
+    const out = await finish("failed", null, errorBodyOf("invalid_request", "Content exceeds the profile's limits (overflow: callback)."), {
       overflow_callback: { profile_id: primary.candidate.profile.id, limits: fit.limits, measured: fit.measured },
     });
+    await deps.store.updateAction(scope, action.id, timeOf("failed"));
+    await notifySettled(deps, stored);
+    return out;
   }
   if (policy.confirmation.required) return finish("needs_confirmation", null, null);
 
@@ -208,14 +214,17 @@ export async function deliver(
   if (res.status === "failed" && res.error) {
     const response = { error: res.error };
     const info = res.error;
-    await deps.store.updateAction(scope, action.id, { status: "failed", error: info, response, http_status: ERROR_CODE_INFO[info.code].status });
+    stored = await deps.store.updateAction(scope, action.id, { status: "failed", error: info, response, http_status: ERROR_CODE_INFO[info.code].status, ...timeOf("failed") });
+    await notifySettled(deps, stored);
     return { ok: false, code: info.code, message: info.message, decision, event: { ...ev(), latency_ms: { device_delivery: delivery } } };
   }
-  await deps.store.updateAction(scope, action.id, { status: res.status, result: res.result });
+  const settledAtOnce = res.status === "done";
+  await deps.store.updateAction(scope, action.id, { status: res.status, result: res.result, ...timeOf(res.status) });
   const open = isAsk(primary.capability) && (res.status === "queued" || res.status === "delivered");
   if (open && opts.hold !== false) res = await holdAndSettle(deps, scope, action.id, res);
   const fanout = results.length > 1 ? { fanout: routed.chosen.map((r, i) => ({ device_id: r.candidate.device.id, status: results[i].status })) } : {};
   const done = await finish(res.status, { ...(res.result ?? {}), ...fanout, ...(fit.kind === "truncated" ? { truncated: true } : {}) }, res.error);
+  if (settledAtOnce) await notifySettled(deps, stored);
   return { ...done, event: { ...done.event, latency_ms: { device_delivery: delivery } }, ...(open && opts.hold === false && { respondedAsync: true as const }) };
 }
 

@@ -2,13 +2,16 @@
  * Lens row → `dev_actions` (A8). An even_g2 delivery returns `result.lens_message_id`, the
  * `dev_device_messages` row it queued; the glasses' inbox and answer routes move the action through
  * that id, so `GET /v1/actions/{id}` and the `ask.*` hold (`action-service.ts › holdForAnswer`) see it:
- *   inbox hands it over   → queued → delivered
+ *   inbox hands over an ask            → queued → delivered
+ *   inbox hands over a notice or screen → queued → done (nothing more can happen to it, ruled 2026-10-31)
  *   wearer answers an ask → done, `{ index, label }`
  *   wearer dismisses one  → done, `{ dismissed: true, index: null, label: null }`
  * Every move is conditional on the action's current status, so a late hop never regresses a settled row.
  */
 import type { GlassesMessage } from "@/features/glasses/core/messages/types";
 import type { ActionStatus } from "../../types";
+import { isAsk } from "../../delivery/intents";
+import type { CapabilityId } from "../../types";
 import type { StoredAction } from "../delivery-store";
 import type { MemoryDeliveryStore } from "../delivery-store-memory";
 
@@ -16,6 +19,17 @@ export interface LensActionPatch {
   status: ActionStatus;
   /** Merged over the action's stored result (absent = result unchanged). */
   result?: Record<string, unknown>;
+  delivered_at?: string;
+  settled_at?: string;
+  /** Only rows of this class move (absent = both). */
+  only?: "ask" | "not_ask";
+}
+
+/** Does this row pass {@link LensActionPatch.only}? */
+export function matchesOnly(capability: string | null, only: LensActionPatch["only"]): boolean {
+  if (!only) return true;
+  const ask = capability !== null && isAsk(capability as CapabilityId);
+  return only === "ask" ? ask : !ask;
 }
 
 /** A `dev_actions` row a move just settled, as stored AFTER the move (tenant, key, status, result). */
@@ -36,9 +50,9 @@ const OPEN: ActionStatus[] = ["queued", "delivered"];
 export function settlementFor(row: GlassesMessage): LensActionPatch | null {
   if (row.kind !== "ask") return null;
   if (row.status === "answered" && row.answer) {
-    return { status: "done", result: { index: row.answer.index, label: row.answer.choice, answered_at: row.answer.at } };
+    return { status: "done", result: { index: row.answer.index, label: row.answer.choice, answered_at: row.answer.at }, settled_at: new Date().toISOString() };
   }
-  if (row.status === "dismissed") return { status: "done", result: { dismissed: true, index: null, label: null } };
+  if (row.status === "dismissed") return { status: "done", result: { dismissed: true, index: null, label: null }, settled_at: new Date().toISOString() };
   return null;
 }
 
@@ -47,8 +61,14 @@ export function withStatus(response: Record<string, unknown>, status: ActionStat
   return "status" in response ? { ...response, status } : response;
 }
 
-export async function markDelivered(store: LensActionStore, deviceId: string, lensMessageIds: string[]): Promise<void> {
-  if (lensMessageIds.length > 0) await store.move(deviceId, lensMessageIds, ["queued"], { status: "delivered" });
+/** The inbox handed these rows over. Returns the actions this finished (notices and screens), for their webhook. */
+export async function markDelivered(store: LensActionStore, deviceId: string, lensMessageIds: string[], at: string = new Date().toISOString()): Promise<MovedLensAction[]> {
+  if (lensMessageIds.length === 0) return [];
+  const [, finished] = await Promise.all([
+    store.move(deviceId, lensMessageIds, ["queued"], { status: "delivered", delivered_at: at, only: "ask" }),
+    store.move(deviceId, lensMessageIds, ["queued"], { status: "done", delivered_at: at, settled_at: at, only: "not_ask" }),
+  ]);
+  return finished;
 }
 
 /** Settles the action(s) a lens row serves; returns the ones this call moved (none for a late hop). */
@@ -65,7 +85,10 @@ export function memoryLensActions(store: MemoryDeliveryStore): LensActionStore {
       for (const a of store.actions) {
         const lens = a.result?.lens_message_id;
         if (a.device_id !== deviceId || typeof lens !== "string" || !ids.includes(lens) || !from.includes(a.status)) continue;
+        if (!matchesOnly(a.capability, patch.only)) continue;
         a.status = patch.status;
+        if (patch.delivered_at) a.delivered_at = patch.delivered_at;
+        if (patch.settled_at) a.settled_at = patch.settled_at;
         if (patch.result) a.result = { ...(a.result ?? {}), ...patch.result };
         a.response = withStatus(a.response, patch.status);
         a.updated_at = new Date(store.now()).toISOString();

@@ -14,7 +14,7 @@ import {
   type LogFilters,
   type PortalParams,
 } from "@/features/device-sdk/portal/scope";
-import { KIND_LABEL } from "../_lib/format";
+import { KIND_LABEL } from "../../_lib/format";
 
 const OUTCOMES = [
   { key: "all", label: "Any outcome" },

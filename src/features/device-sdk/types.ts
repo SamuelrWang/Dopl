@@ -58,6 +58,7 @@ export {
 } from "@dopl/device-contracts";
 
 export type {
+  ConsideredDevice,
   ApiKey,
   ApiKeyKind,
   ApiKeyScope,

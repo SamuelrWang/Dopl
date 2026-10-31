@@ -45,7 +45,7 @@ export function AcceptInvite({
     setError(null);
     try {
       const out = await portalCall<{ orgId: string }>("/api/developers/invites/accept", "POST", { token });
-      router.push(`/developers/org?org=${encodeURIComponent(out.orgId)}`);
+      router.push(`/developers/classic/org?org=${encodeURIComponent(out.orgId)}`);
       router.refresh();
     } catch (e) {
       setError(errorText(e, "Could not accept the invite"));
@@ -82,7 +82,7 @@ export function AcceptInvite({
           {state.kind === "joined" && (
             <>
               <p className="text-body text-text-secondary">You are already in {orgName}.</p>
-              <Link href={`/developers/org?org=${encodeURIComponent(state.orgId)}`} className={SMALL_PRIMARY_BUTTON}>
+              <Link href={`/developers/classic/org?org=${encodeURIComponent(state.orgId)}`} className={SMALL_PRIMARY_BUTTON}>
                 Open the org
               </Link>
             </>

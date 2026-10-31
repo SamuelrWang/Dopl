@@ -9,8 +9,8 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { FormDialog, PillChoice } from "@/shared/ui/form-dialog";
 import { CreateButton, pillButton } from "@/shared/ui/pill-button";
 import { StatusPill } from "@/shared/ui/status-pill";
-import { Card, PageHeader, Table, ov } from "../_components/ui";
-import { errorText, portalCall } from "../_lib/client-api";
+import { Card, PageHeader, Table, ov } from "../../_components/ui";
+import { errorText, portalCall } from "../../_lib/client-api";
 
 /** A key row as the server formatted it. The raw key is never here. */
 export interface KeyView {
@@ -50,7 +50,7 @@ function Status({ status }: { status: KeyView["status"] }) {
 }
 
 /**
- * `/developers/keys` body: the header's Create key, the once-only secret card, and the table with
+ * `/developers/classic/keys` body: the header's Create key, the once-only secret card, and the table with
  * Rotate and Revoke. Every write is a `/api/developers/*` call; the page re-reads after each.
  */
 export function KeysTable({

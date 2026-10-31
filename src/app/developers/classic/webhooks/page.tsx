@@ -5,12 +5,12 @@ import { StatusPill } from "@/shared/ui/status-pill";
 import { EMPTY_FILTERS, portalQuery, type PortalParams, type RawSearchParams } from "@/features/device-sdk/portal/scope";
 import type { WebhookDelivery, WebhookEndpoint } from "@/features/device-sdk/types";
 import { listPortalWebhookDeliveries, listPortalWebhookEndpoints } from "@/features/device-sdk/server/portal-webhooks";
-import { PortalFrame } from "../_components/portal-frame";
-import { Card, Facts, NoProjects, PageHeader, Table, ov } from "../_components/ui";
-import { loadPortal } from "../_lib/load-portal";
-import { clock, since } from "../_lib/format";
+import { PortalFrame } from "../../_components/portal-frame";
+import { Card, Facts, NoProjects, PageHeader, Table, ov } from "../../_components/ui";
+import { loadPortal } from "../../_lib/load-portal";
+import { clock, since } from "../../_lib/format";
 
-const PATH = "/developers/webhooks";
+const PATH = "/developers/classic/webhooks";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** How much of a response body the attempts table shows. */
 const BODY_PREVIEW = 120;
@@ -55,7 +55,7 @@ const preview = (body: string | null) =>
   body === null || body === "" ? "None" : body.length > BODY_PREVIEW ? `${body.slice(0, BODY_PREVIEW)}…` : body;
 
 /**
- * `/developers/webhooks` — read only. The selected project's endpoints for one env; pick one
+ * `/developers/classic/webhooks` — read only. The selected project's endpoints for one env; pick one
  * (`?endpoint=`) to see its newest deliveries, and a delivery (`?delivery=`) to see its HTTP
  * attempts. Creating, rotating and replaying stay in the public API. No secret is ever read.
  */

@@ -3,21 +3,21 @@ import { canManageKeys, canManageMembers, type RawSearchParams } from "@/feature
 import { listPortalOrgs } from "@/features/device-sdk/server/portal";
 import { listOrgMembers } from "@/features/device-sdk/server/portal-admin";
 import { listOrgInvites } from "@/features/device-sdk/server/portal-invites";
-import { PortalFrame } from "../_components/portal-frame";
-import { NoProjects, PageHeader } from "../_components/ui";
-import { loadPortal } from "../_lib/load-portal";
-import { since } from "../_lib/format";
+import { PortalFrame } from "../../_components/portal-frame";
+import { NoProjects, PageHeader } from "../../_components/ui";
+import { loadPortal } from "../../_lib/load-portal";
+import { since } from "../../_lib/format";
 import { OrgView } from "./org-view";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * `/developers/org` — the org's projects, members and open invites (P3). The org is `?org=` when it
+ * `/developers/classic/org` — the org's projects, members and open invites (P3). The org is `?org=` when it
  * is one of the caller's, else the selected project's org, else their first. Every read is
  * reach-checked in `portal-admin.ts` / `portal-invites.ts`; invites are listed for owner/admin only.
  */
 export default async function OrgPage({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
-  const { userId, projects, params, now } = await loadPortal(searchParams, "/developers/org");
+  const { userId, projects, params, now } = await loadPortal(searchParams, "/developers/classic/org");
   const raw = await searchParams;
   const wanted = typeof raw.org === "string" && UUID.test(raw.org) ? raw.org : null;
   const orgs = await listPortalOrgs(userId);

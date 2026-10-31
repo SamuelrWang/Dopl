@@ -28,7 +28,7 @@ import { usePortal } from "./portal-store";
 export { OverviewCard as Card, Bars } from "@/features/home/components/overview/overview-card";
 export { ov };
 
-export const BASE = "/playground/developers";
+export const BASE = "/developers";
 
 const KIND_ICON: Record<string, LucideIcon> = {
   glasses: Glasses,

@@ -8,12 +8,13 @@
  *                 fallback chain (`FALLBACK_KIND_ORDER`).
  *   3. URGENCY  — `high` fans out to every eligible device; `normal` takes the top one; `low` waits for
  *                 the ACTIVE device (the most recently seen online one) and is refused if it can't take it.
- *   4. DECISION — `{ target, reason, candidates }`, which the caller logs on the event row (C8).
+ *   4. DECISION — `{ target, reason, candidates, considered }`, which the caller logs on the event row
+ *                 (C8). `considered` is every candidate's verdict; past calls cannot be backfilled.
  *
  * A refusal names the furthest step that emptied the set: no device online → `device_offline`,
  * none capable → `capability_unsupported`, none granted → the grant's own code.
  */
-import { DEVICE_KINDS, type CapabilityId, type ContextProfile, type Device, type DeviceKind, type ErrorCode, type RouteDecision, type Urgency } from "../types";
+import { DEVICE_KINDS, type CapabilityId, type ConsideredDevice, type ContextProfile, type Device, type DeviceKind, type ErrorCode, type RouteDecision, type Urgency } from "../types";
 import { checkGrant, type DeviceGrant } from "./policy";
 import { scopesCover } from "./resolve-profile";
 
@@ -58,10 +59,32 @@ export function activeDevice(candidates: readonly RouteCandidate[]): RouteCandid
   return candidates.filter((c) => c.device.online).reduce<RouteCandidate | null>((a, c) => (!a || seen(c.device) > seen(a.device) ? c : a), null);
 }
 
+/** Each candidate's verdict at the first filter it failed, or `eligible`. A pure read of the router's own filters. */
+function considerAll(input: RouteInput, targetedIds: ReadonlySet<string>, chosen: readonly RoutedDevice[], why: string): ConsideredDevice[] {
+  const chosenIds = new Set(chosen.map((r) => r.candidate.device.id));
+  return input.candidates.map((c) => {
+    const base = { device_id: c.device.id, kind: c.device.kind };
+    if (!targetedIds.has(c.device.id)) return { ...base, verdict: "skipped", reason: "not the requested target" };
+    if (!c.device.online) return { ...base, verdict: "skipped", reason: "offline" };
+    const capability = capabilityOn(c, input.capabilities);
+    if (!capability) return { ...base, verdict: "skipped", reason: `does not support ${input.capabilities.join(" or ")} under its profile` };
+    const grant = checkGrant(c.grant, capability, input.now);
+    if (!grant.ok) return { ...base, verdict: "skipped", reason: grant.message };
+    if (chosenIds.has(c.device.id)) return { ...base, verdict: "chosen", reason: why };
+    return { ...base, verdict: "eligible", reason: "ranked lower" };
+  });
+}
+
 export function route(input: RouteInput): RouteResult {
   const { target, urgency } = input;
   const ids = input.candidates.map((c) => c.device.id);
-  const decide = (reason: string): RouteDecision => ({ target, reason, candidates: ids });
+  let targetedIds: ReadonlySet<string> = new Set<string>();
+  const decide = (reason: string, chosen: readonly RoutedDevice[] = []): RouteDecision => ({
+    target,
+    reason,
+    candidates: ids,
+    considered: considerAll(input, targetedIds, chosen, reason),
+  });
   const fail = (code: ErrorCode, message: string): RouteResult => ({ ok: false, code, message, decision: decide(message) });
 
   // 0. Target.
@@ -71,6 +94,7 @@ export function route(input: RouteInput): RouteResult {
       : isKind(target)
         ? input.candidates.filter((c) => c.device.kind === target)
         : input.candidates.filter((c) => c.device.id === target);
+  targetedIds = new Set(targeted.map((c) => c.device.id));
   if (targeted.length === 0) {
     if (target !== "auto" && !isKind(target)) return fail("not_found", `No device ${target} for this user.`);
     return fail("device_offline", target === "auto" ? "The user has no connected devices." : `The user has no ${target} connected.`);
@@ -115,16 +139,16 @@ export function route(input: RouteInput): RouteResult {
 
   // 3. Urgency.
   if (urgency === "high" && ranked.length > 1) {
-    return { ok: true, chosen: ranked, decision: decide(`${scope}high urgency: fan-out to ${ranked.length} devices; primary by ${why}`) };
+    return { ok: true, chosen: ranked, decision: decide(`${scope}high urgency: fan-out to ${ranked.length} devices; primary by ${why}`, ranked) };
   }
   if (urgency === "low") {
     const active = activeDevice(targeted);
     if (!active || active.device.id !== top.candidate.device.id) {
       const pick = ranked.find((r) => r.candidate.device.id === active?.device.id);
       if (!pick) return fail("device_offline", "Low urgency waits for the active device, which cannot take this delivery now.");
-      return { ok: true, chosen: [pick], decision: decide(`${scope}low urgency: the active device`) };
+      return { ok: true, chosen: [pick], decision: decide(`${scope}low urgency: the active device`, [pick]) };
     }
-    return { ok: true, chosen: [top], decision: decide(`${scope}low urgency: the active device`) };
+    return { ok: true, chosen: [top], decision: decide(`${scope}low urgency: the active device`, [top]) };
   }
-  return { ok: true, chosen: [top], decision: decide(`${scope}${why}`) };
+  return { ok: true, chosen: [top], decision: decide(`${scope}${why}`, [top]) };
 }

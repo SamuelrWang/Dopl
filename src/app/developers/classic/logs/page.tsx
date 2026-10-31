@@ -12,13 +12,13 @@ import {
 } from "@/features/device-sdk/portal/scope";
 import type { DeviceEventRow } from "@/features/device-sdk/types";
 import { countBillableEvents, getPortalEvent, queryPortalEvents } from "@/features/device-sdk/server/portal";
-import { PortalFrame } from "../_components/portal-frame";
-import { Card, Facts, Json, NoProjects, PageHeader, Table, ov } from "../_components/ui";
-import { loadPortal } from "../_lib/load-portal";
-import { KIND_LABEL, OUTCOME_LABEL, clock } from "../_lib/format";
+import { PortalFrame } from "../../_components/portal-frame";
+import { Card, Facts, Json, NoProjects, PageHeader, Table, ov } from "../../_components/ui";
+import { loadPortal } from "../../_lib/load-portal";
+import { KIND_LABEL, OUTCOME_LABEL, clock } from "../../_lib/format";
 import { LogFilterBar } from "./log-filters";
 
-const PATH = "/developers/logs";
+const PATH = "/developers/classic/logs";
 
 function Outcome({ row }: { row: DeviceEventRow }) {
   if (row.outcome === "ok") {
@@ -43,7 +43,7 @@ function describe(row: DeviceEventRow): string {
 }
 
 /**
- * `/developers/logs` — `dev_events` for the selected project (or all of them) and env, newest
+ * `/developers/classic/logs` — `dev_events` for the selected project (or all of them) and env, newest
  * first, with filters, an internal-traffic toggle and a detail pane. The 30-day usage figure reads
  * `dev_billable_events`, so internal traffic never counts toward it.
  */

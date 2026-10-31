@@ -9,6 +9,7 @@ import {
   deviceEventFields,
   execute,
   grantFor,
+  notifySettled,
   nowOf,
   replayResult,
   requestHash,
@@ -17,7 +18,7 @@ import {
   type DeliveryDeps,
   type ServiceResult,
 } from "./delivery-common";
-import type { Scope, StoredAction } from "./delivery-store";
+import { actionTimes, type Scope, type StoredAction } from "./delivery-store";
 import type { DevEventAnnotation } from "./with-developer-key";
 
 /**
@@ -94,6 +95,7 @@ export async function getAction(deps: DeliveryDeps, scope: Scope, id: string): P
       external_user_id: externalUserId,
       device_id: a.device_id,
       capability: (a.capability as CapabilityId | null) ?? null,
+      action_id: a.id,
     },
   };
 }
@@ -129,7 +131,7 @@ export async function deviceAction(
   /** `hold: false` (`Prefer: respond-async`): an `ask.*` returns at once, unanswered; no 200s hold. */
   opts: { hold?: boolean } = {}
 ): Promise<ServiceResult> {
-  const decision: RouteDecision = { target: deviceId, reason: "explicit device", candidates: [deviceId] };
+  let decision: RouteDecision = { target: deviceId, reason: "explicit device", candidates: [deviceId] };
   const event: DevEventAnnotation = { device_id: deviceId, capability };
   const hash = requestHash({ route: "action", device_id: deviceId, capability, body: req });
   const fail = (code: Parameters<typeof refusal>[0], message: string, ev: DevEventAnnotation = event): ServiceResult => refusal(code, message, decision, ev);
@@ -159,16 +161,24 @@ export async function deviceAction(
     profile_version: profile.version ?? null,
   };
 
-  if (!device.online) return fail("device_offline", `Device ${deviceId} is offline.`, ev);
+  const verdict = (v: "chosen" | "skipped", reason: string) => {
+    decision = { ...decision, considered: [{ device_id: device.id, kind: device.kind, verdict: v, reason }] };
+  };
+  const skip = (code: Parameters<typeof refusal>[0], message: string, reason: string) => {
+    verdict("skipped", reason);
+    return fail(code, message, ev);
+  };
+  if (!device.online) return skip("device_offline", `Device ${deviceId} is offline.`, "offline");
   if (!device.capabilities.some((d) => d.capability === capability)) {
-    return fail("capability_unsupported", `Device ${deviceId} (${device.adapter_id}) does not support ${capability}.`, ev);
+    return skip("capability_unsupported", `Device ${deviceId} (${device.adapter_id}) does not support ${capability}.`, `does not support ${capability}`);
   }
   if (!scopesCover(profile.allowed_capabilities, capability)) {
-    return fail("capability_unsupported", `Profile "${profile.id}" does not allow ${capability} on this device.`, ev);
+    return skip("capability_unsupported", `Profile "${profile.id}" does not allow ${capability} on this device.`, `profile ${profile.id} does not allow ${capability}`);
   }
   const now = nowOf(deps);
   const policy = evaluatePolicy({ capability, grant, profile, now });
-  if (!policy.ok) return fail(policy.code, policy.message, ev);
+  if (!policy.ok) return skip(policy.code, policy.message, policy.message);
+  verdict("chosen", "explicit device");
   const confirmation = { required: policy.confirmation.required, result: null };
   const evDone = { ...ev, risk_tier: policy.tier, confirmation };
 
@@ -193,10 +203,12 @@ export async function deviceAction(
     return claim.existing.request_hash === hash ? replayResult(claim.existing, event) : conflictResult(req.idempotency_key, decision, event);
   }
   const id = claim.action.id;
+  let stored: StoredAction | null = null;
+  const timeOf = (status: StoredAction["status"]) => actionTimes(status, new Date(nowOf(deps)).toISOString());
   const accept = async (status: StoredAction["status"], result: Record<string, unknown> | null) => {
     const response = { action_id: id, status };
-    await deps.store.updateAction(scope, id, { status, result, response, http_status: 202 });
-    return { ok: true as const, status: 202, body: response, decision, event: evDone };
+    stored = await deps.store.updateAction(scope, id, { status, result, response, http_status: 202 });
+    return { ok: true as const, status: 202, body: response, decision, event: { ...evDone, action_id: id } };
   };
   if (policy.confirmation.required) return accept("needs_confirmation", null);
 
@@ -205,13 +217,16 @@ export async function deviceAction(
   const latency = { device_delivery: Math.max(0, nowOf(deps) - started) };
   if (res.status === "failed" && res.error) {
     const status = ERROR_CODE_INFO[res.error.code].status;
-    await deps.store.updateAction(scope, id, { status: "failed", error: res.error, response: { error: res.error }, http_status: status });
-    return { ok: false, code: res.error.code, message: res.error.message, decision, event: { ...evDone, latency_ms: latency } };
+    stored = await deps.store.updateAction(scope, id, { status: "failed", error: res.error, response: { error: res.error }, http_status: status, ...timeOf("failed") });
+    await notifySettled(deps, stored);
+    return { ok: false, code: res.error.code, message: res.error.message, decision, event: { ...evDone, action_id: id, latency_ms: latency } };
   }
-  await deps.store.updateAction(scope, id, { status: res.status, result: res.result });
+  const settledAtOnce = res.status === "done";
+  await deps.store.updateAction(scope, id, { status: res.status, result: res.result, ...timeOf(res.status) });
   const open = isAsk(capability) && (res.status === "queued" || res.status === "delivered");
   if (open && opts.hold !== false) res = await holdAndSettle(deps, scope, id, res);
   const out = await accept(res.status, res.result);
+  if (settledAtOnce) await notifySettled(deps, stored);
   return { ...out, event: { ...out.event, latency_ms: latency }, ...(open && opts.hold === false && { respondedAsync: true as const }) };
 }
 

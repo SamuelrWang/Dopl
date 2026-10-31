@@ -29,7 +29,7 @@ export function argsFor(capability: CapabilityId, content: DeliverContent): Reco
     case "present.display":
       return { blocks: content.blocks ?? (text !== undefined ? [textBlock(text)] : []) };
     case "present.notify":
-      return { body: text ?? "", ...(content.blocks ? { blocks: content.blocks } : {}) };
+      return { body: text ?? "", ...(content.title ? { title: content.title } : {}), ...(content.blocks ? { blocks: content.blocks } : {}) };
     case "present.speak":
       return { text: text ?? "" };
     case "ask.choice": {

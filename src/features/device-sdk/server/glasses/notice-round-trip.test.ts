@@ -109,7 +109,7 @@ async function world() {
     deviceFromTokenHash: async () => null,
     touch: async () => {},
     revokeToken: async () => {},
-    delivered: (id, ids) => markDelivered(lensActions, id, ids),
+    delivered: async (id, ids) => void (await markDelivered(lensActions, id, ids)),
     settled: (id, row) => settle(lensActions, id, row),
     migratedDeviceIds: async (userId) => (userId === DOPL_USER ? [link.id] : []),
   };

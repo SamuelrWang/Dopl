@@ -1,6 +1,8 @@
 import "server-only";
 import { NextResponse, type NextRequest } from "next/server";
+import { connectStore } from "./connect/store";
 import { wiredDeviceAdapters } from "./device-adapters";
+import { emitActionSettled } from "./webhooks/action-events";
 import type { ZodType } from "zod";
 import type { RouteDecision } from "../types";
 import type { DeliveryDeps, ServiceResult } from "./delivery-common";
@@ -15,7 +17,12 @@ import type { DeveloperKeyContext } from "./with-developer-key";
  * on the call's one event row (🔒 every deliver logs `route_decision`; so does every A5 route).
  */
 
-const productionDeps: DeliveryDeps = { store: supabaseDeliveryStore, grants: supabaseGrantStore, adapters: wiredDeviceAdapters };
+const productionDeps: DeliveryDeps = {
+  store: supabaseDeliveryStore,
+  grants: supabaseGrantStore,
+  adapters: wiredDeviceAdapters,
+  onSettled: (rows) => emitActionSettled(connectStore, rows),
+};
 let deps: DeliveryDeps = productionDeps;
 
 export const deliveryDeps = (): DeliveryDeps => deps;

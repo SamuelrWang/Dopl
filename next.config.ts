@@ -75,6 +75,9 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: "/terms", destination: "/services-agreement", permanent: true },
+      // The portal left public `/playground` on 2026-10-31.
+      { source: "/playground/developers", destination: "/developers", permanent: false },
+      { source: "/playground/developers/:path*", destination: "/developers/:path*", permanent: false },
       // The docs land on their home page (`docs/content/index.ts › DOCS_HOME`); config redirects
       // run before the proxy, so bare `/docs` needs no public-route entry (`/docs/` has one).
       // Temporary: the home moved twice on 2026-10-27, and a 308 is cached by browsers.

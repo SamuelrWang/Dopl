@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { ContextProfileSchema, type ContextProfile } from "../types";
+import { actionTimeColumns } from "./column-compat";
 import type { DeliveryStore, DeviceRow, NewAction, Scope, StoredAction } from "./delivery-store";
 
 /**
@@ -101,17 +102,18 @@ export const supabaseDeliveryStore: DeliveryStore = {
     return { inserted: true as const, action: must(res) as StoredAction };
   },
   async updateAction(s: Scope, id, patch) {
-    const data = must(
-      await db()
+    const write = (row: typeof patch) =>
+      db()
         .from("dev_actions")
-        .update({ ...patch, updated_at: new Date().toISOString() })
+        .update({ ...row, updated_at: new Date().toISOString() })
         .eq("id", id)
         .eq("project_id", s.projectId)
         .eq("env", s.env)
         .select(ACTION_COLS)
-        .maybeSingle()
-    );
-    return (data as StoredAction | null) ?? null;
+        .maybeSingle();
+    let res = await write(actionTimeColumns.shape(patch));
+    if (res.error && actionTimeColumns.isMissing(res.error)) res = await write(actionTimeColumns.fallback(patch));
+    return (must(res) as StoredAction | null) ?? null;
   },
   async getAction(s, id) {
     if (!/^[0-9a-f-]{36}$/i.test(id)) return null;

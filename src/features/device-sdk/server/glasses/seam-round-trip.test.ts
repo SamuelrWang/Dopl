@@ -109,7 +109,7 @@ async function world() {
     deviceFromTokenHash: async () => null,
     touch: async () => {},
     revokeToken: async () => {},
-    delivered: (id, ids) => markDelivered(lensActions, id, ids),
+    delivered: async (id, ids) => void (await markDelivered(lensActions, id, ids)),
     settled: (id, row) => settle(lensActions, id, row),
     migratedDeviceIds: async (userId) => (userId === DOPL_USER ? [link.id] : []),
     isDoplAppProject: async (projectId, env) => projectId === PROJECT && env === "live",
@@ -213,7 +213,7 @@ describe("W1.2 ask round trip over @dopl/sdk", () => {
     const { messages } = (await (await w.handlers.inbox(w.glasses("/api/glasses/device/inbox?wait=0"))).json()) as { messages: GlassesMessage[] };
     expect(messages.map((m) => m.kind)).toEqual(["screen"]);
     expect(JSON.stringify(messages[0].payload)).toContain("Deploy done");
-    expect(w.store.actions[0].status).toBe("delivered");
+    expect(w.store.actions[0].status).toBe("done");
     expect(logs.map((l) => [l.op, l.outcome])).toEqual([["context", "ok"], ["show", "ok"]]);
   });
 

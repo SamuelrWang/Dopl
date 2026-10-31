@@ -38,6 +38,7 @@ import { compileForLens, isReservedLensId, lensState, pushAsk, pushScreen } from
 import { channelWorkspaceOf, findByDisplayId, hasAnswerMessage, replaceDisplay } from "./repository";
 import { sdkAskKey } from "./sdk-ask-key";
 import { SdkLensError, type LensDevices, type SdkAskOutcome, type SdkAskTicket } from "./sdk-lens";
+import { logProsumerFallback } from "@/features/device-sdk/server/internal-events";
 import { productionSdkLens, sdkLensFor, sdkPlanOf, type SdkPlan, type ShowDeps } from "./sdk-seam";
 
 /**
@@ -103,7 +104,7 @@ export interface ShowResult {
 }
 
 /** `sdk`: users with the `sdk_delivery` flag get their lens copy over `@dopl/sdk` (W1.2, `sdk-seam.ts`). */
-const deps0: ShowDeps = { store: glassesRepository, devices: deviceRepository, sdk: productionSdkLens };
+const deps0: ShowDeps = { store: glassesRepository, devices: deviceRepository, sdk: productionSdkLens, logFallback: logProsumerFallback };
 const bad = (message: string) => new HttpError(400, "DISPLAY_INVALID", message);
 const invalid = (errors: unknown[], extra: Record<string, unknown> = {}) =>
   new HttpError(400, "DISPLAY_INVALID", JSON.stringify({ ok: false, errors, ...extra }), { errors, ...extra });
@@ -292,6 +293,9 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
   }
   if (row && posted && row.channel_message_id !== posted.id) await deps.store.linkChannelMessage(ctx.userId, row.id, posted.id);
   const path = !wantLens ? "none" : row ? (fallbackReason ? "prosumer_fallback" : "prosumer") : sdk ? "sdk" : "prosumer";
+  if (path === "prosumer_fallback" && fallbackReason) {
+    await deps.logFallback?.(ctx.userId, { operation: "display.prosumer_fallback", capability: "present.display", reason: fallbackReason });
+  }
 
   console.info(
     "[display] " +

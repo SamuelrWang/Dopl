@@ -370,13 +370,15 @@ export interface SdkNoticeAction {
 }
 
 /**
- * One user's lens NOTICES over the SDK: `glasses_notify` (`present.notify` on ONE device, so the title
- * rides along; `deliver` carries only text) and `glasses_get_answer` for an SDK action id.
+ * One user's lens NOTICES over the SDK: `glasses_notify` and `glasses_show`, each `deliver` to ONE device
+ * by id (so the project's rules apply and the row carries the routing verdict), and `glasses_get_answer`
+ * for an SDK action id.
  * Structurally the `GlassesSdkUser` port of `glasses/core/messages/service.ts`.
  */
 export interface SdkUserNotices {
   deviceIds: string[];
   notify(a: { deviceId: string; title: string; body: string; idempotencyKey: string }): Promise<SdkNoticeResult<{ id: string; status: string }>>;
+  show(a: { deviceId: string; title: string; lines: string[]; idempotencyKey: string }): Promise<SdkNoticeResult<{ id: string; status: string }>>;
   /** The action, or `not_found` when it is unknown OR on a device that is not one of {@link deviceIds}. */
   action(id: string): Promise<SdkNoticeResult<SdkNoticeAction>>;
 }
@@ -390,6 +392,12 @@ const settle = async <T>(p: Promise<T>): Promise<SdkNoticeResult<T>> => {
   }
 };
 
+/** Accepted but not on the lens: stored before any dispatch (`failed`) is proven non-delivery. */
+function noticeOf(r: DeliverResponse): { id: string; status: string } {
+  if (r.status === "failed" || r.status === "needs_confirmation") throw new SdkLensError(r.status, r.status === "failed");
+  return { id: r.delivery_id, status: r.status };
+}
+
 /** Notices for one user over a ready client. Exported for the suites. */
 export function sdkUserNotices(dopl: Dopl, userId: string, deviceIds: string[]): SdkUserNotices {
   return {
@@ -399,9 +407,19 @@ export function sdkUserNotices(dopl: Dopl, userId: string, deviceIds: string[]):
       return settle(
         deliverOnce(
           "notify",
-          (signal) => dopl.devices.action(deviceId, "present.notify", { title, body }, { idempotencyKey, signal }),
-          (r) => ({ action_id: r.action_id, status: r.status }),
-        ).then((r) => ({ id: r.action_id, status: r.status })),
+          (signal) => dopl.users.deliver(userId, { intent: "notify", content: { title, text: body }, target: deviceId, urgency: "normal" }, { idempotencyKey, signal }),
+          deliveryFields,
+        ).then(noticeOf),
+      );
+    },
+    show({ deviceId, title, lines, idempotencyKey }) {
+      const blocks: SdkBlock[] = [{ id: "title", type: "heading", text: title }, { id: "lines", type: "list", items: lines } as SdkBlock];
+      return settle(
+        deliverOnce(
+          "show",
+          (signal) => dopl.users.deliver(userId, { intent: "display", content: { blocks }, target: deviceId, urgency: "normal" }, { idempotencyKey, signal }),
+          deliveryFields,
+        ).then(noticeOf),
       );
     },
     async action(id) {

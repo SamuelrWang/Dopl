@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { DeviceEventRowSchema, type DeviceEventRow } from "../types";
+import { createColumnCompat } from "./column-compat";
 
 /**
  * DEVICE SDK EVENT LOG (C8, A2) — `logDevEvent(row)` writes one `dev_events` row.
@@ -15,6 +16,10 @@ import { DeviceEventRowSchema, type DeviceEventRow } from "../types";
  * function is not frozen with rows still queued).
  *
  * The sink is injectable (`setDevEventSinkForTests`); the default inserts with the service role.
+ *
+ * 🔒 HOT PATH (docs/INVARIANTS.md §12): one unknown column would lose the WHOLE batch, so the default
+ * sink drops the portal's columns (`20261125100000_dev_portal_log_fields.sql`) and retries when the
+ * database does not have them yet. The row survives without them.
  */
 
 export const DEV_EVENTS_TABLE = "dev_events";
@@ -29,11 +34,23 @@ export interface DevEventSink {
   write(rows: DeviceEventRow[]): Promise<void>;
 }
 
+const logColumns = createColumnCompat(["api_key_id", "action_id", "operation", "http_method", "route", "http_status"]);
+
+/** The batch insert, over any `insert`. Exported so the suite runs the real path against a database lacking the columns. */
+export async function writeEventRows(
+  insert: (rows: DeviceEventRow[]) => PromiseLike<{ error: { message: string } | null }>,
+  rows: DeviceEventRow[],
+  compat = logColumns
+): Promise<void> {
+  const first = await insert(rows.map((r) => compat.shape(r)));
+  if (!first.error) return;
+  if (!compat.isMissing(first.error)) throw new Error(first.error.message);
+  const second = await insert(rows.map((r) => compat.fallback(r)));
+  if (second.error) throw new Error(second.error.message);
+}
+
 const supabaseSink: DevEventSink = {
-  async write(rows) {
-    const { error } = await supabaseAdmin().from(DEV_EVENTS_TABLE).insert(rows);
-    if (error) throw new Error(error.message);
-  },
+  write: (rows) => writeEventRows((batch) => supabaseAdmin().from(DEV_EVENTS_TABLE).insert(batch), rows),
 };
 
 let sink: DevEventSink = supabaseSink;
@@ -88,6 +105,12 @@ export function buildDevEvent(input: DevEventInput): DeviceEventRow {
     bytes_in: input.bytes_in ?? 0,
     bytes_out: input.bytes_out ?? 0,
     cost_units: input.cost_units ?? 0,
+    api_key_id: input.api_key_id ?? null,
+    action_id: input.action_id ?? null,
+    operation: input.operation ?? null,
+    http_method: input.http_method ?? null,
+    route: input.route ?? null,
+    http_status: input.http_status ?? null,
   };
 }
 

@@ -35,6 +35,8 @@ export interface GlassesDeps extends Clock {
    * absent = prosumer only. Production: `display/server/sdk-lens.ts › productionSdkNotices`.
    */
   sdkNotices?: GlassesSdkPort;
+  /** A lens copy the SDK could not take went through the prosumer queue: put it in the developer log. Never rejects. */
+  logFallback?: (userId: string, a: { operation: string; capability: "present.notify" | "present.display"; reason: string }) => Promise<void>;
 }
 
 /** One SDK call as the tools read it (`display/server/sdk-lens.ts › SdkNoticeResult`). */
@@ -44,6 +46,7 @@ export type GlassesSdkResult<T> = { ok: true; value: T } | { ok: false; code: st
 export interface GlassesSdkUser {
   deviceIds: string[];
   notify(a: { deviceId: string; title: string; body: string; idempotencyKey: string }): Promise<GlassesSdkResult<{ id: string; status: string }>>;
+  show(a: { deviceId: string; title: string; lines: string[]; idempotencyKey: string }): Promise<GlassesSdkResult<{ id: string; status: string }>>;
   action(id: string): Promise<GlassesSdkResult<{ id: string; device_id: string; capability: string; status: string; result: Record<string, unknown> | null; updated_at: string }>>;
 }
 
@@ -54,6 +57,8 @@ export interface GlassesSdkPort {
 
 /** The SDK's even_g2 notice lifetime (`device-sdk/server/glasses/even-g2-dispatch.ts › SDK_NOTIFY_TTL_S`). */
 export const SDK_NOTIFY_TTL_SEC = 60;
+/** The SDK's screen lifetime (`even-g2-dispatch.ts › SDK_SCREEN_TTL_S`). */
+export const SDK_SHOW_TTL_SEC = 600;
 
 const logNotice = (fields: Record<string, unknown>) => console.info("[glasses] " + JSON.stringify(fields));
 
@@ -97,7 +102,8 @@ export async function glassesNotify(
   let fallbackReason = sdk.unavailable;
   if (sdk.user && ttl !== SDK_NOTIFY_TTL_SEC) fallbackReason = `ttl_sec ${ttl}`; // 🔒 faithful or not at all
   else if (sdk.user) {
-    const sent = await notifyOverSdk(sdk.user, sdk.linkIds, { title, body });
+    const user = sdk.user;
+    const sent = await everyDevice(sdk.linkIds, "glasses_notify", (deviceId, idempotencyKey) => user.notify({ deviceId, title, body, idempotencyKey }));
     if (sent.path === "sdk") {
       logNotice({ evt: "glasses_notify", path: "sdk", devices: sent.devices, ...(sent.status.startsWith("skipped") && { outcome: sent.status }) });
       return { id: sent.id, status: sent.status };
@@ -105,6 +111,7 @@ export async function glassesNotify(
     fallbackReason = sent.reason;
   }
   if (deps.sdkNotices) logNotice({ evt: "glasses_notify", path: fallbackReason ? "prosumer_fallback" : "prosumer", ...(fallbackReason && { fallback_reason: fallbackReason }) });
+  if (fallbackReason) await deps.logFallback?.(userId, { operation: "notify.prosumer_fallback", capability: "present.notify", reason: fallbackReason });
   const now = nowOf(deps);
   const row = await deps.store.insert(userId, {
     kind: "notify",
@@ -117,17 +124,17 @@ export async function glassesNotify(
 }
 
 /**
- * `present.notify` on each migrated device (the prosumer queue reaches every device too). EVERY device
+ * One lens copy on each migrated device (the prosumer queue reaches every device too). EVERY device
  * is tried: one stale pairing refusing `device_offline` must not keep the notice from a live one.
  * Prosumer fallback ONLY when no device took it and every refusal was proven non-delivery (SDK
  * unavailable, or refused before any lens copy existed); a device that fails after another landed is
  * logged, never re-sent (no double copy). A may-have-landed outcome (unconfirmed, our timeout) or any
  * other refusal reports `skipped:sdk <code>` when no device took it.
  */
-async function notifyOverSdk(
-  user: GlassesSdkUser,
+async function everyDevice(
   deviceIds: string[],
-  a: { title: string; body: string },
+  evt: "glasses_notify" | "glasses_show",
+  send: (deviceId: string, idempotencyKey: string) => Promise<GlassesSdkResult<{ id: string; status: string }>>,
 ): Promise<{ path: "sdk"; id: string | null; status: string; devices: number } | { path: "prosumer"; reason: string }> {
   const key = newKey();
   let first: { id: string; status: string } | null = null;
@@ -135,14 +142,14 @@ async function notifyOverSdk(
   let proven: string | null = null;
   let landed = 0;
   for (const deviceId of deviceIds) {
-    const r = await user.notify({ deviceId, title: a.title, body: a.body, idempotencyKey: `${key}:${deviceId}` });
+    const r = await send(deviceId, `${key}:${deviceId}`);
     if (r.ok) {
       first ??= r.value;
       landed += 1;
     } else {
       if (r.fallback) proven ??= r.code;
       else refusal ??= r.code;
-      logNotice({ evt: "glasses_notify", path: "sdk", device_id: deviceId, outcome: r.code });
+      logNotice({ evt, path: "sdk", device_id: deviceId, outcome: r.code });
     }
   }
   if (!first && proven && !refusal) return { path: "prosumer", reason: proven };
@@ -169,6 +176,22 @@ export async function glassesShow(
       throw new GlassesValidationError(`card_id may not start with "${RESERVED_CARD_PREFIX}" (reserved for agent replies)`);
     }
   }
+  // 🔒 Faithful or not at all: the SDK has no replace-by-id (Gap #11) and screens live SDK_SHOW_TTL_SEC.
+  const sdk = await sdkNoticesFor(deps, userId);
+  let fallbackReason = sdk.unavailable;
+  if (sdk.user && cardId) fallbackReason = "card_id";
+  else if (sdk.user && ttl !== SDK_SHOW_TTL_SEC) fallbackReason = `ttl_sec ${ttl}`;
+  else if (sdk.user) {
+    const user = sdk.user;
+    const sent = await everyDevice(sdk.linkIds, "glasses_show", (deviceId, idempotencyKey) => user.show({ deviceId, title, lines, idempotencyKey }));
+    if (sent.path === "sdk") {
+      logNotice({ evt: "glasses_show", path: "sdk", devices: sent.devices, ...(sent.status.startsWith("skipped") && { outcome: sent.status }) });
+      return { id: sent.id, card_id: null, status: sent.status };
+    }
+    fallbackReason = sent.reason;
+  }
+  if (deps.sdkNotices) logNotice({ evt: "glasses_show", path: fallbackReason ? "prosumer_fallback" : "prosumer", ...(fallbackReason && { fallback_reason: fallbackReason }) });
+  if (fallbackReason) await deps.logFallback?.(userId, { operation: "show.prosumer_fallback", capability: "present.display", reason: fallbackReason });
   const now = nowOf(deps);
   const payload = { title, lines };
   const expiresAt = iso(now + ttl * 1000);

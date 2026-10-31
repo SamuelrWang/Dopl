@@ -857,6 +857,10 @@ components:
       minProperties: 1
       properties:
         text: { type: string, minLength: 1 }
+        title:
+          description: A heading for `present.notify`. Other capabilities ignore it.
+          type: string
+          minLength: 1
         blocks: { $ref: "#/components/schemas/DisplayBlocks" }
         options:
           type: array
@@ -918,6 +922,9 @@ components:
           oneOf:
             - $ref: "#/components/schemas/ErrorBody"
             - type: "null"
+        external_user_id:
+          description: The developer's id for the person. Sent on webhook payloads.
+          type: [string, "null"]
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -1040,6 +1047,17 @@ components:
         candidates:
           type: array
           items: { type: string }
+        considered:
+          description: The router's verdict per device. Absent on older rows and on calls that never routed.
+          type: array
+          items:
+            type: object
+            required: [device_id, kind, verdict, reason]
+            properties:
+              device_id: { type: string, minLength: 1 }
+              kind: { $ref: "#/components/schemas/DeviceKind" }
+              verdict: { type: string, enum: [chosen, eligible, skipped] }
+              reason: { type: string, minLength: 1 }
     EventConfirmation:
       type: object
       required: [required, result]

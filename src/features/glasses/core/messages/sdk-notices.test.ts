@@ -7,7 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeGlassesStore, fakeClock } from "../testing/fake-store";
 import { createFakeDeviceStore } from "../testing/fake-device-store";
-import { glassesGetAnswer, glassesNotify, type GlassesSdkResult, type GlassesSdkUser } from "./service";
+import { glassesGetAnswer, glassesNotify, glassesShow, type GlassesSdkResult, type GlassesSdkUser } from "./service";
 
 const USER = "11111111-1111-4111-8111-111111111111";
 const ACT = "22222222-2222-4222-8222-222222222222";
@@ -15,7 +15,7 @@ const ACT = "22222222-2222-4222-8222-222222222222";
 type Notify = GlassesSdkUser["notify"];
 type ActionFn = GlassesSdkUser["action"];
 
-async function setup(opts: { migrated?: "all" | "both" | "none" | "one of two"; notify?: Notify; action?: ActionFn; forUser?: () => Promise<GlassesSdkUser | null> } = {}) {
+async function setup(opts: { migrated?: "all" | "both" | "none" | "one of two"; notify?: Notify; show?: GlassesSdkUser["show"]; action?: ActionFn; forUser?: () => Promise<GlassesSdkUser | null> } = {}) {
   const fake = createFakeGlassesStore();
   const clock = fakeClock();
   const { devices } = createFakeDeviceStore();
@@ -30,10 +30,12 @@ async function setup(opts: { migrated?: "all" | "both" | "none" | "one of two"; 
   const migratedIds = opts.migrated === "none" ? [] : opts.migrated === "both" ? ids : [ids[0]];
   const notify = vi.fn<Notify>(opts.notify ?? (async () => ({ ok: true, value: { id: ACT, status: "queued" } })));
   const action = vi.fn<ActionFn>(opts.action ?? (async () => ({ ok: false, code: "not_found", fallback: false })));
-  const user: GlassesSdkUser = { deviceIds: migratedIds, notify, action };
+  const show = vi.fn<GlassesSdkUser["show"]>(opts.show ?? (async () => ({ ok: true, value: { id: ACT, status: "queued" } })));
+  const user: GlassesSdkUser = { deviceIds: migratedIds, notify, show, action };
   const forUser = vi.fn(opts.forUser ?? (async () => user));
-  const deps = { store: fake.store, devices, now: clock.now, sleep: clock.sleep, sdkNotices: { forUser } };
-  return { deps, rows: fake.rows, notify, action, forUser, ids };
+  const logFallback = vi.fn(async () => {});
+  const deps = { store: fake.store, devices, now: clock.now, sleep: clock.sleep, sdkNotices: { forUser }, logFallback };
+  return { deps, rows: fake.rows, notify, show, action, forUser, ids, logFallback };
 }
 
 let logs: Array<Record<string, unknown>>;
@@ -44,6 +46,36 @@ beforeEach(() => {
 
 const unavailable = (code: string): GlassesSdkResult<never> => ({ ok: false, code, fallback: true });
 const refused = (code: string): GlassesSdkResult<never> => ({ ok: false, code, fallback: false });
+
+describe("glasses_show over the SDK", () => {
+  it("every link migrated: one logged deliver per device, no prosumer row", async () => {
+    const w = await setup({ migrated: "both" });
+    const out = await glassesShow(w.deps, USER, { title: "T", lines: ["a", "b"] });
+    expect(out).toEqual({ id: ACT, card_id: null, status: "pending" });
+    expect(w.show).toHaveBeenCalledTimes(2);
+    expect(w.rows).toHaveLength(0);
+    expect(w.logFallback).not.toHaveBeenCalled();
+  });
+
+  it("🔒 faithful or not at all: a card_id or another ttl stays on the prosumer queue, and says so in the log", async () => {
+    const w = await setup();
+    await glassesShow(w.deps, USER, { title: "T", lines: ["a"], card_id: "c1" });
+    await glassesShow(w.deps, USER, { title: "T", lines: ["a"], ttl_sec: 30 });
+    expect(w.show).not.toHaveBeenCalled();
+    expect(w.rows).toHaveLength(2);
+    expect(w.logFallback).toHaveBeenCalledWith(USER, { operation: "show.prosumer_fallback", capability: "present.display", reason: "card_id" });
+    expect(w.logFallback).toHaveBeenCalledWith(USER, { operation: "show.prosumer_fallback", capability: "present.display", reason: "ttl_sec 30" });
+  });
+});
+
+describe("glasses_notify fallback row", () => {
+  it("🔒 a proven refusal writes the row that explains the delivered message", async () => {
+    const w = await setup({ notify: async () => unavailable("device_offline") });
+    await glassesNotify(w.deps, USER, { title: "T", body: "B" });
+    expect(w.rows).toHaveLength(1);
+    expect(w.logFallback).toHaveBeenCalledWith(USER, { operation: "notify.prosumer_fallback", capability: "present.notify", reason: "device_offline" });
+  });
+});
 
 describe("glasses_notify over the SDK", () => {
   it("every link migrated: present.notify on the device with title+body, no prosumer row", async () => {

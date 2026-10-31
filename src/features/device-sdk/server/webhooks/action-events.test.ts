@@ -44,6 +44,15 @@ describe("action settle webhooks", () => {
     });
   });
 
+  it("carries external_user_id, and a failed lookup costs the id, never the webhook", async () => {
+    const out: OutboxRow[] = [];
+    const a = { ...row("done"), end_user_id: "eu1" };
+    await emitActionSettled({ insertOutbox: async (r) => void out.push(r), externalUserIdOf: async () => "user-9" }, [a]);
+    await emitActionSettled({ insertOutbox: async (r) => void out.push(r), externalUserIdOf: async () => { throw new Error("down"); } }, [a]);
+    expect((out[0].payload as { data: Record<string, unknown> }).data.external_user_id).toBe("user-9");
+    expect((out[1].payload as { data: Record<string, unknown> }).data.external_user_id).toBeNull();
+  });
+
   it("a failed outbox write never throws into the device's answer path", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const n = await emitActionSettled(

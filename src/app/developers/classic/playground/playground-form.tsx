@@ -9,7 +9,7 @@ import { SelectMenu } from "@/shared/ui/select-menu";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { PLAYGROUND_OPS, playgroundOp, type PlaygroundOp } from "@/features/device-sdk/portal/playground-ops";
 import type { PlaygroundRun } from "@/features/device-sdk/portal/playground-types";
-import { Card, Json, ov } from "../_components/ui";
+import { Card, Json, ov } from "../../_components/ui";
 
 const OP_OPTIONS = PLAYGROUND_OPS.map((op) => ({ value: op.id, label: op.label, description: `${op.method} ${op.path}` }));
 const FIELD = "card-well h-8 w-full rounded-field px-2.5 font-mono text-small text-text-primary placeholder:text-text-disabled";

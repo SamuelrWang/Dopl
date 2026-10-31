@@ -2,7 +2,7 @@
 
 /**
  * The real developer portal's frame (W1.3): left nav (project picker, test/live switch, sections),
- * top bar, page below. The look is the `/playground/developers` demo's shell, built from the same
+ * top bar, page below. The look is the redesign's shell (`(portal)`), built from the same
  * kit pieces; the data is the caller's own, read on the server and passed in. Every choice here
  * is a URL change, so the server re-reads for it.
  */
@@ -22,7 +22,7 @@ import {
   type PortalProject,
 } from "@/features/device-sdk/portal/scope";
 
-export const DEVELOPERS_BASE = "/developers";
+export const DEVELOPERS_BASE = "/developers/classic";
 
 const SECTIONS: ReadonlyArray<{ href: string; label: string; icon: LucideIcon }> = [
   { href: "/logs", label: "Request log", icon: Activity },

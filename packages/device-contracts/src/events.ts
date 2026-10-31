@@ -21,6 +21,17 @@ export type EventOutcome = z.infer<typeof EventOutcomeSchema>;
 
 export const CONFIRMATION_RESULTS = ["approved", "denied", "timeout"] as const;
 
+/** One device's verdict from the router, kept so a log can show why each was or was not picked. */
+export const CONSIDERED_VERDICTS = ["chosen", "eligible", "skipped"] as const;
+export const ConsideredDeviceSchema = z.object({
+  device_id: z.string().min(1),
+  kind: DeviceKindSchema,
+  verdict: z.enum(CONSIDERED_VERDICTS),
+  /** Why it was skipped, or why it was picked. */
+  reason: z.string().min(1),
+});
+export type ConsideredDevice = z.infer<typeof ConsideredDeviceSchema>;
+
 export const RouteDecisionSchema = z.object({
   /** What the caller asked for (`auto`, a kind, a device id). */
   target: z.string().min(1),
@@ -28,6 +39,8 @@ export const RouteDecisionSchema = z.object({
   reason: z.string().min(1),
   /** Device ids considered. */
   candidates: z.array(z.string()),
+  /** The router's verdict per device. Absent on rows written before 2026-10-31 and on calls that never routed. */
+  considered: z.array(ConsideredDeviceSchema).optional(),
 });
 export type RouteDecision = z.infer<typeof RouteDecisionSchema>;
 
@@ -70,6 +83,16 @@ export const DeviceEventRowSchema = z.object({
   bytes_in: z.number().int().nonnegative(),
   bytes_out: z.number().int().nonnegative(),
   cost_units: z.number().nonnegative(),
+  /** The key behind the call; null for rows no key made (hosted Connect, the prosumer fallback). */
+  api_key_id: z.string().nullish(),
+  /** The `dev_actions` row this call created or moved. */
+  action_id: z.string().nullish(),
+  /** Stable name of the call (`deliver`, `device.action`, `connect.pair`, `notify.prosumer_fallback`). */
+  operation: z.string().nullish(),
+  http_method: z.string().nullish(),
+  /** The request path. Never holds a token: hosted Connect writes `:token`. */
+  route: z.string().nullish(),
+  http_status: z.number().int().nullish(),
 });
 export type DeviceEventRow = z.infer<typeof DeviceEventRowSchema>;
 
@@ -110,7 +133,7 @@ export const PublicDeviceEventSchema = DeviceEventRowSchema.pick({
 export type PublicDeviceEvent = z.infer<typeof PublicDeviceEventSchema>;
 
 /** The C8 fields `PublicDeviceEventSchema` never exposes (pinned by `events.test.ts`). */
-export const PRIVATE_EVENT_FIELDS = ["org_id", "bytes_in", "bytes_out", "cost_units"] as const;
+export const PRIVATE_EVENT_FIELDS = ["org_id", "bytes_in", "bytes_out", "cost_units", "api_key_id", "action_id", "operation", "http_method", "route", "http_status"] as const;
 
 /** `GET /events` response: the shared list envelope (`lists.ts`). */
 export const EventListResponseSchema = listResponseSchema(PublicDeviceEventSchema);

@@ -2,15 +2,15 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { canManageKeys } from "@/features/device-sdk/portal/scope";
 import type { RawSearchParams } from "@/features/device-sdk/portal/scope";
 import { listProjectKeys } from "@/features/device-sdk/server/portal";
-import { PortalFrame } from "../_components/portal-frame";
-import { NoProjects, PageHeader } from "../_components/ui";
-import { loadPortal } from "../_lib/load-portal";
-import { maskedKey, since } from "../_lib/format";
+import { PortalFrame } from "../../_components/portal-frame";
+import { NoProjects, PageHeader } from "../../_components/ui";
+import { loadPortal } from "../../_lib/load-portal";
+import { maskedKey, since } from "../../_lib/format";
 import { KeysTable, type KeyView } from "./keys-table";
 
-/** `/developers/keys` — the selected project's keys for one env: masked, last used; create, rotate, revoke. */
+/** `/developers/classic/keys` — the selected project's keys for one env: masked, last used; create, rotate, revoke. */
 export default async function KeysPage({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
-  const { projects, params, now } = await loadPortal(searchParams, "/developers/keys");
+  const { projects, params, now } = await loadPortal(searchParams, "/developers/classic/keys");
   const project = projects.find((p) => p.id === params.project) ?? null;
 
   let body;

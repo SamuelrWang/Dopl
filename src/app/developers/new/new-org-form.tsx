@@ -25,7 +25,7 @@ export function NewOrgForm({ firstOrg }: { firstOrg: boolean }) {
     setError(null);
     try {
       const out = await portalCall<{ projectId: string }>("/api/developers/orgs", "POST", { orgName, projectName });
-      router.push(`/developers/keys?project=${encodeURIComponent(out.projectId)}&env=test`);
+      router.push(`/developers/classic/keys?project=${encodeURIComponent(out.projectId)}&env=test`);
       router.refresh();
     } catch (e) {
       setError(errorText(e, "Could not create the org"));

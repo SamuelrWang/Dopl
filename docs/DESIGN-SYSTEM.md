@@ -50,6 +50,10 @@ is why `label[for]` is not in the list (every `htmlFor` here points at a text fi
 where a click is a focus, not a press). Full rule: INVARIANTS §15; pinned by
 `src/shared/ui/clickable-cursor.test.ts`, which also fails a new bare `onClick`.
 
+## The developer portal's own scale (2026-10-31)
+
+`src/app/developers/(portal)/_design` is a scoped design system with its own tokens (`--u`, `tokens.module.css`) and its own rules (`_design/README.md`, guarded by `_design/design-guard.test.ts`). This file still governs everything else. The two have not been reconciled; a change to global tokens does not reach the portal.
+
 ## The three control kinds (2026-10-26)
 
 Samuel names a control by its kind ("make X a text link"). Each kind is ONE implementation in

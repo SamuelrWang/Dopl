@@ -70,7 +70,7 @@ function world() {
     async revokeToken(deviceId) {
       for (const [h, d] of creds) if (d.id === deviceId) creds.delete(h);
     },
-    delivered: (deviceId, ids) => markDelivered(lensActions, deviceId, ids),
+    delivered: async (deviceId, ids) => void (await markDelivered(lensActions, deviceId, ids)),
     settled: (deviceId, row) => settle(lensActions, deviceId, row),
   };
 
@@ -159,8 +159,9 @@ describe("SDK G2: deliver → its own lens queue", () => {
     expect(messages).toHaveLength(1);
     // D3: the words arrive exactly as delivered.
     expect(messages[0]).toMatchObject({ id: action.result!.lens_message_id, kind: "notify", payload: { title: "", body: "Meeting moved to 3pm." } });
-    expect(w.store.actions[0].status).toBe("delivered");
-    expect((await getAction(w.deps, A, action.id)).body).toMatchObject({ status: "delivered" });
+    // Picked up is the end of a notice (ruled 2026-10-31).
+    expect(w.store.actions[0].status).toBe("done");
+    expect((await getAction(w.deps, A, action.id)).body).toMatchObject({ status: "done" });
   });
 
   it("present.display compiles through the G2 compiler into a screen row; content that does not fit is refused, never rewritten", async () => {

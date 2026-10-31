@@ -18,8 +18,8 @@ import {
   type AssignableRole,
   type PortalRole,
 } from "@/features/device-sdk/portal/scope";
-import { Card, PageHeader, Table, ov } from "../_components/ui";
-import { errorText, portalCall } from "../_lib/client-api";
+import { Card, PageHeader, Table, ov } from "../../_components/ui";
+import { errorText, portalCall } from "../../_lib/client-api";
 
 export interface MemberRow {
   userId: string;
@@ -154,7 +154,7 @@ export function OrgView({
       );
     } else if (pending.kind === "leave") {
       await run("leave the org", () => portalCall(`${orgPath}/members/${encodeURIComponent(me)}`, "DELETE"));
-      router.push("/developers/org");
+      router.push("/developers/classic/org");
     } else {
       await run("revoke the invite", () =>
         portalCall(`/api/developers/invites/${encodeURIComponent(pending.invite.id)}`, "DELETE")
@@ -176,7 +176,7 @@ export function OrgView({
                 ariaLabel="Switch org"
                 value={org.id}
                 options={[{ value: org.id, label: org.name }, ...otherOrgs.map((o) => ({ value: o.id, label: o.name }))]}
-                onChange={(id) => router.push(`/developers/org?org=${encodeURIComponent(id)}`)}
+                onChange={(id) => router.push(`/developers/classic/org?org=${encodeURIComponent(id)}`)}
               />
             )}
             <Link href="/developers/new" className={pillButton("outline", "md")}>
@@ -226,7 +226,7 @@ export function OrgView({
                 <td className="font-mono text-small text-text-muted">{p.apiVersion}</td>
                 <td>
                   <span className="flex justify-end">
-                    <Link href={`/developers/keys?project=${encodeURIComponent(p.id)}&env=test`} className={pillButton("quiet", "xs")}>
+                    <Link href={`/developers/classic/keys?project=${encodeURIComponent(p.id)}&env=test`} className={pillButton("quiet", "xs")}>
                       Keys
                     </Link>
                   </span>

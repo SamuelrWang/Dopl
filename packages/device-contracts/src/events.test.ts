@@ -18,6 +18,8 @@ const SPEC_FIELDS = [
   "capability", "intent", "route_decision", "profile_id", "profile_version",
   "risk_tier", "confirmation", "outcome", "error_code",
   "latency_ms", "bytes_in", "bytes_out", "cost_units",
+  // The portal's request fields, added 2026-10-31.
+  "api_key_id", "action_id", "operation", "http_method", "route", "http_status",
 ];
 
 const ROW = {

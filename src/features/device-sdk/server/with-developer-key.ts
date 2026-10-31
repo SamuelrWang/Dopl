@@ -33,7 +33,7 @@ import { touchApiKeyLastUsed, verifyApiKey, type ResolvedDeveloperKey } from "./
 /** Fields a handler may set on its call's event row. Identity, outcome and `latency_ms.api` are the wrapper's. */
 export type DevEventAnnotation = Omit<
   DevEventInput,
-  "org_id" | "project_id" | "env" | "outcome" | "error_code" | "event_id" | "ts" | "latency_ms"
+  "org_id" | "project_id" | "env" | "outcome" | "error_code" | "event_id" | "ts" | "latency_ms" | "api_key_id" | "http_method" | "route" | "http_status"
 > & { latency_ms?: { device_delivery?: number | null; user_response?: number | null } };
 
 export interface DevEventHandle {
@@ -71,6 +71,29 @@ export function readBearer(request: Request): string | null {
   const match = /^Bearer[ ]+(\S+)[ ]*$/i.exec(header);
   return match ? match[1] : null;
 }
+
+const OPERATIONS: ReadonlyArray<[RegExp, string]> = [
+  [/^\/users\/[^/]+\/deliver$/, "deliver"],
+  [/^\/users\/[^/]+\/context$/, "context.read"],
+  [/^\/users\/[^/]+\/connections$/, "connections.list"],
+  [/^\/devices\/[^/]+\/actions\/[^/]+$/, "device.action"],
+  [/^\/devices\/[^/]+$/, "device.read"],
+  [/^\/actions\/[^/]+$/, "action.read"],
+  [/^\/connect_sessions$/, "connect.session"],
+  [/^\/connections\/exchange$/, "connect.exchange"],
+  [/^\/connections\/[^/]+$/, "connection"],
+  [/^\/webhook_/, "webhooks"],
+  [/^\/test\/reset$/, "test.reset"],
+  [/^\/ping$/, "ping"],
+];
+
+/** The stable name of a `/api/v1` call, so counting deliveries never parses a path. Null = unnamed route. */
+export function operationOf(pathname: string): string | null {
+  const path = pathname.replace(/^\/api\/v1/, "");
+  return OPERATIONS.find(([re]) => re.test(path))?.[1] ?? null;
+}
+
+const MAX_ROUTE_CHARS = 256;
 
 /** C8 outcome for a response: auth/permission refusals are `denied`, other failures `error`. */
 function outcomeOf(status: number, code: ErrorCode | null): EventOutcome {
@@ -128,10 +151,16 @@ export function withDeveloperKey(handler: DeveloperKeyHandler, options: Develope
       if (!resolved || options.logEvent === false) return;
       try {
         const { latency_ms, ...rest } = annotation;
+        const pathname = new URL(request.url).pathname;
         logDevEvent({
           bytes_in: byteLength(request.headers.get("content-length")),
           bytes_out: bytesOut,
+          operation: operationOf(pathname),
           ...rest,
+          api_key_id: resolved.key.id,
+          http_method: request.method,
+          route: pathname.slice(0, MAX_ROUTE_CHARS),
+          http_status: status,
           event_id: requestId,
           org_id: resolved.orgId,
           project_id: resolved.projectId,

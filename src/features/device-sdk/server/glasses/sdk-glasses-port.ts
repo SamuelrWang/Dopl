@@ -4,9 +4,10 @@ import { EVEN_G2_INFO } from "@/features/glasses/platforms/even-g2/info";
 import { TtlCache } from "@/features/glasses/core/ttl-cache";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { ActionStatus } from "../../types";
+import { actionTimeColumns } from "../column-compat";
 import { ACTION_COLS } from "../delivery-store-supabase";
 import { sdkDeliveryFor } from "../sdk-delivery-flag";
-import { markDelivered, settle, withStatus, type LensActionStore, type MovedLensAction } from "./lens-actions";
+import { markDelivered, matchesOnly, settle, withStatus, type LensActionStore, type MovedLensAction } from "./lens-actions";
 import { sdkGlassesStore } from "./sdk-glasses-store";
 import { connectStore } from "../connect/store";
 import { emitActionSettled } from "../webhooks/action-events";
@@ -38,24 +39,28 @@ export const supabaseLensActions: LensActionStore = {
     const rows = must(
       await db()
         .from("dev_actions")
-        .select("id, status, result, response")
+        .select("id, status, capability, result, response")
         .eq("device_id", deviceId)
         .in("result->>lens_message_id", ids)
         .in("status", from),
       "lens action read"
-    ) as Array<{ id: string; status: ActionStatus; result: Record<string, unknown> | null; response: Record<string, unknown> }> | null;
+    ) as Array<{ id: string; status: ActionStatus; capability: string | null; result: Record<string, unknown> | null; response: Record<string, unknown> }> | null;
     const moved: MovedLensAction[] = [];
     for (const r of rows ?? []) {
+      if (!matchesOnly(r.capability, patch.only)) continue;
       const update: Record<string, unknown> = {
         status: patch.status,
         response: withStatus(r.response ?? {}, patch.status),
         updated_at: new Date().toISOString(),
       };
       if (patch.result) update.result = { ...(r.result ?? {}), ...patch.result };
-      const hit = must(
-        await db().from("dev_actions").update(update).eq("id", r.id).eq("device_id", deviceId).in("status", from).select(ACTION_COLS),
-        "lens action update"
-      ) as MovedLensAction[] | null;
+      if (patch.delivered_at) update.delivered_at = patch.delivered_at;
+      if (patch.settled_at) update.settled_at = patch.settled_at;
+      const write = (row: Record<string, unknown>) =>
+        db().from("dev_actions").update(row).eq("id", r.id).eq("device_id", deviceId).in("status", from).select(ACTION_COLS);
+      let res = await write(actionTimeColumns.shape(update));
+      if (res.error && actionTimeColumns.isMissing(res.error)) res = await write(actionTimeColumns.fallback(update));
+      const hit = must(res, "lens action update") as MovedLensAction[] | null;
       moved.push(...(hit ?? []));
     }
     return moved;
@@ -100,7 +105,10 @@ export const sdkGlassesPort: SdkGlassesPort = {
     );
   },
 
-  delivered: (deviceId, ids) => markDelivered(supabaseLensActions, deviceId, ids),
+  async delivered(deviceId, ids) {
+    // A notice or screen the device took has nothing left to happen: `action.completed` now (ruled 2026-10-31).
+    await emitActionSettled(connectStore, await markDelivered(supabaseLensActions, deviceId, ids));
+  },
   async settled(deviceId, row) {
     const moved = await settle(supabaseLensActions, deviceId, row);
     // C8: an answered / dismissed ask is `action.completed` for the developer (ruled 2026-10-28).

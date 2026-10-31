@@ -4,6 +4,7 @@ import type { DoplClient } from "@dopl/client";
 import { offeredToolsFor } from "@dopl/mcp-server/factory";
 import { consumeMcpCredits } from "@/features/billing/server/credits-service";
 import { productionSdkNotices } from "@/features/display/server/sdk-lens";
+import { logProsumerFallback } from "@/features/device-sdk/server/internal-events";
 import { resolveActiveWorkspace } from "@/features/workspaces/server/service";
 import { deviceRepository } from "../devices/repository";
 import { glassesRepository } from "../messages/repository";
@@ -28,7 +29,7 @@ import { registerGlassesTools } from "./tools";
  * `sdkNotices`: for a user whose `sdk_delivery` flag is on, `glasses_notify` and `glasses_get_answer`
  * go over `@dopl/sdk` (W1.2 Gaps #1). The rest stays prosumer: KB Plans/"Dopl SDK Split - W1.2 Glasses Seam".
  */
-const glassesToolDeps: GlassesDeps = { store: glassesRepository, devices: deviceRepository, sdkNotices: productionSdkNotices };
+const glassesToolDeps: GlassesDeps = { store: glassesRepository, devices: deviceRepository, sdkNotices: productionSdkNotices, logFallback: logProsumerFallback };
 
 const EXHAUSTED = "Your Dopl credits are used up for this period.";
 const refusalText = (upgradeUrl: string | undefined) => (upgradeUrl ? `${EXHAUSTED} Upgrade: ${upgradeUrl}` : EXHAUSTED);

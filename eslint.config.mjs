@@ -118,7 +118,6 @@ const eslintConfig = defineConfig([
       "src/app/connect/**",
       "src/app/api/cron/device-sdk-events-prune/**",
       "src/app/api/cron/device-sdk-webhooks-send/**",
-      "src/app/playground/developers/**",
       "src/app/developers/**",
       "src/app/api/developers/**",
       "src/features/marketing/docs/**",

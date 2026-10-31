@@ -36,11 +36,11 @@ beforeEach(() => {
 });
 
 describe("sdkUserNotices.notify", () => {
-  it("present.notify on the device with title and body", async () => {
+  it("deliver to the device by id, with title and body", async () => {
     const { n, fetch } = notices((k, body) => {
-      expect(k).toBe(`POST /devices/${DEV}/actions/present.notify`);
-      expect(body).toMatchObject({ args: { title: "T", body: "B" }, idempotency_key: "k1" });
-      return res(202, { action_id: "a1", status: "queued" });
+      expect(k).toBe(`POST /users/${USER}/deliver`);
+      expect(body).toMatchObject({ intent: "notify", target: DEV, content: { title: "T", text: "B" }, idempotency_key: "k1" });
+      return res(202, { delivery_id: "a1", status: "queued" });
     });
     expect(await n.notify({ deviceId: DEV, title: "T", body: "B", idempotencyKey: "k1" })).toEqual({ ok: true, value: { id: "a1", status: "queued" } });
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -60,7 +60,7 @@ describe("sdkUserNotices.notify", () => {
     expect(lost.fetch).toHaveBeenCalledTimes(2);
     expect(await call(() => err(503, "unexpected_response", "api_error"))).toEqual({ ok: false, code: "unconfirmed", fallback: false });
     let n = 0;
-    expect(await call(() => (n++ === 0 ? err(502, "bad_gateway", "api_error") : res(202, { action_id: "a1", status: "queued" })))).toEqual({ ok: true, value: { id: "a1", status: "queued" } });
+    expect(await call(() => (n++ === 0 ? err(502, "bad_gateway", "api_error") : res(202, { delivery_id: "a1", status: "queued" })))).toEqual({ ok: true, value: { id: "a1", status: "queued" } });
     // Refused before any lens copy existed (router / pre-queue): proven, the prosumer notice is the one copy.
     expect(await call(() => err(409, "device_offline", "device_error"))).toEqual({ ok: false, code: "device_offline", fallback: true });
     expect(await call(() => err(400, "invalid_request"))).toEqual({ ok: false, code: "invalid_request", fallback: true });

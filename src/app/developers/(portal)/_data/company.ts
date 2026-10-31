@@ -1,6 +1,6 @@
 /**
  * The demo's one fictional customer. Every id, count and name on every page of
- * `/playground/developers` hangs off these files; nothing here is real and nothing is fetched.
+ * `/developers` hangs off these files; nothing here is real and nothing is fetched.
  */
 export const DEMO_NOW = "2026-10-29T16:40:00.000Z";
 

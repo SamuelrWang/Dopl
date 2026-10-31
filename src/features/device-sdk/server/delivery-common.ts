@@ -21,6 +21,22 @@ export interface DeliveryDeps {
   rateLimit?: { max: number; windowMs: number };
   /** How often an `ask.*` hold re-reads the action. */
   askPollMs?: number;
+  /**
+   * An action that settled on the adapter's FIRST answer (a refusal, an immediate `done`). Production
+   * enqueues `action.completed` / `action.failed`. A device that settles one later reports through
+   * `glasses/lens-actions.ts`. Absent = no webhook.
+   */
+  onSettled?: (rows: readonly StoredAction[]) => Promise<unknown>;
+}
+
+/** Tell {@link DeliveryDeps.onSettled}. A webhook write never fails the developer's call. */
+export async function notifySettled(deps: DeliveryDeps, row: StoredAction | null): Promise<void> {
+  if (!row || !deps.onSettled) return;
+  try {
+    await deps.onSettled([row]);
+  } catch (err) {
+    console.warn(`[device-sdk] settled webhook failed for action ${row.id}:`, err);
+  }
 }
 
 /** A service answer the route turns into a response, plus what goes on the event row. */
@@ -134,7 +150,8 @@ export async function checkIdempotency(deps: DeliveryDeps, scope: Scope, key: st
   return existing.request_hash === hash ? { kind: "replay", action: existing } : { kind: "conflict" };
 }
 
-export function replayResult(action: StoredAction, event: DevEventAnnotation): ServiceResult {
+export function replayResult(action: StoredAction, annotation: DevEventAnnotation): ServiceResult {
+  const event = { ...annotation, action_id: action.id };
   const decision = action.route_decision ?? { target: action.device_id ?? "replay", reason: "idempotent replay", candidates: [] };
   const replayDecision = { ...decision, reason: `idempotent replay: ${decision.reason}` };
   if (action.http_status >= 400 && action.error) {

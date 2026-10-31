@@ -1,7 +1,7 @@
 "use client";
 
 /** The portal: the sidebar and the page's content, on one surface. No rail, no panel around either. */
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import {
   Activity,
@@ -12,7 +12,6 @@ import {
   KeyRound,
   LayoutGrid,
   Link2,
-  Palette,
   Users,
   UsersRound,
   Webhook,
@@ -20,6 +19,7 @@ import {
 } from "lucide-react";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import { NavRow, Segmented } from "../_design/ui";
+import { Banner } from "../_design/ui-extras";
 import { AccountRow, NavGroup, PortalFrame, ProjectSwitcher, Sidebar } from "../_design/ui-sidebar";
 import { COMPANY, MEMBERS, PROJECTS, type Env } from "../_data/company";
 import { issuesFor } from "../_data/issues";
@@ -60,7 +60,6 @@ const GROUPS: { label: string | null; items: NavItem[] }[] = [
       { href: "/webhooks", label: "Webhooks", icon: Webhook },
       { href: "/usage", label: "Usage", icon: BarChart3 },
       { href: "/team", label: "Team", icon: UsersRound },
-      { href: "/design-playground", label: "Design Playground", icon: Palette },
     ],
   },
 ];
@@ -101,8 +100,12 @@ function PortalSidebar({ fontClass }: { fontClass?: string }) {
 }
 
 export function PortalShell({ fontClass, children }: { fontClass?: string; children: ReactNode }) {
+  const router = useRouter();
   return (
     <PortalFrame rootClass={shell.root} sidebar={<PortalSidebar fontClass={fontClass} />}>
+      <Banner icon={FlaskConical} action="Open live data" onAction={() => router.push("/developers/classic/logs")}>
+        Sample data
+      </Banner>
       {children}
     </PortalFrame>
   );

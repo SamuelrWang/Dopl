@@ -33,6 +33,28 @@ async function seeded() {
 const answered = (): GlassesMessage =>
   ({ id: LENS, kind: "ask", status: "answered", answer: { index: 1, choice: "No", at: "2026-10-28T00:00:00.000Z" } }) as unknown as GlassesMessage;
 
+describe("markDelivered", () => {
+  it("🔒 an ask waits for its answer; a notice or screen is finished, and is returned for its webhook", async () => {
+    const { store, actions, actionId } = await seeded();
+    const notice = "22222222-2222-4222-8222-222222222222";
+    const { action: other } = (await store.insertAction({
+      ...(await store.getAction({ projectId: "p1", env: "live" }, actionId))!,
+      id: undefined,
+      idempotency_key: "key-2",
+      capability: "present.notify",
+      intent: "notify",
+      result: { lens_message_id: notice },
+    })) as { inserted: true; action: { id: string } };
+    const done = await markDelivered(actions, DEVICE, [LENS, notice], "2026-10-31T00:00:00.000Z");
+    expect(done.map((a) => a.id)).toEqual([other.id]);
+    const scope = { projectId: "p1", env: "live" as const };
+    expect(await store.getAction(scope, other.id)).toMatchObject({ status: "done", delivered_at: "2026-10-31T00:00:00.000Z", settled_at: "2026-10-31T00:00:00.000Z" });
+    const ask = await store.getAction(scope, actionId);
+    expect(ask).toMatchObject({ status: "delivered", delivered_at: "2026-10-31T00:00:00.000Z" });
+    expect(ask?.settled_at).toBeUndefined();
+  });
+});
+
 describe("settle", () => {
   it("returns the moved row as stored after the move: tenant, key, done, answer", async () => {
     const { actions, actionId } = await seeded();

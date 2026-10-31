@@ -35,6 +35,8 @@ export type DeliverTarget = "auto" | z.infer<typeof DeviceKindSchema> | (string 
 export const DeliverContentSchema = z
   .object({
     text: z.string().min(1).optional(),
+    /** A heading for `present.notify`. Other capabilities ignore it. */
+    title: z.string().min(1).optional(),
     blocks: DisplayBlocksSchema.optional(),
     options: z.array(ChoiceOptionSchema).min(2).optional(),
   })
@@ -91,6 +93,8 @@ export const ActionSchema = z.object({
   result: z.record(z.string(), z.unknown()).nullable(),
   /** Set when `failed`. */
   error: ErrorBodySchema.nullable(),
+  /** The developer's id for the person. Sent on webhook payloads, so a handler need not map the device. */
+  external_user_id: z.string().nullable().optional(),
   created_at: z.iso.datetime(),
   updated_at: z.iso.datetime(),
 });
