@@ -448,3 +448,34 @@ Read all of `src/app/developers`. No size, spacing, radius, type or copy changed
 - **Split:** `ui-overlay.tsx` from `ui-page.tsx`, `team-flows.tsx` from `team.tsx`.
 - **Bugs fixed:** pressing Enter twice in Create key could create two keys and lose the first secret. New project could post an empty name on Enter, double-post, and kept an old error showing. A bad JSON body on Load older left its spinner on forever. Returning to a tab re-read the page twice (focus and visibilitychange), three times on Webhooks. Clipboard refusals went unhandled outside API keys. Issues read each title twice to a screen reader.
 - **Gates:** eslint clean on `src/app/developers`. Vitest on `sections.test.tsx` and `design-guard.test.ts`: 57 passed. One typecheck scoped to this tree and the docs: clean in this tree. Activity and Find anything now use `isUuid` from `shared/lib/id/uuid`, since `portal-http.ts` dropped its `UUID`. No `next build`, not opened in a browser.
+
+## Final cleanup, server half (2026-10-31)
+
+Commits `a006a074b`, `016e2b82f`, `cf1df4f75` and the id fix after them, on top of `080e0b231`. Nothing pushed, no migration.
+
+### Bugs fixed
+
+| Bug | Now |
+|---|---|
+| **The retention cron would have failed at its first full batch.** `deleteInBatches` sent 500 ids in the URL. Probed read-only on production: 350 UUIDs answer 200, 400 and up fail in `fetch` with `UND_ERR_HEADERS_OVERFLOW`. Never seen, because no table has reached a full batch of old rows | 200 ids per request, at most 10,000 rows per table per run |
+| `pruneDevEvents` was one unbounded delete | Same batches, moved to `retention.ts` |
+| `/v1/devices/{id}` and `/v1/actions/{id}` took 36 dashes as a uuid, so a cast error read 500 | `not_found`, through the shared `isUuid` |
+| `GET /v1/events` selected every column, `message_text` included, then dropped the private ones | Selects only `PublicDeviceEventSchema`'s columns. Checked against production |
+
+### One implementation
+
+`portalRoute` for the portal routes' error handling (`sessionOnly: true` stays literal in each route, since `write-gate-coverage.test.ts` reads it). `webhookRoute` for the `/v1` webhook routes. `requireManagedKey` and `rotationRefusal` for key reach and rotation. `isUuid` replaces seven copies. `must`, `parseEnv`, `isPortalRole`, `afterResponse`. Rotation logic moved from its route to `portal-admin.ts`; order of checks and responses unchanged.
+
+### Efficiency
+
+- `listPortalOrgs` is React `cache`d, so a page render resolves reach once instead of per caller. A route handler still reads each time, so a role change takes effect at once. The cost: `listPortalProjects` is now one sequential hop longer on the Activity poll.
+- Team reads members once, not twice. Webhook figures group once instead of filtering per endpoint and per day. `readWebhookCalls` reads only the endpoints it shows.
+
+### Checked, left alone
+
+- **Activity filters stay client-side.** Moving them needs the client to send them, which is a UI change. The route already takes `user` and `source`.
+- **Query plans:** `dev_events` holds 625 rows, so the planner seq-scans and plans prove little. `?user=` walks `dev_events_project_env_ts_idx` and filters, which costs a project's 30 days at worst. No index added; add `(project_id, env, external_user_id, ts DESC)` if that grows.
+- **Unproven:** `readEndpointViews` asks for 5,000 rows, and PostgREST may cap at its `max_rows` (Supabase's default is 1000; production's value not read). An endpoint past that in a week would read low. `dev_portal_metrics` returns one jsonb, so it is not affected.
+- **`dev_events` prunes at most 10,000 rows a run.** A project past that daily would fall behind.
+
+Vitest on device-sdk, `/api/developers`, `/api/v1`, the prune cron, the write gate and `/developers`: 67 files, 604 passed, 17 skipped. `tsc` clean. ESLint clean on changed files. No `next build`.
