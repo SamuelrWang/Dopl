@@ -4,6 +4,22 @@ Written 2026-10-31. Goal: replace the hard-coded portal at `/playground/develope
 
 Every page was mapped element by element against the code and production. Full tables are in [maps/](maps/). Numbers below were measured on 2026-10-31.
 
+## Your answers, 2026-10-31
+
+- **The demo is recorded,** at home, so venue risks are gone and retakes are possible.
+- **You have a physical Google Home.**
+- **Flow:** send a message from Dopl desktop, it shows in the channel. Open the Even simulator, open the chat, and that message is there. Dictate a message from the glasses, and it goes back to the agent.
+- **Scope:** not everything has to be live before the demo. **Everything that shows stats must be.**
+
+What changed in this plan as a result:
+
+| Before | Now |
+|---|---|
+| Mac receives deliveries as a device, with a desktop release | **Cut for the demo.** Mac appears as a connected device and as a message source. No SDK delivery to it |
+| Typed message doesn't appear in logs | **Inbound messages get logged,** from both Mac and glasses, since that's the moment you're showing |
+| Google Home bridge inside the desktop app | **Small local script on your Mac.** It's a recording, so no desktop build is needed for it |
+| Every page wired | **Stats and read views first.** Controls that can't work yet get hidden or disabled, so nothing pretends |
+
 ## 1. Where we stand
 
 **The backend is further along than the portal, but the demo's two new devices don't exist yet.**
@@ -11,7 +27,7 @@ Every page was mapped element by element against the code and production. Full t
 | Works today | Doesn't exist yet |
 |---|---|
 | `/v1` API, keys (hashing, reveal once, rotate, revoke) | Mac as an SDK device: production refuses every send (`src/features/device-sdk/server/device-adapters.ts › desktopUnavailable`) |
-| Delivery to the Even simulator, logged, proven on production | Google Home adapter, bridge or device row. Only a Cast sender in the desktop repo, tested against a fake socket |
+| Delivery to the Even simulator, logged, proven on production. Channel reading and dictation on the glasses exist | Google Home adapter, bridge or device row. Only a Cast sender in the desktop repo, tested against a fake socket |
 | Routing, rules enforcement on `deliver`, grants | Real Users, Devices, Overview, Issues, Connect pages. No endpoint lists users or devices |
 | Webhook sender: signing, 8 retries over about 27 hours, replay, rotation | Stored routing verdicts, delivery timestamps, per-key call counts |
 | Hosted Connect screen, built and tested | A run of Connect on production: 0 sessions ever |
@@ -24,7 +40,7 @@ Every page was mapped element by element against the code and production. Full t
 
 1. **Dopl App is internal, so real pages show zero.** Usage reads `dev_billable_events`, which excludes internal orgs, and the log filter drops internal projects by default. `refuseInternal` also blocks creating keys and inviting people there.
 2. **Portal opens on Test, and all Dopl traffic is Live,** so the first screen is empty.
-3. **Sending from the Mac writes no log.** Only `/api/v1` writes `dev_events`. A typed channel message, `glasses_show`, an agent's ordinary reply mirrored to the lens, hosted Connect steps and Google Home all leave no row.
+3. **The moments you're showing write no log.** Only `/api/v1` writes `dev_events`. A typed channel message, a dictated glasses message, `glasses_show`, an agent's reply mirrored to the lens, hosted Connect steps and Google Home all leave no row.
 4. **Failed rows sit beside delivered messages.** When an SDK send is refused, `glassesNotify` falls back to the old queue, which logs nothing. Each notify also tries all 4 G2s, so 3 stale ones produce red rows.
 5. **Don't restart the simulator.** Re-pairing creates an unmigrated link, then every send silently skips the logs. Fixing it needs an RPC with no script or UI. Its 60-second online window can also lapse if its window stays hidden.
 6. **Most numbers on screen are invented, some by formula:** `dailySeries`, the `Math.sin` rate line, week × 3.9, the $249 plan, Starter/Team/Scale prices, the maintenance banner, the Ask answer, test results that always pass, the pairing code, `Send test`.
@@ -93,7 +109,7 @@ Additive, applied by name, before the code that writes them. `logDevEvent` is ho
 
 ### Phase 0: answer unknowns first (S each, before building on them)
 1. Your rulings in section 8.
-2. **Google Home go or no-go:** run `node dopl-desktop-app/main/google-home/mcp-stdio.js --discover`, then one real speak on your speaker. Never yet run on real hardware.
+2. **Google Home go or no-go:** one real speak on your speaker. Discovery run from this session on 2026-10-31 found 0 devices. That doesn't prove much: Mac reported no Wi-Fi association on `en0`, and `bonjour-service` isn't installed in the repo. Check it runs on the speaker's network.
 3. **Run `deliver` once on production** with `target` by device id. All 14 rows so far are `present.notify`.
 4. **Run real Connect once on production.** 0 sessions ever.
 5. Decide stale G2 cleanup.
@@ -105,64 +121,71 @@ Additive, applied by name, before the code that writes them. `logDevEvent` is ho
 9. Logging: write new fields, router trace, `delivered_at`, hosted Connect rows, fallback row, move notices to `deliver`, route `glasses_show` through the SDK.
 10. `action.failed`, notify completion, `external_user_id` in payload.
 
-### Phase 2: the two new devices
-11. Generic bridge route and token, replacing the G2-only lookup in `sdk-glasses-port.ts › deviceFromTokenHash`.
-12. **Mac:** device row, credential, grant, presence, a real dispatcher for internal projects, pull loop in the desktop app, native banner.
-13. **Google Home:** `google_home` adapter (`home_hub`, `local_bridge`), Cast executor sharing the same loop. Use intent `message`; the demo's `notify` would be refused. Cast gives no answer back, so status ends at delivered.
-14. Local desktop build pointed at `www.usedopl.com`. Exception to the Electron-with-local-API rule, and you launch it.
+### Phase 2: your demo's devices and messages
+11. **Inbound rows (M).** A dictated glasses message (`src/features/glasses/core/voice/handlers.ts`) and a typed Dopl desktop message (`postMessage`) write a `dev_events` row with kind, source device and channel reference, never the text unless ruling 10 says so. Neither writes one today. Also emit `input.utterance` from the glasses path.
+12. **Agent replies on the lens get logged (S to M).** `reply-mirror.ts` uses the old queue with no row.
+13. **Mac as a connected device (S to M).** Device row, connection and grant under Dopl App, with heartbeat touching `devices.last_seen`. SDK delivery stays refused.
+14. **Google Home (M to L).** `google_home` adapter (`home_hub`, `local_bridge`), generic bridge route and token replacing the G2-only lookup in `sdk-glasses-port.ts › deviceFromTokenHash`, and a local script on your Mac running the Cast code. Use intent `message`; `notify` would be refused. Cast gives no answer back, so status ends at delivered.
+15. **Real traffic ahead of recording.** Charts need days of data, and today there's one day of it. Send real messages daily once logging ships, so a 14-day chart isn't one bar. No seeded fake rows.
 
-Mac and Google Home share one bridge, so together they're about L, not 2L.
+**Already built, needs one real run:** reading a channel on the glasses and dictating into it both exist. Check three things:
+- Speech-to-text needs `OPENAI_API_KEY` or `GROQ_API_KEY` on production (`src/features/glasses/core/voice/stt.ts`). Not verified.
+- **Keep the simulator's current pairing.** A G2 paired through hosted Connect gets "Voice is not available on this device" (`SDK_VOICE_REFUSAL`). Your simulator came through migration, so it can dictate. So **don't show pairing this device through Connect** in the same take.
+- The simulator's mic is your Mac's default input.
 
 ### Phase 3: wire the pages
-15. API keys, then Team (mostly existing routes, fastest wins).
-16. Activity with polling, then Webhooks with a public receiver you control.
-17. Users and Devices, read side. Then Send test, Relink, Revoke.
-18. Overview, Usage, Issues on the shared metrics.
-19. Connect config and real test link. Playground on real calls.
-20. What it receives: real defaults and floors first, then publishing.
-21. Delete every fixture import. Add a check that `/developers` can't import `_data`.
+16. API keys, then Team (mostly existing routes, fastest wins).
+17. Activity with polling, then Webhooks with a public receiver you control.
+18. Users and Devices, read side.
+19. Overview, Usage, Issues on the shared metrics.
+20. Hide or disable what isn't live yet. No fake success messages.
+21. What it receives, read-only: real defaults and floors, remove false claims.
+22. Delete every fixture import. Add a check that `/developers` can't import `_data`.
 
 ### Phase 4: rehearse
-22. Full dress run on production. Clean device list, fresh rows, public webhook receiver.
-23. Backup recording of the real speaker.
+23. Full dress run on production. Clean device list, fresh rows, public webhook receiver.
+24. Retake anything that goes wrong; it's a recording.
 
-### Phase 5: before any outside customer (not needed for the demo)
+### Phase 5: after the demo
+- **Controls:** Send test, Relink, Revoke, Connect save and real test link, Playground on real calls, rules publishing, Add device flow, Mac as a delivery target.
+
+### Phase 6: before any outside customer
 - **Publishable key hole:** a public `pk_` key can start a session for any user, and consent activates the connection with no secret-key step, so a stranger's device could receive that user's deliveries. Fix: inert until exchange. Traced to consent, fan-out not fully traced.
 - Redirect allowlist. `pk_` keys can't override branding. Webhook management needs a real scope; any secret key can do it today.
 - Retention on `dev_actions`, `dev_device_messages` and webhook logs, which have none. Privacy copy.
 - Daily rollup before billing or 90-day ranges; 30-day pruning would lose the start of a 31-day month.
 - Plans and pricing, presence events, `needs_reauth` writer, render acknowledgement, email invites, firmware reporting, publish the SDK.
 
-## 7. Demo script once built
+## 7. Demo script
 
-Assumes Phases 1 to 4 are done. The agent uses `deliver` from `dopl-sdk-mcp` with explicit device ids, added through "Use my tools" in a private channel. Avoid `target: auto` (it picks the most recently seen device) and `urgency: high` (logs only the primary device).
+Recorded at home, on the speaker's network. Keep the simulator running from before you start.
 
 | # | You do | On screen |
 |---|---|---|
-| 1 | Open Dopl desktop, private channel, simulator visible beside it | Channel and lens |
-| 2 | "Tell me on my Mac the build finished" | Mac banner |
-| 3 | "Put it on my glasses" | Lens card in the simulator |
-| 4 | "Ask me on the glasses whether to ship", answer in simulator | Ask card; agent reads the answer; webhook fires |
-| 5 | "Say it on the Google Home" | Speaker talks in the room |
-| 6 | Switch to portal: Activity | New rows appear within seconds, one per device |
-| 7 | Open a row | Timeline, devices considered and why, rule version, latency |
-| 8 | Open Devices, then Users | Mac, G2, Google Home online; you as the user |
-| 9 | Open Webhooks | The `action.completed` delivery, with attempts and signature verified on your receiver |
+| 1 | In Dopl desktop, send a message in a private channel | Message in the channel; agent wakes |
+| 2 | Open the Even simulator, open the chat | **Your Mac message appears on the lens** |
+| 3 | Dictate a message from the simulator | Transcript in the channel, marked as sent from glasses; agent receives it |
+| 4 | Agent replies | Reply on the lens and in the channel |
+| 5 | Ask on the glasses, for example "Ship it?" with options, answer it | Ask card; agent reads the answer; webhook fires |
+| 6 | "Say it on the Google Home" | Speaker talks in the room |
+| 7 | Switch to portal: Activity | Your Mac message, glasses message, lens sends, speaker, in order |
+| 8 | Open a row | Timeline, devices considered, rule version, latency |
+| 9 | Overview, Devices, Users, Usage | Real counts and charts, with Mac, G2 and Google Home connected |
+| 10 | Webhooks | The `action.completed` delivery and its attempts |
 
-Top risks: venue Wi-Fi blocks Cast (use a travel router or record at home); simulator restart loses logging; agent picks an unlogged tool (name the tool in the prompt); Do Not Disturb hides the banner; Electron restart kills channel agents.
+The agent should use `deliver` from `dopl-sdk-mcp` with explicit device ids, since `glasses_show` isn't logged until step 9 ships. Avoid `target: auto` and `urgency: high`.
+
+**Remaining risks:** simulator restart loses logging. Its window hidden over 60 seconds shows offline. Electron restart kills channel agents, so don't relaunch mid-take. Numbers will be small and honest: one user, three devices.
 
 ## 8. Decisions I need from you
 
-Each has my recommendation. The first four change the plan most.
+Each has my recommendation, and I'll build to those unless you say otherwise. Items 15 and 16 need your explicit word.
 
-**Clarifying**
-1. **When is the demo, and is it live or recorded?** No date means I can't say what to cut. Recommend recording at home on your own Wi-Fi.
-2. **Do you have a physical Google Home or Nest?** If not, it's a labelled browser speaker, and the shot is much weaker.
-3. **"Send a message from my Mac": which do you mean?** I read it as you typing in Dopl and the agent sending to devices. Recommend the typed message itself doesn't appear as a delivery, since it isn't one, and the agent's sends do. If you want it logged too, it's extra.
-4. **Do you want everything in this plan before the demo?** Recommend no: demo needs Phases 0 to 4, with What it receives publishing and Add device flow read-only if short on time. If time runs out, cut rules publishing and the Add device flow first, then Mac as a listed device. Glasses and the speaker are the shots to keep.
+**Still open**
+1. **What date is the recording?** Decides how much history the charts can show, and what gets cut.
+2. **Should message text show in those inbound rows?** See 10 below. Without text, the row says only "Message from glasses". Recommend showing it for this project.
 
 **Product**
-5. **Mac as a real SDK device for internal projects only?** Yes. Outside SDK users have no Dopl account, so the refusal still applies to them.
 6. **Usage for an internal project?** Show real activity labelled "Internal, not billed". Don't flip the flag; billing stays correct.
 7. **Plan, prices, Next bill, Manage?** Cut. Pricing is held (spec D5), and invented prices on a shown screen are a risk. This removes plan cards you just asked me to add.
 8. **"Shown" or "Delivered"?** "Delivered", meaning taken by the device. Nothing reports a real render. Timeline says "Picked up by device".
@@ -183,6 +206,8 @@ Smaller rulings with defaults are in each file in [maps/](maps/). Unless you say
 ## 9. Assumptions not yet proven
 
 - The Cast code works on real hardware.
+- Speech-to-text is configured on production.
+- The chat view on the simulator shows a desktop message and takes a dictated reply on today's production build. Code read, not run in this session.
 - `dopl-sdk-mcp` loads for an agent through "Use my tools". Code path read, never run.
 - The webhook cron runs on production. The outbox has always been empty.
 - `/developers` and `/connect` load inside Dopl.app. Using the browser avoids this.
