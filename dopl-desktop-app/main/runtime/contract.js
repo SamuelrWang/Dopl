@@ -57,6 +57,8 @@ const OPTIONAL_METHODS = {
   hasFullLogin: 0,
   // Stop a sign-in in flight — the Cancel on "Signing in…" (`runtime-credentials.js › cancelSignIn`).
   cancelSignIn: 0,
+  // A session on that full login was refused: true once it is off (`session-auth.js › settleFullLoginHold`).
+  settleFullLogin: 1,
 };
 
 // ── THE FOUR THAT REFUSE ─────────────────────────────────────────────────────────────────────

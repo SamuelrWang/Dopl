@@ -10613,7 +10613,9 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
     next Chrome run. (c3) the private Keychain item is readable by any same-user process through
     `/usr/bin/security` (as the operator's own Claude Code login is); only shell-capable sessions
     (private channels) can reach it.
-- Status: PARTLY RESOLVED — (a) accepted, (c) resolved; (b), (c1)–(c3) open.
+  - **2026-10-30:** (c1) RESOLVED. A dead full login drops its own marker and the session falls back to
+    the setup-token once (`main/session-auth.js › settleFullLoginHold`, INVARIANTS §11.0h).
+- Status: PARTLY RESOLVED — (a) accepted, (c), (c1) resolved; (b), (c2), (c3) open.
 
 ### F-765 — Codex "Auto" (the Codex app's "Approve for me") lets Codex's reviewer approve a Dopl post past Dopl's gate (2026-09-25, accepted)
 

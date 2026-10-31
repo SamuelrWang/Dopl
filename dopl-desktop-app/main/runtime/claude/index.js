@@ -138,6 +138,8 @@ const runtime = {
   // Optional: stop a sign-in in flight (the Cancel on "Signing in…").
   cancelSignIn() { return credential.cancelSignIn(); },
   hasFullLogin() { return credential.hasFullLogin(); },
+  // Optional: a session on the full login was refused (`session-auth.js › settleFullLoginHold`).
+  settleFullLogin(signInDidNotHelp) { return credential.settleFullLogin(signInDidNotHelp); },
 };
 
 module.exports = { descriptor, runtime };
