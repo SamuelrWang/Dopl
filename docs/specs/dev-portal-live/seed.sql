@@ -1,6 +1,6 @@
 -- FAKE PORTAL ROWS (Samuel, 2026-10-31: "You can have the agents seed fake rows ... Otherwise, it'll look too empty").
 -- Project: Dopl App (internal org, so nothing here reaches dev_billable_events). Every row's id starts 5eed0000-.
--- Removal SQL is in PROGRESS.md. Safe to re-run only after removing.
+-- Removal: PROGRESS.md, "Seed rows: final removal". Safe to re-run only after removing. `dev_portal_roll_seed` keeps these rows from ageing out.
 --
 -- Webhooks: nothing is left pending, so the sender never picks a seeded delivery up. The enabled endpoints listen only to
 -- events nothing emits today, and the one with live event names is paused, so real traffic never fans out to a fake URL.
@@ -20,8 +20,8 @@ DECLARE
   v_speak text[] := ARRAY['Dinner is ready in ten minutes.','Your meeting starts in five minutes.','The laundry cycle is done.','Time to leave for the airport.','The front door was left unlocked.'];
   v_keys uuid[]; v_key uuid; v_end uuid; v_dev uuid; v_ext text; v_name text;
   v_devs jsonb := '[]'::jsonb; v_d jsonb; v_consider jsonb;
-  n int := 0; a int := 0; i int; d int; c int; r float; v_ts timestamptz; v_act uuid; v_ev uuid; v_status text; v_outcome text; v_code text; v_cap text; v_intent text; v_text text; v_label text; v_lat int; v_opts jsonb;
-  v_ok boolean; v_http int; v_seen timestamptz; v_dep uuid; v_ob uuid; v_ep uuid; x int; tries int; v_t timestamptz; v_kind text;
+  n int := 0; a int := 0; i int; d int; c int; r float; v_ts timestamptz; v_act uuid; v_ev uuid; v_status text; v_code text; v_cap text; v_intent text; v_text text; v_label text; v_lat int;
+  v_ok boolean; v_seen timestamptz; v_dep uuid; v_ob uuid; v_ep uuid; x int; tries int; v_t timestamptz; v_kind text;
 BEGIN
   PERFORM setseed(0.42);
   IF EXISTS (SELECT 1 FROM public.dev_end_users WHERE id::text LIKE '5eed0000-%') THEN RAISE EXCEPTION 'seed rows already exist; remove them first'; END IF;

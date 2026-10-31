@@ -4,6 +4,27 @@ Written 2026-10-31. Goal: replace the hard-coded portal at `/playground/develope
 
 Every page was mapped element by element against the code and production. Full tables are in [maps/](maps/). Numbers below were measured on 2026-10-31.
 
+## What was built
+
+Everything after this section is the plan as written on 2026-10-31, before the build: its "doesn't exist yet" and "will break" lines describe that morning. [PROGRESS.md](PROGRESS.md) is the full record; [seed.sql](seed.sql) holds the seeded rows.
+
+| Roadmap | Built | Differs from the plan |
+|---|---|---|
+| Phase 0 | Stale G2s revoked, `a5a061e6` kept. `deliver` run once on production. Hosted Connect run once, Test env | Speaker go or no-go is Samuel's; real Cast has never run |
+| Phase 1 | Portal at `/developers`, log fields, internal project opens on Live, notices on `deliver` | Old pages kept at `/developers/classic` for one phase, then deleted in Phase 3 |
+| Phase 2 | Inbound and reply-mirror rows with text, Mac linked as a device, `google_home` adapter, `/api/device-bridge/{poll,ack}`, `bridge.js` | Text shown per Samuel. Mac stays refused for delivery |
+| Phase 3 | Every page reads rows, `_data/` deleted, `dev_portal_metrics` | Controls that could not work were deleted, not disabled |
+| Phase 4 | Readers and API walked against production without a browser | **Nothing has been seen signed in or heard on a speaker.** The 13 post-push checks in PROGRESS cover what remains |
+
+**Changed from the plan's text:**
+
+- **Step 15, "No seeded fake rows":** reversed by Samuel on 2026-10-31. Production holds rows with ids starting `5eed0000-`, kept fresh by `dev_portal_roll_seed` in the daily prune cron. Removal is in PROGRESS, "Seed rows: final removal".
+- **Section 5:** built `dev_events`, `dev_actions`, `route_decision.considered`, `dev_api_keys`, `dev_end_users.display_name`, `dev_org_members.last_active_at` and `dev_portal_metrics`. **Not built, with their features:** `connect_config`, `allowed_adapters`, `context_profiles` notes, `dev_profile_drafts`, `dev_issue_mutes`, `dev_portal_device_stats`.
+- **Phase 6, retention:** done early (`src/features/device-sdk/server/retention.ts › pruneDeviceText`), with privacy copy.
+- **Added beyond the plan:** `src/features/device-sdk/server/stuck-actions.ts › sweepStuckActions` in the minute webhook cron, `GET /api/developers/activity` for the live feed, and a lock on Dopl's delivery key.
+- **Section 7's note on `glasses_show`:** it is logged now, since step 9 shipped. A `card_id` or non-default ttl stays on the old queue with a fallback row.
+- **Not built from section 3:** portal sign-out, Mute, Send test, Relink, rule publishing, Connect save, and every other control PROGRESS lists under "Still not live". Section 8's rulings were applied as PROGRESS records them. Item 2 was answered by Samuel during the build; item 1, the recording date, is not recorded.
+
 ## Your answers, 2026-10-31
 
 - **The demo is recorded,** at home, so venue risks are gone and retakes are possible.
@@ -126,7 +147,7 @@ Additive, applied by name, before the code that writes them. `logDevEvent` is ho
 12. **Agent replies on the lens get logged (S to M).** `reply-mirror.ts` uses the old queue with no row.
 13. **Mac as a connected device (S to M).** Device row, connection and grant under Dopl App, with heartbeat touching `devices.last_seen`. SDK delivery stays refused.
 14. **Google Home (M to L).** `google_home` adapter (`home_hub`, `local_bridge`), generic bridge route and token replacing the G2-only lookup in `sdk-glasses-port.ts › deviceFromTokenHash`, and a local script on your Mac running the Cast code. Use intent `message`; `notify` would be refused. Cast gives no answer back, so status ends at delivered.
-15. **Real traffic ahead of recording.** Charts need days of data, and today there's one day of it. Send real messages daily once logging ships, so a 14-day chart isn't one bar. No seeded fake rows.
+15. **Real traffic ahead of recording.** Charts need days of data, and today there's one day of it. Send real messages daily once logging ships, so a 14-day chart isn't one bar. (Seeded rows were later allowed; see What was built.)
 
 **Already built, needs one real run:** reading a channel on the glasses and dictating into it both exist. Check three things:
 - Speech-to-text needs `OPENAI_API_KEY` or `GROQ_API_KEY` on production (`src/features/glasses/core/voice/stt.ts`). Not verified.
@@ -152,7 +173,6 @@ Additive, applied by name, before the code that writes them. `logDevEvent` is ho
 ### Phase 6: before any outside customer
 - **Publishable key hole:** a public `pk_` key can start a session for any user, and consent activates the connection with no secret-key step, so a stranger's device could receive that user's deliveries. Fix: inert until exchange. Traced to consent, fan-out not fully traced.
 - Redirect allowlist. `pk_` keys can't override branding. Webhook management needs a real scope; any secret key can do it today.
-- Retention on `dev_actions`, `dev_device_messages` and webhook logs, which have none. Privacy copy.
 - Daily rollup before billing or 90-day ranges; 30-day pruning would lose the start of a 31-day month.
 - Plans and pricing, presence events, `needs_reauth` writer, render acknowledgement, email invites, firmware reporting, publish the SDK.
 
