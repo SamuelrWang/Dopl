@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { HttpError } from "@/shared/lib/http-error";
+import { isUuid } from "@/shared/lib/id/uuid";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import { flushDevEvents } from "@/features/device-sdk/server/events";
 import { verifyApiKey } from "@/features/device-sdk/server/keys";
@@ -16,11 +17,10 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const TEST_SECRET = /^sk_test_[A-Za-z0-9]{16,}$/;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const QUERY_VALUE = /^[A-Za-z0-9_.:@+*-]{1,512}$/;
 
 const RunSchema = z.object({
-  project_id: z.string().regex(UUID),
+  project_id: z.string().refine(isUuid),
   key: z.string().min(1).max(256),
   operation: z.string().min(1).max(64),
   path_params: z.record(z.string(), z.string().max(255)).default({}),
@@ -113,7 +113,7 @@ export const POST = withUserAuth(async (request, { userId }) => {
     // The handler queued its event row; write it now so the run can show it.
     await flushDevEvents();
     const requestId = res.headers.get("request-id");
-    const event = requestId && UUID.test(requestId) ? await getPortalEvent(requestId, [input.project_id]) : null;
+    const event = requestId && isUuid(requestId) ? await getPortalEvent(requestId, [input.project_id]) : null;
 
     const run: PlaygroundRun = {
       request: { method: op.method, path: `/v1${path}`, authorization: `Bearer ${maskKey(input.key)}`, idempotencyKey, body: body ?? null },

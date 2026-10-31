@@ -168,7 +168,7 @@ export function playgroundOp(id: string): PlaygroundOp | undefined {
 }
 
 /** A path param value: what a route segment can hold. */
-export const PATH_VALUE = /^[A-Za-z0-9_.:@*-]{1,255}$/;
+const PATH_VALUE = /^[A-Za-z0-9_.:@*-]{1,255}$/;
 
 /**
  * The op's path with values filled and encoded, or an error sentence. Every placeholder must be

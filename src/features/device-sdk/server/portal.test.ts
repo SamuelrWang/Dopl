@@ -5,9 +5,7 @@
  * The properties that fail quietly:
  *  - 🔒 REACH: a user's projects are exactly their owned + member orgs' projects, with the
  *    strongest role; an org they are in neither way never appears.
- *  - 🔒 USAGE READS `dev_billable_events`, never `dev_events` (W0.2); LOG reads `dev_events`.
  *  - 🔒 every event read is fenced by `project_id IN (caller's ids)`; an empty id list reads nothing.
- *  - keys never select `key_hash`.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

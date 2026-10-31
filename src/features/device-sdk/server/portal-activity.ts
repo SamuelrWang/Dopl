@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { DeviceEventRow, Environment } from "../types";
 import { modelOfAdapter } from "../portal/catalog";
 import type { Call, CallStep, CallStatus, Considered } from "../portal/view";
+import { must } from "./portal-http";
 import { readWebhookCalls } from "./portal-webhooks";
 
 /**
@@ -20,8 +21,6 @@ export const FEED_LIMIT = 300;
 interface ActionRow {
   id: string;
   status: string;
-  capability: string | null;
-  intent: string | null;
   result: Record<string, unknown> | null;
   error: { code?: string; message?: string } | null;
   response: unknown;
@@ -94,12 +93,10 @@ function kindOf(e: DeviceEventRow): Call["kind"] {
 
 const TITLE_OF_MESSAGE: Record<string, string> = { "message.from_desktop": "Message from Mac", "message.from_glasses": "Message from glasses" };
 
+const routeOf = (e: DeviceEventRow) => (e.route ? `${e.http_method ?? "GET"} ${e.route.replace(/^\/api/, "")}` : null);
+
 function titleOf(e: DeviceEventRow, text: string | null): string {
-  if (text) return text;
-  if (e.operation && TITLE_OF_MESSAGE[e.operation]) return TITLE_OF_MESSAGE[e.operation];
-  if (e.capability) return e.capability;
-  if (e.route) return `${e.http_method ?? "GET"} ${e.route.replace(/^\/api/, "")}`;
-  return e.operation ?? "Call";
+  return text || (e.operation && TITLE_OF_MESSAGE[e.operation]) || e.capability || routeOf(e) || e.operation || "Call";
 }
 
 const consideredOf = (e: DeviceEventRow): Considered[] => (e.route_decision?.considered ?? []).map((c) => ({ deviceId: c.device_id, verdict: c.verdict, reason: c.reason }));
@@ -126,9 +123,7 @@ async function readEvents(input: CallsQuery, limit: number): Promise<DeviceEvent
   if (input.since) query = query.gte("ts", input.since);
   if (input.before) query = query.lte("ts", input.before);
   if (input.userId) query = query.eq("external_user_id", input.userId);
-  const { data, error } = await query.order("ts", { ascending: false }).limit(limit);
-  if (error) throw new Error(`readCalls failed: ${error.message}`);
-  return (data ?? []) as unknown as DeviceEventRow[];
+  return (must(await query.order("ts", { ascending: false }).limit(limit), "readCalls") ?? []) as unknown as DeviceEventRow[];
 }
 
 export async function readCalls(input: CallsQuery): Promise<Call[]> {
@@ -139,23 +134,20 @@ export async function readCalls(input: CallsQuery): Promise<Call[]> {
   const actionIds = [...new Set(events.map((e) => e.action_id).filter((v): v is string => Boolean(v)))];
   const actions = new Map<string, ActionRow>();
   if (actionIds.length > 0) {
-    const res = await db.from("dev_actions").select("id, status, capability, intent, result, error, response, created_at, delivered_at, settled_at").eq("project_id", input.projectId).in("id", actionIds);
-    if (res.error) throw new Error(`readCalls actions failed: ${res.error.message}`);
-    for (const a of (res.data ?? []) as ActionRow[]) actions.set(a.id, a);
+    const res = await db.from("dev_actions").select("id, status, result, error, response, created_at, delivered_at, settled_at").eq("project_id", input.projectId).in("id", actionIds);
+    for (const a of (must(res, "readCalls actions") ?? []) as ActionRow[]) actions.set(a.id, a);
   }
   const lensIds = [...actions.values()].map(lensIdOf).filter((v): v is string => v !== null);
   const lens = new Map<string, LensRow>();
   if (lensIds.length > 0) {
     const res = await db.from("dev_device_messages").select(input.internal ? "id, status, payload" : "id, status").in("id", lensIds);
-    if (res.error) throw new Error(`readCalls messages failed: ${res.error.message}`);
-    for (const m of (res.data ?? []) as unknown as LensRow[]) lens.set(m.id, m);
+    for (const m of (must(res, "readCalls messages") ?? []) as unknown as LensRow[]) lens.set(m.id, m);
   }
   const deviceIds = [...new Set(events.map((e) => e.device_id).filter((v): v is string => Boolean(v)))];
   const adapterOf = new Map<string, string>();
   if (deviceIds.length > 0) {
     const res = await db.from("devices").select("id, adapter_id").eq("project_id", input.projectId).in("id", deviceIds);
-    if (res.error) throw new Error(`readCalls devices failed: ${res.error.message}`);
-    for (const d of (res.data ?? []) as Array<{ id: string; adapter_id: string }>) adapterOf.set(d.id, d.adapter_id);
+    for (const d of (must(res, "readCalls devices") ?? []) as Array<{ id: string; adapter_id: string }>) adapterOf.set(d.id, d.adapter_id);
   }
 
   const calls: Call[] = events.map((e) => {
@@ -180,7 +172,7 @@ export async function readCalls(input: CallsQuery): Promise<Call[]> {
       latencyMs: e.latency_ms?.api || null,
       steps: kind === "delivery" ? stepsOf(e, action, status) : [],
       considered: consideredOf(e),
-      route: e.route ? `${e.http_method ?? "GET"} ${e.route.replace(/^\/api/, "")}` : null,
+      route: routeOf(e),
       response: action?.response ?? (e.error_code ? { error: { code: e.error_code, request_id: e.event_id } } : null),
       webhook: null,
     };

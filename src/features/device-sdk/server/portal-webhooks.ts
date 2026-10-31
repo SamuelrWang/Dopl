@@ -1,7 +1,8 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { Environment, WebhookEndpoint } from "../types";
-import { dayOf, endpointFailing, rateOf, type Call, type CallStatus, type EndpointView } from "../portal/view";
+import { DAY_MS, dayOf, endpointFailing, rateOf, type Call, type CallStatus, type EndpointView } from "../portal/view";
+import { must } from "./portal-http";
 import { toEndpoint } from "./webhooks/api";
 import { ENDPOINT_COLS, pickEndpoint } from "./webhooks/store-supabase";
 
@@ -14,16 +15,15 @@ import { ENDPOINT_COLS, pickEndpoint } from "./webhooks/store-supabase";
 
 /** Endpoints of one project and env, newest first. */
 export async function listPortalWebhookEndpoints(projectId: string, env: Environment): Promise<WebhookEndpoint[]> {
-  const { data, error } = await supabaseAdmin()
+  const res = await supabaseAdmin()
     .from("dev_webhook_endpoints")
     .select(ENDPOINT_COLS)
     .eq("project_id", projectId)
     .eq("env", env)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false });
-  if (error) throw new Error(`listPortalWebhookEndpoints failed: ${error.message}`);
   const now = new Date();
-  return ((data ?? []) as Record<string, unknown>[]).map((r) => toEndpoint(pickEndpoint(r), now));
+  return ((must(res, "listPortalWebhookEndpoints") ?? []) as Record<string, unknown>[]).map((r) => toEndpoint(pickEndpoint(r), now));
 }
 
 const STATS_LIMIT = 5000;
@@ -35,16 +35,17 @@ interface DeliveryStatRow {
   created_at: string;
 }
 
+const endpointName = (e: { description: string | null; url: string }) => e.description ?? new URL(e.url).hostname;
+
 const noteOf = (a: { status_code: number | null; error: string | null }) =>
   a.error ?? (a.status_code === null ? "No reply" : a.status_code < 300 ? "Accepted" : `Answered ${a.status_code}`);
 
 /** Every endpoint of one project and env, with its last week. A never-seen endpoint reads no figures, not a perfect one. */
 export async function readEndpointViews(projectId: string, env: Environment, now: Date): Promise<EndpointView[]> {
-  const db = supabaseAdmin();
   const endpoints = await listPortalWebhookEndpoints(projectId, env);
   if (endpoints.length === 0) return [];
-  const week = new Date(now.getTime() - 7 * 86_400_000).toISOString();
-  const { data, error } = await db
+  const week = new Date(now.getTime() - 7 * DAY_MS).toISOString();
+  const res = await supabaseAdmin()
     .from("dev_webhook_deliveries")
     .select("endpoint_id, status, created_at")
     .eq("project_id", projectId)
@@ -52,18 +53,23 @@ export async function readEndpointViews(projectId: string, env: Environment, now
     .gte("created_at", week)
     .order("created_at", { ascending: false })
     .limit(STATS_LIMIT);
-  if (error) throw new Error(`readEndpointViews failed: ${error.message}`);
-  const rows = (data ?? []) as DeliveryStatRow[];
+  const byEndpoint = new Map<string, DeliveryStatRow[]>();
+  for (const r of (must(res, "readEndpointViews") ?? []) as DeliveryStatRow[]) {
+    const rows = byEndpoint.get(r.endpoint_id);
+    if (rows) rows.push(r);
+    else byEndpoint.set(r.endpoint_id, [r]);
+  }
+  const days = Array.from({ length: 7 }, (_, i) => dayOf(now.getTime(), 6 - i));
   return endpoints.map((e) => {
-    const mine = rows.filter((r) => r.endpoint_id === e.id);
+    const mine = byEndpoint.get(e.id) ?? [];
     const delivered = mine.filter((r) => r.status === "delivered").length;
     const failed = mine.filter((r) => r.status === "failed").length;
     const settled = mine.filter((r) => r.status !== "pending").map((r) => ({ failed: r.status === "failed", at: r.created_at }));
-    const bars = Array.from({ length: 7 }, (_, i) => mine.filter((r) => r.created_at.slice(0, 10) === dayOf(now.getTime(), 6 - i)).length);
+    const bars = days.map((day) => mine.filter((r) => r.created_at.startsWith(day)).length);
     const top = Math.max(...bars, 1);
     return {
       id: e.id,
-      name: e.description ?? new URL(e.url).hostname,
+      name: endpointName(e),
       url: e.url,
       events: e.enabled_events,
       state: e.status === "disabled" ? "paused" : endpointFailing(settled, now.getTime()) ? "failing" : "healthy",
@@ -86,19 +92,17 @@ export async function readWebhookCalls(projectId: string, env: Environment, opti
     .eq("project_id", projectId)
     .eq("env", env);
   if (options.ids) query = query.in("id", options.ids);
-  else query = query.gte("created_at", options.since ?? new Date(Date.now() - FEED_DAYS * 86_400_000).toISOString());
+  else query = query.gte("created_at", options.since ?? new Date(Date.now() - FEED_DAYS * DAY_MS).toISOString());
   if (options.before) query = query.lte("created_at", options.before);
-  const { data, error } = await query.order("created_at", { ascending: false }).limit(options.limit);
-  if (error) throw new Error(`readWebhookCalls failed: ${error.message}`);
-  const rows = (data ?? []) as Array<{ id: string; outbox_id: string; endpoint_id: string; event_type: string; status: string; attempts: number; last_status_code: number | null; last_error: string | null; created_at: string }>;
+  const rows = (must(await query.order("created_at", { ascending: false }).limit(options.limit), "readWebhookCalls") ?? []) as Array<{ id: string; outbox_id: string; endpoint_id: string; event_type: string; status: string; attempts: number; last_status_code: number | null; last_error: string | null; created_at: string }>;
   if (rows.length === 0) return [];
   const [endpoints, attempts, outbox] = await Promise.all([
-    db.from("dev_webhook_endpoints").select("id, url, description").eq("project_id", projectId).eq("env", env),
+    db.from("dev_webhook_endpoints").select("id, url, description").eq("project_id", projectId).eq("env", env).in("id", [...new Set(rows.map((r) => r.endpoint_id))]),
     db.from("dev_webhook_attempts").select("delivery_id, attempt, attempted_at, status_code, error").in("delivery_id", rows.map((r) => r.id)).order("attempt", { ascending: true }),
     options.payloads ? db.from("dev_webhook_outbox").select("id, payload").eq("project_id", projectId).in("id", rows.map((r) => r.outbox_id)) : Promise.resolve({ data: [], error: null }),
   ]);
   for (const res of [endpoints, attempts, outbox]) if (res.error) throw new Error(`readWebhookCalls failed: ${res.error.message}`);
-  const names = new Map(((endpoints.data ?? []) as Array<{ id: string; url: string; description: string | null }>).map((e) => [e.id, e.description ?? new URL(e.url).hostname]));
+  const names = new Map(((endpoints.data ?? []) as Array<{ id: string; url: string; description: string | null }>).map((e) => [e.id, endpointName(e)]));
   const payloads = new Map(((outbox.data ?? []) as Array<{ id: string; payload: unknown }>).map((o) => [o.id, o.payload]));
   const tries = (attempts.data ?? []) as Array<{ delivery_id: string; attempted_at: string; status_code: number | null; error: string | null }>;
   return rows.map((d) => {

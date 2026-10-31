@@ -5,6 +5,7 @@ import type { KeyView, MetricRow } from "../portal/view";
 import { dayOf } from "../portal/view";
 import { lockedKeyIds } from "./keys";
 import { emailOf } from "./portal-admin";
+import { must } from "./portal-http";
 
 /**
  * API keys as the Keys page shows them. Never selects `key_hash` into a result.
@@ -13,20 +14,19 @@ import { emailOf } from "./portal-admin";
  */
 
 export async function countActiveKeys(projectId: string, env: Environment): Promise<number> {
-  const { count, error } = await supabaseAdmin().from("dev_api_keys").select("id", { count: "exact", head: true }).eq("project_id", projectId).eq("env", env).is("revoked_at", null);
-  if (error) throw new Error(`countActiveKeys failed: ${error.message}`);
-  return count ?? 0;
+  const res = await supabaseAdmin().from("dev_api_keys").select("id", { count: "exact", head: true }).eq("project_id", projectId).eq("env", env).is("revoked_at", null);
+  must(res, "countActiveKeys");
+  return res.count ?? 0;
 }
 
 export async function readKeyViews(projectId: string, env: Environment, internal: boolean, metrics: readonly MetricRow[], now: Date): Promise<KeyView[]> {
-  const { data, error } = await supabaseAdmin()
+  const res = await supabaseAdmin()
     .from("dev_api_keys")
     .select("id, kind, prefix, name, created_by, scopes, created_at, last_used_at, revoked_at, expires_at")
     .eq("project_id", projectId)
     .eq("env", env)
     .order("created_at", { ascending: false });
-  if (error) throw new Error(`readKeyViews failed: ${error.message}`);
-  const rows = (data ?? []) as Array<{ id: string; kind: "secret" | "publishable"; prefix: string; name: string | null; created_by: string | null; scopes: string[]; created_at: string; last_used_at: string | null; revoked_at: string | null; expires_at: string | null }>;
+  const rows = (must(res, "readKeyViews") ?? []) as Array<{ id: string; kind: "secret" | "publishable"; prefix: string; name: string | null; created_by: string | null; scopes: string[]; created_at: string; last_used_at: string | null; revoked_at: string | null; expires_at: string | null }>;
   const weekStart = dayOf(now.getTime(), 6);
   const calls = new Map<string, number>();
   for (const m of metrics) if (m.key && m.day >= weekStart) calls.set(m.key, (calls.get(m.key) ?? 0) + m.calls);

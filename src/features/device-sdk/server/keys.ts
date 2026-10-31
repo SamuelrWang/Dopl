@@ -10,6 +10,7 @@ import {
   type Environment,
   type ErrorCode,
 } from "../types";
+import { rotationRefusal } from "../portal/scope";
 
 /**
  * DEVICE SDK API KEYS (C1, docs/specs/device-sdk/SPEC-v1.md). Mint, verify, revoke, rotate.
@@ -30,7 +31,7 @@ const KEY_BODY_LENGTH = 32;
 /** Random characters kept in the display prefix (`sk_live_` + 4). */
 const DISPLAY_CHARS = 4;
 /** Default rotation overlap: the outgoing key keeps working this long. */
-export const DEFAULT_ROTATION_OVERLAP_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_ROTATION_OVERLAP_MS = 24 * 60 * 60 * 1000;
 
 const BASE62 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -180,10 +181,8 @@ export class KeyNotRotatableError extends Error {
  * Mint a replacement with the same env, kind and scopes, and give the outgoing key an
  * `expires_at` overlap window.
  *
- * ⚠ ONLY A LIVE, UN-ROTATED KEY ROTATES. A revoked key, an expired key, or a key already in its
- * overlap window (`expires_at` set) is refused with `KeyNotRotatableError`: rotating an expired
- * key would mint a working credential off a dead one, and rotating one already rotating would
- * leave several live replacements.
+ * ⚠ ONLY A LIVE, UN-ROTATED KEY ROTATES (`portal/scope.ts › rotationRefusal`); anything else is
+ * refused with `KeyNotRotatableError`.
  * ⚠ THE CLAIM IS ATOMIC: the old key's `expires_at` is set by an UPDATE conditioned on
  * `expires_at IS NULL AND revoked_at IS NULL`, BEFORE the replacement is minted. Two concurrent
  * rotations (two tabs, a retry) race on that UPDATE; exactly one wins, the other is refused.
@@ -208,11 +207,8 @@ export async function rotateApiKey(input: {
   const prev = old as DevApiKeyRow | null;
   if (!prev) throw new Error("rotateApiKey: key not found");
   const now = input.now ?? new Date();
-  if (prev.revoked_at) throw new KeyNotRotatableError("KEY_REVOKED", "A revoked key cannot be rotated");
-  if (prev.expires_at && Date.parse(prev.expires_at) <= now.getTime()) {
-    throw new KeyNotRotatableError("KEY_EXPIRED", "An expired key cannot be rotated");
-  }
-  if (prev.expires_at) throw new KeyNotRotatableError("KEY_ROTATING", "This key is already being rotated");
+  const refusal = rotationRefusal({ revokedAt: prev.revoked_at, expiresAt: prev.expires_at }, now.getTime());
+  if (refusal) throw new KeyNotRotatableError(refusal.code, refusal.message);
 
   const expiresAt = new Date(now.getTime() + (input.overlapMs ?? DEFAULT_ROTATION_OVERLAP_MS)).toISOString();
   const { data: claimed, error: upErr } = await db
@@ -270,7 +266,7 @@ export interface ResolvedDeveloperKey {
   key: { id: string; kind: ApiKeyKind; scopes: ApiKeyScope[]; prefix: string };
 }
 
-export type VerifyResult =
+type VerifyResult =
   | { ok: true; resolved: ResolvedDeveloperKey }
   | {
       ok: false;

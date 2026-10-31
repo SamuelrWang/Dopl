@@ -1,17 +1,20 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { HttpError } from "@/shared/lib/http-error";
-import { API_KEY_SCOPES, type ApiKeyKind, type ApiKeyScope, type Environment } from "../types";
+import { API_KEY_SCOPES, type ApiKeyKind, type ApiKeyScope } from "../types";
 import {
   canActOn,
   canAssignRole,
   canManageKeys,
+  isPortalRole,
+  rotationRefusal,
   type PortalOrg,
   type PortalProject,
   type PortalRole,
 } from "../portal/scope";
-import { lockedKeyIds, mintApiKey, revokeApiKey, type MintedKey } from "./keys";
+import { KeyNotRotatableError, lockedKeyIds, mintApiKey, revokeApiKey, rotateApiKey, type MintedKey } from "./keys";
 import { getKeyProject, listPortalOrgs, listPortalProjects } from "./portal";
+import { parseEnv } from "./portal-http";
 
 /**
  * DEVELOPER PORTAL SELF-SERVE WRITES (P3, Plans/Dopl SDK Split › §6, §9). Service role, server only.
@@ -31,7 +34,7 @@ import { getKeyProject, listPortalOrgs, listPortalProjects } from "./portal";
  * requests can land a few over. They bound abuse and accidents; nothing relies on them holding.
  */
 export const MAX_OWNED_ORGS = 5;
-export const MAX_PROJECTS_PER_ORG = 20;
+const MAX_PROJECTS_PER_ORG = 20;
 /** Live (not revoked, not expired) keys per project and env. */
 export const MAX_ACTIVE_KEYS = 10;
 
@@ -154,13 +157,14 @@ export async function createProject(userId: string, orgId: string, input: { name
 
 // ─── Members ──────────────────────────────────────────────────────────────────────────────────
 
-export interface OrgMemberView {
+interface OrgMemberView {
   userId: string;
   email: string | null;
   role: PortalRole;
   /** The org's `owner_user_id`. */
   isOwner: boolean;
   joinedAt: string | null;
+  lastActiveAt: string | null;
 }
 
 /**
@@ -184,16 +188,16 @@ export async function listOrgMembers(userId: string, orgId: string): Promise<Org
   const org = await requireOrg(userId, orgId);
   const { data, error } = await supabaseAdmin()
     .from("dev_org_members")
-    .select("user_id, role, created_at")
+    .select("user_id, role, created_at, last_active_at")
     .eq("org_id", org.id)
     .order("created_at", { ascending: true });
   if (error) throw dbError("listOrgMembers", error);
-  const members = ((data ?? []) as Array<{ user_id: string; role: string; created_at: string }>).filter(
-    (m) => m.user_id !== org.ownerUserId && (m.role === "owner" || m.role === "admin" || m.role === "developer")
-  );
+  const rows = (data ?? []) as Array<{ user_id: string; role: string; created_at: string; last_active_at: string | null }>;
   const people = [
-    { userId: org.ownerUserId, role: "owner" as PortalRole, isOwner: true, joinedAt: null as string | null },
-    ...members.map((m) => ({ userId: m.user_id, role: m.role as PortalRole, isOwner: false, joinedAt: m.created_at })),
+    { userId: org.ownerUserId, role: "owner" as PortalRole, isOwner: true, joinedAt: null as string | null, lastActiveAt: rows.find((m) => m.user_id === org.ownerUserId)?.last_active_at ?? null },
+    ...rows
+      .filter((m) => m.user_id !== org.ownerUserId && isPortalRole(m.role))
+      .map((m) => ({ userId: m.user_id, role: m.role as PortalRole, isOwner: false, joinedAt: m.created_at, lastActiveAt: m.last_active_at })),
   ];
   const emails = await Promise.all(people.map((p) => emailOf(p.userId)));
   return people.map((p, i) => ({ ...p, email: emails[i].email }));
@@ -208,7 +212,7 @@ export async function memberRole(orgId: string, targetUserId: string): Promise<P
     .maybeSingle();
   if (error) throw dbError("memberRole", error);
   const role = (data as { role: string } | null)?.role;
-  return role === "owner" || role === "admin" || role === "developer" ? role : null;
+  return isPortalRole(role) ? role : null;
 }
 
 /** Change a member's role. Only to a role below the actor's, only on a member below the actor. */
@@ -253,7 +257,6 @@ export async function removeMember(userId: string, orgId: string, targetUserId: 
 
 // ─── Keys ─────────────────────────────────────────────────────────────────────────────────────
 
-const ENVS: readonly Environment[] = ["test", "live"];
 const KINDS: readonly ApiKeyKind[] = ["secret", "publishable"];
 
 /**
@@ -266,11 +269,10 @@ export async function createProjectKey(
   input: { env: unknown; kind: unknown; name?: unknown; scopes?: unknown },
   now: Date = new Date()
 ): Promise<MintedKey> {
-  if (!(ENVS as readonly unknown[]).includes(input.env)) throw new HttpError(400, "BAD_REQUEST", "env must be test or live");
+  const env = parseEnv(input.env);
   if (!(KINDS as readonly unknown[]).includes(input.kind)) {
     throw new HttpError(400, "BAD_REQUEST", "kind must be secret or publishable");
   }
-  const env = input.env as Environment;
   const kind = input.kind as ApiKeyKind;
   const project = await requireProject(userId, projectId);
   if (!canManageKeys(project.role)) throw new HttpError(403, "FORBIDDEN", "Only an org owner or admin can create keys");
@@ -296,15 +298,41 @@ export async function createProjectKey(
   return mintApiKey({ projectId: project.id, env, kind, name, scopes, createdBy: userId });
 }
 
-/** Revoke a key now. Owner or admin of its project; a key the caller cannot see is 404. */
-export async function revokeProjectKey(userId: string, keyId: string): Promise<void> {
+/** The key and its project, for an owner or admin allowed to manage it. A key the caller cannot see is 404. */
+async function requireManagedKey(userId: string, keyId: string, verb: "rotate" | "revoke") {
   const key = await getKeyProject(keyId);
   const project = key ? (await listPortalProjects(userId)).find((p) => p.id === key.projectId) : undefined;
   if (!key || !project) throw notFound("Key");
-  if (!canManageKeys(project.role)) throw new HttpError(403, "FORBIDDEN", "Only an org owner or admin can revoke keys");
+  if (!canManageKeys(project.role)) throw new HttpError(403, "FORBIDDEN", `Only an org owner or admin can ${verb} keys`);
   refuseInternalUnlessOwner(project);
+  return { key, project };
+}
+
+export async function revokeProjectKey(userId: string, keyId: string): Promise<void> {
+  const { key, project } = await requireManagedKey(userId, keyId, "revoke");
   await refuseLockedKey(project, keyId);
   if (key.revokedAt) throw new HttpError(409, "KEY_REVOKED", "This key is already revoked");
   const revoked = await revokeApiKey({ projectId: project.id, keyId });
   if (!revoked) throw new HttpError(409, "KEY_REVOKED", "This key is already revoked");
+}
+
+/** How long the old secret keeps working, in hours. The only values the portal offers. */
+const GRACE_HOURS: readonly unknown[] = [0, 1, 24];
+
+/**
+ * Mint a replacement with the same env, kind and scopes; the old key keeps working for the grace. The read here
+ * answers the common refusals cleanly; `rotateApiKey` holds the same ones atomically, so the check-to-rotate race lands there.
+ */
+export async function rotateProjectKey(userId: string, keyId: string, graceHours: unknown) {
+  const { key, project } = await requireManagedKey(userId, keyId, "rotate");
+  const refusal = rotationRefusal(key, Date.now());
+  if (refusal) throw new HttpError(409, refusal.code, refusal.message);
+  await refuseLockedKey(project, keyId);
+  if (graceHours !== undefined && !GRACE_HOURS.includes(graceHours)) throw new HttpError(400, "BAD_REQUEST", "grace_hours must be 0, 1 or 24");
+  try {
+    return await rotateApiKey({ projectId: project.id, keyId, overlapMs: graceHours === undefined ? undefined : (graceHours as number) * 3_600_000 });
+  } catch (err) {
+    if (err instanceof KeyNotRotatableError) throw new HttpError(409, err.code, err.message);
+    throw err;
+  }
 }

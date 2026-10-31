@@ -3,6 +3,7 @@ import { HttpError } from "@/shared/lib/http-error";
 import { canManageKeys } from "../portal/scope";
 import type { Environment } from "../types";
 import { refuseInternalUnlessOwner, requireProject } from "./portal-admin";
+import { parseEnv } from "./portal-http";
 import { WebhookApiError, createEndpoint, replayDelivery, updateEndpoint } from "./webhooks/api";
 import { kickWebhookSender, webhookApiDeps } from "./webhooks/runtime";
 
@@ -13,12 +14,12 @@ import { kickWebhookSender, webhookApiDeps } from "./webhooks/runtime";
  */
 
 async function tenantOf(userId: string, projectId: string, env: unknown): Promise<{ projectId: string; env: Environment }> {
-  if (env !== "test" && env !== "live") throw new HttpError(400, "BAD_REQUEST", "env must be test or live");
+  const parsedEnv = parseEnv(env);
   const project = await requireProject(userId, projectId);
   if (!canManageKeys(project.role)) throw new HttpError(403, "FORBIDDEN", "Only an org owner or admin can manage webhooks");
   // An internal org's events carry every Dopl user's device traffic, so who receives them is the owner's call.
   refuseInternalUnlessOwner(project);
-  return { projectId: project.id, env };
+  return { projectId: project.id, env: parsedEnv };
 }
 
 async function clean<T>(run: () => Promise<T>): Promise<T> {

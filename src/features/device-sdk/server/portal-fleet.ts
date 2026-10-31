@@ -1,11 +1,12 @@
 import "server-only";
+import { isUuid } from "@/shared/lib/id/uuid";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { Environment } from "../types";
 import { modelOfAdapter } from "../portal/catalog";
-import { dayOf, deviceState, type MetricRow, type OwnedDevice, type PortalUser } from "../portal/view";
+import { DAY_MS, dayOf, deviceState, type MetricRow, type OwnedDevice, type PortalUser } from "../portal/view";
 import { wiredDeviceAdapters } from "./device-adapters";
 import { emailOf } from "./portal-admin";
-import { UUID } from "./portal-http";
+import { must } from "./portal-http";
 
 /**
  * USERS, DEVICES AND FIGURES for `/developers`. Service role, server only. The caller passes a project it
@@ -20,16 +21,11 @@ const MAX_FLEET = 1000;
 /** Looking up a name is one auth call each, so an internal project's list stops here. */
 const MAX_NAME_LOOKUPS = 20;
 
-function must<T>(res: { data: T | null; error: { message: string } | null }, op: string): T {
-  if (res.error) throw new Error(`${op} failed: ${res.error.message}`);
-  return res.data as T;
-}
-
 export async function readMetrics(projectId: string, env: Environment, now: Date): Promise<MetricRow[]> {
   const res = await supabaseAdmin().rpc("dev_portal_metrics", {
     p_project: projectId,
     p_env: env,
-    p_since: new Date(now.getTime() - METRIC_DAYS * 86_400_000).toISOString(),
+    p_since: new Date(now.getTime() - METRIC_DAYS * DAY_MS).toISOString(),
   });
   return (must(res, "readMetrics") ?? []) as MetricRow[];
 }
@@ -69,7 +65,7 @@ async function namesFromAccounts(ids: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   await Promise.all(
     ids
-      .filter((id) => UUID.test(id))
+      .filter(isUuid)
       .slice(0, MAX_NAME_LOOKUPS)
       .map(async (id) => {
         const { email } = await emailOf(id);
@@ -101,7 +97,11 @@ export async function readFleet(input: { projectId: string; env: Environment; in
   // A device can be re-paired: oldest first, so the newest connection is the one kept.
   const connectionOf = new Map(connections.map((c) => [c.device_id, c]));
   const devicesOf = new Map<string, DeviceRow[]>();
-  for (const d of devices) devicesOf.set(d.end_user_id, [...(devicesOf.get(d.end_user_id) ?? []), d]);
+  for (const d of devices) {
+    const owned = devicesOf.get(d.end_user_id);
+    if (owned) owned.push(d);
+    else devicesOf.set(d.end_user_id, [d]);
+  }
   const weekStart = dayOf(now, 6);
   const perDevice = new Map<string, { deliveries: number; delivered: number }>();
   const lastDelivery = new Map<string, string>();

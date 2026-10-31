@@ -1,4 +1,5 @@
 /** DEVELOPER PORTAL SCOPE: who may do what in a project, and the keyset cursor. Pure: no DB, no React. */
+import { isUuid } from "@/shared/lib/id/uuid";
 
 /** A dev org role (`dev_org_members.role`; the org's `owner_user_id` reads as `owner`). */
 export type PortalRole = "owner" | "admin" | "developer";
@@ -23,6 +24,8 @@ export interface PortalOrg {
 }
 
 export const ROLE_RANK: Record<PortalRole, number> = { owner: 3, admin: 2, developer: 1 };
+
+export const isPortalRole = (role: unknown): role is PortalRole => role === "owner" || role === "admin" || role === "developer";
 
 /** Roles an invite or a role change may grant. `owner` is `dev_orgs.owner_user_id` alone. */
 const ASSIGNABLE_ROLES = ["admin", "developer"] as const;
@@ -53,8 +56,6 @@ export function canActOn(actor: PortalRole, target: PortalRole): boolean {
   return ROLE_RANK[target] < ROLE_RANK[actor];
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
  * A Postgres timestamptz as PostgREST returns it: up to MICROSECONDS, with `Z` or an offset.
  * ⚠ Never round-trip a cursor ts through `Date`: it truncates to milliseconds, so the `ts.eq` tie
@@ -72,6 +73,17 @@ export function parseLogCursor(value: string | null): { ts: string; eventId: str
   if (value === null) return null;
   const [ts, eventId, extra] = value.split("~");
   if (extra !== undefined || !ts || !PG_TS.test(ts) || Number.isNaN(Date.parse(ts))) return null;
-  if (!eventId || !UUID.test(eventId)) return null;
+  if (!eventId || !isUuid(eventId)) return null;
   return { ts, eventId: eventId.toLowerCase() };
+}
+
+/**
+ * Only a live, never-rotated key rotates: an expired key would mint a working credential off a dead one, and a
+ * key in its overlap window would get a second live replacement. Null = it may rotate.
+ */
+export function rotationRefusal(key: { revokedAt: string | null; expiresAt: string | null }, now: number): { code: "KEY_REVOKED" | "KEY_EXPIRED" | "KEY_ROTATING"; message: string } | null {
+  if (key.revokedAt) return { code: "KEY_REVOKED", message: "A revoked key cannot be rotated" };
+  if (key.expiresAt && Date.parse(key.expiresAt) <= now) return { code: "KEY_EXPIRED", message: "An expired key cannot be rotated" };
+  if (key.expiresAt) return { code: "KEY_ROTATING", message: "This key is already being rotated" };
+  return null;
 }

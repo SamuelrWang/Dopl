@@ -16,8 +16,8 @@ import { dbError, emailOf, memberRole, normalizeEmail, notFound, refuseInternal,
  */
 
 /** Soft limit: count-then-insert, so concurrent invites can land a few over. */
-export const MAX_OPEN_INVITES_PER_ORG = 50;
-export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_OPEN_INVITES_PER_ORG = 50;
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function hashInviteToken(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");
@@ -30,7 +30,7 @@ function newInviteToken(): string {
 
 const INVITE_TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
-export interface OrgInviteView {
+interface OrgInviteView {
   id: string;
   email: string;
   role: AssignableRole;
@@ -153,9 +153,9 @@ export async function revokeInvite(userId: string, inviteId: string): Promise<vo
   if (upErr) throw dbError("revokeInvite", upErr);
 }
 
-export type InviteState = "open" | "expired" | "revoked" | "accepted";
+type InviteState = "open" | "expired" | "revoked" | "accepted";
 
-export interface InviteForToken {
+interface InviteForToken {
   id: string;
   orgId: string;
   orgName: string;

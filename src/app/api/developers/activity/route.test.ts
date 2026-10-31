@@ -12,14 +12,6 @@ const readCalls = vi.fn();
 const listPortalProjects = vi.fn();
 vi.mock("@/features/device-sdk/server/portal-activity", () => ({ FEED_LIMIT: 300, readCalls: (...a: unknown[]) => readCalls(...a) }));
 vi.mock("@/features/device-sdk/server/portal", () => ({ listPortalProjects: (...a: unknown[]) => listPortalProjects(...a) }));
-vi.mock("@/features/device-sdk/server/portal-http", async () => {
-  const { NextResponse } = await import("next/server");
-  return {
-    UUID: /^[0-9a-f-]{36}$/,
-    noStore: (body: unknown) => NextResponse.json(body, { headers: { "Cache-Control": "no-store" } }),
-    portalErrorResponse: (_: string, err: { status?: number }) => NextResponse.json({}, { status: err.status ?? 500 }),
-  };
-});
 
 import { GET } from "./route";
 

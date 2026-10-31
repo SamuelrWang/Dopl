@@ -18,7 +18,7 @@ type Handler = (request: NextRequest, ctx: RouteContextArg) => Promise<Response>
  * Playground operation → the REAL `/api/v1` handler that serves it, and how the op's path params map
  * onto that route folder's dynamic segments. The playground calls these in process, so a run is
  * exactly the production code path (key check, scopes, event row), only without a network hop.
- * `playground-dispatch.test.ts` pins this table to `PLAYGROUND_OPS`.
+ * `dispatch.test.ts` pins this table to `PLAYGROUND_OPS`.
  */
 export const PLAYGROUND_DISPATCH: Record<string, { handler: Handler; segments: (p: Record<string, string>) => Record<string, string> }> = {
   createConnectSession: { handler: connectSessions.POST, segments: () => ({}) },
