@@ -406,3 +406,35 @@ Reviewed `38ab003fb..a8877143e`. Nothing rehearsal-only was committed: the diff 
 - **Left alone:** the correct `=== 1 ?` ternaries elsewhere.
 
 Vitest on `view.test.ts` and `sections.test.tsx`: 23 passed. `tsc` clean. No `next build`.
+
+## Final cleanup: device half (2026-10-31)
+
+Read all of `dopl-desktop-app/main/google-home/`, the Mac heartbeat, `seed.sql` and this doc set.
+
+- **Merged:** `cast-client.js › withCastChannel` replaces three copies of open, try, close. `discovery.js › bonjourBrowser` replaces the bridge's copy. `RECEIVER` has one home. `service.js › castResult` replaces two copies.
+- **Deleted:** channel `onMessage` and listeners (no caller), unused frame fields, `TOOL_NAMES` (test-only, now in the test), `mcp-stdio.js`'s export, notify's `title` arg (no caller could send it), unused exports and three unused seed variables. Seed output is unchanged.
+- **Bugs fixed:** concurrent publishes started a second media server that `close` never reached. A file expiring between stat and open raised an unheard stream error, which ends the process.
+- **Timers:** the Cast heartbeat is no longer unref'd, since every channel now closes in one place. The media TTL timer stays unref'd because nothing awaits it and `close` clears it. The bridge's 3-second poll is the speaker's online signal, and it waits for each pass to finish.
+- **Mac on the desktop side:** no change. `device-registry-core.js` predates this build, has no timer of its own and rides the presence beat. The Mac's `last_seen` write is server code.
+- **Scripts and temp files:** the branch added no scripts. No rehearsal files are in the worktree. `/tmp/pm-portal-*.ts` date from 2026-10-28, before this build, so they were left.
+- **Checked by running:** 40 tests in the four `google-home-*` files. `bridge.js --discover` from a clean deps directory installed `bonjour-service` and found 0 speakers. Missing and group-readable config files are refused. **`--say` was not run,** so speech is still untested.
+
+### Seed rows: final removal
+
+This replaces "Removing the seed rows" above. The `DELETE` block there is right and complete, and its one gap was the roll job.
+
+**Checked by read-only queries on production, 2026-10-31.** `seed.sql` writes these 10 tables, and all are in the block: 232 attempts, 152 deliveries, 152 outbox, 4 endpoints, 606 events, 350 actions, 32 connections, 32 devices, 19 end users, 7 keys. No other row points at a seeded one: 0 real events on a seeded device or key, 0 real actions, 0 messages, 0 credentials, 0 Connect sessions, 0 real deliveries on a seeded endpoint. The only delete trigger is `dev_webhook_endpoints_vault_cleanup`, which finds no vault row for a seeded secret. **The deletes themselves were not run,** even in a rolled-back transaction.
+
+1. **Run the `DELETE` block above.** The real rows stay, including the Phase 0 `connect-rehearsal` rows and the 6 revoked `Phase 4 rehearsal` keys, which are not seed rows.
+2. **Remove the roll job from code and ship it.** Delete `rollSeedRows` from `src/features/device-sdk/server/retention.ts`, its call in `src/app/api/cron/device-sdk-events-prune/route.ts`, and its mock in that route's test.
+3. **Then drop the function, in a new migration:** `DROP FUNCTION public.dev_portal_roll_seed();`
+
+Between steps 1 and 2 the job does nothing: with no seed rows it returns 0. Dropping the function before the code ships would only log a warning each day, since `rollSeedRows` never fails the prune.
+
+### Post-push checks: additions
+
+The 13 checks above stand. Verified against the tree: cron schedules in `vercel.json`, the SDK bin path and its env names. Three details they leave out:
+
+- **Check 4:** `select last_seen from devices where id::text like '127f88ed-%'` should keep moving.
+- **Check 10:** `--say` needs nothing but the network. Without `--say`, the bridge needs `~/.dopl/google-home-bridge.json` at mode 600 and refuses to start otherwise. Its first run installs `bonjour-service`, so it needs internet once.
+- **Check 13:** the seed rows moved if `select max(ts) from dev_events where event_id::text like '5eed0000-%'` is within the last day.
